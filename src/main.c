@@ -30,8 +30,74 @@ int main(int argc, char **argv) {
 	yydebug = 1;
 #endif
 	
+	options_t options = {
+		.showHelp = false,
+		.showVersion = false,
+		.numSourceFiles = 0,
+		.sourceFiles = NULL,
+		.numIncludeDirs = 0,
+		.includeDirs = NULL,
+		.outputFile = NULL,
+		.outputType = NULL
+	};
+	
+	// Read options.
+	int argIndex;
+	for (argIndex = 1; argIndex < argc; argIndex++) {
+		if (!strcmp(argv[argIndex], "-v") || !strcmp(argv[argIndex], "--version")) {
+			// Show version
+			if (options.showVersion) printf("Note: Show version already specified.\n");
+			options.showVersion = true;
+		} else if (!strcmp(argv[argIndex], "-h") || !strcmp(argv[argIndex], "--help")) {
+			// Show help.
+			if (options.showHelp) printf("Note: Show help already specified.\n");
+			options.showHelp = true;
+		} else if (!strncmp(argv[argIndex], "-I", 2)) {
+			// Add include directory.
+			options.numIncludeDirs ++;
+			options.includeDirs = (char **) realloc(options.includeDirs, sizeof(char *) * options.numIncludeDirs);
+			options.includeDirs[options.numIncludeDirs - 1] = &(argv[argIndex])[2];
+		} else if (!strncmp(argv[argIndex], "--include=", 10)) {
+			// Add include directory.
+			options.numIncludeDirs ++;
+			options.includeDirs = (char **) realloc(options.includeDirs, sizeof(char *) * options.numIncludeDirs);
+			options.includeDirs[options.numIncludeDirs - 1] = &(argv[argIndex])[10];
+		} else if (!strncmp(argv[argIndex], "--out=", 6)) {
+			// Output type.
+			if (options.outputType) printf("Note: Output type already specified.\n");
+			options.outputType = &(argv[argIndex])[6];
+		} else if (*argv[argIndex] == '-') {
+			// Unknown option.
+			fflush(stdout);
+			fprintf(stderr, "Error: Unknown option '%s'!\n", argv[argIndex]);
+			options.showHelp = true;
+		} else {
+			// End of options.
+			break;
+		}
+	}
+	apply_defaults(&options);
+	
+	if (options.showHelp) {
+		printf("lilly-cc " ARCH_ID " v0.1\n");
+		show_help(argc, argv);
+		return 0;
+	}
+	if (options.showVersion) {
+		printf("lilly-cc " ARCH_ID " v0.1\n");
+		return 0;
+	}
+	// Check for input files.
+	if (argIndex >= argc) {
+		fflush(stdout);
+		fprintf(stderr, "Error: No input files specified!\n");
+		fprintf(stderr, "Try '%s --help' for help.\n", *argv);
+		return 0;
+	}
+	
 	// Read file.
-	char *filename = "test/test0.txt";
+	if (argc > argIndex + 1) printf("Please note: Only the first input file is compiled for now.\n");
+	char *filename = argv[argIndex];
 	FILE *file = fopen(filename, "r");
 	fseek(file, 0, SEEK_END);
 	size_t len = ftell(file);
@@ -54,6 +120,28 @@ int main(int argc, char **argv) {
 	yyparse(&ctx);
 }
 
+// Show help on the command line.
+void show_help(int argc, char **argv) {
+	printf("%s [options] source-files...\n", *argv);
+	printf("Options:\n");
+	printf("  -v  --version\n");
+	printf("                Show the version.\n");
+	printf("  -h  --help\n");
+	printf("                Show this list.\n");
+	printf("  -I<dir>  --include=<dir>\n");
+	printf("                Add a directory to the include directories.\n");
+	printf("  --out=<type>\n");
+	printf("                Specify the output type:\n");
+	printf("                elf, raw\n");
+}
+
+// Apply default options for options not already set.
+void apply_defaults(options_t *options) {
+	if (!options->outputFile) {
+		options->outputFile = "a.out";
+	}
+}
+
 int yylex(parser_ctx_t *ctx) {
 	return tokenise(ctx->tokeniser_ctx);
 }
@@ -63,12 +151,34 @@ void yyerror(parser_ctx_t *ctx, char *msg) {
 	fflush(stderr);
 }
 
+
+/* Some debug printening. */
+
 void prontExprs(expressions_t *expr);
 void prontExpr(expression_t *expr);
 void prontVardecls(vardecls_t *var, int depth);
 void prontVardecl(vardecl_t *var, int depth);
 void prontStatmts(statements_t *statmt, int depth);
 void prontStatmt(statement_t *statmt, int depth);
+
+// Process a function.
+void function_added(parser_ctx_t *parser_ctx, funcdef_t *func) {
+	// Some debug printening.
+	printf("funcdef_t '%s' (", func->ident);
+	if (func->numParams) fputs(func->paramIdents[0], stdout);
+	for (int i = 1; i < func->numParams; i ++) {
+		fputc(',', stdout);
+		fputs(func->paramIdents[i], stdout);
+	}
+	printf("):\n");
+	prontStatmts(func->statements, 1);
+	// Create function asm.
+	asm_preproc_function(parser_ctx, func);
+	asm_write_function(parser_ctx, func);
+}
+
+
+/* Some debug printening. */
 
 void prontVardecls(vardecls_t *var, int depth) {
 	for (int i = 0; i < var->num; i++) {
@@ -212,21 +322,6 @@ void prontStatmt(statement_t *statmt, int depth) {
 		}
 	}
 	free(deep);
-}
-
-void function_added(parser_ctx_t *parser_ctx, funcdef_t *func) {
-	// Some debug printening.
-	printf("funcdef_t '%s' (", func->ident);
-	if (func->numParams) fputs(func->paramIdents[0], stdout);
-	for (int i = 1; i < func->numParams; i ++) {
-		fputc(',', stdout);
-		fputs(func->paramIdents[i], stdout);
-	}
-	printf("):\n");
-	prontStatmts(func->statements, 1);
-	// Create function asm.
-	asm_preproc_function(parser_ctx, func);
-	asm_write_function(parser_ctx, func);
 }
 
 

@@ -286,7 +286,7 @@ void asm_pop_scope(asm_ctx_t *ctx) {
 
 // Open a new scope for the preprocessor.
 void asm_preproc_push_scope(asm_ctx_t *ctx) {
-	printf("PUSH PREPROC SCOPE\n");
+	// printf("PUSH PREPROC SCOPE\n");
 	// Create some stuff.
 	asm_scope_t *current = malloc(sizeof(asm_scope_t));
 	current->parent = ctx->scope;
@@ -307,7 +307,7 @@ void asm_preproc_push_scope(asm_ctx_t *ctx) {
 
 // Close the current scope for the preprocessor.
 void asm_preproc_pop_scope(asm_ctx_t *ctx) {
-	printf("POP PREPROC SCOPE\n");
+	// printf("POP PREPROC SCOPE\n");
 	// Set the current scope to it's parent.
 	asm_scope_t *current = ctx->scope;
 	ctx->scope = current->parent;
@@ -318,7 +318,7 @@ void asm_preproc_pop_scope(asm_ctx_t *ctx) {
 
 // Close the current scope for the preprocessor, given the context of a loop.
 void asm_preproc_loop_scope(asm_ctx_t *ctx) {
-	printf("LOOP PREPROC SCOPE\n");
+	// printf("LOOP PREPROC SCOPE\n");
 	// Set the current scope to it's parent.
 	asm_scope_t *current = ctx->scope;
 	ctx->scope = current->parent;

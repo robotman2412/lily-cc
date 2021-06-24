@@ -13,9 +13,11 @@ This compiler does not do C++.
 1. Pull git git repository: `git clone https://github.com/robotman2412/lilly-c`
 2. Configure (see [Configuration](#Configuration))
 3. Build for the first time: `./build.sh` <sup>(1)</sup>
-4. Start coding!
+4. The output executable is called `comp` <sup>(2)</sup>
 
 Note 1: The initial build is required because several files are generated.
+
+Note 2: Executable name subject to change.
 
 ## Configuration
 There are two options at this point:

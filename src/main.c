@@ -132,13 +132,25 @@ void show_help(int argc, char **argv) {
 	printf("                Add a directory to the include directories.\n");
 	printf("  --out=<type>\n");
 	printf("                Specify the output type:\n");
-	printf("                elf, raw\n");
+	printf("                shared, raw, executable\n");
 }
 
 // Apply default options for options not already set.
 void apply_defaults(options_t *options) {
 	if (!options->outputFile) {
 		options->outputFile = "a.out";
+		options->outputType = "executable";
+	} else if (!options->outputType) {
+		size_t len = strlen(options->outputFile);
+		if (!strcmp(&options->outputFile[len - 3], ".so")) {
+			options->outputType = "shared";
+		} else if (!strcmp(&options->outputFile[len - 3], ".o")) {
+			options->outputType = "shared";
+		} else if (!strcmp(&options->outputFile[len - 4], ".bin")) {
+			options->outputType = "raw";
+		} else {
+			options->outputType = "executable";
+		}
 	}
 }
 
@@ -318,6 +330,16 @@ void prontStatmt(statement_t *statmt, int depth) {
 				prontExpr(statmt->expr);
 				printf("\n");
 				prontStatmt(statmt->statement, depth + 1);
+				break;
+			case(STATMT_TYPE_FOR):
+				printf("%sstatement_t: for\n", deep);
+				prontStatmt(statmt->statement, depth + 1);
+				printf("%s  expression_t ", deep);
+				prontExpr(statmt->expr);
+				printf("\n%s  expression_t ", deep);
+				prontExpr(statmt->expr);
+				printf("\n");
+				prontStatmt(statmt->statement1, depth + 1);
 				break;
 		}
 	}

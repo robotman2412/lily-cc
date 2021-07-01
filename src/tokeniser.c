@@ -80,50 +80,50 @@ int tokenise(tokeniser_ctx_t *ctx) {
 			if (next == '+') {
 				tokeniser_readchar(ctx);
 				DEBUG("INC\n");
-				return INC;
+				return TKN_INC;
 			} else {
 				DEBUG("ADD\n");
-				return ADD;
+				return TKN_ADD;
 			}
 		case ('-'):
 			if (next == '-') {
 				tokeniser_readchar(ctx);
 				DEBUG("DEC\n");
-				return DEC;
+				return TKN_DEC;
 			} else {
 				DEBUG("SUB\n");
-				return SUB;
+				return TKN_SUB;
 			}
 		case ('('):
 			DEBUG("LPAR\n");
-			return LPAR;
+			return TKN_LPAR;
 		case (')'):
 			DEBUG("RPAR\n");
-			return RPAR;
+			return TKN_RPAR;
 		case ('{'):
 			DEBUG("LBRAC\n");
-			return LBRAC;
+			return TKN_LBRAC;
 		case ('}'):
 			DEBUG("RBRAC\n");
-			return RBRAC;
+			return TKN_RBRAC;
 		case ('*'):
 			DEBUG("MUL\n");
-			return MUL;
+			return TKN_MUL;
 		case ('/'):
 			DEBUG("DIV\n");
-			return DIV;
+			return TKN_DIV;
 		case ('%'):
 			DEBUG("REM\n");
-			return REM;
+			return TKN_REM;
 		case ('='):
 			DEBUG("ASSIGN\n");
-			return ASSIGN;
+			return TKN_ASSIGN;
 		case (','):
 			DEBUG("COMMA\n");
-			return COMMA;
+			return TKN_COMMA;
 		case (';'):
 			DEBUG("SEMI\n");
-			return SEMI;
+			return TKN_SEMI;
 	}
 	// This could be a number.
 	if (is_numeric(c)) {
@@ -144,7 +144,7 @@ int tokenise(tokeniser_ctx_t *ctx) {
 		free(strval);
 		yylval.ival = ival;
 		DEBUG("NUM(%d)\n", ival);
-		return NUM;
+		return TKN_NUM;
 	}
 	// Or an ident or keyword.
 	if (is_alphanumeric(c)) {
@@ -161,24 +161,42 @@ int tokenise(tokeniser_ctx_t *ctx) {
 		}
 		// Next, check for keywords.
 		int keyw = 0;
-		if (!strcmp(strval, "var")) {
-			DEBUG("VAR\n");
-			keyw = VAR;
-		} else if (!strcmp(strval, "if")) {
+		if (!strcmp(strval, "if")) {
 			DEBUG("IF\n");
-			keyw = IF;
+			keyw = TKN_IF;
 		} else if (!strcmp(strval, "else")) {
 			DEBUG("ELSE\n");
-			keyw = ELSE;
+			keyw = TKN_ELSE;
 		} else if (!strcmp(strval, "while")) {
 			DEBUG("WHILE\n");
-			keyw = WHILE;
-		} else if (!strcmp(strval, "func")) {
-			DEBUG("FUNC\n");
-			keyw = FUNC;
+			keyw = TKN_WHILE;
+		} else if (!strcmp(strval, "for")) {
+			DEBUG("FOR\n");
+			keyw = TKN_FOR;
 		} else if (!strcmp(strval, "return")) {
 			DEBUG("RETURN\n");
-			keyw = RETURN;
+			keyw = TKN_RETURN;
+		} else if (!strcmp(strval, "char")) {
+			DEBUG("CHAR\n");
+			keyw = TKN_CHAR;
+		} else if (!strcmp(strval, "int")) {
+			DEBUG("INT\n");
+			keyw = TKN_INT;
+		} else if (!strcmp(strval, "short")) {
+			DEBUG("SHORT\n");
+			keyw = TKN_SHORT;
+		} else if (!strcmp(strval, "long")) {
+			DEBUG("LONG\n");
+			keyw = TKN_LONG;
+		} else if (!strcmp(strval, "float")) {
+			DEBUG("FLOAT\n");
+			keyw = TKN_FLOAT;
+		} else if (!strcmp(strval, "double")) {
+			DEBUG("LONG\n");
+			keyw = TKN_LONG;
+		} else if (!strcmp(strval, "void")) {
+			DEBUG("VOID\n");
+			keyw = TKN_VOID;
 		}
 		// Return the appropriate alternative.
 		if (keyw) {
@@ -187,7 +205,7 @@ int tokenise(tokeniser_ctx_t *ctx) {
 		}
 		yylval.ident = strval;
 		DEBUG("IDENT(%s)\n", strval);
-		return IDENT;
+		return TKN_IDENT;
 	}
 	// Otherwise, this is garbage.
 	// TODO: Better solution.

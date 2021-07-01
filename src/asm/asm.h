@@ -73,6 +73,8 @@ struct asm_scope {
 	asm_scope_t *parent;
 	// The number of times in this method that the stack has been pushed to.
 	address_t stackSize;
+	// Whether or not the scope is in a loop.
+	bool isLoop;
 };
 
 struct asm_preproc {
@@ -135,10 +137,10 @@ void asm_restore_scope(asm_ctx_t *ctx, bool explicit);
 void asm_pop_scope(asm_ctx_t *ctx);
 // Open a new scope for the preprocessor.
 void asm_preproc_push_scope(asm_ctx_t *ctx);
+// Open a new scope for the preprocessor, given the context of a loop.
+void asm_preproc_loop_scope(asm_ctx_t *ctx);
 // Close the current scope for the preprocessor.
 void asm_preproc_pop_scope(asm_ctx_t *ctx);
-// Close the current scope for the preprocessor, given the context of a loop.
-void asm_preproc_loop_scope(asm_ctx_t *ctx);
 
 /* ============== Pre-processing ============== */
 // Pre-processing pass before writing ASM.

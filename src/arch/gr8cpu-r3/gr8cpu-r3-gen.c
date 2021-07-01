@@ -176,7 +176,7 @@ void r3_math2(asm_ctx_t *ctx, uint8_t offs, param_spec_t *a, param_spec_t *b, pa
 					printf("TODO: CALC MODE %d\n", b->type);
 					break;
 			}
-		} else if (reg = REGS_X) {
+		} else if (reg == REGS_X) {
 			switch (b->type) {
 				case (LABEL):
 					asm_append(ctx, OFFS_PIE + offs + OFFS_CALC_XM);
@@ -189,6 +189,9 @@ void r3_math2(asm_ctx_t *ctx, uint8_t offs, param_spec_t *a, param_spec_t *b, pa
 				case (CONSTANT):
 					asm_append(ctx, offs + OFFS_CALC_XV);
 					asm_append(ctx, b->ptr.constant);
+					break;
+				case (REGISTER):
+					printf("Error: CALC X REG %d\n", b->ptr.regs);
 					break;
 				default:
 					printf("TODO: CALC X MODE %d\n", b->type);
@@ -208,6 +211,9 @@ void r3_math2(asm_ctx_t *ctx, uint8_t offs, param_spec_t *a, param_spec_t *b, pa
 					asm_append(ctx, offs + OFFS_CALC_YV);
 					asm_append(ctx, b->ptr.constant);
 					break;
+				case (REGISTER):
+					printf("Error: CALC Y REG %d\n", b->ptr.regs);
+					break;
 				default:
 					printf("TODO: CALC Y MODE %d\n", b->type);
 					break;
@@ -222,8 +228,10 @@ void r3_math2(asm_ctx_t *ctx, uint8_t offs, param_spec_t *a, param_spec_t *b, pa
 				.save_to = NULL
 			};
 			r3_use_register(ctx, reg, out);
-		} else {
+		} else if (doSave) {
 			r3_unuse_register(ctx, reg);
+		} else {
+			r3_use_register(ctx, reg, a);
 		}
 	} else {
 		printf("TODO: USE LABELS\n");
@@ -241,7 +249,7 @@ bool r3_collect_args(asm_ctx_t *ctx, param_spec_t *a, param_spec_t *b, bool doSa
 	
 	// Check whether alternate registers can be used directly.
 	if (a->type == REGISTER && a->ptr.regs != REGS_A && allowAltRegs) {
-		if (b->type == CONSTANT || b->type == ADDRESS || b->type == STACK) {
+		if (b->type == CONSTANT || b->type == ADDRESS || b->type == LABEL) {
 			*useReg = a->ptr.regs;
 			if (a->needs_save) {
 				r3_save_register(ctx, *useReg);
@@ -266,7 +274,7 @@ bool r3_collect_args(asm_ctx_t *ctx, param_spec_t *a, param_spec_t *b, bool doSa
 			// Save if required.
 			r3_save_register(ctx, REGS_A);
 		}
-		useReg = REGS_A;
+		*useReg = REGS_A;
 	} else if (a->ptr.regs != REGS_A) {
 		// Move something into A.
 		regs_t pre = a->ptr.regs;
@@ -277,7 +285,13 @@ bool r3_collect_args(asm_ctx_t *ctx, param_spec_t *a, param_spec_t *b, bool doSa
 			// Save if required.
 			a->ptr.regs = pre;
 		}
-		useReg = REGS_A;
+		*useReg = REGS_A;
+	} else {
+		*useReg = REGS_A;
+		if (a->needs_save && doSave) {
+			// Save if required.
+			r3_save_register(ctx, REGS_A);
+		}
 	}
 	
 	return true;
@@ -300,7 +314,7 @@ bool r3_mov(asm_ctx_t *ctx, regs_t reg, param_spec_t *value) {
 					else insn = INSN_MOV_YX;
 				}
 				asm_append(ctx, insn);
-				if (!value->needs_save) r3_unuse_register(ctx, value->ptr.regs);
+				r3_unuse_register(ctx, value->ptr.regs);
 			}
 			break;
 		case (LABEL):
@@ -335,7 +349,7 @@ bool r3_mov(asm_ctx_t *ctx, regs_t reg, param_spec_t *value) {
 // Saves a register to the stack and updates stuff to reflect the situation.
 void r3_save_register(asm_ctx_t *ctx, regs_t reg) {
 	// Saving is only required if the register is in use and the value is used later on.
-	if (ctx->gen_ctx.used[reg] && ctx->gen_ctx.usedFor[reg]->needs_save) {
+	if (ctx->gen_ctx.used[reg]) {
 		param_spec_t *spec = ctx->gen_ctx.usedFor[reg];
 		regs_t alt = reg == REGS_Y ? REGS_X : REGS_Y;
 		if (spec->save_to) {
@@ -352,7 +366,7 @@ void r3_save_register(asm_ctx_t *ctx, regs_t reg) {
 			// Update the location of the stored value.
 			spec->type = REGISTER;
 			spec->ptr.regs = alt;
-		} else{
+		} else {
 			// Append a push instruction.
 			asm_append(ctx, OFFS_PUSHR + reg);
 			// Update the location of the stored value.
@@ -375,6 +389,7 @@ void r3_use_register(asm_ctx_t *ctx, regs_t reg, param_spec_t *usedFor) {
 // Mark a register as unused.
 void r3_unuse_register(asm_ctx_t *ctx, regs_t reg) {
 	ctx->gen_ctx.used[reg] = false;
+	ctx->gen_ctx.usedFor[reg] = NULL;
 }
 
 // Appens ASM data for PIE label reference.
@@ -390,6 +405,8 @@ void r3_labelres_abs(asm_ctx_t *ctx, address_t pos, address_t labelpos) {
 /* ================ Generation ================ */
 // Generation of simple statements.
 
+/* -------- Utilities --------- */
+
 // Anything that needs to happen after asm_init.
 void gen_init(asm_ctx_t *ctx) {
 	ctx->gen_ctx = (gen_ctx_t) {
@@ -398,6 +415,17 @@ void gen_init(asm_ctx_t *ctx) {
 		.saveYReg = false
 	};
 }
+
+// Notify the generator of a pointer changing.
+void gen_update_ptr(asm_ctx_t *ctx, param_spec_t* from, param_spec_t *to) {
+	for (int i = 0; i < 3; i ++) {
+		if (ctx->gen_ctx.used[i] && ctx->gen_ctx.usedFor[i] == from) {
+			ctx->gen_ctx.usedFor[i] = to;
+		}
+	}
+}
+
+/* --------- Methods ---------- */
 
 // Generate method entry with optional params.
 void gen_method_entry(asm_ctx_t *ctx, param_spec_t **params, int nParams) {
@@ -435,12 +463,12 @@ void gen_method_ret(asm_ctx_t *ctx, param_spec_t *returnType) {
 	} else {
 		printf("TODO: RET SIZE %d\n", returnType->size);
 	}
-	if (ctx->gen_ctx.saveYReg) {
-		asm_append(ctx, OFFS_PULLR + REGS_Y);
-	}
 	while (ctx->stackSize) {
 		ctx->stackSize --;
 		asm_append(ctx, INSN_POP);
+	}
+	if (ctx->gen_ctx.saveYReg) {
+		asm_append(ctx, OFFS_PULLR + REGS_Y);
 	}
 	asm_append(ctx, INSN_RET);
 }
@@ -461,6 +489,22 @@ void gen_math2(asm_ctx_t *ctx, param_spec_t *a, param_spec_t *b, operator_t op, 
 
 // Generate simple math.
 void gen_math1(asm_ctx_t *ctx, param_spec_t *a, operator_t op) {
+	printf("MEHH ");
+	desc_param(ctx, a);
+	printf("\n");
+	if (a->type == STACK) {
+		for (int i = 0; i < 3; i++) {
+			if (!ctx->gen_ctx.used[i]) {
+				a->type = REGISTER;
+				a->ptr.regs = i;
+				ctx->stackSize --;
+				asm_append(ctx, OFFS_PULLR + i);
+				goto we_did_find;
+			}
+		}
+		printf("OH NO\n");
+	}
+	we_did_find:
 	if (op == OP_INC) {
 		if (a->type == ADDRESS) {
 			asm_append(ctx, INSN_INC_M);
@@ -509,6 +553,8 @@ void gen_comp(asm_ctx_t *ctx, param_spec_t *a, param_spec_t *b, branch_cond_t op
 	r3_math2(ctx, OFFS_CMP, a, b, out, false);
 }
 
+/* ------- Flow control ------- */
+
 // Generate branch after comparison.
 void gen_branch(asm_ctx_t *ctx, param_spec_t *a, param_spec_t *b, branch_cond_t cond, label_t to) {
 	r3_math2(ctx, OFFS_CMP, a, b, NULL, false);
@@ -521,23 +567,7 @@ void gen_jump(asm_ctx_t *ctx, label_t to) {
 	asm_label_ref(ctx, to, &r3_labelres_pie);
 }
 
-// Generate code to copy the value of 'src' to the location of 'dest'.
-// Doing this is allowed to change the location of either value.
-bool gen_mov(asm_ctx_t *ctx, param_spec_t *dest, param_spec_t *src) {
-	printf("MOV ");
-	desc_param(ctx, dest);
-	printf(", ");
-	desc_param(ctx, src);
-	printf("\n");
-	if (dest->size > 1) {
-		printf("TODO: MOV SIZE %d\n", dest->size);
-	}
-	if (dest->type == REGISTER) {
-		r3_mov(ctx, dest->ptr.regs, src);
-	} else {
-		printf("TODO: MOV TYPE %d, %d\n", dest->type, src->type);
-	}
-}
+/* -------- Variables --------- */
 
 // Reserve a location for a variable of a certain type.
 void gen_var(asm_ctx_t *ctx, type_spec_t *type, param_spec_t *out) {
@@ -570,7 +600,7 @@ void gen_var_assign(asm_ctx_t *ctx, param_spec_t *val, param_spec_t *out) {
 	if (val->size > 1) {
 		printf("TODO: VAR SIZE %d\n", val->size);
 	}
-	if (!out->needs_save) {
+	if (!out->needs_save && !out->type == CONSTANT) {
 		out->type = val->type;
 		out->ptr = val->ptr;
 		return;
@@ -611,6 +641,24 @@ void gen_var_assign(asm_ctx_t *ctx, param_spec_t *val, param_spec_t *out) {
 	ctx->stackSize ++;
 }
 
+// Generate code to copy the value of 'src' to the location of 'dest'.
+// Doing this is allowed to change the location of either value.
+bool gen_mov(asm_ctx_t *ctx, param_spec_t *dest, param_spec_t *src) {
+	printf("MOV ");
+	desc_param(ctx, dest);
+	printf(", ");
+	desc_param(ctx, src);
+	printf("\n");
+	if (dest->size > 1) {
+		printf("TODO: MOV SIZE %d\n", dest->size);
+	}
+	if (dest->type == REGISTER) {
+		r3_mov(ctx, dest->ptr.regs, src);
+	} else {
+		printf("TODO: MOV TYPE %d, %d\n", dest->type, src->type);
+	}
+}
+
 // Generate code to move 'from' to the same location as 'to'.
 // Returns true on success.
 bool gen_restore(asm_ctx_t *ctx, param_spec_t *from, param_spec_t *to) {
@@ -624,12 +672,3 @@ bool gen_restore(asm_ctx_t *ctx, param_spec_t *from, param_spec_t *to) {
 }
 
 /* ==== Architecture-optimised generation. ==== */
-// Any of these may return data to be passed to the complementary methods.
-
-// Support for simple for loop given limit.
-char agen_supports_fori(asm_ctx_t *ctx, param_spec_t *limit) { return 0; }
-
-// Simple for (int i; i<123; i++) loop.
-void *agen_fori_pre(asm_ctx_t *ctx, param_spec_t *limit) { return NULL; }
-// Simple for (int i; i<123; i++) loop.
-void *agen_fori_post(asm_ctx_t *ctx, param_spec_t *limit) { return NULL; }

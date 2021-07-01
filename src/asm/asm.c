@@ -87,6 +87,7 @@ void asm_init(asm_ctx_t *ctx) {
 	};
 	ctx->scope = (asm_scope_t *) malloc(sizeof(asm_scope_t));
 	ctx->scope->parent = NULL;
+	ctx->scope->isLoop = false;
 	map_create(&ctx->scope->variables);
 	map_create(&ctx->scope->upper);
 	gen_init(ctx);
@@ -241,6 +242,7 @@ void asm_push_scope(asm_ctx_t *ctx) {
 		asm_var_t *to = (asm_var_t *) malloc(sizeof(asm_var_t));
 		memcpy(to, from, sizeof(asm_var_t));
 		current->upper.values[i] = to;
+		gen_update_ptr(ctx, &from->param, &to->param);
 	}
 	ctx->scope = current;
 	ctx->scope->stackSize = ctx->stackSize;
@@ -258,8 +260,11 @@ void asm_restore_scope(asm_ctx_t *ctx, bool explicit) {
 	if (explicit) {
 		for (size_t i = 0; i < current->upper.numEntries; i++) {
 			asm_var_t *to = (asm_var_t *) map_get(&ctx->scope->variables, current->upper.strings[i]);
+			if (!to) to = (asm_var_t *) map_get(&ctx->scope->upper, current->upper.strings[i]);
+			if (!to) continue;
 			asm_var_t *from = (asm_var_t *) current->upper.values[i];
 			gen_restore(ctx, &from->param, &to->param);
+			gen_update_ptr(ctx, &from->param, &to->param);
 		}
 	}
 	ctx->stackSize = current->stackSize;
@@ -276,8 +281,12 @@ void asm_pop_scope(asm_ctx_t *ctx) {
 	ctx->scope = current->parent;
 	// Merge variable locations into parent scope.
 	for (size_t i = 0; i < current->upper.numEntries; i++) {
-		asm_var_t *var = (asm_var_t *) map_get(&ctx->scope->variables, current->upper.strings[i]);
-		var->param = ((asm_var_t *) current->upper.values[i])->param;
+		asm_var_t *to = (asm_var_t *) map_get(&ctx->scope->variables, current->upper.strings[i]);
+		if (!to) to = (asm_var_t *) map_get(&ctx->scope->upper, current->upper.strings[i]);
+		if (!to) continue;
+		asm_var_t *from = (asm_var_t *) current->upper.values[i];
+		to->param = from->param;
+		gen_update_ptr(ctx, &from->param, &to->param);
 	}
 	map_delete_with_values(&current->variables);
 	map_delete_with_values(&current->upper);
@@ -286,7 +295,7 @@ void asm_pop_scope(asm_ctx_t *ctx) {
 
 // Open a new scope for the preprocessor.
 void asm_preproc_push_scope(asm_ctx_t *ctx) {
-	// printf("PUSH PREPROC SCOPE\n");
+	printf("PUSH PREPROC SCOPE\n");
 	// Create some stuff.
 	asm_scope_t *current = malloc(sizeof(asm_scope_t));
 	current->parent = ctx->scope;
@@ -302,30 +311,47 @@ void asm_preproc_push_scope(asm_ctx_t *ctx) {
 		asm_preproc_t *var = (asm_preproc_t *) parent->variables.values[i];
 		map_set(&current->upper, var->ident, var);
 	}
+	current->isLoop = current->parent->isLoop;
+	ctx->scope = current;
+}
+
+// Open a new scope for the preprocessor, given the context of a loop.
+void asm_preproc_loop_scope(asm_ctx_t *ctx) {
+	printf("LOOP PREPROC SCOPE\n");
+	// Create some stuff.
+	asm_scope_t *current = malloc(sizeof(asm_scope_t));
+	current->parent = ctx->scope;
+	map_create(&current->variables);
+	map_create(&current->upper);
+	// Copy parent's variables.
+	asm_scope_t *parent = current->parent;
+	for (size_t i = 0; i < parent->upper.numEntries; i++) {
+		asm_preproc_t *var = (asm_preproc_t *) parent->upper.values[i];
+		map_set(&current->upper, var->ident, var);
+	}
+	for (size_t i = 0; i < parent->variables.numEntries; i++) {
+		asm_preproc_t *var = (asm_preproc_t *) parent->variables.values[i];
+		map_set(&current->upper, var->ident, var);
+	}
+	current->isLoop = true;
 	ctx->scope = current;
 }
 
 // Close the current scope for the preprocessor.
 void asm_preproc_pop_scope(asm_ctx_t *ctx) {
-	// printf("POP PREPROC SCOPE\n");
+	printf("POP PREPROC SCOPE\n");
 	// Set the current scope to it's parent.
 	asm_scope_t *current = ctx->scope;
 	ctx->scope = current->parent;
-	map_delete_with_values(&current->variables);
-	map_delete(&current->upper);
-	free(current);
-}
-
-// Close the current scope for the preprocessor, given the context of a loop.
-void asm_preproc_loop_scope(asm_ctx_t *ctx) {
-	// printf("LOOP PREPROC SCOPE\n");
-	// Set the current scope to it's parent.
-	asm_scope_t *current = ctx->scope;
-	ctx->scope = current->parent;
-	// Mark all as not last use.
-	for (size_t i = 0; i < current->upper.numEntries; i++) {
-		asm_preproc_t *usage = (asm_preproc_t *) map_get(&ctx->scope->variables, current->upper.strings[i]);
-		if (usage->expr) usage->expr->value = 0;
+	if (current->isLoop) {
+		for (size_t i = 0; i < current->variables.numEntries; i++) {
+			asm_preproc_t *var = (asm_preproc_t *) current->variables.values[i];
+			if (var->expr) var->expr->value = 0;
+		}
+		for (size_t i = 0; i < current->upper.numEntries; i++) {
+			asm_preproc_t *var = (asm_preproc_t *) current->upper.values[i];
+			if (var->expr) var->expr->value = 0;
+		}
 	}
 	map_delete_with_values(&current->variables);
 	map_delete(&current->upper);
@@ -403,7 +429,7 @@ bool asm_preproc_statmt(parser_ctx_t *parser_ctx, statement_t *statmt) {
 				asm_preproc_t *var = (asm_preproc_t *) malloc(sizeof(asm_preproc_t));
 				var->expr = NULL;
 				var->ident = decl->ident;
-				if(decl->expr) asm_preproc_expr(parser_ctx, decl->expr);
+				if (decl->expr) asm_preproc_expr(parser_ctx, decl->expr);
 			}
 			return true;
 		case (STATMT_TYPE_IF): {
@@ -421,10 +447,21 @@ bool asm_preproc_statmt(parser_ctx_t *parser_ctx, statement_t *statmt) {
 		case (STATMT_TYPE_WHILE): {
 			// While statement.
 			asm_preproc_expr(parser_ctx, statmt->expr);
+			asm_preproc_loop_scope(ctx);
+			asm_preproc_statmt(parser_ctx, statmt->statement);
+			asm_preproc_pop_scope(ctx);
+			implicit = true;
+			} break;
+		case (STATMT_TYPE_FOR): {
+			// For statement.
 			asm_preproc_push_scope(ctx);
 			asm_preproc_statmt(parser_ctx, statmt->statement);
 			asm_preproc_loop_scope(ctx);
-			implicit = true;
+			asm_preproc_expr(parser_ctx, statmt->expr);
+			asm_preproc_statmt(parser_ctx, statmt->statement1);
+			asm_preproc_expr(parser_ctx, statmt->expr1);
+			asm_preproc_pop_scope(ctx);
+			asm_preproc_pop_scope(ctx);
 			} break;
 		case (STATMT_TYPE_MULTI):
 			// Many statements.
@@ -686,6 +723,38 @@ bool asm_write_statmt(parser_ctx_t *parser_ctx, statement_t *statmt) {
 			free(pre);
 			free(post);
 			implicit = true;
+			} break;
+		case (STATMT_TYPE_FOR): {
+			// For statement.
+			label_t pre = asm_numbered_label(ctx);
+			label_t post = asm_numbered_label(ctx);
+			asm_push_scope(ctx);
+			// Setup.
+			asm_write_statmt(parser_ctx, statmt->statement);
+			// Condition.
+			asm_label(ctx, pre);
+			asm_push_scope(ctx);
+			asm_write_expr(parser_ctx, statmt->expr);
+			param_spec_t *cond = asm_filter_param(ctx, softstack_get(&ctx->paramStack, 0));
+			softstack_pop(&ctx->paramStack);
+			param_spec_t zero = {
+				.type = CONSTANT,
+				.type_spec = { .type = NUM_HHU },
+				.size = 1,
+				.ptr = { .constant = 0 },
+				.needs_save = false,
+				.save_to = NULL
+			};
+			gen_branch(ctx, cond, &zero, BRANCH_EQUAL, post);
+			// Loop code.
+			asm_write_statmt(parser_ctx, statmt->statement1);
+			// Increment.
+			asm_write_expr(parser_ctx, statmt->expr1);
+			asm_restore_scope(ctx, true);
+			// Re-loopening.
+			gen_jump(ctx, pre);
+			asm_label(ctx, post);
+			asm_pop_scope(ctx);
 			} break;
 		case (STATMT_TYPE_MULTI):
 			// Many statements.

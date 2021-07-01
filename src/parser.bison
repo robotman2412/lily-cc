@@ -27,13 +27,16 @@
 	expressions_t exprs;
 }
 
-%token VAR "var" IF "if" ELSE "else" WHILE "while" FUNC "func" RETURN "return"
-%token LPAR "(" RPAR ")" LBRAC "{" RBRAC "}" SEMI ";" COMMA ","
-%token <ival> NUM
-%token <ident> IDENT
-%token INC "++" DEC "--" ADD "+" SUB "-" ASSIGN "="
-%token MUL "*" DIV "/" REM "%"
-%token THEN "then"
+%token TKN_IF "if" TKN_ELSE "else" TKN_WHILE "while" TKN_FOR "for" TKN_RETURN "return"
+%token TKN_LPAR "(" TKN_RPAR ")" TKN_LBRAC "{" TKN_RBRAC "}" TKN_SEMI ";" TKN_COMMA ","
+%token <ival> TKN_NUM
+%token <ident> TKN_IDENT
+%token TKN_INC "++" TKN_DEC "--" TKN_ADD "+" TKN_SUB "-" TKN_ASSIGN "="
+%token TKN_MUL "*" TKN_DIV "/" TKN_REM "%"
+%token TKN_THEN "then"
+%token TKN_STRUCT "struct" TKN_ENUM "enum" TKN_VOID "void"
+%token TKN_SIGNED "signed" TKN_UNSIGNED "unsigned" TKN_CHAR "char" TKN_SHORT "short" TKN_LONG "long" TKN_INT "int"
+%token TKN_FLOAT "float" TKN_DOUBLE "double"
 
 %type <func> funcdef
 %type <idents> funcparams
@@ -59,46 +62,68 @@
 
 %%
 library:		{init(ctx);}		funcdefs;
-funcdef:		{pre_func(ctx);}	"func" IDENT "(" opt_funcparams ")" "{" statmts "}" {$$=post_func(ctx, $3, &$5, &$8);};
+funcdef:		{pre_func(ctx);}	type_spec TKN_IDENT "(" opt_funcparams ")" "{" statmts "}" {$$=post_func(ctx, $3, &$5, &$8);};
 funcdefs:		funcdefs funcdef
 |				%empty;
-opt_funcparams:	funcparams						{$$=$1;}
-|				%empty							{$$=param_new   (ctx, NULL);}
-funcparams:		funcparams "," IDENT			{$$=param_cat   (ctx, &$1, $3);}
-|				IDENT							{$$=param_new   (ctx, $1);};
-vardecl:		"var" vardecls					{$$=$2;};
-vardecls:		vardecls "," varassign			{$$=vars_cat    (ctx, &$1, &$3);}
-|				varassign						{$$=vars_new    (ctx, &$1);};
-varassign:		IDENT "=" expr					{$$=decl_assign (ctx, $1, &$3);}
-|				IDENT							{$$=decl        (ctx, $1);};
-statmt:			"{" statmts "}"					{$$=statmt_multi(ctx, &$2);}
+opt_funcparams:	funcparams							{$$=$1;}
+|				%empty								{$$=param_new   (ctx, NULL);}
+funcparams:		funcparams "," type_spec TKN_IDENT	{$$=param_cat   (ctx, &$1, $4);}
+|				type_spec TKN_IDENT					{$$=param_new   (ctx, $2);};
+
+vardecl:		type_spec varassign					{$$=vars_new    (ctx, &$2);}
+|				type_spec varassign "," vardecls	{$$=vars_cat    (ctx, &$4, &$2);};
+vardecls:		vardecls "," type_spec varassign	{$$=vars_cat    (ctx, &$1, &$4);}
+|				vardecls "," varassign				{$$=vars_cat    (ctx, &$1, &$3);}
+|				type_spec varassign					{$$=vars_new    (ctx, &$2);}
+|				varassign							{$$=vars_new    (ctx, &$1);};
+varassign:		TKN_IDENT "=" expr					{$$=decl_assign (ctx, $1, &$3);}
+|				TKN_IDENT							{$$=decl        (ctx, $1);};
+statmt:			"{" statmts "}"						{$$=statmt_multi(ctx, &$2);}
 |				"if"	"(" expr ")" statmt
-				opt_else						{$$=statmt_if   (ctx, &$3, &$5, &$6);}
-|				"while"	"(" expr ")" statmt		{$$=statmt_while(ctx, &$3, &$5);}
-|				"return" expr	";"				{$$=statmt_ret  (ctx, &$2);}
-|				vardecl			";"				{$$=statmt_var  (ctx, &$1);}
-|				expr			";"				{$$=statmt_expr (ctx, &$1);}
-|				";"								{$$=statmt_nop  (ctx);};
-statmts:		%empty							{$$=statmts_new (ctx);}
-|				statmts statmt					{$$=statmts_cat (ctx, &$1, &$2);};
-expr:			IDENT							{$$=expr_var    (ctx, $1);}
-|				NUM								{$$=expr_const  (ctx, $1);}
-|				"(" expr ")"					{$$=$2;}
-|				expr "(" opt_exprs ")"			{$$=expr_call   (ctx, &$1, &$3);}
-|				expr "=" expr					{$$=expr_assign (ctx, &$1, &$3);}
-|				expr "+" expr					{$$=expr_math2  (ctx, &$1, &$3, OP_ADD);}
-|				expr "-" expr		%prec "+"	{$$=expr_math2  (ctx, &$1, &$3, OP_SUB);}
-|				expr "*" expr					{$$=expr_math2  (ctx, &$1, &$3, OP_MUL);}
-|				expr "/" expr		%prec "*"	{$$=expr_math2  (ctx, &$1, &$3, OP_DIV);}
-|				expr "%" expr		%prec "*"	{$$=expr_math2  (ctx, &$1, &$3, OP_REM);}
-|				expr "++"						{$$=expr_math1  (ctx, &$1, OP_INC);}
-|				expr "--"			%prec "++"	{$$=expr_math1  (ctx, &$1, OP_DEC);};
-exprs:			exprs "," expr					{$$=exprs_cat   (ctx, &$1, &$3);}
-|				expr							{$$=exprs_new   (ctx, &$1);};
-opt_exprs:		exprs							{$$=$1;}
-|				%empty							{$$=exprs_new   (ctx, NULL);};
-opt_else:		"else" statmt					{$$=$2;}
-|				%empty				%prec "then"{$$=statmt_nop  (ctx);};
+				opt_else							{$$=statmt_if   (ctx, &$3, &$5, &$6);}
+|				"while"	"(" expr ")" statmt			{$$=statmt_while(ctx, &$3, &$5);}
+|				"for" "(" statmt expr
+								";" expr ")" statmt	{$$=statmt_for  (ctx, &$3, &$4, &$6, &$8);}
+|				"return" expr	";"					{$$=statmt_ret  (ctx, &$2);}
+|				vardecl			";"					{$$=statmt_var  (ctx, &$1);}
+|				expr			";"					{$$=statmt_expr (ctx, &$1);}
+|				";"									{$$=statmt_nop  (ctx);};
+statmts:		%empty								{$$=statmts_new (ctx);}
+|				statmts statmt						{$$=statmts_cat (ctx, &$1, &$2);};
+expr:			TKN_IDENT							{$$=expr_var    (ctx, $1);}
+|				TKN_NUM								{$$=expr_const  (ctx, $1);}
+|				"(" expr ")"						{$$=$2;}
+|				expr "(" opt_exprs ")"				{$$=expr_call   (ctx, &$1, &$3);}
+|				expr "=" expr						{$$=expr_assign (ctx, &$1, &$3);}
+|				expr "+" expr						{$$=expr_math2  (ctx, &$1, &$3, OP_ADD);}
+|				expr "-" expr		%prec "+"		{$$=expr_math2  (ctx, &$1, &$3, OP_SUB);}
+|				expr "*" expr						{$$=expr_math2  (ctx, &$1, &$3, OP_MUL);}
+|				expr "/" expr		%prec "*"		{$$=expr_math2  (ctx, &$1, &$3, OP_DIV);}
+|				expr "%" expr		%prec "*"		{$$=expr_math2  (ctx, &$1, &$3, OP_REM);}
+|				expr "++"							{$$=expr_math1  (ctx, &$1, OP_INC);}
+|				expr "--"			%prec "++"		{$$=expr_math1  (ctx, &$1, OP_DEC);};
+exprs:			exprs "," expr						{$$=exprs_cat   (ctx, &$1, &$3);}
+|				expr								{$$=exprs_new   (ctx, &$1);};
+opt_exprs:		exprs								{$$=$1;}
+|				%empty								{$$=exprs_new   (ctx, NULL);};
+opt_else:		"else" statmt						{$$=$2;}
+|				%empty				%prec "then"	{$$=statmt_nop  (ctx);};
+type_spec:		"void"
+|				"signed" int_spec
+|				"unsigned" int_spec
+|				int_spec
+|				"float"
+|				"double"
+|				"long" "double"
+|				"struct" TKN_IDENT
+|				"enum" TKN_IDENT;
+int_spec:		"char"
+|				"short" opt_int
+|				"int"
+|				"long" opt_int
+|				"long" "long" opt_int;
+opt_int:		"int"
+|				%empty;
 %%
 
 static void *make_copy(void *mem, size_t size) {
@@ -204,6 +229,7 @@ statement_t statmt_nop(parser_ctx_t *ctx) {
 	return (statement_t) {
 		.type = STATMT_TYPE_NOP,
 		.expr = NULL,
+		.expr1 = NULL,
 		.statement = NULL,
 		.statement1 = NULL,
 		.statements = NULL,
@@ -215,6 +241,7 @@ statement_t statmt_expr(parser_ctx_t *ctx, expression_t *expr) {
 	return (statement_t) {
 		.type = STATMT_TYPE_EXPR,
 		.expr = make_copy(expr, sizeof(expression_t)),
+		.expr1 = NULL,
 		.statement = NULL,
 		.statement1 = NULL,
 		.statements = NULL,
@@ -226,6 +253,7 @@ statement_t statmt_ret(parser_ctx_t *ctx, expression_t *expr) {
 	return (statement_t) {
 		.type = STATMT_TYPE_RET,
 		.expr = make_copy(expr, sizeof(expression_t)),
+		.expr1 = NULL,
 		.statement = NULL,
 		.statement1 = NULL,
 		.statements = NULL,
@@ -237,6 +265,7 @@ statement_t statmt_var(parser_ctx_t *ctx, vardecls_t *var) {
 	return (statement_t) {
 		.type = STATMT_TYPE_VAR,
 		.expr = NULL,
+		.expr1 = NULL,
 		.statement = NULL,
 		.statement1 = NULL,
 		.statements = NULL,
@@ -248,6 +277,7 @@ statement_t statmt_if(parser_ctx_t *ctx, expression_t *expr, statement_t *code, 
 	return (statement_t) {
 		.type = STATMT_TYPE_IF,
 		.expr = make_copy(expr, sizeof(expression_t)),
+		.expr1 = NULL,
 		.statement = make_copy(code, sizeof(statement_t)),
 		.statement1 = make_copy(else_code, sizeof(statement_t)),
 		.statements = NULL,
@@ -259,8 +289,21 @@ statement_t statmt_while(parser_ctx_t *ctx, expression_t *expr, statement_t *cod
 	return (statement_t) {
 		.type = STATMT_TYPE_WHILE,
 		.expr = make_copy(expr, sizeof(expression_t)),
+		.expr1 = NULL,
 		.statement = make_copy(code, sizeof(statement_t)),
 		.statement1 = NULL,
+		.statements = NULL,
+		.decls = NULL
+	};
+}
+
+statement_t statmt_for(parser_ctx_t *ctx, statement_t *setup, expression_t *cond, expression_t *inc, statement_t *code) {
+	return (statement_t) {
+		.type = STATMT_TYPE_FOR,
+		.expr = make_copy(cond, sizeof(expression_t)),
+		.expr1 = make_copy(inc, sizeof(expression_t)),
+		.statement = make_copy(setup, sizeof(statement_t)),
+		.statement1 = make_copy(code, sizeof(statement_t)),
 		.statements = NULL,
 		.decls = NULL
 	};
@@ -270,6 +313,7 @@ statement_t statmt_multi(parser_ctx_t *ctx, statements_t *code) {
 	return (statement_t) {
 		.type = STATMT_TYPE_MULTI,
 		.expr = NULL,
+		.expr1 = NULL,
 		.statement = NULL,
 		.statement1 = NULL,
 		.statements = make_copy(code, sizeof(statements_t)),

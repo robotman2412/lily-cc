@@ -1,5 +1,0 @@
-
-func mul(a, b) {
-	b = b + 3;
-	return b;
-}

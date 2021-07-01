@@ -50,7 +50,8 @@ enum statement_type {
 	STATMT_TYPE_VAR,
 	STATMT_TYPE_IF,
 	STATMT_TYPE_WHILE,
-	STATMT_TYPE_MULTI
+	STATMT_TYPE_MULTI,
+	STATMT_TYPE_FOR
 };
 
 // Expression: a + b * c, a = 123, etc.
@@ -74,6 +75,7 @@ struct expressions {
 struct statement {
 	statement_type_t type;
 	expression_t *expr;
+	expression_t *expr1;
 	statement_t *statement;
 	statement_t *statement1;
 	statements_t *statements;
@@ -144,6 +146,7 @@ statement_t statmt_ret		(parser_ctx_t *ctx, expression_t *expr);
 statement_t statmt_var		(parser_ctx_t *ctx, vardecls_t *var);
 statement_t statmt_if		(parser_ctx_t *ctx, expression_t *expr, statement_t *code, statement_t *else_code);
 statement_t statmt_while	(parser_ctx_t *ctx, expression_t *expr, statement_t *code);
+statement_t statmt_for		(parser_ctx_t *ctx, statement_t *setup, expression_t *cond, expression_t *inc, statement_t *code);
 statement_t statmt_multi	(parser_ctx_t *ctx, statements_t *code);
 
 expression_t expr_var		(parser_ctx_t *ctx, char *ident);

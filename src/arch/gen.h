@@ -169,8 +169,15 @@ struct param_spec {
 /* ================ Generation ================ */
 // Generation of simple statements.
 
+/* -------- Utilities --------- */
+
 // Anything that needs to happen after asm_init.
 void gen_init			(asm_ctx_t *ctx);
+// Notify the generator of a pointer changing.
+void gen_update_ptr		(asm_ctx_t *ctx, param_spec_t* from, param_spec_t *to);
+
+/* --------- Methods ---------- */
+
 // Generate method entry with optional params.
 void gen_method_entry	(asm_ctx_t *ctx, param_spec_t **params, int nParams);
 // Generate method return with specified return type.
@@ -181,10 +188,16 @@ void gen_math2			(asm_ctx_t *ctx, param_spec_t *a, param_spec_t *b, operator_t o
 void gen_math1			(asm_ctx_t *ctx, param_spec_t *a, operator_t op);
 // Generate comparison, returning 0 or 1.
 void gen_comp			(asm_ctx_t *ctx, param_spec_t *a, param_spec_t *b, branch_cond_t op, param_spec_t *out);
+
+/* ------- Flow control ------- */
+
 // Generate branch after comparison.
 void gen_branch			(asm_ctx_t *ctx, param_spec_t *a, param_spec_t *b, branch_cond_t cond, label_t to);
 // Generate jump.
 void gen_jump			(asm_ctx_t *ctx, label_t to);
+
+/* -------- Variables --------- */
+
 // Reserve a location for a variable of a certain type.
 void gen_var			(asm_ctx_t *ctx, type_spec_t *type, param_spec_t *out);
 // Reserve a location for a variable with a given value.
@@ -198,14 +211,5 @@ bool gen_restore		(asm_ctx_t *ctx, param_spec_t *from, param_spec_t *to);
 
 
 /* ==== Architecture-optimised generation. ==== */
-// Any of these may return data to be passed to the complementary methods.
-
-// Support for simple for loop given limit.
-char agen_supports_fori	(asm_ctx_t *ctx, param_spec_t * limit);
-
-// Simple for (int i; i<123; i++) loop.
-void *agen_fori_pre		(asm_ctx_t *ctx, param_spec_t * limit);
-// Simple for (int i; i<123; i++) loop.
-void *agen_fori_post	(asm_ctx_t *ctx, param_spec_t * limit);
 
 #endif // GEN_H

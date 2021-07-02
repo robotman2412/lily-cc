@@ -1,5 +1,5 @@
 
-void tfw(int a) {
+int tfw(int a) {
 	int out = 0;
 	for (; a; a--) {
 		out ++;

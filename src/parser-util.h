@@ -4,6 +4,8 @@
 
 enum expr_type;
 enum statement_type;
+struct ival;
+struct ident;
 struct expression;
 struct expressions;
 struct statement;
@@ -16,6 +18,8 @@ struct parser_ctx;
 
 typedef enum expr_type expr_type_t;
 typedef enum statement_type statement_type_t;
+typedef struct ival ival_t;
+typedef struct ident ident_t;
 typedef struct expression expression_t;
 typedef struct expressions expressions_t;
 typedef struct statement statement_t;
@@ -54,8 +58,21 @@ enum statement_type {
 	STATMT_TYPE_FOR
 };
 
+// Combination of pos_t and int.
+struct ival {
+	pos_t pos;
+	int ival;
+};
+
+// Combination of pos_t and char *.
+struct ident {
+	pos_t pos;
+	char *ident;
+};
+
 // Expression: a + b * c, a = 123, etc.
 struct expression {
+	pos_t pos;
 	enum expr_type type;
 	char *ident;
 	expression_t *expr;
@@ -67,12 +84,14 @@ struct expression {
 
 // Multiple expressions: function params, array init.
 struct expressions {
+	pos_t pos;
 	int num;
 	expression_t *exprs;
 };
 
 // Statement: if, while, expression, etc.
 struct statement {
+	pos_t pos;
 	statement_type_t type;
 	expression_t *expr;
 	expression_t *expr1;
@@ -84,32 +103,37 @@ struct statement {
 
 // Multiple statements.
 struct statements {
+	pos_t pos;
 	int num;
 	statement_t *statements;
 };
 
 // Definition of a function.
 struct funcdef {
-	char *ident;
+	pos_t pos;
+	ident_t ident;
 	int numParams;
-	char **paramIdents;
+	ident_t *paramIdents;
 	statements_t *statements;
 };
 
 // Function parameters.
 struct idents {
+	pos_t pos;
 	int numIdents;
-	char **idents;
+	ident_t *idents;
 };
 
 // Definition of a single variable.
 struct vardecl {
-	char *ident;
+	pos_t pos;
+	ident_t ident;
 	expression_t *expr;
 };
 
 // Multiple expressions: function params, array init.
 struct vardecls {
+	pos_t pos;
 	int num;
 	vardecl_t *vars;
 };
@@ -133,12 +157,13 @@ void push_scope				(parser_ctx_t *ctx);
 void pop_scope				(parser_ctx_t *ctx);
 
 void pre_func				(parser_ctx_t *ctx);
-idents_t param_cat			(parser_ctx_t *ctx, idents_t *other, char *ident);
-idents_t param_new			(parser_ctx_t *ctx, char *ident);
-funcdef_t post_func			(parser_ctx_t *ctx, char *ident, idents_t *idents, statements_t *statmt);
+idents_t param_cat			(parser_ctx_t *ctx, idents_t *other, ident_t ident);
+idents_t param_new			(parser_ctx_t *ctx, ident_t ident);
+idents_t param_empty		(parser_ctx_t *ctx);
+funcdef_t post_func			(parser_ctx_t *ctx, ident_t ident, idents_t *idents, statements_t *statmt);
 
-vardecl_t decl_assign		(parser_ctx_t *ctx, char *ident, expression_t *expression);
-vardecl_t decl				(parser_ctx_t *ctx, char *ident);
+vardecl_t decl_assign		(parser_ctx_t *ctx, ident_t ident, expression_t *expression);
+vardecl_t decl				(parser_ctx_t *ctx, ident_t ident);
 
 statement_t statmt_nop		(parser_ctx_t *ctx);
 statement_t statmt_expr		(parser_ctx_t *ctx, expression_t *expr);
@@ -149,8 +174,8 @@ statement_t statmt_while	(parser_ctx_t *ctx, expression_t *expr, statement_t *co
 statement_t statmt_for		(parser_ctx_t *ctx, statement_t *setup, expression_t *cond, expression_t *inc, statement_t *code);
 statement_t statmt_multi	(parser_ctx_t *ctx, statements_t *code);
 
-expression_t expr_var		(parser_ctx_t *ctx, char *ident);
-expression_t expr_const		(parser_ctx_t *ctx, int iconst);
+expression_t expr_var		(parser_ctx_t *ctx, ident_t ident);
+expression_t expr_const		(parser_ctx_t *ctx, ival_t iconst);
 expression_t expr_call		(parser_ctx_t *ctx, expression_t *func, expressions_t *params);
 expression_t expr_assign	(parser_ctx_t *ctx, expression_t *var, expression_t *val);
 expression_t expr_math2		(parser_ctx_t *ctx, expression_t *left, expression_t *right, operator_t oper);

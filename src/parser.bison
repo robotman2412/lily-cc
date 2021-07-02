@@ -15,8 +15,9 @@
 %param { parser_ctx_t *ctx };
 
 %union {
-	int ival;
-	char *ident;
+	pos_t pos;
+	ival_t ival;
+	ident_t ident;
 	funcdef_t func;
 	idents_t idents;
 	vardecl_t var;
@@ -27,16 +28,16 @@
 	expressions_t exprs;
 }
 
-%token TKN_IF "if" TKN_ELSE "else" TKN_WHILE "while" TKN_FOR "for" TKN_RETURN "return"
-%token TKN_LPAR "(" TKN_RPAR ")" TKN_LBRAC "{" TKN_RBRAC "}" TKN_SEMI ";" TKN_COMMA ","
+%token <pos> TKN_IF "if" TKN_ELSE "else" TKN_WHILE "while" TKN_FOR "for" TKN_RETURN "return"
+%token <pos> TKN_LPAR "(" TKN_RPAR ")" TKN_LBRAC "{" TKN_RBRAC "}" TKN_SEMI ";" TKN_COMMA ","
 %token <ival> TKN_NUM
 %token <ident> TKN_IDENT
-%token TKN_INC "++" TKN_DEC "--" TKN_ADD "+" TKN_SUB "-" TKN_ASSIGN "="
-%token TKN_MUL "*" TKN_DIV "/" TKN_REM "%"
+%token <pos> TKN_INC "++" TKN_DEC "--" TKN_ADD "+" TKN_SUB "-" TKN_ASSIGN "="
+%token <pos> TKN_MUL "*" TKN_DIV "/" TKN_REM "%"
 %token TKN_THEN "then"
-%token TKN_STRUCT "struct" TKN_ENUM "enum" TKN_VOID "void"
-%token TKN_SIGNED "signed" TKN_UNSIGNED "unsigned" TKN_CHAR "char" TKN_SHORT "short" TKN_LONG "long" TKN_INT "int"
-%token TKN_FLOAT "float" TKN_DOUBLE "double"
+%token <pos> TKN_STRUCT "struct" TKN_ENUM "enum" TKN_VOID "void"
+%token <pos> TKN_SIGNED "signed" TKN_UNSIGNED "unsigned" TKN_CHAR "char" TKN_SHORT "short" TKN_LONG "long" TKN_INT "int"
+%token <pos> TKN_FLOAT "float" TKN_DOUBLE "double"
 
 %type <func> funcdef
 %type <idents> funcparams
@@ -50,6 +51,10 @@
 %type <expr> expr
 %type <exprs> exprs
 %type <exprs> opt_exprs
+// TODO: Make type_spec actually interesting.
+%type <pos> type_spec
+%type <pos> int_spec
+%type <pos> opt_int
 
 %right "="
 %left "+" "-"
@@ -66,64 +71,65 @@ funcdef:		{pre_func(ctx);}	type_spec TKN_IDENT "(" opt_funcparams ")" "{" statmt
 funcdefs:		funcdefs funcdef
 |				%empty;
 opt_funcparams:	funcparams							{$$=$1;}
-|				%empty								{$$=param_new   (ctx, NULL);}
-funcparams:		funcparams "," type_spec TKN_IDENT	{$$=param_cat   (ctx, &$1, $4);}
-|				type_spec TKN_IDENT					{$$=param_new   (ctx, $2);};
+|				%empty								{$$=param_empty (ctx);						$$.pos=pos_empty(ctx->tokeniser_ctx);}
+funcparams:		funcparams "," type_spec TKN_IDENT	{$$=param_cat   (ctx, &$1, $4);				$$.pos=pos_merge($1.pos, $4.pos);}
+|				type_spec TKN_IDENT					{$$=param_new   (ctx, $2);					$$.pos=pos_merge($1/*.pos*/, $2.pos);};
 
-vardecl:		type_spec varassign					{$$=vars_new    (ctx, &$2);}
-|				type_spec varassign "," vardecls	{$$=vars_cat    (ctx, &$4, &$2);};
-vardecls:		vardecls "," type_spec varassign	{$$=vars_cat    (ctx, &$1, &$4);}
-|				vardecls "," varassign				{$$=vars_cat    (ctx, &$1, &$3);}
-|				type_spec varassign					{$$=vars_new    (ctx, &$2);}
-|				varassign							{$$=vars_new    (ctx, &$1);};
-varassign:		TKN_IDENT "=" expr					{$$=decl_assign (ctx, $1, &$3);}
-|				TKN_IDENT							{$$=decl        (ctx, $1);};
-statmt:			"{" statmts "}"						{$$=statmt_multi(ctx, &$2);}
+vardecl:		type_spec varassign					{$$=vars_new    (ctx, &$2);					$$.pos=pos_merge($1/*.pos*/, $2.pos);}
+|				type_spec varassign "," vardecls	{$$=vars_cat    (ctx, &$4, &$2);			$$.pos=pos_merge($1/*.pos*/, $4.pos);};
+vardecls:		vardecls "," type_spec varassign	{$$=vars_cat    (ctx, &$1, &$4);			$$.pos=pos_merge($1.pos, $4.pos);}
+|				vardecls "," varassign				{$$=vars_cat    (ctx, &$1, &$3);			$$.pos=pos_merge($1.pos, $3.pos);}
+|				type_spec varassign					{$$=vars_new    (ctx, &$2);					$$.pos=pos_merge($1/*.pos*/, $2.pos);}
+|				varassign							{$$=vars_new    (ctx, &$1);					$$.pos=$1.pos;};
+varassign:		TKN_IDENT "=" expr					{$$=decl_assign (ctx, $1, &$3);				$$.pos=pos_merge($1.pos, $3.pos);}
+|				TKN_IDENT							{$$=decl        (ctx, $1);					$$.pos=$1.pos;};
+statmt:			"{" statmts "}"						{$$=statmt_multi(ctx, &$2);					$$.pos=pos_merge($1, $3);}
 |				"if"	"(" expr ")" statmt
-				opt_else							{$$=statmt_if   (ctx, &$3, &$5, &$6);}
-|				"while"	"(" expr ")" statmt			{$$=statmt_while(ctx, &$3, &$5);}
+				opt_else							{$$=statmt_if   (ctx, &$3, &$5, &$6);		$$.pos=pos_merge($1, $6.pos);}
+|				"while"	"(" expr ")" statmt			{$$=statmt_while(ctx, &$3, &$5);			$$.pos=pos_merge($1, $5.pos);}
 |				"for" "(" statmt expr
-								";" expr ")" statmt	{$$=statmt_for  (ctx, &$3, &$4, &$6, &$8);}
-|				"return" expr	";"					{$$=statmt_ret  (ctx, &$2);}
-|				vardecl			";"					{$$=statmt_var  (ctx, &$1);}
-|				expr			";"					{$$=statmt_expr (ctx, &$1);}
-|				";"									{$$=statmt_nop  (ctx);};
-statmts:		%empty								{$$=statmts_new (ctx);}
-|				statmts statmt						{$$=statmts_cat (ctx, &$1, &$2);};
-expr:			TKN_IDENT							{$$=expr_var    (ctx, $1);}
-|				TKN_NUM								{$$=expr_const  (ctx, $1);}
-|				"(" expr ")"						{$$=$2;}
-|				expr "(" opt_exprs ")"				{$$=expr_call   (ctx, &$1, &$3);}
-|				expr "=" expr						{$$=expr_assign (ctx, &$1, &$3);}
-|				expr "+" expr						{$$=expr_math2  (ctx, &$1, &$3, OP_ADD);}
-|				expr "-" expr		%prec "+"		{$$=expr_math2  (ctx, &$1, &$3, OP_SUB);}
-|				expr "*" expr						{$$=expr_math2  (ctx, &$1, &$3, OP_MUL);}
-|				expr "/" expr		%prec "*"		{$$=expr_math2  (ctx, &$1, &$3, OP_DIV);}
-|				expr "%" expr		%prec "*"		{$$=expr_math2  (ctx, &$1, &$3, OP_REM);}
-|				expr "++"							{$$=expr_math1  (ctx, &$1, OP_INC);}
-|				expr "--"			%prec "++"		{$$=expr_math1  (ctx, &$1, OP_DEC);};
-exprs:			exprs "," expr						{$$=exprs_cat   (ctx, &$1, &$3);}
-|				expr								{$$=exprs_new   (ctx, &$1);};
-opt_exprs:		exprs								{$$=$1;}
-|				%empty								{$$=exprs_new   (ctx, NULL);};
-opt_else:		"else" statmt						{$$=$2;}
-|				%empty				%prec "then"	{$$=statmt_nop  (ctx);};
-type_spec:		"void"
-|				"signed" int_spec
-|				"unsigned" int_spec
-|				int_spec
-|				"float"
-|				"double"
-|				"long" "double"
-|				"struct" TKN_IDENT
-|				"enum" TKN_IDENT;
-int_spec:		"char"
-|				"short" opt_int
-|				"int"
-|				"long" opt_int
-|				"long" "long" opt_int;
-opt_int:		"int"
-|				%empty;
+								";" expr ")" statmt	{$$=statmt_for  (ctx, &$3, &$4, &$6, &$8);	$$.pos=pos_merge($1, $8.pos);}
+|				"return" expr	";"					{$$=statmt_ret  (ctx, &$2);					$$.pos=pos_merge($1, $3);}
+|				vardecl			";"					{$$=statmt_var  (ctx, &$1);					$$.pos=pos_merge($1.pos, $2);}
+|				expr			";"					{$$=statmt_expr (ctx, &$1);					$$.pos=pos_merge($1.pos, $2);}
+|				";"									{$$=statmt_nop  (ctx);						$$.pos=$1;};
+statmts:		%empty								{$$=statmts_new (ctx);						$$.pos=pos_empty(ctx->tokeniser_ctx);}
+|				statmts statmt						{$$=statmts_cat (ctx, &$1, &$2);			$$.pos=pos_merge($1.pos, $2.pos);};
+expr:			TKN_IDENT							{$$=expr_var    (ctx, $1);					$$.pos=$1.pos;}
+|				TKN_NUM								{$$=expr_const  (ctx, $1);					$$.pos=$1.pos;}
+|				"(" expr ")"						{$$=$2;										$$.pos=pos_merge($1, $3);}
+|				expr "(" opt_exprs ")"				{$$=expr_call   (ctx, &$1, &$3);			$$.pos=pos_merge($1.pos, $4);}
+|				expr "=" expr						{$$=expr_assign (ctx, &$1, &$3);			$$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "+" expr						{$$=expr_math2  (ctx, &$1, &$3, OP_ADD);	$$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "-" expr		%prec "+"		{$$=expr_math2  (ctx, &$1, &$3, OP_SUB);	$$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "*" expr						{$$=expr_math2  (ctx, &$1, &$3, OP_MUL);	$$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "/" expr		%prec "*"		{$$=expr_math2  (ctx, &$1, &$3, OP_DIV);	$$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "%" expr		%prec "*"		{$$=expr_math2  (ctx, &$1, &$3, OP_REM);	$$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "++"							{$$=expr_math1  (ctx, &$1, OP_INC);			$$.pos=pos_merge($1.pos, $2);}
+|				expr "--"			%prec "++"		{$$=expr_math1  (ctx, &$1, OP_DEC);			$$.pos=pos_merge($1.pos, $2);};
+exprs:			exprs "," expr						{$$=exprs_cat   (ctx, &$1, &$3);			$$.pos=pos_merge($1.pos, $3.pos);}
+|				expr								{$$=exprs_new   (ctx, &$1);					$$.pos=$1.pos;};
+opt_exprs:		exprs								{$$=$1;										$$.pos=$1.pos;}
+|				%empty								{$$=exprs_new   (ctx, NULL);				$$.pos=pos_empty(ctx->tokeniser_ctx);};
+opt_else:		"else" statmt						{$$=$2;										$$.pos=pos_merge($1, $2.pos);}
+|				%empty				%prec "then"	{$$=statmt_nop  (ctx);						$$.pos=pos_empty(ctx->tokeniser_ctx);};
+// TODO: Make type_spec actually interesting.
+type_spec:		"void"								{$$=$1;}
+|				"signed" int_spec					{$$=pos_merge($1, $2/*.pos*/);}
+|				"unsigned" int_spec					{$$=pos_merge($1, $2/*.pos*/);}
+|				int_spec							{$$=$1;}
+|				"float"								{$$=$1;}
+|				"double"							{$$=$1;}
+|				"long" "double"						{$$=pos_merge($1, $2);}
+|				"struct" TKN_IDENT					{$$=pos_merge($1, $2.pos);}
+|				"enum" TKN_IDENT					{$$=pos_merge($1, $2.pos);};
+int_spec:		"char"								{$$=$1;}
+|				"short" opt_int						{$$=pos_merge($1, $2/*.pos*/);}
+|				"int"								{$$=$1;}
+|				"long" opt_int						{$$=pos_merge($1, $2/*.pos*/);}
+|				"long" "long" opt_int				{$$=pos_merge($1, $3/*.pos*/);};
+opt_int:		"int"								{$$=$1;}
+|				%empty								{$$=pos_empty(ctx->tokeniser_ctx);};
 %%
 
 static void *make_copy(void *mem, size_t size) {
@@ -156,9 +162,9 @@ void pre_func(parser_ctx_t *ctx) {
 	push_scope(ctx);
 }
 
-idents_t param_cat(parser_ctx_t *ctx, idents_t *other, char *ident) {
+idents_t param_cat(parser_ctx_t *ctx, idents_t *other, ident_t ident) {
 	int num = other->numIdents + 1;
-	char **mem = (char **) realloc(other->idents, sizeof(char *) * num);
+	ident_t *mem = (ident_t *) realloc(other->idents, sizeof(ident_t) * num);
 	mem[other->numIdents] = ident;
 	return (idents_t) {
 		.numIdents = num,
@@ -166,61 +172,67 @@ idents_t param_cat(parser_ctx_t *ctx, idents_t *other, char *ident) {
 	};
 }
 
-idents_t param_new(parser_ctx_t *ctx, char *ident) {
-	if (ident) {
-		char **mem = (char **) malloc(sizeof(char *));
-		*mem = ident;
-		return (idents_t) {
-			.numIdents = 1,
-			.idents = mem
-		};
-	} else {
-		return (idents_t) {
-			.numIdents = 0,
-			.idents = NULL
-		};
-	}
+idents_t param_new(parser_ctx_t *ctx, ident_t ident) {
+	ident_t *mem = (ident_t *) malloc(sizeof(ident_t));
+	*mem = ident;
+	return (idents_t) {
+		.numIdents = 1,
+		.idents = mem
+	};
 }
 
-funcdef_t post_func(parser_ctx_t *ctx, char *ident, idents_t *idents, statements_t *statmt) {
+idents_t param_empty(parser_ctx_t *ctx) {
+	return (idents_t) {
+		.numIdents = 0,
+		.idents = NULL
+	};
+}
+
+funcdef_t post_func(parser_ctx_t *ctx, ident_t ident, idents_t *idents, statements_t *statmt) {
 	funcdef_t f = {
+		.pos = pos_merge(ident.pos, idents->pos),
 		.ident = ident,
 		.numParams = idents->numIdents,
 		.paramIdents = idents->idents,
 		.statements = statmt
 	};
 	pop_scope(ctx);
-	funcdef_t *existing = map_get(&ctx->funcMap, ident);
+	funcdef_t *existing = map_get(&ctx->funcMap, ident.ident);
 	if (existing) {
+		// TODO: Standard error message.
 		yyerror(ctx, "Function is already declared.");
 	} else {
 		funcdef_t *add = malloc(sizeof(funcdef_t));
 		*add = f;
-		map_set(&ctx->funcMap, ident, add);
+		map_set(&ctx->funcMap, ident.ident, add);
 	}
 	function_added(ctx, &f);
 	return f;
 }
 
 
-vardecl_t decl_assign(parser_ctx_t *ctx, char *ident, expression_t *expression) {
+vardecl_t decl_assign(parser_ctx_t *ctx, ident_t ident, expression_t *expression) {
 	if (expression) expression = make_copy(expression, sizeof(expression_t));
+	pos_t pos = ident.pos;
+	if (expression) {
+		pos = pos_merge(ident.pos, expression->pos);
+	}
 	vardecl_t f = {
 		.ident = ident,
 		.expr = expression
 	};
-	vardecl_t *existing = map_get(&ctx->scope->varMap, ident);
+	vardecl_t *existing = map_get(&ctx->scope->varMap, ident.ident);
 	if (existing) {
 		yyerror(ctx, "Variable is already declared in this scope.");
 	} else {
 		vardecl_t *add = malloc(sizeof(vardecl_t));
 		*add = f;
-		map_set(&ctx->scope->varMap, ident, add);
+		map_set(&ctx->scope->varMap, ident.ident, add);
 	}
 	return f;
 }
 
-vardecl_t decl(parser_ctx_t *ctx, char *ident) {
+vardecl_t decl(parser_ctx_t *ctx, ident_t ident) {
 	decl_assign(ctx, ident, NULL);
 }
 
@@ -322,10 +334,10 @@ statement_t statmt_multi(parser_ctx_t *ctx, statements_t *code) {
 }
 
 
-expression_t expr_var(parser_ctx_t *ctx, char *ident) {
+expression_t expr_var(parser_ctx_t *ctx, ident_t ident) {
 	return (expression_t) {
 		.type = EXPR_TYPE_IDENT,
-		.ident = ident,
+		.ident = ident.ident,
 		.expr = NULL,
 		.expr1 = NULL,
 		.exprs = NULL,
@@ -333,14 +345,14 @@ expression_t expr_var(parser_ctx_t *ctx, char *ident) {
 	};
 }
 
-expression_t expr_const(parser_ctx_t *ctx, int iconst) {
+expression_t expr_const(parser_ctx_t *ctx, ival_t iconst) {
 	return (expression_t) {
 		.type = EXPR_TYPE_ICONST,
 		.ident = NULL,
 		.expr = NULL,
 		.expr1 = NULL,
 		.exprs = NULL,
-		.value = iconst
+		.value = iconst.ival
 	};
 }
 

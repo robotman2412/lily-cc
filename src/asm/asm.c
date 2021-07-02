@@ -67,6 +67,11 @@ static size_t asm_add_or_get_label(asm_ctx_t *ctx, char *label) {
 	return ctx->nLabels - 1;
 }
 
+// Read an N byte number.
+static size_t asm_readnum(asm_ctx_t *ctx, size_t offset, uint8_t nBytes) {
+	
+}
+
 
 /* ================== Setup =================== */
 // Setup and post processing.
@@ -96,7 +101,13 @@ void asm_init(asm_ctx_t *ctx) {
 // Post-process ASM to make binary.
 void asm_postproc(asm_ctx_t *ctx) {
 	ctx->words = (memword_t *) malloc(sizeof(memword_t) * ctx->nWords);
-	size_t ptr;
+	size_t ptr = 0;
+	// Offset at which the code is placed after assembling.
+	size_t outputOffset = 0;
+	// Pass 1: Find label addresses.
+	address_t currentAddress = 0;
+	map_t labelMap;
+	map_create(&labelMap);
 	while (ptr < ctx->nAsmData) {
 		uint8_t type = ctx->asmData[ptr];
 		ptr ++;
@@ -105,6 +116,16 @@ void asm_postproc(asm_ctx_t *ctx) {
 			fputs("Warning: Missing ASM data. This is a bug.\n", stderr);
 			fflush(stderr);
 			return;
+		}
+		switch (type) {
+			case (ASM_TYPE_LABEL):
+				break;
+			case (ASM_TYPE_LBREF):
+				break;
+			case (ASM_TYPE_RAW):
+				currentAddress += asm_readnum(ctx, ptr, 1);
+				ptr ++;
+				break;
 		}
 	}
 }
@@ -127,7 +148,7 @@ void asm_label(asm_ctx_t *ctx, label_t label) {
 // Create a numbered label.
 label_t asm_numbered_label(asm_ctx_t *ctx) {
 	char *buf = (char *) malloc(10);
-	sprintf(buf, "L%d", ctx->labelno);
+	sprintf(buf, ".L%d", ctx->labelno);
 	ctx->labelno ++;
 	return buf;
 }
@@ -428,7 +449,7 @@ bool asm_preproc_statmt(parser_ctx_t *parser_ctx, statement_t *statmt) {
 				vardecl_t *decl = &statmt->decls->vars[i];
 				asm_preproc_t *var = (asm_preproc_t *) malloc(sizeof(asm_preproc_t));
 				var->expr = NULL;
-				var->ident = decl->ident;
+				var->ident = decl->ident.ident;
 				if (decl->expr) asm_preproc_expr(parser_ctx, decl->expr);
 			}
 			return true;
@@ -625,9 +646,9 @@ bool asm_write_statmt(parser_ctx_t *parser_ctx, statement_t *statmt) {
 				}
 				// Add the variable.
 				asm_var_t *var = (asm_var_t *) malloc(sizeof(asm_var_t));
-				var->ident = decl->ident;
+				var->ident = decl->ident.ident;
 				var->param = val;
-				map_set(&ctx->scope->variables, decl->ident, var);
+				map_set(&ctx->scope->variables, decl->ident.ident, var);
 			}
 			break;
 		case (STATMT_TYPE_IF): {
@@ -777,12 +798,12 @@ void asm_write_function(parser_ctx_t *parser_ctx, funcdef_t *func) {
 	bool do_implicit_ret = true;
 	softstack_create(&ctx->paramStack);
 	// Method entry.
-	asm_label(ctx, func->ident);
+	asm_label(ctx, func->ident.ident);
 	param_spec_t *param_ptr[func->numParams];
 	for (int i = 0; i < func->numParams; i++) {
 		asm_var_t *var = (asm_var_t *) malloc(sizeof(asm_var_t));
 		*var = (asm_var_t) {
-			.ident = func->paramIdents[i],
+			.ident = func->paramIdents[i].ident,
 			.param = {
 				.type_spec = { .type = NUM_HHU, .size = 1 },
 				.size = 1,
@@ -791,7 +812,7 @@ void asm_write_function(parser_ctx_t *parser_ctx, funcdef_t *func) {
 			}
 		};
 		param_ptr[i] = &var->param;
-		map_set(&ctx->scope->variables, func->paramIdents[i], var);
+		map_set(&ctx->scope->variables, func->paramIdents[i].ident, var);
 	}
 	gen_method_entry(ctx, param_ptr, func->numParams);
 	// Processing.

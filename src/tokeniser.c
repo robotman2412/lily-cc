@@ -3,11 +3,57 @@
 #include <stdlib.h>
 #include <config.h>
 
-void tokeniser_init(tokeniser_ctx_t *ctx, char *file) {
+pos_t pos_merge(pos_t one, pos_t two) {
+	if (one.index0 > two.index0) {
+		pos_t temp = one;
+		one = two;
+		two = temp;
+	}
+	pos_t out = {
+		.filename = one.filename,
+		.x0 = one.x0,
+		.y0 = one.y0,
+		.x1 = two.x1,
+		.y1 = two.y1,
+		.index0 = one.index0,
+		.index1 = two.index1
+	};
+	return out;
+}
+
+pos_t pos_empty(tokeniser_ctx_t *ctx) {
+	return (pos_t) {
+		.filename = ctx->filename,
+		.x0 = ctx->x,
+		.y0 = ctx->y,
+		.x1 = ctx->x,
+		.y1 = ctx->y,
+		.index0 = ctx->index,
+		.index1 = ctx->index
+	};
+}
+
+void tokeniser_init_cstr(tokeniser_ctx_t *ctx, char *raw) {
 	*ctx = (tokeniser_ctx_t) {
+		.filename = "<anonymous>",
+		.source = raw,
+		.source_len = strlen(raw),
+		.fd = NULL,
+		.use_fd = false,
 		.index = 0,
-		.source = file,
-		.source_len = strlen(file),
+		.x = 0,
+		.y = 0
+	};
+}
+
+void tokeniser_init_file(tokeniser_ctx_t *ctx, FILE *file) {
+	*ctx = (tokeniser_ctx_t) {
+		.filename = "<anonymous>",
+		.source = NULL,
+		.source_len = 0,
+		.fd = file,
+		.use_fd = true,
+		.index = 0,
 		.x = 0,
 		.y = 0
 	};
@@ -34,10 +80,18 @@ bool is_alphanumeric(char c) {
 }
 
 char tokeniser_readchar(tokeniser_ctx_t *ctx) {
-	if (ctx->index >= ctx->source_len) {
-		return 0;
+	char c;
+	if (ctx->use_fd) {
+		if (feof(ctx->fd)) {
+			return 0;
+		}
+		fread(&c, 1, 1, ctx->fd);
+	} else {
+		if (ctx->index >= ctx->source_len) {
+			return 0;
+		}
+		c = ctx->source[ctx->index];
 	}
-	char c = ctx->source[ctx->index];
 	ctx->index ++;
 	ctx->x ++;
 	if (c == '\r') {
@@ -59,12 +113,25 @@ char tokeniser_nextchar(tokeniser_ctx_t *ctx) {
 
 // Next character + offset.
 char tokeniser_nextchar_no(tokeniser_ctx_t *ctx, int no) {
-	if (ctx->index + no >= ctx->source_len) {
-		return 0;
+	if (ctx->use_fd) {
+		size_t pos = ftell(ctx->fd);
+		int success = fseek(ctx->fd, pos + no, SEEK_SET);
+		if (!success) {
+			fseek(ctx->fd, pos, SEEK_SET);
+			return 0;
+		}
+		char c;
+		fread(&c, 1, 1, ctx->fd);
+		fseek(ctx->fd, pos, SEEK_SET);
+		return c;
+	} else {
+		if (ctx->index + no >= ctx->source_len) {
+			return 0;
+		}
+		char c = ctx->source[ctx->index + no];
+		if (c == '\r') c = '\n';
+		return c;
 	}
-	char c = ctx->source[ctx->index + no];
-	if (c == '\r') c = '\n';
-	return c;
 }
 
 int tokenise(tokeniser_ctx_t *ctx) {
@@ -142,7 +209,10 @@ int tokenise(tokeniser_ctx_t *ctx) {
 		// TODO: Verify that the constant is in range.
 		int ival = atoi(strval);
 		free(strval);
-		yylval.ival = ival;
+		yylval.ival = (ival_t) {
+			//.pos = pos,
+			.ival = ival
+		};
 		DEBUG("NUM(%d)\n", ival);
 		return TKN_NUM;
 	}
@@ -203,7 +273,10 @@ int tokenise(tokeniser_ctx_t *ctx) {
 			free(strval);
 			return keyw;
 		}
-		yylval.ident = strval;
+		yylval.ident = (ident_t) {
+			//.pos = pos,
+			.ident = strval
+		};
 		DEBUG("IDENT(%s)\n", strval);
 		return TKN_IDENT;
 	}

@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
 	asm_ctx_t asm_ctx;
 	ctx.tokeniser_ctx = &tokeniser_ctx;
 	ctx.asm_ctx = &asm_ctx;
-	tokeniser_init(&tokeniser_ctx, source);
+	tokeniser_init_cstr(&tokeniser_ctx, source);
 	asm_init(&asm_ctx);
 	
 	// Lol who compiles.
@@ -176,11 +176,11 @@ void prontStatmt(statement_t *statmt, int depth);
 // Process a function.
 void function_added(parser_ctx_t *parser_ctx, funcdef_t *func) {
 	// Some debug printening.
-	printf("funcdef_t '%s' (", func->ident);
-	if (func->numParams) fputs(func->paramIdents[0], stdout);
+	printf("funcdef_t '%s' (", func->ident.ident);
+	if (func->numParams) fputs(func->paramIdents[0].ident, stdout);
 	for (int i = 1; i < func->numParams; i ++) {
 		fputc(',', stdout);
-		fputs(func->paramIdents[i], stdout);
+		fputs(func->paramIdents[i].ident, stdout);
 	}
 	printf("):\n");
 	prontStatmts(func->statements, 1);
@@ -204,7 +204,7 @@ void prontVardecl(vardecl_t *var, int depth) {
 	for (int i = 0; i < depth * 2; i++) {
 		deep[i] = ' ';
 	}
-	printf("%svardecl_t '%s'", deep, var->ident);
+	printf("%svardecl_t '%s'", deep, var->ident.ident);
 	if (var->expr) {
 		printf(":\n%s  expression_t: ", deep);
 		prontExpr(var->expr);

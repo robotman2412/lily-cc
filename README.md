@@ -34,7 +34,7 @@ Note: MOS 6502 is not implemented at the moment.
 2. Create a `decription.txt` there, for example: `Intel 8086 desktop CPU` <sup>(1)</sup>
 3. Write `8086-config.h`, `8086-gen.c` and `8086-types.h` accordingly. <sup>(2)</sup>
 
-Note 1: Do not add a newline to `description.txt`, it must ideally be a single line.
+Note 1: Description files should have exactly one trailing newline.
 
 Note 2: Refer to `src/arch/gr8cpu-r3` for examples of implementing these files.
 

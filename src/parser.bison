@@ -40,8 +40,8 @@
 %destructor {free_expr(&$$);} <expr>
 %destructor {free_exprs(&$$);} <exprs> */
 
-%destructor {printf("free_ident($$.ident);\n");} <ident>
-%destructor {printf("free_garbage($$.garbage);\n");} <garbage>
+%destructor {printf("free_ident($$);\n");} <ident>
+%destructor {printf("free_garbage($$);\n");} <garbage>
 %destructor {printf("free_funcdef(&$$);\n");} <func>
 %destructor {printf("free_idents(&$$);\n");} <idents>
 %destructor {printf("free_vardecl(&$$);\n");} <var>

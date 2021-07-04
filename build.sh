@@ -17,7 +17,8 @@ errors=0
 CC() {
 	for i in $*; do
 		echo "CC $1"
-		mkdir -p "build/${i%/*}"
+		paf="build/$i"
+		mkdir -p "${paf%/*}"
 		gcc $CCOPTIONS -c "src/$i" -o "build/$i.o" || errors=1
 		FILES="$FILES build/$i.o"
 	done

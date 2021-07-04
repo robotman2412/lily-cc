@@ -17,10 +17,8 @@ CONTAINS() {
 
 SHOW_ARCHS() {
 	for i in $archs ; do
-		#desc=$(cat src/arch/$i/description.txt)
 		indent="                "
 		echo "  --arch=$i"
-		#echo "$desc"
 		sed -E "s/^/$indent/;s/\n/$indent/" "src/arch/$i/description.txt"
 	done
 }

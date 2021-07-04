@@ -17,9 +17,11 @@ CONTAINS() {
 
 SHOW_ARCHS() {
 	for i in $archs ; do
-		desc=$(cat src/arch/$i/description.txt)
+		#desc=$(cat src/arch/$i/description.txt)
+		indent="                "
 		echo "  --arch=$i"
-		echo "                $desc"
+		#echo "$desc"
+		sed -E "s/^/$indent/;s/\n/$indent/" "src/arch/$i/description.txt"
 	done
 }
 
@@ -56,7 +58,7 @@ for i in "$@" ; do
 			arch="${i#*=}"
 			shift
 			;;
-		-a*|--arch*)
+		-a|--arch)
 			echo "Option '$i' missing '=arch-name'"
 			show_help=1
 			;;

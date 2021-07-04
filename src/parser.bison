@@ -18,6 +18,7 @@
 	pos_t pos;
 	ival_t ival;
 	ident_t ident;
+	ident_t garbage;
 	funcdef_t func;
 	idents_t idents;
 	vardecl_t var;
@@ -28,10 +29,34 @@
 	expressions_t exprs;
 }
 
+/* %destructor {free_ident(&$$);} <ident>
+%destructor {free_garbage(&$$);} <ident>
+%destructor {free_funcdef(&$$);} <func>
+%destructor {free_idents(&$$);} <idents>
+%destructor {free_vardecl(&$$);} <var>
+%destructor {free_vardecls(&$$);} <vars>
+%destructor {free_statmt(&$$);} <statmt>
+%destructor {free_statmts(&$$);} <statmts>
+%destructor {free_expr(&$$);} <expr>
+%destructor {free_exprs(&$$);} <exprs> */
+
+%destructor {printf("free_ident($$.ident);\n");} <ident>
+%destructor {printf("free_garbage($$.garbage);\n");} <garbage>
+%destructor {printf("free_funcdef(&$$);\n");} <func>
+%destructor {printf("free_idents(&$$);\n");} <idents>
+%destructor {printf("free_vardecl(&$$);\n");} <var>
+%destructor {printf("free_vardecls(&$$);\n");} <vars>
+%destructor {printf("free_statmt(&$$);\n");} <statmt>
+%destructor {printf("free_statmts(&$$);\n");} <statmts>
+%destructor {printf("free_expr(&$$);\n");} <expr>
+%destructor {printf("free_exprs(&$$);\n");} <exprs>
+%destructor {printf("free_pos(&$$);\n");} <pos>
+
 %token <pos> TKN_IF "if" TKN_ELSE "else" TKN_WHILE "while" TKN_FOR "for" TKN_RETURN "return"
 %token <pos> TKN_LPAR "(" TKN_RPAR ")" TKN_LBRAC "{" TKN_RBRAC "}" TKN_SEMI ";" TKN_COMMA ","
 %token <ival> TKN_NUM
 %token <ident> TKN_IDENT
+%token <garbage> TKN_GARBAGE
 %token <pos> TKN_INC "++" TKN_DEC "--" TKN_ADD "+" TKN_SUB "-" TKN_ASSIGN "="
 %token <pos> TKN_MUL "*" TKN_DIV "/" TKN_REM "%"
 %token TKN_THEN "then"
@@ -67,14 +92,16 @@
 
 %%
 library:		{init(ctx);}		funcdefs;
-funcdef:		{pre_func(ctx);}	type_spec TKN_IDENT "(" opt_funcparams ")" "{" statmts "}" {$$=post_func(ctx, $3, &$5, &$8);};
+funcdef:		{pre_func(ctx);}	type_spec TKN_IDENT "(" opt_funcparams ")" "{" statmts "}" {$$=post_func(ctx, $3, &$5, &$8);}
+|				error ")" "{" statmts "}"													   {printf("err\n");/*dispose of stuff*/};
 funcdefs:		funcdefs funcdef
 |				%empty;
 opt_funcparams:	funcparams							{$$=$1;}
-|				%empty								{$$=param_empty (ctx);						$$.pos=pos_empty(ctx->tokeniser_ctx);}
+|				%empty								{$$=param_empty (ctx);						$$.pos=pos_empty(ctx->tokeniser_ctx);};
 funcparams:		funcparams "," type_spec TKN_IDENT	{$$=param_cat   (ctx, &$1, $4);				$$.pos=pos_merge($1.pos, $4.pos);}
-|				type_spec TKN_IDENT					{$$=param_new   (ctx, $2);					$$.pos=pos_merge($1/*.pos*/, $2.pos);};
-
+|				type_spec TKN_IDENT					{$$=param_new   (ctx, $2);					$$.pos=pos_merge($1/*.pos*/, $2.pos);}
+|				funcparams error TKN_IDENT			{$$=param_empty (ctx);						$$.pos=pos_merge($1.pos, $3.pos);		syntax_error(ctx, $$.pos, "Expected parameter");}
+|				type_spec error TKN_IDENT			{$$=param_empty (ctx); 						$$.pos=pos_merge($1/*.pos*/, $3.pos);	syntax_error(ctx, $$.pos, "Expected parameter");};
 vardecl:		type_spec varassign					{$$=vars_new    (ctx, &$2);					$$.pos=pos_merge($1/*.pos*/, $2.pos);}
 |				type_spec varassign "," vardecls	{$$=vars_cat    (ctx, &$4, &$2);			$$.pos=pos_merge($1/*.pos*/, $4.pos);};
 vardecls:		vardecls "," type_spec varassign	{$$=vars_cat    (ctx, &$1, &$4);			$$.pos=pos_merge($1.pos, $4.pos);}
@@ -140,6 +167,7 @@ static void *make_copy(void *mem, size_t size) {
 
 void init(parser_ctx_t *ctx) {
 	ctx->scope = NULL;
+	ctx->currentError = NULL;
 	map_create(&ctx->funcMap);
 }
 

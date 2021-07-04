@@ -114,6 +114,7 @@ int main(int argc, char **argv) {
 	ctx.tokeniser_ctx = &tokeniser_ctx;
 	ctx.asm_ctx = &asm_ctx;
 	tokeniser_init_cstr(&tokeniser_ctx, source);
+	tokeniser_ctx.filename = filename;
 	asm_init(&asm_ctx);
 	
 	// Lol who compiles.
@@ -159,10 +160,16 @@ int yylex(parser_ctx_t *ctx) {
 }
 
 void yyerror(parser_ctx_t *ctx, char *msg) {
+	if (ctx->currentError) {
+		free(ctx->currentError);
+	} else {
+		ctx->currentError = strdup(msg);
+	}
+	fflush(stdout);
 	fputs(msg, stderr);
+	fputc('\n', stderr);
 	fflush(stderr);
 }
-
 
 /* Some debug printening. */
 
@@ -346,4 +353,78 @@ void prontStatmt(statement_t *statmt, int depth) {
 	free(deep);
 }
 
+
+/* Some memory freeing. */
+
+void free_ident(parser_ctx_t *ctx, ident_t *ident) {
+	free(ident->ident);
+	ctx->errorPos = ident->pos;
+}
+
+void free_garbage(parser_ctx_t *ctx, ident_t *garbage) {
+	free(garbage->ident);
+	ctx->errorPos = garbage->pos;
+}
+
+void free_funcdef(parser_ctx_t *ctx, funcdef_t *funcdef) {
+	free_ident(ctx, &funcdef->ident);
+	for (int i = 0; i < funcdef->numParams; i++) {
+		free_ident(ctx, &funcdef->paramIdents[i]);
+	}
+	free(funcdef->paramIdents);
+	free_statmts(ctx, funcdef->statements);
+	ctx->errorPos = funcdef->pos;
+}
+
+void free_idents(parser_ctx_t *ctx, idents_t *idents) {
+	for (int i = 0; i < idents->numIdents; i++) {
+		free_ident(ctx, &idents->idents[i]);
+	}
+	free(idents->idents);
+	ctx->errorPos = idents->pos;
+}
+
+void free_vardecl(parser_ctx_t *ctx, vardecl_t *vardecl) {
+	if (vardecl->expr) free_expr(ctx, vardecl->expr);
+	free_ident(ctx, &vardecl->ident);
+	ctx->errorPos = vardecl->pos;
+}
+
+void free_vardecls(parser_ctx_t *ctx, vardecls_t *vardecls) {
+	for (int i = 0; i < vardecls->num; i++) {
+		free_vardecls(ctx, &vardecls->vars[i]);
+	}
+	free(vardecls->vars);
+	ctx->errorPos = vardecls->pos;
+}
+
+void free_statmt(parser_ctx_t *ctx, statement_t *statmt) {
+	if (statmt->expr) free_expr(ctx, statmt->expr);
+	if (statmt->expr1) free_expr(ctx, statmt->expr1);
+	if (statmt->statement) free_statmt(ctx, statmt->statement);
+	if (statmt->statement1) free_statmt(ctx, statmt->statement1);
+	if (statmt->statements) free_statmts(ctx, statmt->statements);
+	if (statmt->decls) free_vardecls(ctx, statmt->decls);
+	ctx->errorPos = statmt->pos;
+}
+
+void free_statmts(parser_ctx_t *ctx, statements_t *statmts) {
+	for (int i = 0; i < statmts->num; i++) {
+		free_statmts(ctx, &statmts->statements[i]);
+	}
+	free(statmts->statements);
+	ctx->errorPos = statmts->pos;
+}
+
+void free_expr(parser_ctx_t *ctx, expression_t *expr) {
+	ctx->errorPos = expr->pos;
+}
+
+void free_exprs(parser_ctx_t *ctx, expressions_t *exprs) {
+	for (int i = 0; i < exprs->num; i++) {
+		free_exprs(ctx, &exprs->exprs[i]);
+	}
+	free(exprs->exprs);
+	ctx->errorPos = exprs->pos;
+}
 

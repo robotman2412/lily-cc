@@ -22,6 +22,7 @@ struct pos {
 
 pos_t pos_merge(pos_t one, pos_t two);
 pos_t pos_empty(tokeniser_ctx_t *ctx);
+void print_pos(pos_t pos);
 
 #include <parser.h>
 
@@ -49,5 +50,7 @@ char tokeniser_readchar(tokeniser_ctx_t *ctx);
 char tokeniser_nextchar(tokeniser_ctx_t *ctx);
 char tokeniser_nextchar_no(tokeniser_ctx_t *ctx, int no);
 int tokenise(tokeniser_ctx_t *ctx);
+
+void syntax_error(parser_ctx_t *parser_ctx, pos_t pos, char *message);
 
 #endif // TOKENISER_H

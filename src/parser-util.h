@@ -144,11 +144,14 @@ struct scope {
 	map_t varMap;
 };
 
+// Wow, context!
 struct parser_ctx {
 	scope_t *scope;
 	map_t funcMap;
 	tokeniser_ctx_t *tokeniser_ctx;
 	asm_ctx_t *asm_ctx;
+	char *currentError;
+	pos_t errorPos;
 };
 
 void init					(parser_ctx_t *ctx);
@@ -193,5 +196,16 @@ int yyparse					(parser_ctx_t *ctx);
 extern void function_added	(parser_ctx_t *ctx, funcdef_t *func);
 extern int yylex			(parser_ctx_t *ctx);
 extern void yyerror			(parser_ctx_t *ctx, char *msg);
+
+void free_ident				(parser_ctx_t *ctx, ident_t *ident);
+void free_garbage			(parser_ctx_t *ctx, ident_t *garbage);
+void free_funcdef			(parser_ctx_t *ctx, funcdef_t *funcdef);
+void free_idents			(parser_ctx_t *ctx, idents_t *idents);
+void free_vardecl			(parser_ctx_t *ctx, vardecl_t *vardecl);
+void free_vardecls			(parser_ctx_t *ctx, vardecls_t *vardecls);
+void free_statmt			(parser_ctx_t *ctx, statement_t *statmt);
+void free_statmts			(parser_ctx_t *ctx, statements_t *statmts);
+void free_expr				(parser_ctx_t *ctx, expression_t *expr);
+void free_exprs				(parser_ctx_t *ctx, expressions_t *exprs);
 
 #endif // PARSER_UTIL_H

@@ -1,1 +1,2 @@
 MOS 6502 family 8-bit CPU
+Note: Currently unimplemented

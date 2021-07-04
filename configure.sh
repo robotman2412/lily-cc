@@ -19,7 +19,7 @@ SHOW_ARCHS() {
 	for i in $archs ; do
 		indent="                "
 		echo "  --arch=$i"
-		sed -E "s/^/$indent/;s/\n/$indent/" "src/arch/$i/description.txt"
+		sed -E "s/^/$indent/;s/(\r\n?)|\n/$indent/" "src/arch/$i/description.txt"
 	done
 }
 
@@ -57,7 +57,7 @@ for i in "$@" ; do
 			shift
 			;;
 		-a|--arch)
-			echo "Option '$i' missing '=arch-name'"
+			echo "Option '$i' missing architecture name (e.g. $i=mos6502)"
 			show_help=1
 			;;
 		-h|--help)
@@ -65,7 +65,7 @@ for i in "$@" ; do
 			shift
 			;;
 		-*)
-			echo "Unknown option '$i'"
+			echo "Unknown option '$i' (e.g. --help)"
 			show_help=1
 			shift
 			;;
@@ -74,12 +74,12 @@ done
 
 # Check whether we need to show help.
 if [ $did_options == 0 ] || [ $show_help == 1 ] ; then
-	HELP; exit
+	HELP ; exit
 fi
 
 # Check if architecture is valid.
 CONTAINS "$archs" $arch || {
-	echo "No such architecture '$arch'."
+	echo "No such architecture '$arch' (e.g. --arch=mos6502)"
 	echo "Architectures:"
 	SHOW_ARCHS ; exit
 }

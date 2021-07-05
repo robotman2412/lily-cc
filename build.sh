@@ -10,6 +10,9 @@ FILES=""
 # Options passed to compiler
 ARCH=$(cat current_arch)
 CCOPTIONS="-Isrc -Ibuild -Isrc/asm -Isrc/arch -Isrc/arch/$ARCH"
+if [ "$1" == "debug" ]; then
+	CCOPTIONS="$CCOPTIONS -ggdb"
+fi
 
 errors=0
 

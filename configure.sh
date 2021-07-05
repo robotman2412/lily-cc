@@ -109,3 +109,6 @@ echo "#include <$arch-gen.c>" >> "$gen_path"
 
 # Update current arch thingy.
 echo "$arch" > "current_arch"
+
+# Feedback is nice.
+echo "Configured for architecture $arch"

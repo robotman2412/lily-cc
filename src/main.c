@@ -1,6 +1,9 @@
 
 #include "main.h"
 #include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <asm.h>
 #include <config.h>
@@ -31,6 +34,7 @@ int main(int argc, char **argv) {
 #endif
 	
 	options_t options = {
+		.abort = false,
 		.showHelp = false,
 		.showVersion = false,
 		.numSourceFiles = 0,
@@ -54,15 +58,51 @@ int main(int argc, char **argv) {
 			options.showHelp = true;
 		} else if (!strncmp(argv[argIndex], "-I", 2)) {
 			// Add include directory.
-			options.numIncludeDirs ++;
-			options.includeDirs = (char **) realloc(options.includeDirs, sizeof(char *) * options.numIncludeDirs);
-			options.includeDirs[options.numIncludeDirs - 1] = &(argv[argIndex])[2];
+			char *dir = &(argv[argIndex])[2];
+			if (isdir(dir)) {
+				options.numIncludeDirs ++;
+				options.includeDirs = (char **) realloc(options.includeDirs, sizeof(char *) * options.numIncludeDirs);
+				options.includeDirs[options.numIncludeDirs - 1] = dir;
+			} else if (access(dir, R_OK)) {
+				fflush(stdout);
+				fprintf(stderr, "Error: '%s' is not a directory\n", dir);
+				options.abort = true;
+			} else if (access(dir, F_OK)) {
+				fflush(stdout);
+				fprintf(stderr, "Error: Permission denied for '%s'\n", dir);
+				options.abort = true;
+			} else {
+				fflush(stdout);
+				fprintf(stderr, "Error: No such file or directory '%s'\n", dir);
+				options.abort = true;
+			}
+		} else if (!strcmp(argv[argIndex], "-o")) {
+			// Specify output file.
+			if (argIndex < argc - 1) {
+				argIndex ++;
+				printf("%s\n", argv[argIndex]);
+				if (access(argv[argIndex], W_OK)) {
+					options.outputFile = argv[argIndex];
+				} else if (isdir(argv[argIndex])) {
+					fflush(stdout);
+					fprintf(stderr, "Error: '%s' is a directory\n", argv[argIndex]);
+					options.abort = true;
+				} else if (access(argv[argIndex], F_OK)) {
+					fflush(stdout);
+					fprintf(stderr, "Error: Permission denied for '%s'\n", argv[argIndex]);
+					options.abort = true;
+				} else puts("else");
+			} else {
+				fflush(stdout);
+				fprintf(stderr, "Error: Missing filename for '-o'\n");
+				options.abort = true;
+			}
 		} else if (!strncmp(argv[argIndex], "--include=", 10)) {
 			// Add include directory.
 			options.numIncludeDirs ++;
 			options.includeDirs = (char **) realloc(options.includeDirs, sizeof(char *) * options.numIncludeDirs);
 			options.includeDirs[options.numIncludeDirs - 1] = &(argv[argIndex])[10];
-		} else if (!strncmp(argv[argIndex], "--out=", 6)) {
+		} else if (!strncmp(argv[argIndex], "--outtype=", 10)) {
 			// Output type.
 			if (options.outputType) printf("Note: Output type already specified.\n");
 			options.outputType = &(argv[argIndex])[6];
@@ -86,6 +126,9 @@ int main(int argc, char **argv) {
 	if (options.showVersion) {
 		printf("lilly-cc " ARCH_ID " v0.1\n");
 		return 0;
+	}
+	if (options.abort) {
+		return 1;
 	}
 	// Check for input files.
 	if (argIndex >= argc) {
@@ -129,9 +172,11 @@ void show_help(int argc, char **argv) {
 	printf("                Show the version.\n");
 	printf("  -h  --help\n");
 	printf("                Show this list.\n");
+	printf("  -o <file>\n");
+	printf("                Specify the output file path.\n");
 	printf("  -I<dir>  --include=<dir>\n");
 	printf("                Add a directory to the include directories.\n");
-	printf("  --out=<type>\n");
+	printf("  --outtype=<type>\n");
 	printf("                Specify the output type:\n");
 	printf("                shared, raw, executable\n");
 }
@@ -153,6 +198,13 @@ void apply_defaults(options_t *options) {
 			options->outputType = "executable";
 		}
 	}
+}
+
+// Check wether a file exists and is a directory.
+bool isdir(char *path) {
+	struct stat statbuf;
+	if (stat(path, &statbuf) != 0) return 0;
+	return S_ISDIR(statbuf.st_mode);
 }
 
 int yylex(parser_ctx_t *ctx) {
@@ -392,7 +444,7 @@ void free_vardecl(parser_ctx_t *ctx, vardecl_t *vardecl) {
 
 void free_vardecls(parser_ctx_t *ctx, vardecls_t *vardecls) {
 	for (int i = 0; i < vardecls->num; i++) {
-		free_vardecls(ctx, &vardecls->vars[i]);
+		free_vardecl(ctx, &vardecls->vars[i]);
 	}
 	free(vardecls->vars);
 	ctx->errorPos = vardecls->pos;
@@ -410,7 +462,7 @@ void free_statmt(parser_ctx_t *ctx, statement_t *statmt) {
 
 void free_statmts(parser_ctx_t *ctx, statements_t *statmts) {
 	for (int i = 0; i < statmts->num; i++) {
-		free_statmts(ctx, &statmts->statements[i]);
+		free_statmt(ctx, &statmts->statements[i]);
 	}
 	free(statmts->statements);
 	ctx->errorPos = statmts->pos;
@@ -422,7 +474,7 @@ void free_expr(parser_ctx_t *ctx, expression_t *expr) {
 
 void free_exprs(parser_ctx_t *ctx, expressions_t *exprs) {
 	for (int i = 0; i < exprs->num; i++) {
-		free_exprs(ctx, &exprs->exprs[i]);
+		free_expr(ctx, &exprs->exprs[i]);
 	}
 	free(exprs->exprs);
 	ctx->errorPos = exprs->pos;

@@ -6,6 +6,7 @@ typedef struct options options_t;
 #include <parser.h>
 
 struct options {
+	bool abort;
 	bool showHelp;
 	bool showVersion;
 	int numSourceFiles;
@@ -16,6 +17,8 @@ struct options {
 	char *outputType;
 };
 
+// Check wether a file exists and is a directory.
+bool isdir(char *path);
 // Show help on the command line.
 void show_help(int argc, char **argv);
 // Apply default options for options not already set.

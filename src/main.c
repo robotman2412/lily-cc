@@ -236,10 +236,10 @@ void prontStatmt(statement_t *statmt, int depth);
 void function_added(parser_ctx_t *parser_ctx, funcdef_t *func) {
 	// Some debug printening.
 	printf("funcdef_t '%s' (", func->ident.ident);
-	if (func->numParams) fputs(func->paramIdents[0].ident, stdout);
+	if (func->numParams) fputs(func->params[0].ident.ident, stdout);
 	for (int i = 1; i < func->numParams; i ++) {
 		fputc(',', stdout);
-		fputs(func->paramIdents[i].ident, stdout);
+		fputs(func->params[i].ident.ident, stdout);
 	}
 	printf("):\n");
 	prontStatmts(func->statements, 1);
@@ -421,9 +421,9 @@ void free_garbage(parser_ctx_t *ctx, ident_t *garbage) {
 void free_funcdef(parser_ctx_t *ctx, funcdef_t *funcdef) {
 	free_ident(ctx, &funcdef->ident);
 	for (int i = 0; i < funcdef->numParams; i++) {
-		free_ident(ctx, &funcdef->paramIdents[i]);
+		free_vardecl(ctx, &funcdef->params[i]);
 	}
-	free(funcdef->paramIdents);
+	free(funcdef->params);
 	free_statmts(ctx, funcdef->statements);
 	ctx->errorPos = funcdef->pos;
 }

@@ -27,6 +27,7 @@
 	statements_t statmts;
 	expression_t expr;
 	expressions_t exprs;
+	type_t type;
 }
 
 /* %destructor {free_ident(&$$);} <ident>
@@ -65,9 +66,10 @@
 %token <pos> TKN_FLOAT "float" TKN_DOUBLE "double"
 
 %type <func> funcdef
-%type <idents> funcparams
-%type <idents> opt_funcparams
+%type <vars> funcparams
+%type <vars> opt_funcparams
 %type <var> varassign
+%type <var> varassign_t
 %type <vars> vardecl
 %type <vars> vardecls
 %type <statmt> statmt
@@ -77,8 +79,8 @@
 %type <exprs> exprs
 %type <exprs> opt_exprs
 // TODO: Make type_spec actually interesting.
-%type <pos> type_spec
-%type <pos> int_spec
+%type <type> type_spec
+%type <type> int_spec
 %type <pos> opt_int
 
 %right "="
@@ -92,69 +94,70 @@
 
 %%
 library:		{init(ctx);}		funcdefs;
-funcdef:		{pre_func(ctx);}	type_spec TKN_IDENT "(" opt_funcparams ")" "{" statmts "}" {$$=post_func(ctx, $3, &$5, &$8);}
+funcdef:		type_spec TKN_IDENT "(" opt_funcparams ")" "{" statmts "}" 					   {$$=func_impl(ctx, $1, $2, &$4, &$7);$$.pos = pos_merge($1.pos, $5);}
 |				error ")" "{" statmts "}"													   {printf("err\n");/*dispose of stuff*/};
 funcdefs:		funcdefs funcdef
 |				%empty;
 opt_funcparams:	funcparams							{$$=$1;}
-|				%empty								{$$=param_empty (ctx);						$$.pos=pos_empty(ctx->tokeniser_ctx);};
-funcparams:		funcparams "," type_spec TKN_IDENT	{$$=param_cat   (ctx, &$1, $4);				$$.pos=pos_merge($1.pos, $4.pos);}
-|				type_spec TKN_IDENT					{$$=param_new   (ctx, $2);					$$.pos=pos_merge($1/*.pos*/, $2.pos);}
-|				funcparams error TKN_IDENT			{$$=param_empty (ctx);						$$.pos=pos_merge($1.pos, $3.pos);		syntax_error(ctx, $$.pos, "Expected parameter");}
-|				type_spec error TKN_IDENT			{$$=param_empty (ctx); 						$$.pos=pos_merge($1/*.pos*/, $3.pos);	syntax_error(ctx, $$.pos, "Expected parameter");};
-vardecl:		type_spec varassign					{$$=vars_new    (ctx, &$2);					$$.pos=pos_merge($1/*.pos*/, $2.pos);}
-|				type_spec varassign "," vardecls	{$$=vars_cat    (ctx, &$4, &$2);			$$.pos=pos_merge($1/*.pos*/, $4.pos);};
-vardecls:		vardecls "," type_spec varassign	{$$=vars_cat    (ctx, &$1, &$4);			$$.pos=pos_merge($1.pos, $4.pos);}
-|				vardecls "," varassign				{$$=vars_cat    (ctx, &$1, &$3);			$$.pos=pos_merge($1.pos, $3.pos);}
-|				type_spec varassign					{$$=vars_new    (ctx, &$2);					$$.pos=pos_merge($1/*.pos*/, $2.pos);}
-|				varassign							{$$=vars_new    (ctx, &$1);					$$.pos=$1.pos;};
-varassign:		TKN_IDENT "=" expr					{$$=decl_assign (ctx, $1, &$3);				$$.pos=pos_merge($1.pos, $3.pos);}
-|				TKN_IDENT							{$$=decl        (ctx, $1);					$$.pos=$1.pos;};
-statmt:			"{" statmts "}"						{$$=statmt_multi(ctx, &$2);					$$.pos=pos_merge($1, $3);}
+|				%empty								{$$=param_empty  (ctx);						$$.pos=pos_empty(ctx->tokeniser_ctx);};
+funcparams:		funcparams "," type_spec TKN_IDENT	{$$=param_cat    (ctx, &$1, $4, $3);		$$.pos=pos_merge($1.pos, $4.pos);}
+|				type_spec TKN_IDENT					{$$=param_new    (ctx, $2, $1);				$$.pos=pos_merge($1.pos, $2.pos);}
+|				funcparams error TKN_IDENT			{$$=param_empty  (ctx);						$$.pos=pos_merge($1.pos, $3.pos);	report_error(ctx, "Syntax error", $$.pos, "Expected parameter");}
+|				type_spec error TKN_IDENT			{$$=param_empty  (ctx); 					$$.pos=pos_merge($1.pos, $3.pos);	report_error(ctx, "Syntax error", $$.pos, "Expected parameter");};
+vardecl:		varassign_t							{$$=vars_new     (ctx, &$1);				$$.pos=$1.pos;}
+|				varassign_t "," vardecls			{$$=vars_cat     (ctx, &$3, &$1);			$$.pos=pos_merge($1.pos, $3.pos);};
+vardecls:		varassign							{$$=vars_new     (ctx, &$1);				$$.pos=$1.pos;}
+|				vardecls "," varassign				{$$=vars_cat     (ctx, &$1, &$3);			$$.pos=pos_merge($1.pos, $3.pos);};
+varassign_t:	type_spec TKN_IDENT "=" expr		{$$=declt_assign (ctx, $2, $1, &$4);		$$.pos=pos_merge($1.pos, $4.pos);}
+|				type_spec TKN_IDENT					{$$=declt        (ctx, $2, $1);				$$.pos=pos_merge($1.pos, $2.pos);};
+varassign:		varassign_t							{$$=$1;}
+|				TKN_IDENT "=" expr					{$$=decl_assign  (ctx, $1, &$3);			$$.pos=pos_merge($1.pos, $3.pos);}
+|				TKN_IDENT							{$$=decl         (ctx, $1);					$$.pos=$1.pos;};
+statmt:			"{" statmts "}"						{$$=statmt_multi (ctx, &$2);				$$.pos=pos_merge($1, $3);}
 |				"if"	"(" expr ")" statmt
-				opt_else							{$$=statmt_if   (ctx, &$3, &$5, &$6);		$$.pos=pos_merge($1, $6.pos);}
-|				"while"	"(" expr ")" statmt			{$$=statmt_while(ctx, &$3, &$5);			$$.pos=pos_merge($1, $5.pos);}
+				opt_else							{$$=statmt_if    (ctx, &$3, &$5, &$6);		$$.pos=pos_merge($1, $6.pos);}
+|				"while"	"(" expr ")" statmt			{$$=statmt_while (ctx, &$3, &$5);			$$.pos=pos_merge($1, $5.pos);}
 |				"for" "(" statmt expr
-								";" expr ")" statmt	{$$=statmt_for  (ctx, &$3, &$4, &$6, &$8);	$$.pos=pos_merge($1, $8.pos);}
-|				"return" expr	";"					{$$=statmt_ret  (ctx, &$2);					$$.pos=pos_merge($1, $3);}
-|				vardecl			";"					{$$=statmt_var  (ctx, &$1);					$$.pos=pos_merge($1.pos, $2);}
-|				expr			";"					{$$=statmt_expr (ctx, &$1);					$$.pos=pos_merge($1.pos, $2);}
-|				";"									{$$=statmt_nop  (ctx);						$$.pos=$1;};
-statmts:		%empty								{$$=statmts_new (ctx);						$$.pos=pos_empty(ctx->tokeniser_ctx);}
-|				statmts statmt						{$$=statmts_cat (ctx, &$1, &$2);			$$.pos=pos_merge($1.pos, $2.pos);};
-expr:			TKN_IDENT							{$$=expr_var    (ctx, $1);					$$.pos=$1.pos;}
-|				TKN_NUM								{$$=expr_const  (ctx, $1);					$$.pos=$1.pos;}
+								";" expr ")" statmt	{$$=statmt_for   (ctx, &$3, &$4, &$6, &$8);	$$.pos=pos_merge($1, $8.pos);}
+|				"return" expr	";"					{$$=statmt_ret   (ctx, &$2);				$$.pos=pos_merge($1, $3);}
+|				vardecl			";"					{$$=statmt_var   (ctx, &$1);				$$.pos=pos_merge($1.pos, $2);}
+|				expr			";"					{$$=statmt_expr  (ctx, &$1);				$$.pos=pos_merge($1.pos, $2);}
+|				";"									{$$=statmt_nop   (ctx);						$$.pos=$1;};
+statmts:		%empty								{$$=statmts_new  (ctx);						$$.pos=pos_empty(ctx->tokeniser_ctx);}
+|				statmts statmt						{$$=statmts_cat  (ctx, &$1, &$2);			$$.pos=pos_merge($1.pos, $2.pos);};
+expr:			TKN_IDENT							{$$=expr_var     (ctx, $1);					$$.pos=$1.pos;}
+|				TKN_NUM								{$$=expr_const   (ctx, $1);					$$.pos=$1.pos;}
 |				"(" expr ")"						{$$=$2;										$$.pos=pos_merge($1, $3);}
-|				expr "(" opt_exprs ")"				{$$=expr_call   (ctx, &$1, &$3);			$$.pos=pos_merge($1.pos, $4);}
-|				expr "=" expr						{$$=expr_assign (ctx, &$1, &$3);			$$.pos=pos_merge($1.pos, $3.pos);}
-|				expr "+" expr						{$$=expr_math2  (ctx, &$1, &$3, OP_ADD);	$$.pos=pos_merge($1.pos, $3.pos);}
-|				expr "-" expr		%prec "+"		{$$=expr_math2  (ctx, &$1, &$3, OP_SUB);	$$.pos=pos_merge($1.pos, $3.pos);}
-|				expr "*" expr						{$$=expr_math2  (ctx, &$1, &$3, OP_MUL);	$$.pos=pos_merge($1.pos, $3.pos);}
-|				expr "/" expr		%prec "*"		{$$=expr_math2  (ctx, &$1, &$3, OP_DIV);	$$.pos=pos_merge($1.pos, $3.pos);}
-|				expr "%" expr		%prec "*"		{$$=expr_math2  (ctx, &$1, &$3, OP_REM);	$$.pos=pos_merge($1.pos, $3.pos);}
-|				expr "++"							{$$=expr_math1  (ctx, &$1, OP_INC);			$$.pos=pos_merge($1.pos, $2);}
-|				expr "--"			%prec "++"		{$$=expr_math1  (ctx, &$1, OP_DEC);			$$.pos=pos_merge($1.pos, $2);};
-exprs:			exprs "," expr						{$$=exprs_cat   (ctx, &$1, &$3);			$$.pos=pos_merge($1.pos, $3.pos);}
-|				expr								{$$=exprs_new   (ctx, &$1);					$$.pos=$1.pos;};
+|				expr "(" opt_exprs ")"				{$$=expr_call    (ctx, &$1, &$3);			$$.pos=pos_merge($1.pos, $4);}
+|				expr "=" expr						{$$=expr_assign  (ctx, &$1, &$3);			$$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "+" expr						{$$=expr_math2   (ctx, &$1, &$3, OP_ADD);	$$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "-" expr		%prec "+"		{$$=expr_math2   (ctx, &$1, &$3, OP_SUB);	$$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "*" expr						{$$=expr_math2   (ctx, &$1, &$3, OP_MUL);	$$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "/" expr		%prec "*"		{$$=expr_math2   (ctx, &$1, &$3, OP_DIV);	$$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "%" expr		%prec "*"		{$$=expr_math2   (ctx, &$1, &$3, OP_REM);	$$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "++"							{$$=expr_math1   (ctx, &$1, OP_INC);		$$.pos=pos_merge($1.pos, $2);}
+|				expr "--"			%prec "++"		{$$=expr_math1   (ctx, &$1, OP_DEC);		$$.pos=pos_merge($1.pos, $2);};
+exprs:			exprs "," expr						{$$=exprs_cat    (ctx, &$1, &$3);			$$.pos=pos_merge($1.pos, $3.pos);}
+|				expr								{$$=exprs_new    (ctx, &$1);				$$.pos=$1.pos;};
 opt_exprs:		exprs								{$$=$1;										$$.pos=$1.pos;}
-|				%empty								{$$=exprs_new   (ctx, NULL);				$$.pos=pos_empty(ctx->tokeniser_ctx);};
+|				%empty								{$$=exprs_new    (ctx, NULL);				$$.pos=pos_empty(ctx->tokeniser_ctx);};
 opt_else:		"else" statmt						{$$=$2;										$$.pos=pos_merge($1, $2.pos);}
-|				%empty				%prec "then"	{$$=statmt_nop  (ctx);						$$.pos=pos_empty(ctx->tokeniser_ctx);};
+|				%empty				%prec "then"	{$$=statmt_nop   (ctx);						$$.pos=pos_empty(ctx->tokeniser_ctx);};
 // TODO: Make type_spec actually interesting.
-type_spec:		"void"								{$$=$1;}
-|				"signed" int_spec					{$$=pos_merge($1, $2/*.pos*/);}
-|				"unsigned" int_spec					{$$=pos_merge($1, $2/*.pos*/);}
+type_spec:		"void"								{$$=type_void    (ctx);						$$.pos=$1;}
+|				"signed" int_spec					{$$=type_signed  (ctx, &$2);				$$.pos=pos_merge($1, $2.pos);}
+|				"unsigned" int_spec					{$$=type_unsigned(ctx, &$2);				$$.pos=pos_merge($1, $2.pos);}
 |				int_spec							{$$=$1;}
-|				"float"								{$$=$1;}
-|				"double"							{$$=$1;}
-|				"long" "double"						{$$=pos_merge($1, $2);}
-|				"struct" TKN_IDENT					{$$=pos_merge($1, $2.pos);}
-|				"enum" TKN_IDENT					{$$=pos_merge($1, $2.pos);};
-int_spec:		"char"								{$$=$1;}
-|				"short" opt_int						{$$=pos_merge($1, $2/*.pos*/);}
-|				"int"								{$$=$1;}
-|				"long" opt_int						{$$=pos_merge($1, $2/*.pos*/);}
-|				"long" "long" opt_int				{$$=pos_merge($1, $3/*.pos*/);};
+|				"float"								{$$=type_number  (ctx, FLOAT);				$$.pos=$1;}
+|				"double"							{$$=type_number  (ctx, DOUBLE_FLOAT);		$$.pos=$1;}
+|				"long" "double"						{$$=type_number  (ctx, QUAD_FLOAT);			$$.pos=pos_merge($1, $2);}
+|				"struct" TKN_IDENT					{$$.pos=pos_merge($1, $2.pos);}
+|				"enum" TKN_IDENT					{$$.pos=pos_merge($1, $2.pos);};
+int_spec:		"char"								{$$=type_number  (ctx, NUM_HHI);			$$.pos=$1;}
+|				"short" opt_int						{$$=type_number  (ctx, NUM_HI);				$$.pos=pos_merge($1, $2);}
+|				"int"								{$$=type_number  (ctx, NUM_I);				$$.pos=$1;}
+|				"long" opt_int						{$$=type_number  (ctx, NUM_LI);				$$.pos=pos_merge($1, $2);}
+|				"long" "long" opt_int				{$$=type_number  (ctx, NUM_LLI);			$$.pos=pos_merge($1, $3);};
 opt_int:		"int"								{$$=$1;}
 |				%empty								{$$=pos_empty(ctx->tokeniser_ctx);};
 %%
@@ -166,65 +169,37 @@ static void *make_copy(void *mem, size_t size) {
 }
 
 void init(parser_ctx_t *ctx) {
-	ctx->scope = NULL;
 	ctx->currentError = NULL;
 	map_create(&ctx->funcMap);
-}
-
-void push_scope(parser_ctx_t *ctx) {
-	scope_t *current = (scope_t *) malloc(sizeof(scope_t));
-	current->parent = ctx->scope;
-	map_create(&current->varMap);
-	ctx->scope = current;
-}
-
-void pop_scope(parser_ctx_t *ctx) {
-	map_delete_with_values(&ctx->scope->varMap);
-	void *mem = ctx->scope;
-	ctx->scope = ctx->scope->parent;
-	free(mem);
+	map_create(&ctx->varMap);
 }
 
 
-void pre_func(parser_ctx_t *ctx) {
-	push_scope(ctx);
+vardecls_t param_cat(parser_ctx_t *ctx, vardecls_t *other, ident_t ident, type_t type) {
+	vardecl_t var = declt(ctx, ident, type);
+	return vars_cat(ctx, other, &var);
 }
 
-idents_t param_cat(parser_ctx_t *ctx, idents_t *other, ident_t ident) {
-	int num = other->numIdents + 1;
-	ident_t *mem = (ident_t *) realloc(other->idents, sizeof(ident_t) * num);
-	mem[other->numIdents] = ident;
-	return (idents_t) {
-		.numIdents = num,
-		.idents = mem
+vardecls_t param_new(parser_ctx_t *ctx, ident_t ident, type_t type) {
+	vardecl_t var = declt(ctx, ident, type);
+	return vars_new(ctx, &var);
+}
+
+vardecls_t param_empty(parser_ctx_t *ctx) {
+	return (vardecls_t) {
+		.num = 0,
+		.vars = NULL
 	};
 }
 
-idents_t param_new(parser_ctx_t *ctx, ident_t ident) {
-	ident_t *mem = (ident_t *) malloc(sizeof(ident_t));
-	*mem = ident;
-	return (idents_t) {
-		.numIdents = 1,
-		.idents = mem
-	};
-}
-
-idents_t param_empty(parser_ctx_t *ctx) {
-	return (idents_t) {
-		.numIdents = 0,
-		.idents = NULL
-	};
-}
-
-funcdef_t post_func(parser_ctx_t *ctx, ident_t ident, idents_t *idents, statements_t *statmt) {
+funcdef_t func_impl(parser_ctx_t *ctx, type_t returns, ident_t ident, vardecls_t *params, statements_t *statmt) {
 	funcdef_t f = {
-		.pos = pos_merge(ident.pos, idents->pos),
+		.returns = returns,
 		.ident = ident,
-		.numParams = idents->numIdents,
-		.paramIdents = idents->idents,
+		.numParams = params->num,
+		.params = params->vars,
 		.statements = statmt
 	};
-	pop_scope(ctx);
 	funcdef_t *existing = map_get(&ctx->funcMap, ident.ident);
 	if (existing) {
 		// TODO: Standard error message.
@@ -241,27 +216,51 @@ funcdef_t post_func(parser_ctx_t *ctx, ident_t ident, idents_t *idents, statemen
 
 vardecl_t decl_assign(parser_ctx_t *ctx, ident_t ident, expression_t *expression) {
 	if (expression) expression = make_copy(expression, sizeof(expression_t));
-	pos_t pos = ident.pos;
-	if (expression) {
-		pos = pos_merge(ident.pos, expression->pos);
-	}
 	vardecl_t f = {
 		.ident = ident,
+		.type = ctx->currentVarType,
 		.expr = expression
 	};
-	vardecl_t *existing = map_get(&ctx->scope->varMap, ident.ident);
+	/* vardecl_t *existing = map_get(&ctx->varMap, ident.ident);
 	if (existing) {
-		yyerror(ctx, "Variable is already declared in this scope.");
+		char buf[20 + strlen(ident.ident)];
+		sprintf(buf, "Redefinition of '%s'", ident.ident);
+		report_error(ctx, "Error", ident.pos, buf);
 	} else {
 		vardecl_t *add = malloc(sizeof(vardecl_t));
 		*add = f;
-		map_set(&ctx->scope->varMap, ident.ident, add);
-	}
+		map_set(&ctx->varMap, ident.ident, add);
+	} */
 	return f;
 }
 
 vardecl_t decl(parser_ctx_t *ctx, ident_t ident) {
-	decl_assign(ctx, ident, NULL);
+	return decl_assign(ctx, ident, NULL);
+}
+
+vardecl_t declt_assign(parser_ctx_t *ctx, ident_t ident, type_t type, expression_t *expression) {
+	if (expression) expression = make_copy(expression, sizeof(expression_t));
+	ctx->currentVarType = type;
+	vardecl_t f = {
+		.ident = ident,
+		.type = type,
+		.expr = expression
+	};
+	/* vardecl_t *existing = map_get(&ctx->varMap, ident.ident);
+	if (existing) {
+		char buf[20 + strlen(ident.ident)];
+		sprintf(buf, "Redefinition of '%s'", ident.ident);
+		report_error(ctx, "Error", ident.pos, buf);
+	} else {
+		vardecl_t *add = malloc(sizeof(vardecl_t));
+		*add = f;
+		map_set(&ctx->varMap, ident.ident, add);
+	} */
+	return f;
+}
+
+vardecl_t declt(parser_ctx_t *ctx, ident_t ident, type_t type) {
+	return declt_assign(ctx, ident, type, NULL);
 }
 
 
@@ -495,6 +494,76 @@ vardecls_t vars_new(parser_ctx_t *ctx, vardecl_t *first) {
 	return (vardecls_t) {
 		.num = 1,
 		.vars = mem
+	};
+}
+
+
+type_t type_void(parser_ctx_t *ctx) {
+	return (type_t) {
+		.type_spec = {
+			.type = VOID,
+			.size = 0
+		}
+	};
+}
+
+type_t type_number(parser_ctx_t *ctx, type_simple_t type) {
+	int size;
+	switch (type) {
+		case (NUM_HHU):
+		case (NUM_HHI):
+			size = CHAR_BYTES;
+			break;
+		case (NUM_HU):
+		case (NUM_HI):
+			size = SHORT_BYTES;
+			break;
+		case (NUM_U):
+		case (NUM_I):
+			size = INT_BYTES;
+			break;
+		case (NUM_LU):
+		case (NUM_LI):
+			size = LONG_BYTES;
+			break;
+		case (NUM_LLU):
+		case (NUM_LLI):
+			size = LONG_LONG_BYTES;
+			break;
+	}
+	return (type_t) {
+		.type_spec = {
+			.type = type,
+			.size = size
+		}
+	};
+}
+
+type_t type_signed(parser_ctx_t *ctx, type_t *other) {
+	type_simple_t type = other->type_spec.type;
+	int size = other->type_spec.size;
+	if (type >= NUM_HHU && type <= NUM_LLU) {
+		type = type - NUM_HHU + NUM_HHI;
+	}
+	return (type_t) {
+		.type_spec = {
+			.type = type,
+			.size = size
+		}
+	};
+}
+
+type_t type_unsigned(parser_ctx_t *ctx, type_t *other) {
+	type_simple_t type = other->type_spec.type;
+	int size = other->type_spec.size;
+	if (type >= NUM_HHI && type <= NUM_LLI) {
+		type = type - NUM_HHI + NUM_HHU;
+	}
+	return (type_t) {
+		.type_spec = {
+			.type = type,
+			.size = size
+		}
 	};
 }
 

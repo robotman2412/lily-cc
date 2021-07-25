@@ -113,8 +113,9 @@ union YYSTYPE
 	statements_t statmts;
 	expression_t expr;
 	expressions_t exprs;
+	type_t type;
 
-#line 118 "src/parser.h"
+#line 119 "src/parser.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

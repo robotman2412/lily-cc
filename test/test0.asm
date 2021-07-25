@@ -51,6 +51,21 @@ L1:
 tfw:
 	PSH Y
 	MOV X, 0x00
+.L0: ; 0x0003
+	CMP A, 0x00
+	BEQ .L1 ; PIE
+	INC X
+	DEC A
+	JMP .L0 ; PIE
+.L1: ; 0x000d
+	MOV A, X
+	PUL Y
+	RET
+
+
+tfw:
+	PSH Y
+	MOV X, 0x00
 	; {
 L0:
 		; {

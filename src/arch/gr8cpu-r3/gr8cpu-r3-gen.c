@@ -25,6 +25,7 @@
 #define OFFS_CALC_XM	0x2B
 #define OFFS_CALC_YV	0x32
 #define OFFS_CALC_YM	0x33
+#define OFFS_CALC_CC	0x0C
 
 #define INSN_INC_A		0x3E
 #define INSN_DEC_A		0x40
@@ -76,8 +77,7 @@ void			r3_save_register	(asm_ctx_t *ctx, regs_t reg);
 void			r3_use_register		(asm_ctx_t *ctx, regs_t reg, param_spec_t *usedFor);
 void			r3_unuse_register	(asm_ctx_t *ctx, regs_t reg);
 
-void			r3_labelres_pie		(asm_ctx_t *ctx, address_t pos, address_t labelpos);
-void			r3_labelres_abs		(asm_ctx_t *ctx, address_t pos, address_t labelpos);
+char		   *r3_mklabel			(char *func, char *var);
 
 /* ================ Utilities ================= */
 // Generator-specific utilities.
@@ -140,7 +140,7 @@ void r3_branch(asm_ctx_t *ctx, branch_cond_t cond, label_t to) {
 			break;
 	}
 	asm_append(ctx, OFFS_PIE + opc);
-	asm_label_ref(ctx, to, &r3_labelres_pie);
+	asm_label_ref(ctx, to, LABEL_RELATIVE, 0);
 }
 
 // Emits math code based on provided context.
@@ -162,7 +162,7 @@ void r3_math2(asm_ctx_t *ctx, uint8_t offs, param_spec_t *a, param_spec_t *b, pa
 					break;
 				case (LABEL):
 					asm_append(ctx, OFFS_PIE + offs + OFFS_CALC_AM);
-					asm_label_ref(ctx, b->ptr.label, &r3_labelres_pie);
+					asm_label_ref(ctx, b->ptr.label, LABEL_RELATIVE, 0);
 					break;
 				case (ADDRESS):
 					asm_append(ctx, offs + OFFS_CALC_AM);
@@ -180,7 +180,7 @@ void r3_math2(asm_ctx_t *ctx, uint8_t offs, param_spec_t *a, param_spec_t *b, pa
 			switch (b->type) {
 				case (LABEL):
 					asm_append(ctx, OFFS_PIE + offs + OFFS_CALC_XM);
-					asm_label_ref(ctx, b->ptr.label, &r3_labelres_pie);
+					asm_label_ref(ctx, b->ptr.label, LABEL_RELATIVE, 0);
 					break;
 				case (ADDRESS):
 					asm_append(ctx, offs + OFFS_CALC_XM);
@@ -201,7 +201,7 @@ void r3_math2(asm_ctx_t *ctx, uint8_t offs, param_spec_t *a, param_spec_t *b, pa
 			switch (b->type) {
 				case (LABEL):
 					asm_append(ctx, OFFS_PIE + offs + OFFS_CALC_YM);
-					asm_label_ref(ctx, b->ptr.label, &r3_labelres_pie);
+					asm_label_ref(ctx, b->ptr.label, LABEL_RELATIVE, 0);
 					break;
 				case (ADDRESS):
 					asm_append(ctx, offs + OFFS_CALC_YM);
@@ -234,7 +234,50 @@ void r3_math2(asm_ctx_t *ctx, uint8_t offs, param_spec_t *a, param_spec_t *b, pa
 			r3_use_register(ctx, reg, a);
 		}
 	} else {
-		printf("TODO: USE LABELS\n");
+		if (a->type != LABEL) {
+			printf("TODO: WHAT IS NOT LABEL!!!!!!!\n");
+		}
+		r3_save_register(ctx, REGS_A);
+		uint8_t calc_offs = 0;
+		label_t output;
+		if (doSave) {
+			if (out && out->save_to) {
+				output = out->save_to;
+			} else {
+				printf("TODO: OH SHIT NO LABEL!!!\n");
+				output = "OHSHITNOLABEL0";
+			}
+		}
+		if (b->type == LABEL) {
+			for (int i = 0; i < a->size; i++) {
+				asm_append(ctx, OFFS_PIE + OFFS_MOVLD + OFFS_MOVM_AM);
+				asm_label_ref(ctx, a->ptr.label, LABEL_RELATIVE, 0);
+				asm_append(ctx, OFFS_PIE + offs + calc_offs + OFFS_CALC_AM);
+				asm_label_ref(ctx, b->ptr.label, LABEL_RELATIVE, 0);
+				if (doSave) {
+					asm_append(ctx, OFFS_PIE + OFFS_MOVST + OFFS_MOVM_AM);
+					asm_label_ref(ctx, output, LABEL_RELATIVE, 0);
+				}
+				calc_offs = OFFS_CALC_CC;
+			}
+		} else if (b->type == CONSTANT) {
+			word4_t constant = b->ptr.constant;
+			for (int i = 0; i < a->size; i++) {
+				word_t onebyte = constant >> 24;
+				constant <<= 8;
+				asm_append(ctx, OFFS_PIE + OFFS_MOVLD + OFFS_MOVM_AM);
+				asm_label_ref(ctx, a->ptr.label, LABEL_RELATIVE, 0);
+				asm_append(ctx, OFFS_PIE + offs + calc_offs + OFFS_CALC_AV);
+				asm_append(ctx, onebyte);
+				if (doSave) {
+					asm_append(ctx, OFFS_PIE + OFFS_MOVST + OFFS_MOVM_AM);
+					asm_label_ref(ctx, output, LABEL_RELATIVE, 0);
+				}
+				calc_offs = OFFS_CALC_CC;
+			}
+		} else {
+			printf("TODO: CALC(%d) %d\n", a->size, b->type);
+		}
 	}
 }
 
@@ -319,7 +362,7 @@ bool r3_mov(asm_ctx_t *ctx, regs_t reg, param_spec_t *value) {
 			break;
 		case (LABEL):
 			asm_append(ctx, OFFS_PIE + OFFS_MOVLD + reg);
-			asm_label_ref(ctx, value->ptr.label, &r3_labelres_pie);
+			asm_label_ref(ctx, value->ptr.label, LABEL_RELATIVE, 0);
 			break;
 		case (ADDRESS):
 			asm_append(ctx, OFFS_PIE + OFFS_MOVLD + reg);
@@ -355,7 +398,7 @@ void r3_save_register(asm_ctx_t *ctx, regs_t reg) {
 		if (spec->save_to) {
 			// Append a store instruction.
 			asm_append(ctx, OFFS_PIE + OFFS_MOVST + reg);
-			asm_label_ref(ctx, spec->save_to, &r3_labelres_pie);
+			asm_label_ref(ctx, spec->save_to, LABEL_RELATIVE, 0);
 			// Update the location of the stored value.
 			spec->type = LABEL;
 			spec->ptr.label = spec->save_to;
@@ -392,14 +435,15 @@ void r3_unuse_register(asm_ctx_t *ctx, regs_t reg) {
 	ctx->gen_ctx.usedFor[reg] = NULL;
 }
 
-// Appens ASM data for PIE label reference.
-void r3_labelres_pie(asm_ctx_t *ctx, address_t pos, address_t labelpos) {
-	asm_append2(ctx, labelpos - pos);
-}
-
-// Appens ASM data for absolute label reference.
-void r3_labelres_abs(asm_ctx_t *ctx, address_t pos, address_t labelpos) {
-	asm_append2(ctx, labelpos);
+// Generate a label string for the given function.
+char *r3_mklabel(char *func, char *var) {
+	char *buf = malloc(5 + strlen(func) + strlen(var));
+	*buf = 0;
+	strcat(buf, "__");
+	strcat(buf, func);
+	strcat(buf, "__");
+	strcat(buf, var);
+	return buf;
 }
 
 /* ================ Generation ================ */
@@ -425,16 +469,63 @@ void gen_update_ptr(asm_ctx_t *ctx, param_spec_t* from, param_spec_t *to) {
 	}
 }
 
+// Generate casting for numeric types.
+// Casting may not generate any ASM.
+void gen_cast_num(asm_ctx_t *ctx, param_spec_t *param, type_spec_t to) {
+	type_spec_t from = param->type_spec;
+	// Casting constants is very simple.
+	if (param->type == CONSTANT) {
+		word4_t val = param->ptr.constant;
+		if (to.type == BOOL) {
+			// Ensure the value is either 0 or 1.
+			// Anything nonzero becomes one.
+			val = val != 0;
+		} else {
+			// Check whether we must carry-extend.
+			bool wasSigned = from.type >= NUM_HHI && from.type <= NUM_LLI;
+			bool isSigned = to.type >= NUM_HHI && to.type <= NUM_LLI;
+			if (wasSigned && isSigned && to.size > from.size) {
+				// Fill the higher bytes with ones or zeroes respectively.
+				bool sign = val >> (8 * from.size - 1);
+				if (sign) {
+					for (int i = from.size; i < to.size; i++) {
+						val |= 0xff << (8 * i);
+					}
+				} else {
+					for (int i = from.size; i < to.size; i++) {
+						val &= ~(0xff << (8 * i));
+					}
+				}
+			}
+			// TODO: Maybe AND-onate.
+		}
+		param->ptr.constant = val;
+		param->type_spec = to;
+		param->size = to.size;
+		return;
+	}
+}
+
 /* --------- Methods ---------- */
 
 // Generate method entry with optional params.
-void gen_method_entry(asm_ctx_t *ctx, param_spec_t **params, int nParams) {
+void gen_method_entry(asm_ctx_t *ctx, funcdef_t *funcdef, param_spec_t **params, int nParams) {
 	if (nParams == 0) {
 		asm_append(ctx, OFFS_PUSHR + REGS_Y);
 		ctx->gen_ctx.saveYReg = true;
 		return;
-	}
-	if (nParams <= 3) {
+	} else if (nParams == 1 && params[0]->size == 2) {
+		label_t label = r3_mklabel(funcdef->ident.ident, funcdef->params[0].ident.ident);
+		asm_bss_label_n(ctx, label, params[0]->size);
+		params[0]->type = LABEL;
+		params[0]->ptr.label = label;
+		asm_append(ctx, OFFS_MOVST + OFFS_MOVM_XM);
+		asm_label_ref(ctx, label, LABEL_RELATIVE, 0);
+		asm_append(ctx, OFFS_MOVST + OFFS_MOVM_YM);
+		asm_label_ref(ctx, label, LABEL_RELATIVE, 1);
+		// TODO: METERDATER?
+		return;
+	} else if (nParams <= 3) {
 		for (int i = 0; i < nParams; i++) {
 			if (params[i]->size > 1) goto label_params;
 		}
@@ -450,7 +541,13 @@ void gen_method_entry(asm_ctx_t *ctx, param_spec_t **params, int nParams) {
 	label_params:
 	asm_append(ctx, OFFS_PUSHR + REGS_Y);
 	ctx->gen_ctx.saveYReg = true;
-	printf("TODO: LABEL PARAMS\n");
+	for (int i = 0; i < nParams; i++) {
+		char *buf = r3_mklabel(funcdef->ident.ident, funcdef->params[i].ident.ident);
+		// TODO: Add metadata?
+		asm_bss_label_n(ctx, buf, params[i]->size);
+		params[i]->type = LABEL;
+		params[i]->ptr.label = buf;
+	}
 }
 
 // Generate method return with specified return type.
@@ -511,7 +608,7 @@ void gen_math1(asm_ctx_t *ctx, param_spec_t *a, operator_t op) {
 			asm_append2(ctx, a->ptr.address);
 		} else if (a->type == LABEL) {
 			asm_append(ctx, OFFS_PIE + INSN_INC_M);
-			asm_label_ref(ctx, a->ptr.label, &r3_labelres_pie);
+			asm_label_ref(ctx, a->ptr.label, LABEL_RELATIVE, 0);
 		} else if (a->type == REGISTER) {
 			switch (a->ptr.regs) {
 				case (REGS_A):
@@ -531,7 +628,7 @@ void gen_math1(asm_ctx_t *ctx, param_spec_t *a, operator_t op) {
 			asm_append2(ctx, a->ptr.address);
 		} else if (a->type == LABEL) {
 			asm_append(ctx, OFFS_PIE + INSN_DEC_M);
-			asm_label_ref(ctx, a->ptr.label, &r3_labelres_pie);
+			asm_label_ref(ctx, a->ptr.label, LABEL_RELATIVE, 0);
 		} else if (a->type == REGISTER) {
 			switch (a->ptr.regs) {
 				case (REGS_A):
@@ -564,7 +661,7 @@ void gen_branch(asm_ctx_t *ctx, param_spec_t *a, param_spec_t *b, branch_cond_t 
 // Generate jump.
 void gen_jump(asm_ctx_t *ctx, label_t to) {
 	asm_append(ctx, OFFS_PIE + INSN_JMP);
-	asm_label_ref(ctx, to, &r3_labelres_pie);
+	asm_label_ref(ctx, to, LABEL_RELATIVE, 0);
 }
 
 /* -------- Variables --------- */
@@ -626,7 +723,7 @@ void gen_var_assign(asm_ctx_t *ctx, param_spec_t *val, param_spec_t *out) {
 			break;
 		case (LABEL):
 			asm_append(ctx, INSN_PUSHM);
-			asm_label_ref(ctx, val->ptr.label, &r3_labelres_pie);
+			asm_label_ref(ctx, val->ptr.label, LABEL_RELATIVE, 0);
 			break;
 		case (CONSTANT):
 			asm_append(ctx, INSN_PUSHI);

@@ -4,6 +4,7 @@
 
 enum expr_type;
 enum statement_type;
+struct type;
 struct ival;
 struct ident;
 struct expression;
@@ -13,11 +14,12 @@ struct statements;
 struct funcdef;
 struct idents;
 struct vardecl;
-struct scope;
+struct vardecls;
 struct parser_ctx;
 
 typedef enum expr_type expr_type_t;
 typedef enum statement_type statement_type_t;
+typedef struct type type_t;
 typedef struct ival ival_t;
 typedef struct ident ident_t;
 typedef struct expression expression_t;
@@ -28,7 +30,6 @@ typedef struct funcdef funcdef_t;
 typedef struct idents idents_t;
 typedef struct vardecl vardecl_t;
 typedef struct vardecls vardecls_t;
-typedef struct scope scope_t;
 typedef struct parser_ctx parser_ctx_t;
 
 #include "strmap.h"
@@ -56,6 +57,12 @@ enum statement_type {
 	STATMT_TYPE_WHILE,
 	STATMT_TYPE_MULTI,
 	STATMT_TYPE_FOR
+};
+
+// Type specification.
+struct type {
+	pos_t pos;
+	type_spec_t type_spec;
 };
 
 // Combination of pos_t and int.
@@ -111,9 +118,10 @@ struct statements {
 // Definition of a function.
 struct funcdef {
 	pos_t pos;
+	type_t returns;
 	ident_t ident;
 	int numParams;
-	ident_t *paramIdents;
+	vardecl_t *params;
 	statements_t *statements;
 };
 
@@ -127,6 +135,7 @@ struct idents {
 // Definition of a single variable.
 struct vardecl {
 	pos_t pos;
+	type_t type;
 	ident_t ident;
 	expression_t *expr;
 };
@@ -138,35 +147,29 @@ struct vardecls {
 	vardecl_t *vars;
 };
 
-// Scopes of variables.
-struct scope {
-	scope_t *parent;
-	map_t varMap;
-};
-
 // Wow, context!
 struct parser_ctx {
-	scope_t *scope;
+	map_t varMap;
 	map_t funcMap;
 	tokeniser_ctx_t *tokeniser_ctx;
 	asm_ctx_t *asm_ctx;
+	type_t currentVarType;
 	char *currentError;
 	pos_t errorPos;
 };
 
 void init					(parser_ctx_t *ctx);
 
-void push_scope				(parser_ctx_t *ctx);
-void pop_scope				(parser_ctx_t *ctx);
-
-void pre_func				(parser_ctx_t *ctx);
-idents_t param_cat			(parser_ctx_t *ctx, idents_t *other, ident_t ident);
-idents_t param_new			(parser_ctx_t *ctx, ident_t ident);
-idents_t param_empty		(parser_ctx_t *ctx);
-funcdef_t post_func			(parser_ctx_t *ctx, ident_t ident, idents_t *idents, statements_t *statmt);
+vardecls_t param_cat		(parser_ctx_t *ctx, vardecls_t *other, ident_t ident, type_t type);
+vardecls_t param_new		(parser_ctx_t *ctx, ident_t ident, type_t type);
+vardecls_t param_empty		(parser_ctx_t *ctx);
+funcdef_t func_decl			(parser_ctx_t *ctx, type_t returns, ident_t ident, vardecls_t *params);
+funcdef_t func_impl			(parser_ctx_t *ctx, type_t returns, ident_t ident, vardecls_t *params, statements_t *statmt);
 
 vardecl_t decl_assign		(parser_ctx_t *ctx, ident_t ident, expression_t *expression);
 vardecl_t decl				(parser_ctx_t *ctx, ident_t ident);
+vardecl_t declt_assign		(parser_ctx_t *ctx, ident_t ident, type_t type, expression_t *expression);
+vardecl_t declt				(parser_ctx_t *ctx, ident_t ident, type_t type);
 
 statement_t statmt_nop		(parser_ctx_t *ctx);
 statement_t statmt_expr		(parser_ctx_t *ctx, expression_t *expr);
@@ -190,6 +193,11 @@ expressions_t exprs_cat		(parser_ctx_t *ctx, expressions_t *other, expression_t 
 expressions_t exprs_new		(parser_ctx_t *ctx, expression_t *first);
 vardecls_t vars_cat			(parser_ctx_t *ctx, vardecls_t *other, vardecl_t *add);
 vardecls_t vars_new			(parser_ctx_t *ctx, vardecl_t *first);
+
+type_t type_void			(parser_ctx_t *ctx);
+type_t type_number			(parser_ctx_t *ctx, type_simple_t type);
+type_t type_signed			(parser_ctx_t *ctx, type_t *other);
+type_t type_unsigned		(parser_ctx_t *ctx, type_t *other);
 
 int yyparse					(parser_ctx_t *ctx);
 

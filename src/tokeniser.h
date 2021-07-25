@@ -51,6 +51,6 @@ char tokeniser_nextchar(tokeniser_ctx_t *ctx);
 char tokeniser_nextchar_no(tokeniser_ctx_t *ctx, int no);
 int tokenise(tokeniser_ctx_t *ctx);
 
-void syntax_error(parser_ctx_t *parser_ctx, pos_t pos, char *message);
+void report_error(parser_ctx_t *parser_ctx, char *type, pos_t pos, char *message);
 
 #endif // TOKENISER_H

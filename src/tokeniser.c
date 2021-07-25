@@ -423,8 +423,8 @@ static void print_pos_range(int x0, int x1) {
 	fputc('\n', stdout);
 }
 
-void syntax_error(parser_ctx_t *parser_ctx, pos_t pos, char *message) {
-	printf("Syntax error in %s:%d:%d -> %d:%d: %s\n", pos.filename, pos.y0, pos.x0, pos.y1, pos.x1, message);
+void report_error(parser_ctx_t *parser_ctx, char *type, pos_t pos, char *message) {
+	printf("%s in %s:%d:%d -> %d:%d: %s\n", type, pos.filename, pos.y0, pos.x0, pos.y1, pos.x1, message);
 	printf("%5d | ", pos.y0);
 	print_src(parser_ctx->tokeniser_ctx, pos.y0);
 	printf("      | ");

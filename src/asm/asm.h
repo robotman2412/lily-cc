@@ -4,11 +4,13 @@
 
 struct asm_ctx;
 struct asm_var;
+struct asm_data;
 struct asm_scope;
 struct asm_preproc;
 
 typedef struct asm_ctx asm_ctx_t;
 typedef struct asm_var asm_var_t;
+typedef struct asm_data asm_data_t;
 typedef struct asm_scope asm_scope_t;
 typedef struct asm_preproc asm_preproc_t;
 
@@ -20,6 +22,11 @@ typedef struct asm_preproc asm_preproc_t;
 #include <strmap.h>
 
 struct asm_ctx {
+	/* ====== Data insertion =======  */
+	// Data to be put in .bss section.
+	map_t bssLabels;
+	// Data to be put in .data section.
+	map_t dataLabels;
 	/* ==== Assembly generation ====  */
 	// Number of next numbered label.
 	int labelno;
@@ -64,6 +71,15 @@ struct asm_var {
 	char *ident;
 };
 
+struct asm_data {
+	// Label name.
+	label_t label;
+	// Size in words.
+	address_t size;
+	// Value for .data section.
+	memword_t *data;
+};
+
 struct asm_scope {
 	// New variables defined in this scope.
 	map_t variables;
@@ -89,7 +105,12 @@ struct asm_preproc {
 
 // Function pointer for label reference resolution.
 // This function will invoke asm_append later on.
-typedef void(*label_res_t)(asm_ctx_t *ctx, address_t pos, address_t label_pos);
+typedef enum label_res label_res_t;
+
+enum label_res {
+	LABEL_ABSOLUTE,
+	LABEL_RELATIVE
+};
 
 /* ================== Setup =================== */
 // Setup and post processing.
@@ -102,6 +123,15 @@ void asm_postproc(asm_ctx_t *ctx);
 /* ================ Appending ================= */
 // Appending ASM data.
 
+// Create a label that will reside in bss, one word in size.
+void asm_bss_label(asm_ctx_t *ctx, label_t label);
+// Create a label that will reside in bss, size words in size.
+void asm_bss_label_n(asm_ctx_t *ctx, label_t label, address_t size);
+// Create a label that will reside in data, one word in size.
+void asm_data_label(asm_ctx_t *ctx, label_t label, memword_t value);
+// Create a label that will reside in data, size words in size.
+// Will not copy provided data.
+void asm_data_label_n(asm_ctx_t *ctx, label_t label, address_t size, memword_t *value);
 // Append a label definition.
 // Will duplicate the given string.
 void asm_label(asm_ctx_t *ctx, label_t label);
@@ -119,10 +149,10 @@ void asm_append4(asm_ctx_t *ctx, memword4_t val);
 
 // Reference a label where the output is address_t.
 // Will duplicate the given string.
-void asm_label_ref(asm_ctx_t *ctx, label_t label, label_res_t res);
+void asm_label_ref(asm_ctx_t *ctx, label_t label, label_res_t res, address_t offset);
 // Reference a label where the output is N words.
 // Will duplicate the given string.
-void asm_label_refl(asm_ctx_t *ctx, label_t label, label_res_t res, uint8_t numWords);
+void asm_label_refl(asm_ctx_t *ctx, label_t label, label_res_t res, address_t offset, uint8_t numWords);
 
 /* ================ Hierarchy ================= */
 // Utilities for dealing with the hierarchy.

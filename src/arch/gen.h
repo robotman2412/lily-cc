@@ -58,9 +58,6 @@ enum oper {
 
 // Basic types and distinctions for struct, enum and union.
 enum type_simple {
-	// Quarter integer type, at lest one byte, signedness unspecified.
-	NUM_CHAR,
-	
 	// Quarter integer type, at least one byte.
 	NUM_HHI,
 	// Half    integer type, at least two bytes.
@@ -107,6 +104,12 @@ enum type_simple {
 	// Void type, used for return statements.
 	VOID,
 };
+
+#if USE_CHAR_SIGNED
+#define NUM_CHAR ((type_simple_t) NUM_HHI)
+#else
+#define NUM_CHAR ((type_simple_t) NUM_HHU)
+#endif
 
 // Full specification of a type.
 struct type_spec {
@@ -166,6 +169,8 @@ struct param_spec {
 
 #define PARAM_SPEC_VOID ((param_spec_t) {.type=VOID,.type_spec={.type=VOID,.size=0},.size=0})
 
+#include <parser.h>
+
 /* ================ Generation ================ */
 // Generation of simple statements.
 
@@ -175,11 +180,13 @@ struct param_spec {
 void gen_init			(asm_ctx_t *ctx);
 // Notify the generator of a pointer changing.
 void gen_update_ptr		(asm_ctx_t *ctx, param_spec_t* from, param_spec_t *to);
+// Generate casting for numeric types.
+void gen_cast_num		(asm_ctx_t *ctx, param_spec_t *param, type_spec_t to);
 
 /* --------- Methods ---------- */
 
 // Generate method entry with optional params.
-void gen_method_entry	(asm_ctx_t *ctx, param_spec_t **params, int nParams);
+void gen_method_entry	(asm_ctx_t *ctx, funcdef_t *funcdef, param_spec_t **params, int nParams);
 // Generate method return with specified return type.
 void gen_method_ret		(asm_ctx_t *ctx, param_spec_t *returnType);
 // Generate simple math.

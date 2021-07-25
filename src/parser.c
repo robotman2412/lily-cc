@@ -182,8 +182,9 @@ union YYSTYPE
 	statements_t statmts;
 	expression_t expr;
 	expressions_t exprs;
+	type_t type;
 
-#line 187 "src/parser.c"
+#line 188 "src/parser.c"
 
 };
 typedef union YYSTYPE YYSTYPE;
@@ -502,7 +503,7 @@ union yyalloc
 /* YYFINAL -- State number of the termination state.  */
 #define YYFINAL  3
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   337
+#define YYLAST   322
 
 /* YYNTOKENS -- Number of terminals.  */
 #define YYNTOKENS  37
@@ -511,7 +512,7 @@ union yyalloc
 /* YYNRULES -- Number of rules.  */
 #define YYNRULES  66
 /* YYNSTATES -- Number of states.  */
-#define YYNSTATES  126
+#define YYNSTATES  125
 
 #define YYUNDEFTOK  2
 #define YYMAXUTOK   291
@@ -562,13 +563,13 @@ static const yytype_int8 yytranslate[] =
   /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_uint8 yyrline[] =
 {
-       0,    94,    94,    94,    95,    95,    96,    97,    98,    99,
-     100,   101,   102,   103,   104,   105,   106,   107,   108,   109,
-     110,   111,   112,   113,   114,   116,   117,   119,   120,   121,
-     122,   123,   124,   125,   126,   127,   128,   129,   130,   131,
-     132,   133,   134,   135,   136,   137,   138,   139,   140,   141,
-     142,   144,   145,   146,   147,   148,   149,   150,   151,   152,
-     153,   154,   155,   156,   157,   158,   159
+       0,    96,    96,    96,    97,    98,    99,   100,   101,   102,
+     103,   104,   105,   106,   107,   108,   109,   110,   111,   112,
+     113,   114,   115,   116,   117,   119,   120,   122,   123,   124,
+     125,   126,   127,   128,   129,   130,   131,   132,   133,   134,
+     135,   136,   137,   138,   139,   140,   141,   142,   143,   144,
+     145,   147,   148,   149,   150,   151,   152,   153,   154,   155,
+     156,   157,   158,   159,   160,   161,   162
 };
 #endif
 
@@ -583,10 +584,10 @@ static const char *const yytname[] =
   "\"+\"", "\"-\"", "\"=\"", "\"*\"", "\"/\"", "\"%\"", "\"then\"",
   "\"struct\"", "\"enum\"", "\"void\"", "\"signed\"", "\"unsigned\"",
   "\"char\"", "\"short\"", "\"long\"", "\"int\"", "\"float\"",
-  "\"double\"", "$accept", "library", "$@1", "funcdef", "$@2", "funcdefs",
-  "opt_funcparams", "funcparams", "vardecl", "vardecls", "varassign",
-  "statmt", "statmts", "expr", "exprs", "opt_exprs", "opt_else",
-  "type_spec", "int_spec", "opt_int", YY_NULLPTR
+  "\"double\"", "$accept", "library", "$@1", "funcdef", "funcdefs",
+  "opt_funcparams", "funcparams", "vardecl", "vardecls", "varassign_t",
+  "varassign", "statmt", "statmts", "expr", "exprs", "opt_exprs",
+  "opt_else", "type_spec", "int_spec", "opt_int", YY_NULLPTR
 };
 #endif
 
@@ -602,12 +603,12 @@ static const yytype_int16 yytoknum[] =
 };
 # endif
 
-#define YYPACT_NINF (-72)
+#define YYPACT_NINF (-61)
 
 #define yypact_value_is_default(Yyn) \
   ((Yyn) == YYPACT_NINF)
 
-#define YYTABLE_NINF (-10)
+#define YYTABLE_NINF (-9)
 
 #define yytable_value_is_error(Yyn) \
   0
@@ -616,19 +617,19 @@ static const yytype_int16 yytoknum[] =
      STATE-NUM.  */
 static const yytype_int16 yypact[] =
 {
-     -72,     4,   -72,   -72,    62,    12,   -72,   301,    15,    24,
-      36,   -72,    83,    83,   -72,    19,     8,   -72,   -72,   -72,
-      42,   -72,   -72,   -72,   -72,   -25,   -72,   -72,   -72,   -72,
-      19,   -72,   -72,    53,    98,   -72,   301,    57,    58,    63,
-      41,    41,   -72,   -72,   -72,   -72,   -72,    60,   -72,    61,
-      59,    18,    39,     9,    41,    41,   200,   133,   251,   132,
-     -72,    41,   -72,   -72,   -72,    41,    41,    41,    41,    41,
-      41,    54,    73,    66,    84,   301,    85,   -72,   268,   285,
-      41,   -72,   -72,   -72,    -6,    89,   102,   201,   201,    -6,
-      20,    20,    20,    41,   222,   -72,   -72,   103,   -72,   200,
-     200,   167,    41,   -72,    -6,   106,   -72,    59,   166,   -72,
-     116,   -72,    41,    -6,   222,   -72,   -72,   200,   -72,   302,
-     -72,    59,   -72,   200,   -72,   -72
+     -61,    14,   -61,   -61,    49,    -1,     9,    21,   -61,     7,
+       7,   -61,   -18,   -23,   -61,   -61,   -61,   -61,    29,   -61,
+      37,   -61,   -61,    36,   -61,   -61,   -61,   -61,   -18,   -61,
+     -61,    43,   -61,   -61,   286,    83,    45,     6,     8,    48,
+      50,    55,    47,    47,   -61,   -61,   -61,   -61,   -61,    54,
+      61,   -61,    84,    53,    77,    85,   286,   106,   -61,    47,
+      47,   185,   118,   236,   117,   -61,   207,    47,   -61,   -61,
+     -61,    47,    47,    47,    47,    47,    47,    78,   -61,   -61,
+     119,   -61,   253,   270,    47,   -61,   -61,   -61,   112,   142,
+     -61,   -61,   186,   154,   159,     4,     4,   186,    35,    35,
+      35,    47,   151,   -61,   185,   185,   152,    47,   207,    47,
+     -61,   186,   -61,   192,   -61,    47,   186,   -61,   186,   185,
+     -61,   287,   -61,   185,   -61
 };
 
   /* YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
@@ -636,33 +637,33 @@ static const yytype_int16 yypact[] =
      means the default is an error.  */
 static const yytype_int8 yydefact[] =
 {
-       2,     0,     8,     1,     0,     0,     7,     0,     0,     0,
-       0,    51,     0,     0,    60,    66,    66,    62,    55,    56,
-       0,    54,    31,    58,    59,    66,    52,    53,    65,    61,
-      66,    57,    63,     0,     0,    64,    10,     0,     0,     0,
-       0,     0,    31,     6,    30,    34,    33,     0,    32,     0,
-       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-      28,    48,    29,    43,    44,     0,     0,     0,     0,     0,
-       0,    22,    15,     0,     0,     0,     0,    12,     0,     0,
-       0,    27,    35,    23,    46,    47,     0,    38,    39,    37,
-      40,    41,    42,     0,     0,    31,    13,     0,    14,     0,
-       0,     0,     0,    36,    21,    16,    20,     0,     0,    11,
-      50,    25,     0,    45,     0,    19,     5,     0,    24,     0,
-      18,     0,    49,     0,    17,    26
+       2,     0,     7,     1,     0,     0,     0,     0,    51,     0,
+       0,    60,    66,    66,    62,    55,    56,     6,     0,    54,
+       0,    58,    59,    66,    52,    53,    65,    61,    66,    57,
+      63,     0,    31,    64,     9,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,    31,     5,    30,    34,    33,     0,
+      14,    32,     0,     0,     0,     0,     0,     0,    11,     0,
+       0,     0,     0,     0,     0,    28,     0,    48,    29,    43,
+      44,     0,     0,     0,     0,     0,     0,    19,    31,    12,
+       0,    13,     0,     0,     0,    27,    35,    23,    22,    15,
+      20,    16,    46,    47,     0,    38,    39,    37,    40,    41,
+      42,     0,     0,    10,     0,     0,     0,     0,     0,     0,
+      36,    18,     4,    50,    25,     0,    21,    17,    45,     0,
+      24,     0,    49,     0,    26
 };
 
   /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-     -72,   -72,   -72,   -72,   -72,   -72,   -72,   -72,   -72,   -72,
-     -71,   -53,   -41,   -35,   -72,   -72,   -72,    -7,    47,    -8
+     -61,   -61,   -61,   -61,   -61,   -61,   -61,   -61,   -61,   -60,
+      81,   -59,   -41,   -42,   -61,   -61,   -61,     1,    62,    -8
 };
 
   /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int8 yydefgoto[] =
 {
-      -1,     1,     2,     6,     7,     4,    51,    52,    47,   105,
-      72,    48,    34,    49,    85,    86,   118,    50,    21,    32
+      -1,     1,     2,    17,     4,    36,    37,    49,    89,    50,
+      91,    51,    35,    52,    93,    94,   120,    53,    19,    30
 };
 
   /* YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
@@ -670,105 +671,103 @@ static const yytype_int8 yydefgoto[] =
      number is the opposite.  If YYTABLE_NINF, syntax error.  */
 static const yytype_int8 yytable[] =
 {
-      20,    59,    61,    80,     3,    57,    58,    29,    30,    28,
-      76,    63,    64,    65,    66,    67,    68,    69,    70,    78,
-      79,     8,    35,   106,    77,    22,    84,    73,    61,    53,
-      87,    88,    89,    90,    91,    92,   115,    63,    64,    23,
-      74,    30,    28,   120,    31,   101,   110,   111,    -9,    41,
-     124,    24,    75,    28,   108,    45,    46,    33,   104,    26,
-      27,    36,    -3,     5,   122,    54,    55,   113,    97,    61,
-     125,    56,    60,    62,    71,    93,    95,   119,    63,    64,
-      65,    66,    67,    68,    69,    70,    94,   107,    -4,    -4,
-      -4,    -4,    -4,    -4,    -4,    -4,    -4,    -4,    -4,    96,
-      98,    37,   102,    38,    39,    40,    41,   121,    42,    43,
-      44,   103,    45,    46,    14,    15,    25,    17,   109,   114,
-     117,     0,     0,     0,     9,    10,    11,    12,    13,    14,
-      15,    16,    17,    18,    19,    37,     0,    38,    39,    40,
-      41,    61,    42,    83,    44,    81,    45,    46,     0,     0,
-      63,    64,    65,    66,    67,    68,    69,    70,     9,    10,
-      11,    12,    13,    14,    15,    16,    17,    18,    19,    37,
-       0,    38,    39,    40,    41,    61,    42,   116,    44,   112,
-      45,    46,     0,     0,    63,    64,    65,    66,    67,    68,
-      69,    70,     9,    10,    11,    12,    13,    14,    15,    16,
-      17,    18,    19,    37,     0,    38,    39,    40,    41,    61,
-      42,     0,    44,     0,    45,    46,     0,     0,    63,    64,
-       0,     0,     0,    68,    69,    70,     9,    10,    11,    12,
-      13,    14,    15,    16,    17,    18,    19,    71,     0,     0,
-       0,     0,     0,     0,     0,     0,     0,     0,     9,    10,
-      11,    12,    13,    14,    15,    16,    17,    18,    19,    61,
-      82,     0,     0,     0,     0,     0,     0,     0,    63,    64,
-      65,    66,    67,    68,    69,    70,    61,    99,     0,     0,
-       0,     0,     0,     0,     0,    63,    64,    65,    66,    67,
-      68,    69,    70,    61,   100,     0,     0,     0,     0,     0,
-       0,     0,    63,    64,    65,    66,    67,    68,    69,    70,
-      61,   123,     0,     0,     0,     0,     0,     0,     0,    63,
-      64,    65,    66,    67,    68,    69,    70,     9,    10,    11,
-      12,    13,    14,    15,    16,    17,    18,    19
+      62,    63,    84,    64,    27,    18,    90,    55,    20,    57,
+      28,    26,    67,    29,     3,    -8,    26,    82,    83,    56,
+      33,    69,    70,    58,    21,    92,    74,    75,    76,    95,
+      96,    97,    98,    99,   100,    38,    22,   102,    11,    12,
+      23,    14,   106,    67,    31,   113,   114,    32,    90,    -3,
+       5,    34,    69,    70,    54,    43,    59,    80,    60,   111,
+     122,    47,    48,    61,   124,   116,    65,   118,    77,    28,
+      26,    24,    25,   121,    66,     6,     7,     8,     9,    10,
+      11,    12,    13,    14,    15,    16,    39,    78,    40,    41,
+      42,    43,    67,    44,    45,    46,    68,    47,    48,   101,
+      79,    69,    70,    71,    72,    73,    74,    75,    76,     6,
+       7,     8,     9,    10,    11,    12,    13,    14,    15,    16,
+      39,    81,    40,    41,    42,    43,    67,    44,    87,    46,
+      85,    47,    48,   107,   103,    69,    70,    71,    72,    73,
+      74,    75,    76,     6,     7,     8,     9,    10,    11,    12,
+      13,    14,    15,    16,    39,   108,    40,    41,    42,    43,
+      67,    44,   112,    46,   115,    47,    48,   109,   110,    69,
+      70,    71,    72,    73,    74,    75,    76,     6,     7,     8,
+       9,    10,    11,    12,    13,    14,    15,    16,    39,   117,
+      40,    41,    42,    43,    67,    44,   119,    46,     0,    47,
+      48,     0,     0,    69,    70,    71,    72,    73,    74,    75,
+      76,     6,     7,     8,     9,    10,    11,    12,    13,    14,
+      15,    16,    88,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     6,     7,     8,     9,    10,    11,    12,
+      13,    14,    15,    16,    67,    86,     0,     0,     0,     0,
+       0,     0,     0,    69,    70,    71,    72,    73,    74,    75,
+      76,    67,   104,     0,     0,     0,     0,     0,     0,     0,
+      69,    70,    71,    72,    73,    74,    75,    76,    67,   105,
+       0,     0,     0,     0,     0,     0,     0,    69,    70,    71,
+      72,    73,    74,    75,    76,    67,   123,     0,     0,     0,
+       0,     0,     0,     0,    69,    70,    71,    72,    73,    74,
+      75,    76,     6,     7,     8,     9,    10,    11,    12,    13,
+      14,    15,    16
 };
 
 static const yytype_int8 yycheck[] =
 {
-       7,    42,     8,    56,     0,    40,    41,    15,    33,    34,
-       1,    17,    18,    19,    20,    21,    22,    23,    24,    54,
-      55,     9,    30,    94,    15,    10,    61,     9,     8,    36,
-      65,    66,    67,    68,    69,    70,   107,    17,    18,    15,
-       1,    33,    34,   114,    36,    80,    99,   100,     9,     8,
-     121,    15,    13,    34,    95,    14,    15,    15,    93,    12,
-      13,     8,     0,     1,   117,     8,     8,   102,    75,     8,
-     123,     8,    12,    12,    15,    21,    10,   112,    17,    18,
-      19,    20,    21,    22,    23,    24,    13,    94,    26,    27,
-      28,    29,    30,    31,    32,    33,    34,    35,    36,    15,
-      15,     3,    13,     5,     6,     7,     8,   114,    10,    11,
-      12,     9,    14,    15,    31,    32,    33,    34,    15,    13,
-       4,    -1,    -1,    -1,    26,    27,    28,    29,    30,    31,
-      32,    33,    34,    35,    36,     3,    -1,     5,     6,     7,
-       8,     8,    10,    11,    12,    12,    14,    15,    -1,    -1,
-      17,    18,    19,    20,    21,    22,    23,    24,    26,    27,
-      28,    29,    30,    31,    32,    33,    34,    35,    36,     3,
-      -1,     5,     6,     7,     8,     8,    10,    11,    12,    12,
-      14,    15,    -1,    -1,    17,    18,    19,    20,    21,    22,
-      23,    24,    26,    27,    28,    29,    30,    31,    32,    33,
-      34,    35,    36,     3,    -1,     5,     6,     7,     8,     8,
-      10,    -1,    12,    -1,    14,    15,    -1,    -1,    17,    18,
-      -1,    -1,    -1,    22,    23,    24,    26,    27,    28,    29,
-      30,    31,    32,    33,    34,    35,    36,    15,    -1,    -1,
-      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    26,    27,
-      28,    29,    30,    31,    32,    33,    34,    35,    36,     8,
-       9,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    17,    18,
-      19,    20,    21,    22,    23,    24,     8,     9,    -1,    -1,
-      -1,    -1,    -1,    -1,    -1,    17,    18,    19,    20,    21,
-      22,    23,    24,     8,     9,    -1,    -1,    -1,    -1,    -1,
-      -1,    -1,    17,    18,    19,    20,    21,    22,    23,    24,
-       8,     9,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    17,
+      42,    43,    61,    44,    12,     4,    66,     1,     9,     1,
+      33,    34,     8,    36,     0,     9,    34,    59,    60,    13,
+      28,    17,    18,    15,    15,    67,    22,    23,    24,    71,
+      72,    73,    74,    75,    76,    34,    15,    78,    31,    32,
+      33,    34,    84,     8,    15,   104,   105,    10,   108,     0,
+       1,     8,    17,    18,     9,     8,     8,    56,     8,   101,
+     119,    14,    15,     8,   123,   107,    12,   109,    15,    33,
+      34,     9,    10,   115,    13,    26,    27,    28,    29,    30,
+      31,    32,    33,    34,    35,    36,     3,    10,     5,     6,
+       7,     8,     8,    10,    11,    12,    12,    14,    15,    21,
+      15,    17,    18,    19,    20,    21,    22,    23,    24,    26,
+      27,    28,    29,    30,    31,    32,    33,    34,    35,    36,
+       3,    15,     5,     6,     7,     8,     8,    10,    11,    12,
+      12,    14,    15,    21,    15,    17,    18,    19,    20,    21,
+      22,    23,    24,    26,    27,    28,    29,    30,    31,    32,
+      33,    34,    35,    36,     3,    13,     5,     6,     7,     8,
+       8,    10,    11,    12,    12,    14,    15,    13,     9,    17,
       18,    19,    20,    21,    22,    23,    24,    26,    27,    28,
-      29,    30,    31,    32,    33,    34,    35,    36
+      29,    30,    31,    32,    33,    34,    35,    36,     3,   108,
+       5,     6,     7,     8,     8,    10,     4,    12,    -1,    14,
+      15,    -1,    -1,    17,    18,    19,    20,    21,    22,    23,
+      24,    26,    27,    28,    29,    30,    31,    32,    33,    34,
+      35,    36,    15,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    26,    27,    28,    29,    30,    31,    32,
+      33,    34,    35,    36,     8,     9,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    17,    18,    19,    20,    21,    22,    23,
+      24,     8,     9,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      17,    18,    19,    20,    21,    22,    23,    24,     8,     9,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    17,    18,    19,
+      20,    21,    22,    23,    24,     8,     9,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    17,    18,    19,    20,    21,    22,
+      23,    24,    26,    27,    28,    29,    30,    31,    32,    33,
+      34,    35,    36
 };
 
   /* YYSTOS[STATE-NUM] -- The (internal number of the) accessing
      symbol of state STATE-NUM.  */
 static const yytype_int8 yystos[] =
 {
-       0,    38,    39,     0,    42,     1,    40,    41,     9,    26,
-      27,    28,    29,    30,    31,    32,    33,    34,    35,    36,
-      54,    55,    10,    15,    15,    33,    55,    55,    34,    56,
-      33,    36,    56,    15,    49,    56,     8,     3,     5,     6,
-       7,     8,    10,    11,    12,    14,    15,    45,    48,    50,
-      54,    43,    44,    54,     8,     8,     8,    50,    50,    49,
-      12,     8,    12,    17,    18,    19,    20,    21,    22,    23,
-      24,    15,    47,     9,     1,    13,     1,    15,    50,    50,
-      48,    12,     9,    11,    50,    51,    52,    50,    50,    50,
-      50,    50,    50,    21,    13,    10,    15,    54,    15,     9,
-       9,    50,    13,     9,    50,    46,    47,    54,    49,    15,
-      48,    48,    12,    50,    13,    47,    11,     4,    53,    50,
-      47,    54,    48,     9,    47,    48
+       0,    38,    39,     0,    41,     1,    26,    27,    28,    29,
+      30,    31,    32,    33,    34,    35,    36,    40,    54,    55,
+       9,    15,    15,    33,    55,    55,    34,    56,    33,    36,
+      56,    15,    10,    56,     8,    49,    42,    43,    54,     3,
+       5,     6,     7,     8,    10,    11,    12,    14,    15,    44,
+      46,    48,    50,    54,     9,     1,    13,     1,    15,     8,
+       8,     8,    50,    50,    49,    12,    13,     8,    12,    17,
+      18,    19,    20,    21,    22,    23,    24,    15,    10,    15,
+      54,    15,    50,    50,    48,    12,     9,    11,    15,    45,
+      46,    47,    50,    51,    52,    50,    50,    50,    50,    50,
+      50,    21,    49,    15,     9,     9,    50,    21,    13,    13,
+       9,    50,    11,    48,    48,    12,    50,    47,    50,     4,
+      53,    50,    48,     9,    48
 };
 
   /* YYR1[YYN] -- Symbol number of symbol that rule YYN derives.  */
 static const yytype_int8 yyr1[] =
 {
-       0,    37,    39,    38,    41,    40,    40,    42,    42,    43,
-      43,    44,    44,    44,    44,    45,    45,    46,    46,    46,
-      46,    47,    47,    48,    48,    48,    48,    48,    48,    48,
+       0,    37,    39,    38,    40,    40,    41,    41,    42,    42,
+      43,    43,    43,    43,    44,    44,    45,    45,    46,    46,
+      47,    47,    47,    48,    48,    48,    48,    48,    48,    48,
       48,    49,    49,    50,    50,    50,    50,    50,    50,    50,
       50,    50,    50,    50,    50,    51,    51,    52,    52,    53,
       53,    54,    54,    54,    54,    54,    54,    54,    54,    54,
@@ -778,8 +777,8 @@ static const yytype_int8 yyr1[] =
   /* YYR2[YYN] -- Number of symbols on the right hand side of rule YYN.  */
 static const yytype_int8 yyr2[] =
 {
-       0,     2,     0,     2,     0,     9,     5,     2,     0,     1,
-       0,     4,     2,     3,     3,     2,     4,     4,     3,     2,
+       0,     2,     0,     2,     8,     5,     2,     0,     1,     0,
+       4,     2,     3,     3,     1,     3,     1,     3,     4,     2,
        1,     3,     1,     3,     6,     5,     8,     3,     2,     2,
        1,     0,     2,     1,     1,     3,     4,     3,     3,     3,
        3,     3,     3,     2,     2,     3,     1,     1,     0,     2,
@@ -1222,285 +1221,279 @@ yydestruct (const char *yymsg, int yytype, YYSTYPE *yyvaluep, parser_ctx_t *ctx)
   switch (yytype)
     {
     case 3: /* "if"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1228 "src/parser.c"
+#line 1227 "src/parser.c"
         break;
 
     case 4: /* "else"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1234 "src/parser.c"
+#line 1233 "src/parser.c"
         break;
 
     case 5: /* "while"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1240 "src/parser.c"
+#line 1239 "src/parser.c"
         break;
 
     case 6: /* "for"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1246 "src/parser.c"
+#line 1245 "src/parser.c"
         break;
 
     case 7: /* "return"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1252 "src/parser.c"
+#line 1251 "src/parser.c"
         break;
 
     case 8: /* "("  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1258 "src/parser.c"
+#line 1257 "src/parser.c"
         break;
 
     case 9: /* ")"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1264 "src/parser.c"
+#line 1263 "src/parser.c"
         break;
 
     case 10: /* "{"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1270 "src/parser.c"
+#line 1269 "src/parser.c"
         break;
 
     case 11: /* "}"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1276 "src/parser.c"
+#line 1275 "src/parser.c"
         break;
 
     case 12: /* ";"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1282 "src/parser.c"
+#line 1281 "src/parser.c"
         break;
 
     case 13: /* ","  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1288 "src/parser.c"
+#line 1287 "src/parser.c"
         break;
 
     case 15: /* TKN_IDENT  */
-#line 43 "src/parser.bison"
-            {printf("free_ident($$.ident);\n");}
-#line 1294 "src/parser.c"
+#line 44 "src/parser.bison"
+            {printf("free_ident(&$$);\n");}
+#line 1293 "src/parser.c"
         break;
 
     case 16: /* TKN_GARBAGE  */
-#line 44 "src/parser.bison"
-            {printf("free_garbage($$.garbage);\n");}
-#line 1300 "src/parser.c"
+#line 45 "src/parser.bison"
+            {printf("free_garbage(&$$);\n");}
+#line 1299 "src/parser.c"
         break;
 
     case 17: /* "++"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1306 "src/parser.c"
+#line 1305 "src/parser.c"
         break;
 
     case 18: /* "--"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1312 "src/parser.c"
+#line 1311 "src/parser.c"
         break;
 
     case 19: /* "+"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1318 "src/parser.c"
+#line 1317 "src/parser.c"
         break;
 
     case 20: /* "-"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1324 "src/parser.c"
+#line 1323 "src/parser.c"
         break;
 
     case 21: /* "="  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1330 "src/parser.c"
+#line 1329 "src/parser.c"
         break;
 
     case 22: /* "*"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1336 "src/parser.c"
+#line 1335 "src/parser.c"
         break;
 
     case 23: /* "/"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1342 "src/parser.c"
+#line 1341 "src/parser.c"
         break;
 
     case 24: /* "%"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1348 "src/parser.c"
+#line 1347 "src/parser.c"
         break;
 
     case 26: /* "struct"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1354 "src/parser.c"
+#line 1353 "src/parser.c"
         break;
 
     case 27: /* "enum"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1360 "src/parser.c"
+#line 1359 "src/parser.c"
         break;
 
     case 28: /* "void"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1366 "src/parser.c"
+#line 1365 "src/parser.c"
         break;
 
     case 29: /* "signed"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1372 "src/parser.c"
+#line 1371 "src/parser.c"
         break;
 
     case 30: /* "unsigned"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1378 "src/parser.c"
+#line 1377 "src/parser.c"
         break;
 
     case 31: /* "char"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1384 "src/parser.c"
+#line 1383 "src/parser.c"
         break;
 
     case 32: /* "short"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1390 "src/parser.c"
+#line 1389 "src/parser.c"
         break;
 
     case 33: /* "long"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1396 "src/parser.c"
+#line 1395 "src/parser.c"
         break;
 
     case 34: /* "int"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1402 "src/parser.c"
+#line 1401 "src/parser.c"
         break;
 
     case 35: /* "float"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1408 "src/parser.c"
+#line 1407 "src/parser.c"
         break;
 
     case 36: /* "double"  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1414 "src/parser.c"
+#line 1413 "src/parser.c"
         break;
 
     case 40: /* funcdef  */
-#line 45 "src/parser.bison"
+#line 46 "src/parser.bison"
             {printf("free_funcdef(&$$);\n");}
-#line 1420 "src/parser.c"
+#line 1419 "src/parser.c"
         break;
 
-    case 43: /* opt_funcparams  */
-#line 46 "src/parser.bison"
-            {printf("free_idents(&$$);\n");}
-#line 1426 "src/parser.c"
-        break;
-
-    case 44: /* funcparams  */
-#line 46 "src/parser.bison"
-            {printf("free_idents(&$$);\n");}
-#line 1432 "src/parser.c"
-        break;
-
-    case 45: /* vardecl  */
-#line 48 "src/parser.bison"
+    case 42: /* opt_funcparams  */
+#line 49 "src/parser.bison"
             {printf("free_vardecls(&$$);\n");}
-#line 1438 "src/parser.c"
+#line 1425 "src/parser.c"
         break;
 
-    case 46: /* vardecls  */
-#line 48 "src/parser.bison"
+    case 43: /* funcparams  */
+#line 49 "src/parser.bison"
             {printf("free_vardecls(&$$);\n");}
-#line 1444 "src/parser.c"
+#line 1431 "src/parser.c"
+        break;
+
+    case 44: /* vardecl  */
+#line 49 "src/parser.bison"
+            {printf("free_vardecls(&$$);\n");}
+#line 1437 "src/parser.c"
+        break;
+
+    case 45: /* vardecls  */
+#line 49 "src/parser.bison"
+            {printf("free_vardecls(&$$);\n");}
+#line 1443 "src/parser.c"
+        break;
+
+    case 46: /* varassign_t  */
+#line 48 "src/parser.bison"
+            {printf("free_vardecl(&$$);\n");}
+#line 1449 "src/parser.c"
         break;
 
     case 47: /* varassign  */
-#line 47 "src/parser.bison"
+#line 48 "src/parser.bison"
             {printf("free_vardecl(&$$);\n");}
-#line 1450 "src/parser.c"
+#line 1455 "src/parser.c"
         break;
 
     case 48: /* statmt  */
-#line 49 "src/parser.bison"
+#line 50 "src/parser.bison"
             {printf("free_statmt(&$$);\n");}
-#line 1456 "src/parser.c"
+#line 1461 "src/parser.c"
         break;
 
     case 49: /* statmts  */
-#line 50 "src/parser.bison"
+#line 51 "src/parser.bison"
             {printf("free_statmts(&$$);\n");}
-#line 1462 "src/parser.c"
+#line 1467 "src/parser.c"
         break;
 
     case 50: /* expr  */
-#line 51 "src/parser.bison"
+#line 52 "src/parser.bison"
             {printf("free_expr(&$$);\n");}
-#line 1468 "src/parser.c"
+#line 1473 "src/parser.c"
         break;
 
     case 51: /* exprs  */
-#line 52 "src/parser.bison"
+#line 53 "src/parser.bison"
             {printf("free_exprs(&$$);\n");}
-#line 1474 "src/parser.c"
+#line 1479 "src/parser.c"
         break;
 
     case 52: /* opt_exprs  */
-#line 52 "src/parser.bison"
+#line 53 "src/parser.bison"
             {printf("free_exprs(&$$);\n");}
-#line 1480 "src/parser.c"
+#line 1485 "src/parser.c"
         break;
 
     case 53: /* opt_else  */
-#line 49 "src/parser.bison"
+#line 50 "src/parser.bison"
             {printf("free_statmt(&$$);\n");}
-#line 1486 "src/parser.c"
-        break;
-
-    case 54: /* type_spec  */
-#line 53 "src/parser.bison"
-            {printf("free_pos(&$$);\n");}
-#line 1492 "src/parser.c"
-        break;
-
-    case 55: /* int_spec  */
-#line 53 "src/parser.bison"
-            {printf("free_pos(&$$);\n");}
-#line 1498 "src/parser.c"
+#line 1491 "src/parser.c"
         break;
 
     case 56: /* opt_int  */
-#line 53 "src/parser.bison"
+#line 54 "src/parser.bison"
             {printf("free_pos(&$$);\n");}
-#line 1504 "src/parser.c"
+#line 1497 "src/parser.c"
         break;
 
       default:
@@ -1768,379 +1761,379 @@ yyreduce:
   switch (yyn)
     {
   case 2:
-#line 94 "src/parser.bison"
+#line 96 "src/parser.bison"
                         {init(ctx);}
-#line 1774 "src/parser.c"
+#line 1767 "src/parser.c"
     break;
 
   case 4:
-#line 95 "src/parser.bison"
-                        {pre_func(ctx);}
-#line 1780 "src/parser.c"
+#line 97 "src/parser.bison"
+                                                                                                                           {(yyval.func)=func_impl(ctx, (yyvsp[-7].type), (yyvsp[-6].ident), &(yyvsp[-4].vars), &(yyvsp[-1].statmts));(yyval.func).pos = pos_merge((yyvsp[-7].type).pos, (yyvsp[-3].pos));}
+#line 1773 "src/parser.c"
     break;
 
   case 5:
-#line 95 "src/parser.bison"
-                                                                                                           {(yyval.func)=post_func(ctx, (yyvsp[-6].ident), &(yyvsp[-4].idents), &(yyvsp[-1].statmts));}
-#line 1786 "src/parser.c"
+#line 98 "src/parser.bison"
+                                                                                                                                                                   {printf("err\n");/*dispose of stuff*/}
+#line 1779 "src/parser.c"
     break;
 
-  case 6:
-#line 96 "src/parser.bison"
-                                                                                                                                                                   {printf("err\n");/*dispose of stuff*/}
-#line 1792 "src/parser.c"
+  case 8:
+#line 101 "src/parser.bison"
+                                                                                {(yyval.vars)=(yyvsp[0].vars);}
+#line 1785 "src/parser.c"
     break;
 
   case 9:
-#line 99 "src/parser.bison"
-                                                                                {(yyval.idents)=(yyvsp[0].idents);}
-#line 1798 "src/parser.c"
+#line 102 "src/parser.bison"
+                                                                                                {(yyval.vars)=param_empty  (ctx);						(yyval.vars).pos=pos_empty(ctx->tokeniser_ctx);}
+#line 1791 "src/parser.c"
     break;
 
   case 10:
-#line 100 "src/parser.bison"
-                                                                                                {(yyval.idents)=param_empty (ctx);						(yyval.idents).pos=pos_empty(ctx->tokeniser_ctx);}
-#line 1804 "src/parser.c"
+#line 103 "src/parser.bison"
+                                                                {(yyval.vars)=param_cat    (ctx, &(yyvsp[-3].vars), (yyvsp[0].ident), (yyvsp[-1].type));		(yyval.vars).pos=pos_merge((yyvsp[-3].vars).pos, (yyvsp[0].ident).pos);}
+#line 1797 "src/parser.c"
     break;
 
   case 11:
-#line 101 "src/parser.bison"
-                                                                {(yyval.idents)=param_cat   (ctx, &(yyvsp[-3].idents), (yyvsp[0].ident));				(yyval.idents).pos=pos_merge((yyvsp[-3].idents).pos, (yyvsp[0].ident).pos);}
-#line 1810 "src/parser.c"
+#line 104 "src/parser.bison"
+                                                                                        {(yyval.vars)=param_new    (ctx, (yyvsp[0].ident), (yyvsp[-1].type));				(yyval.vars).pos=pos_merge((yyvsp[-1].type).pos, (yyvsp[0].ident).pos);}
+#line 1803 "src/parser.c"
     break;
 
   case 12:
-#line 102 "src/parser.bison"
-                                                                                        {(yyval.idents)=param_new   (ctx, (yyvsp[0].ident));					(yyval.idents).pos=pos_merge((yyvsp[-1].pos)/*.pos*/, (yyvsp[0].ident).pos);}
-#line 1816 "src/parser.c"
+#line 105 "src/parser.bison"
+                                                                                {(yyval.vars)=param_empty  (ctx);						(yyval.vars).pos=pos_merge((yyvsp[-2].vars).pos, (yyvsp[0].ident).pos);	report_error(ctx, "Syntax error", (yyval.vars).pos, "Expected parameter");}
+#line 1809 "src/parser.c"
     break;
 
   case 13:
-#line 103 "src/parser.bison"
-                                                                                {(yyval.idents)=param_empty (ctx);						(yyval.idents).pos=pos_merge((yyvsp[-2].idents).pos, (yyvsp[0].ident).pos);		syntax_error(ctx, (yyval.idents).pos, "Expected parameter");}
-#line 1822 "src/parser.c"
+#line 106 "src/parser.bison"
+                                                                                {(yyval.vars)=param_empty  (ctx); 					(yyval.vars).pos=pos_merge((yyvsp[-2].type).pos, (yyvsp[0].ident).pos);	report_error(ctx, "Syntax error", (yyval.vars).pos, "Expected parameter");}
+#line 1815 "src/parser.c"
     break;
 
   case 14:
-#line 104 "src/parser.bison"
-                                                                                {(yyval.idents)=param_empty (ctx); 						(yyval.idents).pos=pos_merge((yyvsp[-2].pos)/*.pos*/, (yyvsp[0].ident).pos);	syntax_error(ctx, (yyval.idents).pos, "Expected parameter");}
-#line 1828 "src/parser.c"
+#line 107 "src/parser.bison"
+                                                                                        {(yyval.vars)=vars_new     (ctx, &(yyvsp[0].var));				(yyval.vars).pos=(yyvsp[0].var).pos;}
+#line 1821 "src/parser.c"
     break;
 
   case 15:
-#line 105 "src/parser.bison"
-                                                                                {(yyval.vars)=vars_new    (ctx, &(yyvsp[0].var));					(yyval.vars).pos=pos_merge((yyvsp[-1].pos)/*.pos*/, (yyvsp[0].var).pos);}
-#line 1834 "src/parser.c"
+#line 108 "src/parser.bison"
+                                                                                {(yyval.vars)=vars_cat     (ctx, &(yyvsp[0].vars), &(yyvsp[-2].var));			(yyval.vars).pos=pos_merge((yyvsp[-2].var).pos, (yyvsp[0].vars).pos);}
+#line 1827 "src/parser.c"
     break;
 
   case 16:
-#line 106 "src/parser.bison"
-                                                                        {(yyval.vars)=vars_cat    (ctx, &(yyvsp[0].vars), &(yyvsp[-2].var));			(yyval.vars).pos=pos_merge((yyvsp[-3].pos)/*.pos*/, (yyvsp[0].vars).pos);}
-#line 1840 "src/parser.c"
+#line 109 "src/parser.bison"
+                                                                                        {(yyval.vars)=vars_new     (ctx, &(yyvsp[0].var));				(yyval.vars).pos=(yyvsp[0].var).pos;}
+#line 1833 "src/parser.c"
     break;
 
   case 17:
-#line 107 "src/parser.bison"
-                                                                {(yyval.vars)=vars_cat    (ctx, &(yyvsp[-3].vars), &(yyvsp[0].var));			(yyval.vars).pos=pos_merge((yyvsp[-3].vars).pos, (yyvsp[0].var).pos);}
-#line 1846 "src/parser.c"
+#line 110 "src/parser.bison"
+                                                                                {(yyval.vars)=vars_cat     (ctx, &(yyvsp[-2].vars), &(yyvsp[0].var));			(yyval.vars).pos=pos_merge((yyvsp[-2].vars).pos, (yyvsp[0].var).pos);}
+#line 1839 "src/parser.c"
     break;
 
   case 18:
-#line 108 "src/parser.bison"
-                                                                                {(yyval.vars)=vars_cat    (ctx, &(yyvsp[-2].vars), &(yyvsp[0].var));			(yyval.vars).pos=pos_merge((yyvsp[-2].vars).pos, (yyvsp[0].var).pos);}
-#line 1852 "src/parser.c"
+#line 111 "src/parser.bison"
+                                                        {(yyval.var)=declt_assign (ctx, (yyvsp[-2].ident), (yyvsp[-3].type), &(yyvsp[0].expr));		(yyval.var).pos=pos_merge((yyvsp[-3].type).pos, (yyvsp[0].expr).pos);}
+#line 1845 "src/parser.c"
     break;
 
   case 19:
-#line 109 "src/parser.bison"
-                                                                                        {(yyval.vars)=vars_new    (ctx, &(yyvsp[0].var));					(yyval.vars).pos=pos_merge((yyvsp[-1].pos)/*.pos*/, (yyvsp[0].var).pos);}
-#line 1858 "src/parser.c"
+#line 112 "src/parser.bison"
+                                                                                        {(yyval.var)=declt        (ctx, (yyvsp[0].ident), (yyvsp[-1].type));				(yyval.var).pos=pos_merge((yyvsp[-1].type).pos, (yyvsp[0].ident).pos);}
+#line 1851 "src/parser.c"
     break;
 
   case 20:
-#line 110 "src/parser.bison"
-                                                                                                {(yyval.vars)=vars_new    (ctx, &(yyvsp[0].var));					(yyval.vars).pos=(yyvsp[0].var).pos;}
-#line 1864 "src/parser.c"
+#line 113 "src/parser.bison"
+                                                                                        {(yyval.var)=(yyvsp[0].var);}
+#line 1857 "src/parser.c"
     break;
 
   case 21:
-#line 111 "src/parser.bison"
-                                                                                {(yyval.var)=decl_assign (ctx, (yyvsp[-2].ident), &(yyvsp[0].expr));				(yyval.var).pos=pos_merge((yyvsp[-2].ident).pos, (yyvsp[0].expr).pos);}
-#line 1870 "src/parser.c"
+#line 114 "src/parser.bison"
+                                                                                        {(yyval.var)=decl_assign  (ctx, (yyvsp[-2].ident), &(yyvsp[0].expr));			(yyval.var).pos=pos_merge((yyvsp[-2].ident).pos, (yyvsp[0].expr).pos);}
+#line 1863 "src/parser.c"
     break;
 
   case 22:
-#line 112 "src/parser.bison"
-                                                                                                {(yyval.var)=decl        (ctx, (yyvsp[0].ident));					(yyval.var).pos=(yyvsp[0].ident).pos;}
-#line 1876 "src/parser.c"
+#line 115 "src/parser.bison"
+                                                                                                {(yyval.var)=decl         (ctx, (yyvsp[0].ident));					(yyval.var).pos=(yyvsp[0].ident).pos;}
+#line 1869 "src/parser.c"
     break;
 
   case 23:
-#line 113 "src/parser.bison"
-                                                                                {(yyval.statmt)=statmt_multi(ctx, &(yyvsp[-1].statmts));					(yyval.statmt).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos));}
-#line 1882 "src/parser.c"
+#line 116 "src/parser.bison"
+                                                                                {(yyval.statmt)=statmt_multi (ctx, &(yyvsp[-1].statmts));				(yyval.statmt).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos));}
+#line 1875 "src/parser.c"
     break;
 
   case 24:
-#line 115 "src/parser.bison"
-                                                                                                {(yyval.statmt)=statmt_if   (ctx, &(yyvsp[-3].expr), &(yyvsp[-1].statmt), &(yyvsp[0].statmt));		(yyval.statmt).pos=pos_merge((yyvsp[-5].pos), (yyvsp[0].statmt).pos);}
-#line 1888 "src/parser.c"
+#line 118 "src/parser.bison"
+                                                                                                {(yyval.statmt)=statmt_if    (ctx, &(yyvsp[-3].expr), &(yyvsp[-1].statmt), &(yyvsp[0].statmt));		(yyval.statmt).pos=pos_merge((yyvsp[-5].pos), (yyvsp[0].statmt).pos);}
+#line 1881 "src/parser.c"
     break;
 
   case 25:
-#line 116 "src/parser.bison"
-                                                                                {(yyval.statmt)=statmt_while(ctx, &(yyvsp[-2].expr), &(yyvsp[0].statmt));			(yyval.statmt).pos=pos_merge((yyvsp[-4].pos), (yyvsp[0].statmt).pos);}
-#line 1894 "src/parser.c"
+#line 119 "src/parser.bison"
+                                                                                {(yyval.statmt)=statmt_while (ctx, &(yyvsp[-2].expr), &(yyvsp[0].statmt));			(yyval.statmt).pos=pos_merge((yyvsp[-4].pos), (yyvsp[0].statmt).pos);}
+#line 1887 "src/parser.c"
     break;
 
   case 26:
-#line 118 "src/parser.bison"
-                                                                                        {(yyval.statmt)=statmt_for  (ctx, &(yyvsp[-5].statmt), &(yyvsp[-4].expr), &(yyvsp[-2].expr), &(yyvsp[0].statmt));	(yyval.statmt).pos=pos_merge((yyvsp[-7].pos), (yyvsp[0].statmt).pos);}
-#line 1900 "src/parser.c"
+#line 121 "src/parser.bison"
+                                                                                        {(yyval.statmt)=statmt_for   (ctx, &(yyvsp[-5].statmt), &(yyvsp[-4].expr), &(yyvsp[-2].expr), &(yyvsp[0].statmt));	(yyval.statmt).pos=pos_merge((yyvsp[-7].pos), (yyvsp[0].statmt).pos);}
+#line 1893 "src/parser.c"
     break;
 
   case 27:
-#line 119 "src/parser.bison"
-                                                                                        {(yyval.statmt)=statmt_ret  (ctx, &(yyvsp[-1].expr));					(yyval.statmt).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos));}
-#line 1906 "src/parser.c"
+#line 122 "src/parser.bison"
+                                                                                        {(yyval.statmt)=statmt_ret   (ctx, &(yyvsp[-1].expr));				(yyval.statmt).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos));}
+#line 1899 "src/parser.c"
     break;
 
   case 28:
-#line 120 "src/parser.bison"
-                                                                                                {(yyval.statmt)=statmt_var  (ctx, &(yyvsp[-1].vars));					(yyval.statmt).pos=pos_merge((yyvsp[-1].vars).pos, (yyvsp[0].pos));}
-#line 1912 "src/parser.c"
+#line 123 "src/parser.bison"
+                                                                                                {(yyval.statmt)=statmt_var   (ctx, &(yyvsp[-1].vars));				(yyval.statmt).pos=pos_merge((yyvsp[-1].vars).pos, (yyvsp[0].pos));}
+#line 1905 "src/parser.c"
     break;
 
   case 29:
-#line 121 "src/parser.bison"
-                                                                                                {(yyval.statmt)=statmt_expr (ctx, &(yyvsp[-1].expr));					(yyval.statmt).pos=pos_merge((yyvsp[-1].expr).pos, (yyvsp[0].pos));}
-#line 1918 "src/parser.c"
+#line 124 "src/parser.bison"
+                                                                                                {(yyval.statmt)=statmt_expr  (ctx, &(yyvsp[-1].expr));				(yyval.statmt).pos=pos_merge((yyvsp[-1].expr).pos, (yyvsp[0].pos));}
+#line 1911 "src/parser.c"
     break;
 
   case 30:
-#line 122 "src/parser.bison"
-                                                                                                        {(yyval.statmt)=statmt_nop  (ctx);						(yyval.statmt).pos=(yyvsp[0].pos);}
-#line 1924 "src/parser.c"
+#line 125 "src/parser.bison"
+                                                                                                        {(yyval.statmt)=statmt_nop   (ctx);						(yyval.statmt).pos=(yyvsp[0].pos);}
+#line 1917 "src/parser.c"
     break;
 
   case 31:
-#line 123 "src/parser.bison"
-                                                                                        {(yyval.statmts)=statmts_new (ctx);						(yyval.statmts).pos=pos_empty(ctx->tokeniser_ctx);}
-#line 1930 "src/parser.c"
+#line 126 "src/parser.bison"
+                                                                                        {(yyval.statmts)=statmts_new  (ctx);						(yyval.statmts).pos=pos_empty(ctx->tokeniser_ctx);}
+#line 1923 "src/parser.c"
     break;
 
   case 32:
-#line 124 "src/parser.bison"
-                                                                                        {(yyval.statmts)=statmts_cat (ctx, &(yyvsp[-1].statmts), &(yyvsp[0].statmt));			(yyval.statmts).pos=pos_merge((yyvsp[-1].statmts).pos, (yyvsp[0].statmt).pos);}
-#line 1936 "src/parser.c"
+#line 127 "src/parser.bison"
+                                                                                        {(yyval.statmts)=statmts_cat  (ctx, &(yyvsp[-1].statmts), &(yyvsp[0].statmt));			(yyval.statmts).pos=pos_merge((yyvsp[-1].statmts).pos, (yyvsp[0].statmt).pos);}
+#line 1929 "src/parser.c"
     break;
 
   case 33:
-#line 125 "src/parser.bison"
-                                                                                        {(yyval.expr)=expr_var    (ctx, (yyvsp[0].ident));					(yyval.expr).pos=(yyvsp[0].ident).pos;}
-#line 1942 "src/parser.c"
+#line 128 "src/parser.bison"
+                                                                                        {(yyval.expr)=expr_var     (ctx, (yyvsp[0].ident));					(yyval.expr).pos=(yyvsp[0].ident).pos;}
+#line 1935 "src/parser.c"
     break;
 
   case 34:
-#line 126 "src/parser.bison"
-                                                                                                {(yyval.expr)=expr_const  (ctx, (yyvsp[0].ival));					(yyval.expr).pos=(yyvsp[0].ival).pos;}
-#line 1948 "src/parser.c"
+#line 129 "src/parser.bison"
+                                                                                                {(yyval.expr)=expr_const   (ctx, (yyvsp[0].ival));					(yyval.expr).pos=(yyvsp[0].ival).pos;}
+#line 1941 "src/parser.c"
     break;
 
   case 35:
-#line 127 "src/parser.bison"
+#line 130 "src/parser.bison"
                                                                                         {(yyval.expr)=(yyvsp[-1].expr);										(yyval.expr).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos));}
-#line 1954 "src/parser.c"
+#line 1947 "src/parser.c"
     break;
 
   case 36:
-#line 128 "src/parser.bison"
-                                                                                {(yyval.expr)=expr_call   (ctx, &(yyvsp[-3].expr), &(yyvsp[-1].exprs));			(yyval.expr).pos=pos_merge((yyvsp[-3].expr).pos, (yyvsp[0].pos));}
-#line 1960 "src/parser.c"
+#line 131 "src/parser.bison"
+                                                                                {(yyval.expr)=expr_call    (ctx, &(yyvsp[-3].expr), &(yyvsp[-1].exprs));			(yyval.expr).pos=pos_merge((yyvsp[-3].expr).pos, (yyvsp[0].pos));}
+#line 1953 "src/parser.c"
     break;
 
   case 37:
-#line 129 "src/parser.bison"
-                                                                                        {(yyval.expr)=expr_assign (ctx, &(yyvsp[-2].expr), &(yyvsp[0].expr));			(yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1966 "src/parser.c"
+#line 132 "src/parser.bison"
+                                                                                        {(yyval.expr)=expr_assign  (ctx, &(yyvsp[-2].expr), &(yyvsp[0].expr));			(yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
+#line 1959 "src/parser.c"
     break;
 
   case 38:
-#line 130 "src/parser.bison"
-                                                                                        {(yyval.expr)=expr_math2  (ctx, &(yyvsp[-2].expr), &(yyvsp[0].expr), OP_ADD);	(yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1972 "src/parser.c"
+#line 133 "src/parser.bison"
+                                                                                        {(yyval.expr)=expr_math2   (ctx, &(yyvsp[-2].expr), &(yyvsp[0].expr), OP_ADD);	(yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
+#line 1965 "src/parser.c"
     break;
 
   case 39:
-#line 131 "src/parser.bison"
-                                                                                {(yyval.expr)=expr_math2  (ctx, &(yyvsp[-2].expr), &(yyvsp[0].expr), OP_SUB);	(yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1978 "src/parser.c"
+#line 134 "src/parser.bison"
+                                                                                {(yyval.expr)=expr_math2   (ctx, &(yyvsp[-2].expr), &(yyvsp[0].expr), OP_SUB);	(yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
+#line 1971 "src/parser.c"
     break;
 
   case 40:
-#line 132 "src/parser.bison"
-                                                                                        {(yyval.expr)=expr_math2  (ctx, &(yyvsp[-2].expr), &(yyvsp[0].expr), OP_MUL);	(yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1984 "src/parser.c"
+#line 135 "src/parser.bison"
+                                                                                        {(yyval.expr)=expr_math2   (ctx, &(yyvsp[-2].expr), &(yyvsp[0].expr), OP_MUL);	(yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
+#line 1977 "src/parser.c"
     break;
 
   case 41:
-#line 133 "src/parser.bison"
-                                                                                {(yyval.expr)=expr_math2  (ctx, &(yyvsp[-2].expr), &(yyvsp[0].expr), OP_DIV);	(yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1990 "src/parser.c"
+#line 136 "src/parser.bison"
+                                                                                {(yyval.expr)=expr_math2   (ctx, &(yyvsp[-2].expr), &(yyvsp[0].expr), OP_DIV);	(yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
+#line 1983 "src/parser.c"
     break;
 
   case 42:
-#line 134 "src/parser.bison"
-                                                                                {(yyval.expr)=expr_math2  (ctx, &(yyvsp[-2].expr), &(yyvsp[0].expr), OP_REM);	(yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1996 "src/parser.c"
+#line 137 "src/parser.bison"
+                                                                                {(yyval.expr)=expr_math2   (ctx, &(yyvsp[-2].expr), &(yyvsp[0].expr), OP_REM);	(yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
+#line 1989 "src/parser.c"
     break;
 
   case 43:
-#line 135 "src/parser.bison"
-                                                                                                {(yyval.expr)=expr_math1  (ctx, &(yyvsp[-1].expr), OP_INC);			(yyval.expr).pos=pos_merge((yyvsp[-1].expr).pos, (yyvsp[0].pos));}
-#line 2002 "src/parser.c"
+#line 138 "src/parser.bison"
+                                                                                                {(yyval.expr)=expr_math1   (ctx, &(yyvsp[-1].expr), OP_INC);		(yyval.expr).pos=pos_merge((yyvsp[-1].expr).pos, (yyvsp[0].pos));}
+#line 1995 "src/parser.c"
     break;
 
   case 44:
-#line 136 "src/parser.bison"
-                                                                                        {(yyval.expr)=expr_math1  (ctx, &(yyvsp[-1].expr), OP_DEC);			(yyval.expr).pos=pos_merge((yyvsp[-1].expr).pos, (yyvsp[0].pos));}
-#line 2008 "src/parser.c"
+#line 139 "src/parser.bison"
+                                                                                        {(yyval.expr)=expr_math1   (ctx, &(yyvsp[-1].expr), OP_DEC);		(yyval.expr).pos=pos_merge((yyvsp[-1].expr).pos, (yyvsp[0].pos));}
+#line 2001 "src/parser.c"
     break;
 
   case 45:
-#line 137 "src/parser.bison"
-                                                                                {(yyval.exprs)=exprs_cat   (ctx, &(yyvsp[-2].exprs), &(yyvsp[0].expr));			(yyval.exprs).pos=pos_merge((yyvsp[-2].exprs).pos, (yyvsp[0].expr).pos);}
-#line 2014 "src/parser.c"
+#line 140 "src/parser.bison"
+                                                                                {(yyval.exprs)=exprs_cat    (ctx, &(yyvsp[-2].exprs), &(yyvsp[0].expr));			(yyval.exprs).pos=pos_merge((yyvsp[-2].exprs).pos, (yyvsp[0].expr).pos);}
+#line 2007 "src/parser.c"
     break;
 
   case 46:
-#line 138 "src/parser.bison"
-                                                                                                {(yyval.exprs)=exprs_new   (ctx, &(yyvsp[0].expr));					(yyval.exprs).pos=(yyvsp[0].expr).pos;}
-#line 2020 "src/parser.c"
+#line 141 "src/parser.bison"
+                                                                                                {(yyval.exprs)=exprs_new    (ctx, &(yyvsp[0].expr));				(yyval.exprs).pos=(yyvsp[0].expr).pos;}
+#line 2013 "src/parser.c"
     break;
 
   case 47:
-#line 139 "src/parser.bison"
+#line 142 "src/parser.bison"
                                                                                         {(yyval.exprs)=(yyvsp[0].exprs);										(yyval.exprs).pos=(yyvsp[0].exprs).pos;}
-#line 2026 "src/parser.c"
+#line 2019 "src/parser.c"
     break;
 
   case 48:
-#line 140 "src/parser.bison"
-                                                                                                {(yyval.exprs)=exprs_new   (ctx, NULL);				(yyval.exprs).pos=pos_empty(ctx->tokeniser_ctx);}
-#line 2032 "src/parser.c"
+#line 143 "src/parser.bison"
+                                                                                                {(yyval.exprs)=exprs_new    (ctx, NULL);				(yyval.exprs).pos=pos_empty(ctx->tokeniser_ctx);}
+#line 2025 "src/parser.c"
     break;
 
   case 49:
-#line 141 "src/parser.bison"
+#line 144 "src/parser.bison"
                                                                                 {(yyval.statmt)=(yyvsp[0].statmt);										(yyval.statmt).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].statmt).pos);}
-#line 2038 "src/parser.c"
+#line 2031 "src/parser.c"
     break;
 
   case 50:
-#line 142 "src/parser.bison"
-                                                                                {(yyval.statmt)=statmt_nop  (ctx);						(yyval.statmt).pos=pos_empty(ctx->tokeniser_ctx);}
-#line 2044 "src/parser.c"
+#line 145 "src/parser.bison"
+                                                                                {(yyval.statmt)=statmt_nop   (ctx);						(yyval.statmt).pos=pos_empty(ctx->tokeniser_ctx);}
+#line 2037 "src/parser.c"
     break;
 
   case 51:
-#line 144 "src/parser.bison"
-                                                                                        {(yyval.pos)=(yyvsp[0].pos);}
-#line 2050 "src/parser.c"
+#line 147 "src/parser.bison"
+                                                                                        {(yyval.type)=type_void    (ctx);						(yyval.type).pos=(yyvsp[0].pos);}
+#line 2043 "src/parser.c"
     break;
 
   case 52:
-#line 145 "src/parser.bison"
-                                                                                        {(yyval.pos)=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)/*.pos*/);}
-#line 2056 "src/parser.c"
+#line 148 "src/parser.bison"
+                                                                                        {(yyval.type)=type_signed  (ctx, &(yyvsp[0].type));				(yyval.type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].type).pos);}
+#line 2049 "src/parser.c"
     break;
 
   case 53:
-#line 146 "src/parser.bison"
-                                                                                        {(yyval.pos)=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)/*.pos*/);}
-#line 2062 "src/parser.c"
+#line 149 "src/parser.bison"
+                                                                                        {(yyval.type)=type_unsigned(ctx, &(yyvsp[0].type));				(yyval.type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].type).pos);}
+#line 2055 "src/parser.c"
     break;
 
   case 54:
-#line 147 "src/parser.bison"
-                                                                                                {(yyval.pos)=(yyvsp[0].pos);}
-#line 2068 "src/parser.c"
+#line 150 "src/parser.bison"
+                                                                                                {(yyval.type)=(yyvsp[0].type);}
+#line 2061 "src/parser.c"
     break;
 
   case 55:
-#line 148 "src/parser.bison"
-                                                                                                {(yyval.pos)=(yyvsp[0].pos);}
-#line 2074 "src/parser.c"
+#line 151 "src/parser.bison"
+                                                                                                {(yyval.type)=type_number  (ctx, FLOAT);				(yyval.type).pos=(yyvsp[0].pos);}
+#line 2067 "src/parser.c"
     break;
 
   case 56:
-#line 149 "src/parser.bison"
-                                                                                                {(yyval.pos)=(yyvsp[0].pos);}
-#line 2080 "src/parser.c"
+#line 152 "src/parser.bison"
+                                                                                                {(yyval.type)=type_number  (ctx, DOUBLE_FLOAT);		(yyval.type).pos=(yyvsp[0].pos);}
+#line 2073 "src/parser.c"
     break;
 
   case 57:
-#line 150 "src/parser.bison"
-                                                                                        {(yyval.pos)=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos));}
-#line 2086 "src/parser.c"
+#line 153 "src/parser.bison"
+                                                                                        {(yyval.type)=type_number  (ctx, QUAD_FLOAT);			(yyval.type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos));}
+#line 2079 "src/parser.c"
     break;
 
   case 58:
-#line 151 "src/parser.bison"
-                                                                                        {(yyval.pos)=pos_merge((yyvsp[-1].pos), (yyvsp[0].ident).pos);}
-#line 2092 "src/parser.c"
+#line 154 "src/parser.bison"
+                                                                                        {(yyval.type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].ident).pos);}
+#line 2085 "src/parser.c"
     break;
 
   case 59:
-#line 152 "src/parser.bison"
-                                                                                        {(yyval.pos)=pos_merge((yyvsp[-1].pos), (yyvsp[0].ident).pos);}
-#line 2098 "src/parser.c"
+#line 155 "src/parser.bison"
+                                                                                        {(yyval.type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].ident).pos);}
+#line 2091 "src/parser.c"
     break;
 
   case 60:
-#line 153 "src/parser.bison"
-                                                                                        {(yyval.pos)=(yyvsp[0].pos);}
-#line 2104 "src/parser.c"
+#line 156 "src/parser.bison"
+                                                                                        {(yyval.type)=type_number  (ctx, NUM_HHI);			(yyval.type).pos=(yyvsp[0].pos);}
+#line 2097 "src/parser.c"
     break;
 
   case 61:
-#line 154 "src/parser.bison"
-                                                                                        {(yyval.pos)=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)/*.pos*/);}
-#line 2110 "src/parser.c"
+#line 157 "src/parser.bison"
+                                                                                        {(yyval.type)=type_number  (ctx, NUM_HI);				(yyval.type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos));}
+#line 2103 "src/parser.c"
     break;
 
   case 62:
-#line 155 "src/parser.bison"
-                                                                                                {(yyval.pos)=(yyvsp[0].pos);}
-#line 2116 "src/parser.c"
+#line 158 "src/parser.bison"
+                                                                                                {(yyval.type)=type_number  (ctx, NUM_I);				(yyval.type).pos=(yyvsp[0].pos);}
+#line 2109 "src/parser.c"
     break;
 
   case 63:
-#line 156 "src/parser.bison"
-                                                                                        {(yyval.pos)=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)/*.pos*/);}
-#line 2122 "src/parser.c"
+#line 159 "src/parser.bison"
+                                                                                        {(yyval.type)=type_number  (ctx, NUM_LI);				(yyval.type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos));}
+#line 2115 "src/parser.c"
     break;
 
   case 64:
-#line 157 "src/parser.bison"
-                                                                                {(yyval.pos)=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos)/*.pos*/);}
-#line 2128 "src/parser.c"
+#line 160 "src/parser.bison"
+                                                                                {(yyval.type)=type_number  (ctx, NUM_LLI);			(yyval.type).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos));}
+#line 2121 "src/parser.c"
     break;
 
   case 65:
-#line 158 "src/parser.bison"
+#line 161 "src/parser.bison"
                                                                                         {(yyval.pos)=(yyvsp[0].pos);}
-#line 2134 "src/parser.c"
+#line 2127 "src/parser.c"
     break;
 
   case 66:
-#line 159 "src/parser.bison"
+#line 162 "src/parser.bison"
                                                                                                 {(yyval.pos)=pos_empty(ctx->tokeniser_ctx);}
-#line 2140 "src/parser.c"
+#line 2133 "src/parser.c"
     break;
 
 
-#line 2144 "src/parser.c"
+#line 2137 "src/parser.c"
 
       default: break;
     }
@@ -2372,7 +2365,7 @@ yyreturn:
 #endif
   return yyresult;
 }
-#line 160 "src/parser.bison"
+#line 163 "src/parser.bison"
 
 
 static void *make_copy(void *mem, size_t size) {
@@ -2382,65 +2375,37 @@ static void *make_copy(void *mem, size_t size) {
 }
 
 void init(parser_ctx_t *ctx) {
-	ctx->scope = NULL;
 	ctx->currentError = NULL;
 	map_create(&ctx->funcMap);
-}
-
-void push_scope(parser_ctx_t *ctx) {
-	scope_t *current = (scope_t *) malloc(sizeof(scope_t));
-	current->parent = ctx->scope;
-	map_create(&current->varMap);
-	ctx->scope = current;
-}
-
-void pop_scope(parser_ctx_t *ctx) {
-	map_delete_with_values(&ctx->scope->varMap);
-	void *mem = ctx->scope;
-	ctx->scope = ctx->scope->parent;
-	free(mem);
+	map_create(&ctx->varMap);
 }
 
 
-void pre_func(parser_ctx_t *ctx) {
-	push_scope(ctx);
+vardecls_t param_cat(parser_ctx_t *ctx, vardecls_t *other, ident_t ident, type_t type) {
+	vardecl_t var = declt(ctx, ident, type);
+	return vars_cat(ctx, other, &var);
 }
 
-idents_t param_cat(parser_ctx_t *ctx, idents_t *other, ident_t ident) {
-	int num = other->numIdents + 1;
-	ident_t *mem = (ident_t *) realloc(other->idents, sizeof(ident_t) * num);
-	mem[other->numIdents] = ident;
-	return (idents_t) {
-		.numIdents = num,
-		.idents = mem
+vardecls_t param_new(parser_ctx_t *ctx, ident_t ident, type_t type) {
+	vardecl_t var = declt(ctx, ident, type);
+	return vars_new(ctx, &var);
+}
+
+vardecls_t param_empty(parser_ctx_t *ctx) {
+	return (vardecls_t) {
+		.num = 0,
+		.vars = NULL
 	};
 }
 
-idents_t param_new(parser_ctx_t *ctx, ident_t ident) {
-	ident_t *mem = (ident_t *) malloc(sizeof(ident_t));
-	*mem = ident;
-	return (idents_t) {
-		.numIdents = 1,
-		.idents = mem
-	};
-}
-
-idents_t param_empty(parser_ctx_t *ctx) {
-	return (idents_t) {
-		.numIdents = 0,
-		.idents = NULL
-	};
-}
-
-funcdef_t post_func(parser_ctx_t *ctx, ident_t ident, idents_t *idents, statements_t *statmt) {
+funcdef_t func_impl(parser_ctx_t *ctx, type_t returns, ident_t ident, vardecls_t *params, statements_t *statmt) {
 	funcdef_t f = {
-		.pos = pos_merge(ident.pos, idents->pos),
+		.returns = returns,
 		.ident = ident,
-		.numParams = idents->numIdents,
-		.paramIdents = idents->idents,
+		.numParams = params->num,
+		.params = params->vars,
 		.statements = statmt
 	};
-	pop_scope(ctx);
 	funcdef_t *existing = map_get(&ctx->funcMap, ident.ident);
 	if (existing) {
 		// TODO: Standard error message.
@@ -2457,27 +2422,51 @@ funcdef_t post_func(parser_ctx_t *ctx, ident_t ident, idents_t *idents, statemen
 
 vardecl_t decl_assign(parser_ctx_t *ctx, ident_t ident, expression_t *expression) {
 	if (expression) expression = make_copy(expression, sizeof(expression_t));
-	pos_t pos = ident.pos;
-	if (expression) {
-		pos = pos_merge(ident.pos, expression->pos);
-	}
 	vardecl_t f = {
 		.ident = ident,
+		.type = ctx->currentVarType,
 		.expr = expression
 	};
-	vardecl_t *existing = map_get(&ctx->scope->varMap, ident.ident);
+	/* vardecl_t *existing = map_get(&ctx->varMap, ident.ident);
 	if (existing) {
-		yyerror(ctx, "Variable is already declared in this scope.");
+		char buf[20 + strlen(ident.ident)];
+		sprintf(buf, "Redefinition of '%s'", ident.ident);
+		report_error(ctx, "Error", ident.pos, buf);
 	} else {
 		vardecl_t *add = malloc(sizeof(vardecl_t));
 		*add = f;
-		map_set(&ctx->scope->varMap, ident.ident, add);
-	}
+		map_set(&ctx->varMap, ident.ident, add);
+	} */
 	return f;
 }
 
 vardecl_t decl(parser_ctx_t *ctx, ident_t ident) {
-	decl_assign(ctx, ident, NULL);
+	return decl_assign(ctx, ident, NULL);
+}
+
+vardecl_t declt_assign(parser_ctx_t *ctx, ident_t ident, type_t type, expression_t *expression) {
+	if (expression) expression = make_copy(expression, sizeof(expression_t));
+	ctx->currentVarType = type;
+	vardecl_t f = {
+		.ident = ident,
+		.type = type,
+		.expr = expression
+	};
+	/* vardecl_t *existing = map_get(&ctx->varMap, ident.ident);
+	if (existing) {
+		char buf[20 + strlen(ident.ident)];
+		sprintf(buf, "Redefinition of '%s'", ident.ident);
+		report_error(ctx, "Error", ident.pos, buf);
+	} else {
+		vardecl_t *add = malloc(sizeof(vardecl_t));
+		*add = f;
+		map_set(&ctx->varMap, ident.ident, add);
+	} */
+	return f;
+}
+
+vardecl_t declt(parser_ctx_t *ctx, ident_t ident, type_t type) {
+	return declt_assign(ctx, ident, type, NULL);
 }
 
 
@@ -2711,6 +2700,76 @@ vardecls_t vars_new(parser_ctx_t *ctx, vardecl_t *first) {
 	return (vardecls_t) {
 		.num = 1,
 		.vars = mem
+	};
+}
+
+
+type_t type_void(parser_ctx_t *ctx) {
+	return (type_t) {
+		.type_spec = {
+			.type = VOID,
+			.size = 0
+		}
+	};
+}
+
+type_t type_number(parser_ctx_t *ctx, type_simple_t type) {
+	int size;
+	switch (type) {
+		case (NUM_HHU):
+		case (NUM_HHI):
+			size = CHAR_BYTES;
+			break;
+		case (NUM_HU):
+		case (NUM_HI):
+			size = SHORT_BYTES;
+			break;
+		case (NUM_U):
+		case (NUM_I):
+			size = INT_BYTES;
+			break;
+		case (NUM_LU):
+		case (NUM_LI):
+			size = LONG_BYTES;
+			break;
+		case (NUM_LLU):
+		case (NUM_LLI):
+			size = LONG_LONG_BYTES;
+			break;
+	}
+	return (type_t) {
+		.type_spec = {
+			.type = type,
+			.size = size
+		}
+	};
+}
+
+type_t type_signed(parser_ctx_t *ctx, type_t *other) {
+	type_simple_t type = other->type_spec.type;
+	int size = other->type_spec.size;
+	if (type >= NUM_HHU && type <= NUM_LLU) {
+		type = type - NUM_HHU + NUM_HHI;
+	}
+	return (type_t) {
+		.type_spec = {
+			.type = type,
+			.size = size
+		}
+	};
+}
+
+type_t type_unsigned(parser_ctx_t *ctx, type_t *other) {
+	type_simple_t type = other->type_spec.type;
+	int size = other->type_spec.size;
+	if (type >= NUM_HHI && type <= NUM_LLI) {
+		type = type - NUM_HHI + NUM_HHU;
+	}
+	return (type_t) {
+		.type_spec = {
+			.type = type,
+			.size = size
+		}
 	};
 }
 

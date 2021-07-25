@@ -50,7 +50,7 @@ static void asm_appendnum(asm_ctx_t *ctx, size_t value, uint8_t nBytes) {
 #endif
 }
 
-static size_t asm_add_or_get_label(asm_ctx_t *ctx, char *label) {
+static size_t asm_add_or_get_label(asm_ctx_t *ctx, label_t label) {
 	// Check for existing labels.
 	for (size_t i = 0; i < ctx->nLabels; i++) {
 		if (!strcmp(label, ctx->labels[i])) {
@@ -65,6 +65,16 @@ static size_t asm_add_or_get_label(asm_ctx_t *ctx, char *label) {
 	ctx->labels[ctx->nLabels] = strdup(label);
 	ctx->nLabels ++;
 	return ctx->nLabels - 1;
+}
+
+static bool asm_label_exists(asm_ctx_t *ctx, label_t label) {
+	// Check for existing labels.
+	for (size_t i = 0; i < ctx->nLabels; i++) {
+		if (!strcmp(label, ctx->labels[i])) {
+			return true;
+		}
+	}
+	return false;
 }
 
 // Read an N byte number.
@@ -132,6 +142,58 @@ void asm_postproc(asm_ctx_t *ctx) {
 
 /* ================ Appending ================= */
 // Appending ASM data.
+
+// Create a label that will reside in bss, one word in size.
+void asm_bss_label(asm_ctx_t *ctx, label_t label) {
+	asm_bss_label_n(ctx, label, 1);
+}
+
+// Create a label that will reside in bss, size words in size.
+void asm_bss_label_n(asm_ctx_t *ctx, label_t label, address_t size) {
+	if (asm_label_exists(ctx, label)) {
+		fprintf(stderr, "Error: Label '%s' already exists!\n", label);
+		fflush(stderr);
+	}
+	asm_add_or_get_label(ctx, label);
+	asm_data_t *data = malloc(sizeof(asm_data_t));
+	*data = (asm_data_t) {
+		.label = label,
+		.size = size,
+		.data = NULL
+	};
+	map_set(&ctx->bssLabels, label, data);
+	printf("BSS %s (%d)\n", label, size);
+}
+
+// Create a label that will reside in data, one word in size.
+void asm_data_label(asm_ctx_t *ctx, label_t label, memword_t value) {
+	memword_t *mem = malloc(sizeof(memword_t));
+	*mem = value;
+	asm_data_label_n(ctx, label, 1, mem);
+}
+
+// Create a label that will reside in data, size words in size.
+// Will not copy provided data.
+void asm_data_label_n(asm_ctx_t *ctx, label_t label, address_t size, memword_t *value) {
+	if (asm_label_exists(ctx, label)) {
+		fprintf(stderr, "Error: Label '%s' already exists!\n", label);
+		fflush(stderr);
+		asm_data_t *delete = map_get(&ctx->dataLabels, label);
+		if (delete) {
+			free(delete->data);
+			free(delete);
+		}
+	}
+	asm_add_or_get_label(ctx, label);
+	asm_data_t *data = malloc(sizeof(asm_data_t));
+	*data = (asm_data_t) {
+		.label = label,
+		.size = size,
+		.data = value
+	};
+	map_set(&ctx->dataLabels, label, data);
+	printf("DAT %s (%d)\n", label, size);
+}
 
 // Append a label definition.
 // Will duplicate the given string.
@@ -212,7 +274,7 @@ void asm_append4(asm_ctx_t *ctx, memword4_t val) {
 
 
 // Reference a label where the output is address_t.
-void asm_label_ref(asm_ctx_t *ctx, label_t label, label_res_t res) {
+void asm_label_ref(asm_ctx_t *ctx, label_t label, label_res_t res, address_t offset) {
 	ctx->rawCountIndex = 0;
 	size_t index = asm_add_or_get_label(ctx, label);
 	asm_shit = false;
@@ -221,20 +283,23 @@ void asm_label_ref(asm_ctx_t *ctx, label_t label, label_res_t res) {
 	asm_appendnum(ctx, (size_t) res, sizeof(size_t));
 	asm_shit = true;
 	ctx->nWords += ADDR_NUM_MEMWS;
-	printf("REF '%s'\n", label);
+	char *mode = res == LABEL_ABSOLUTE ? "ABS" : "REL";
+	printf("REF '%s' (%s)\n", label, mode);
 }
 
 // Reference a label where the output is N words.
-void asm_label_refl(asm_ctx_t *ctx, label_t label, label_res_t res, uint8_t numWords) {
+void asm_label_refl(asm_ctx_t *ctx, label_t label, label_res_t res, address_t offset, uint8_t numWords) {
 	ctx->rawCountIndex = 0;
 	size_t index = asm_add_or_get_label(ctx, label);
 	asm_shit = false;
 	asm_appendraw(ctx, ASM_TYPE_LBREF);
 	asm_appendnum(ctx, index, MEMW_BYTES);
-	asm_appendnum(ctx, (size_t) res, sizeof(size_t));
+	asm_appendraw(ctx, res);
+	asm_appendnum(ctx, offset, sizeof(address_t));
 	asm_shit = true;
 	ctx->nWords += numWords;
-	printf("REF '%s'\n", label);
+	char *mode = res == LABEL_ABSOLUTE ? "ABS" : "REL";
+	printf("REF '%s' (%s)\n", label, mode);
 }
 
 /* ================ Hierarchy ================= */
@@ -629,8 +694,8 @@ bool asm_write_statmt(parser_ctx_t *parser_ctx, statement_t *statmt) {
 				vardecl_t *decl = &statmt->decls->vars[i];
 				// Lettcude specify type.
 				param_spec_t val = {
-					.type_spec = { .type = NUM_HHU },
-					.size = 1,
+					.type_spec = decl->type.type_spec,
+					.size = decl->type.type_spec.size,
 					.needs_save = false,
 					.save_to = NULL
 				};
@@ -803,18 +868,18 @@ void asm_write_function(parser_ctx_t *parser_ctx, funcdef_t *func) {
 	for (int i = 0; i < func->numParams; i++) {
 		asm_var_t *var = (asm_var_t *) malloc(sizeof(asm_var_t));
 		*var = (asm_var_t) {
-			.ident = func->paramIdents[i].ident,
+			.ident = func->params[i].ident.ident,
 			.param = {
-				.type_spec = { .type = NUM_HHU, .size = 1 },
-				.size = 1,
+				.type_spec = func->params[i].type.type_spec,
+				.size = func->params[i].type.type_spec.size,
 				.needs_save = true,
 				.save_to = NULL
 			}
 		};
 		param_ptr[i] = &var->param;
-		map_set(&ctx->scope->variables, func->paramIdents[i].ident, var);
+		map_set(&ctx->scope->variables, func->params[i].ident.ident, var);
 	}
-	gen_method_entry(ctx, param_ptr, func->numParams);
+	gen_method_entry(ctx, func, param_ptr, func->numParams);
 	// Processing.
 	for (int i = 0; i < func->statements->num; i++) {
 		do_implicit_ret = asm_write_statmt(parser_ctx, &func->statements->statements[i]);

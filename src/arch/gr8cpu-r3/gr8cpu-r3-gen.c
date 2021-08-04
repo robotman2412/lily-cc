@@ -76,6 +76,7 @@ bool			r3_mov				(asm_ctx_t *ctx, regs_t reg, param_spec_t *value);
 void			r3_save_register	(asm_ctx_t *ctx, regs_t reg);
 void			r3_use_register		(asm_ctx_t *ctx, regs_t reg, param_spec_t *usedFor);
 void			r3_unuse_register	(asm_ctx_t *ctx, regs_t reg);
+void			r3_pop_discard_n	(asm_ctx_t *ctx, int numDiscarded);
 
 char		   *r3_mklabel			(char *func, char *var);
 
@@ -84,10 +85,9 @@ char		   *r3_mklabel			(char *func, char *var);
 
 // Prints out some debug info about param.
 static void desc_param(asm_ctx_t *ctx, param_spec_t *param) {
-	char *r = "AXY";
 	switch (param->type) {
 		case (REGISTER):
-			printf("REG(%c)", r[param->ptr.regs]);
+			printf("REG(%s)", reg_names[param->ptr.regs]);
 			break;
 		case (LABEL):
 			printf("LAB(%s)", param->ptr.label);
@@ -435,6 +435,15 @@ void r3_unuse_register(asm_ctx_t *ctx, regs_t reg) {
 	ctx->gen_ctx.usedFor[reg] = NULL;
 }
 
+// Discards a given number of bytes from the stack.
+void r3_pop_discard_n(asm_ctx_t *ctx, int numDiscarded) {
+	while (numDiscarded) {
+		numDiscarded --;
+		ctx->stackSize --;
+		asm_append(ctx, INSN_POP);
+	}
+}
+
 // Generate a label string for the given function.
 char *r3_mklabel(char *func, char *var) {
 	char *buf = malloc(5 + strlen(func) + strlen(var));
@@ -555,15 +564,36 @@ void gen_method_ret(asm_ctx_t *ctx, param_spec_t *returnType) {
 	printf("RET ");
 	desc_param(ctx, returnType);
 	printf("\n");
+	// Discard until it is on top, if applicable.
+	if (returnType->type == STACK && returnType->ptr.stackOffset < ctx->stackSize) {
+		r3_pop_discard_n(ctx, ctx->stackSize - returnType->ptr.stackOffset);
+	}
 	if (returnType->size == 1) {
 		r3_mov(ctx, REGS_A, returnType);
+	} else if (returnType->size == 2) {
+		// Move to X/Y.
+		switch (returnType->type) {
+			case STACK:
+				asm_append(ctx, OFFS_PULLR + REGS_Y);
+				asm_append(ctx, OFFS_PULLR + REGS_X);
+				break;
+			case LABEL:
+				asm_append(ctx, OFFS_PIE + OFFS_MOVLD + OFFS_MOVM_XM);
+				asm_label_ref(ctx, returnType->ptr.label, LABEL_RELATIVE, 0);
+				asm_append(ctx, OFFS_PIE + OFFS_MOVLD + OFFS_MOVM_YM);
+				asm_label_ref(ctx, returnType->ptr.label, LABEL_RELATIVE, 1);
+				break;
+			case ADDRESS:
+				asm_append(ctx, OFFS_MOVLD + OFFS_MOVM_XM);
+				asm_append2(ctx, returnType->ptr.address);
+				asm_append(ctx, OFFS_MOVLD + OFFS_MOVM_YM);
+				asm_append2(ctx, returnType->ptr.address + 1);
+				break;
+		}
 	} else {
-		printf("TODO: RET SIZE %d\n", returnType->size);
+		printf("TODO: RET SIZE %d MODE %d\n", returnType->size, returnType->type);
 	}
-	while (ctx->stackSize) {
-		ctx->stackSize --;
-		asm_append(ctx, INSN_POP);
-	}
+	r3_pop_discard_n(ctx, ctx->stackSize);
 	if (ctx->gen_ctx.saveYReg) {
 		asm_append(ctx, OFFS_PULLR + REGS_Y);
 	}

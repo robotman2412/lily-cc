@@ -10,6 +10,8 @@
 #include <tokeniser.h>
 #include <gen.h>
 
+char *reg_names[NUM_REGS] = REG_NAMES;
+
 typedef struct token {
 	enum yytokentype type;
 	YYSTYPE val;

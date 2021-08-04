@@ -176,4 +176,6 @@ typedef uint64_t address_t;
 #define DEBUG(...)
 #endif
 
+extern char *reg_names[NUM_REGS];
+
 #endif // CONFIG_TYPES_H

@@ -18,12 +18,12 @@ pos_t pos_merge(pos_t one, pos_t two) {
 		.index0 = one.index0,
 		.index1 = two.index1
 	};
-	print_pos(one);
-	printf(", ");
-	print_pos(two);
-	printf(" => ");
-	print_pos(out);
-	printf("\n");
+	// print_pos(one);
+	// printf(", ");
+	// print_pos(two);
+	// printf(" => ");
+	// print_pos(out);
+	// printf("\n");
 	return out;
 }
 

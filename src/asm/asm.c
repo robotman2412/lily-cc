@@ -612,22 +612,24 @@ void asm_write_expr(parser_ctx_t *parser_ctx, expression_t *expr) {
 	};
 	switch (expr->type) {
 		case (EXPR_TYPE_IDENT):
+			// Note: This if filtered later on.
 			param = (param_spec_t) {
 				.type = LABEL,
-				.type_spec = { .type = NUM_HHU, .size = 1 },
+				.type_spec = { .type = NUM_I, .size = 1 },
 				.ptr = { .label = expr->ident },
-				.size = 1,
+				.size = INT_BYTES,
 				.needs_save = !expr->value,
 				.save_to = NULL
 			};
 			softstack_push(&ctx->paramStack, param);
 			break;
 		case (EXPR_TYPE_ICONST):
+			// TODO: Implement constants of other sizes.
 			param = (param_spec_t) {
 				.type = CONSTANT,
-				.type_spec = { .type = NUM_HHU, .size = 1 },
+				.type_spec = { .type = NUM_I, .size = 1 },
 				.ptr = { .constant = expr->value },
-				.size = 1,
+				.size = INT_BYTES,
 				.needs_save = false,
 				.save_to = NULL
 			};

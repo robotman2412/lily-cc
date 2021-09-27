@@ -19,3 +19,15 @@ typedef struct gen_ctx {
 	bool used[5];
 	param_spec_t *usedFor[5];
 } gen_ctx_t;
+
+// For convenience.
+__attribute__((packed))
+typedef struct px16_insn_word {
+	uint8_t o	: 5;
+	uint8_t a	: 3;
+	bool	p	: 1;
+	uint8_t b	: 3;
+	bool	q	: 1;
+	uint8_t x	: 2;
+	bool	y	: 1;
+} px16_insn_word_t;

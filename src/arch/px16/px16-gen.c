@@ -9,6 +9,25 @@
 /* =============== Definitions ================ */
 // Generator-specific definitions.
 
+#define OP_ADD		0x00
+#define OP_SUB		0x01
+#define OP_ADDC		0x02
+#define OP_SUBC		0x03
+#define OP_INC		0x04
+#define OP_SHIFT	0x05
+#define OP_AND		0x06
+#define OP_OR		0x07
+#define OP_CMP		0x08
+#define OP_XOR		0x09
+#define OP_CMPC		0x0A
+
+#define OP_SEI		0x19
+#define OP_OPER		0x1A
+#define OP_JMP		0x1B
+#define OP_MOV		0x1C
+#define	OP_LEA		0x1E
+#define	OP_HLT		0x1F
+
 /* ================ Utilities ================= */
 // Generator-specific utilities.
 

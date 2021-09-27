@@ -32,4 +32,4 @@
 }
 
 // Enable debug logs.
-#define ENABLE_DEBUG_LOGS
+// #define ENABLE_DEBUG_LOGS

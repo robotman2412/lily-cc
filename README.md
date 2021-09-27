@@ -1,5 +1,5 @@
 # Slow down there kiddo
-A compiler for a very simple language
+A compiler for a very simple language (this branch only)
 
 ## Developing for lilly-c
 1. Pull git git repository: `git clone https://github.com/robotman2412/lilly-c`

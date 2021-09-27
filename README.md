@@ -1,13 +1,5 @@
-# lilly-c
-The beginnings of a C compiler for simple 8- and 16-bit CPUs.
-
-## What is it?
-A simple C compiler for simple CPUs (think of custom CPUs, the MOS 6502 or the 8086).
-In addition, an architecture may support assembly files and inline assembly.
-
-## What is it not?
-An advanced C/C++ compiler with endless optimisations.
-This compiler does not do C++.
+# Slow down there kiddo
+A compiler for a very simple language
 
 ## Developing for lilly-c
 1. Pull git git repository: `git clone https://github.com/robotman2412/lilly-c`

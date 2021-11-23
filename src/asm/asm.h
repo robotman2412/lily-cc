@@ -92,6 +92,6 @@ void asm_write_num      (asm_ctx_t *ctx, size_t     data, size_t bytes);
 // Writes label definitions to the current chunk.
 void asm_write_label    (asm_ctx_t *ctx, char      *label);
 // Writes label references to the current chunk.
-void asm_write_label_ref(asm_ctx_t *ctx, char      *label, address_t offset);
+void asm_write_label_ref(asm_ctx_t *ctx, char      *label, address_t offset, asm_label_ref_t mode);
 
 #endif //ASM_H

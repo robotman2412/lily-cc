@@ -149,9 +149,11 @@ void asm_write_label(asm_ctx_t *ctx, char *label) {
 }
 
 // Writes label references to the current chunk.
-void asm_write_label_ref(asm_ctx_t *ctx, char *label, address_t offset) {
+void asm_write_label_ref(asm_ctx_t *ctx, char *label, address_t offset, asm_label_ref_t mode) {
     // New label reference chunk.
     asm_append_chunk(ctx, ASM_CHUNK_LABEL_REF);
+    // Label access mode.
+    asm_append(ctx, (char *) &mode, 1);
     // Label offset.
     asm_write_address(ctx, offset);
     // Label string.

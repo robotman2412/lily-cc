@@ -53,6 +53,7 @@ void       gen_mov           (asm_ctx_t *ctx, gen_var_t *dest,    gen_var_t *src
 // Variables: Create a variable based on parameter.
 void       gen_var_arg       (asm_ctx_t *ctx, funcdef_t *funcdef, size_t     argno);
 // Variables: Create a variable based on other value.
+// Other value is null if not initialised.
 void       gen_var_dup       (asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *other);
 
 

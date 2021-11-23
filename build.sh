@@ -2,17 +2,31 @@
 
 # Convert our grammar file to actual C code.
 echo "BISON src/parser.bison"
-bison src/parser.bison -Wnone -Wconflicts-sr -Wconflicts-rr -o src/parser.c --defines=src/parser.h
+bison src/parser.bison -v -Wnone -Wconflicts-sr -Wconflicts-rr -o src/parser.c --defines=src/parser.h || exit 1
 
 # Files to link.
 FILES=""
 
 # Options passed to compiler
-ARCH=$(cat current_arch)
-CCOPTIONS="-Isrc -Ibuild -Isrc/asm -Isrc/arch -Isrc/arch/$ARCH"
-if [ "$1" == "debug" ]; then
-	CCOPTIONS="$CCOPTIONS -ggdb"
-fi
+ARCH=$(cat build/.current_arch)
+CCOPTIONS="-Isrc -Isrc/arch/$ARCH -Isrc/arch -Isrc/asm -Ibuild"
+
+for i in $*; do
+	case $i in
+		debug|--debug)
+			CCOPTIONS="$CCOPTIONS -DENABLE_DEBUG_LOGS -ggdb"
+			;;
+		--ccoptions=*)
+			CCOPTIONS="$CCOPTIONS ${i#*=}"
+			;;
+		-D*)
+			CCOPTIONS="$CCOPTIONS $i"
+			;;
+	esac
+done
+
+echo "Building lilly-cc v0.1"
+echo "CCOPTIONS: $CCOPTIONS"
 
 errors=0
 
@@ -28,20 +42,28 @@ CC() {
 }
 
 # Compile all the files.
-# mkdir -p build/asm build/arch
-CC parser.c
 CC main.c
-CC asm/asm.c
-CC asm/softstack.c
-CC arch/gen.c
-CC tokeniser.c
+CC parser.c
 CC strmap.c
+CC tokeniser.c
+CC parser-util.c
+
+CC asm/asm.c
+#CC arch/gen_fallbacks.c
+
+# Compile all the architecture-specific files.
+for i in $(find src/arch/$ARCH/ -type f -name "*.c"); do
+	CC arch/$ARCH/${i##*/}
+done
+
+CC debug/pront.c
 
 if [ $errors -gt 0 ]; then
 	exit $errors
 fi
 
 # Link the compiled files.
+echo "LN$FILES"
 gcc $FILES -o comp || errors=1
 
 exit $errors

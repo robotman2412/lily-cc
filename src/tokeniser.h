@@ -22,9 +22,7 @@ struct pos {
 
 pos_t pos_merge(pos_t one, pos_t two);
 pos_t pos_empty(tokeniser_ctx_t *ctx);
-void print_pos(pos_t pos);
-
-#include <parser.h>
+void  print_pos(pos_t pos);
 
 // Contains info required to tokenise a source file.
 struct tokeniser_ctx {
@@ -41,14 +39,29 @@ struct tokeniser_ctx {
 	int x, y;
 };
 
+#include <parser-util.h>
+
+// Initialise a context, given c-string.
 void tokeniser_init_cstr(tokeniser_ctx_t *ctx, char *raw);
+// Initialise a context, given a file descriptor.
 void tokeniser_init_file(tokeniser_ctx_t *ctx, FILE *file);
+
+// Is c a space character?
 bool is_space(char c);
+// Is c a numeric character?
 bool is_numeric(char c);
+// Is c an alphanumberic character?
 bool is_alphanumeric(char c);
+
+// Read a single character.
 char tokeniser_readchar(tokeniser_ctx_t *ctx);
+// Next character.
+// Identical to tokeniser_nextchar_no(0).
 char tokeniser_nextchar(tokeniser_ctx_t *ctx);
+// Next character + offset.
 char tokeniser_nextchar_no(tokeniser_ctx_t *ctx, int no);
+
+// Grab next non-space token.
 int tokenise(tokeniser_ctx_t *ctx);
 
 void report_error(parser_ctx_t *parser_ctx, char *type, pos_t pos, char *message);

@@ -7,8 +7,8 @@
 void map_create(map_t *map) {
 	map->numEntries = 0;
 	map->capacity = MAP_DEFAULT_CAPACITY;
-	map->strings = (char **) malloc(sizeof(char **) * map->capacity);
-	map->values = (void *) malloc(sizeof(void *) * map->capacity);
+	map->strings = (char **) malloc(sizeof(char *) * map->capacity);
+	map->values = (void *) malloc(sizeof(size_t) * map->capacity);
 }
 
 // Deletes a map.

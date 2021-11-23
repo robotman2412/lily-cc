@@ -5,10 +5,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <asm.h>
+//#include <asm.h>
 #include <config.h>
-#include <tokeniser.h>
-#include <gen.h>
+#include "tokeniser.h"
+#include "parser.h"
+//#include <gen.h>
 
 char *reg_names[NUM_REGS] = REG_NAMES;
 
@@ -121,13 +122,13 @@ int main(int argc, char **argv) {
 	apply_defaults(&options);
 	
 	if (options.showHelp) {
-		printf("lilly-cc " ARCH_ID " v0.1\n");
+		printf("lilly-cc " ARCH_ID " " COMPILER_VER "\n");
 		show_help(argc, argv);
 		return 0;
 	}
 	if (options.showVersion) {
-		printf("lilly-cc " ARCH_ID " v0.1\n");
-		return 0;
+		printf("lilly-cc " ARCH_ID " " COMPILER_VER "\n");
+		if (argIndex >= argc) return 0;
 	}
 	if (options.abort) {
 		return 1;
@@ -155,12 +156,12 @@ int main(int argc, char **argv) {
 	// Initialise.
 	parser_ctx_t ctx;
 	tokeniser_ctx_t tokeniser_ctx;
-	asm_ctx_t asm_ctx;
+	//asm_ctx_t asm_ctx;
 	ctx.tokeniser_ctx = &tokeniser_ctx;
-	ctx.asm_ctx = &asm_ctx;
+	//ctx.asm_ctx = &asm_ctx;
 	tokeniser_init_cstr(&tokeniser_ctx, source);
 	tokeniser_ctx.filename = filename;
-	asm_init(&asm_ctx);
+	//asm_init(&asm_ctx);
 	
 	// Lol who compiles.
 	yyparse(&ctx);
@@ -210,275 +211,24 @@ bool isdir(char *path) {
 }
 
 int yylex(parser_ctx_t *ctx) {
-	return tokenise(ctx->tokeniser_ctx);
+	int tkn = tokenise(ctx->tokeniser_ctx);
+	return tkn;
 }
 
 void yyerror(parser_ctx_t *ctx, char *msg) {
-	if (ctx->currentError) {
-		free(ctx->currentError);
-	} else {
-		ctx->currentError = strdup(msg);
-	}
+	//if (ctx->currentError) {
+	//	free(ctx->currentError);
+	//} else {
+	//	ctx->currentError = strdup(msg);
+	//}
 	fflush(stdout);
 	fputs(msg, stderr);
 	fputc('\n', stderr);
 	fflush(stderr);
 }
 
-/* Some debug printening. */
-
-void prontExprs(expressions_t *expr);
-void prontExpr(expression_t *expr);
-void prontVardecls(vardecls_t *var, int depth);
-void prontVardecl(vardecl_t *var, int depth);
-void prontStatmts(statements_t *statmt, int depth);
-void prontStatmt(statement_t *statmt, int depth);
-
 // Process a function.
 void function_added(parser_ctx_t *parser_ctx, funcdef_t *func) {
-	// Some debug printening.
-	printf("funcdef_t '%s' (", func->ident.ident);
-	if (func->numParams) fputs(func->params[0].ident.ident, stdout);
-	for (int i = 1; i < func->numParams; i ++) {
-		fputc(',', stdout);
-		fputs(func->params[i].ident.ident, stdout);
-	}
-	printf("):\n");
-	prontStatmts(func->statements, 1);
-	// Create function asm.
-	asm_preproc_function(parser_ctx, func);
-	asm_write_function(parser_ctx, func);
-}
-
-
-/* Some debug printening. */
-
-void prontVardecls(vardecls_t *var, int depth) {
-	for (int i = 0; i < var->num; i++) {
-		prontVardecl(&var->vars[i], depth);
-	}
-}
-
-void prontVardecl(vardecl_t *var, int depth) {
-	char *deep = malloc(sizeof(char) * (depth * 2 + 1));
-	deep[depth * 2] = 0;
-	for (int i = 0; i < depth * 2; i++) {
-		deep[i] = ' ';
-	}
-	printf("%svardecl_t '%s'", deep, var->ident.ident);
-	if (var->expr) {
-		printf(":\n%s  expression_t: ", deep);
-		prontExpr(var->expr);
-	}
-	printf("\n");
-	free(deep);
-}
-
-void prontExprs(expressions_t *expr) {
-	if (expr->num) {
-		prontExpr(expr->exprs);
-		for (int i = 1; i < expr->num; i++) {
-			printf(", ");
-			prontExpr(&expr->exprs[i]);
-		}
-	}
-}
-
-void prontExpr(expression_t *expr) {
-	switch (expr->type) {
-		case (EXPR_TYPE_IDENT):
-			printf("%s ", expr->ident);
-			break;
-		case (EXPR_TYPE_ICONST):
-			printf("%d ", expr->value);
-			break;
-		case (EXPR_TYPE_INVOKE):
-			prontExpr(expr->expr);
-			printf("( ");
-			prontExprs(expr->exprs);
-			printf(") ");
-			break;
-		case (EXPR_TYPE_ASSIGN):
-			prontExpr(expr->expr);
-			prontExpr(expr->expr1);
-			printf("ASSIGN ");
-			break;
-		case (EXPR_TYPE_MATH2):
-			prontExpr(expr->expr);
-			prontExpr(expr->expr1);
-			switch (expr->oper) {
-				case (OP_ADD):
-					printf("ADD ");
-					break;
-				case (OP_SUB):
-					printf("SUB ");
-					break;
-				case (OP_MUL):
-					printf("MUL ");
-					break;
-				case (OP_DIV):
-					printf("DIV ");
-					break;
-				case (OP_REM):
-					printf("REM ");
-					break;
-			}
-			break;
-		case (EXPR_TYPE_MATH1):
-			prontExpr(expr->expr);
-			switch (expr->oper) {
-				case (OP_INC):
-					printf("INC ");
-					break;
-				case (OP_DEC):
-					printf("DEC ");
-					break;
-			}
-			break;
-	}
-}
-
-void prontStatmts(statements_t *statmt, int depth) {
-	for (int i = 0; i < statmt->num; i++) {
-		prontStatmt(&statmt->statements[i], depth);
-	}
-}
-
-void prontStatmt(statement_t *statmt, int depth) {
-	char *deep = (char *) malloc(sizeof(char) * (depth * 2 + 1));
-	deep[depth * 2] = 0;
-	for (int i = 0; i < depth * 2; i++) {
-		deep[i] = ' ';
-	}
-	if (statmt->type == STATMT_TYPE_MULTI) {
-		printf("%sstatement_t: multi\n", deep);
-		prontStatmts(statmt->statements, depth + 1);
-	} else {
-		switch (statmt->type) {
-			case(STATMT_TYPE_NOP):
-				printf("%sstatement_t: nop\n", deep);
-				break;
-			case(STATMT_TYPE_EXPR):
-				printf("%sstatement_t: expr\n", deep);
-				printf("%s  expression_t ", deep);
-				prontExpr(statmt->expr);
-				printf("\n");
-				break;
-			case(STATMT_TYPE_RET):
-				printf("%sstatement_t: return\n", deep);
-				printf("%s  expression_t ", deep);
-				prontExpr(statmt->expr);
-				printf("\n");
-				break;
-			case(STATMT_TYPE_VAR):
-				printf("%sstatement_t: vardecl\n", deep);
-				prontVardecls(statmt->decls, depth + 1);
-				break;
-			case(STATMT_TYPE_IF):
-				printf("%sstatement_t: if\n", deep);
-				printf("%s  expression_t ", deep);
-				prontExpr(statmt->expr);
-				printf("\n");
-				prontStatmt(statmt->statement, depth + 1);
-				if (statmt->statement1->type != STATMT_TYPE_NOP) {
-					printf("%selse:\n", deep);
-					prontStatmt(statmt->statement1, depth + 1);
-				}
-				break;
-			case(STATMT_TYPE_WHILE):
-				printf("%sstatement_t: while\n", deep);
-				printf("%s  expression_t ", deep);
-				prontExpr(statmt->expr);
-				printf("\n");
-				prontStatmt(statmt->statement, depth + 1);
-				break;
-			case(STATMT_TYPE_FOR):
-				printf("%sstatement_t: for\n", deep);
-				prontStatmt(statmt->statement, depth + 1);
-				printf("%s  expression_t ", deep);
-				prontExpr(statmt->expr);
-				printf("\n%s  expression_t ", deep);
-				prontExpr(statmt->expr);
-				printf("\n");
-				prontStatmt(statmt->statement1, depth + 1);
-				break;
-		}
-	}
-	free(deep);
-}
-
-
-/* Some memory freeing. */
-
-void free_ident(parser_ctx_t *ctx, ident_t *ident) {
-	free(ident->ident);
-	ctx->errorPos = ident->pos;
-}
-
-void free_garbage(parser_ctx_t *ctx, ident_t *garbage) {
-	free(garbage->ident);
-	ctx->errorPos = garbage->pos;
-}
-
-void free_funcdef(parser_ctx_t *ctx, funcdef_t *funcdef) {
-	free_ident(ctx, &funcdef->ident);
-	for (int i = 0; i < funcdef->numParams; i++) {
-		free_vardecl(ctx, &funcdef->params[i]);
-	}
-	free(funcdef->params);
-	free_statmts(ctx, funcdef->statements);
-	ctx->errorPos = funcdef->pos;
-}
-
-void free_idents(parser_ctx_t *ctx, idents_t *idents) {
-	for (int i = 0; i < idents->numIdents; i++) {
-		free_ident(ctx, &idents->idents[i]);
-	}
-	free(idents->idents);
-	ctx->errorPos = idents->pos;
-}
-
-void free_vardecl(parser_ctx_t *ctx, vardecl_t *vardecl) {
-	if (vardecl->expr) free_expr(ctx, vardecl->expr);
-	free_ident(ctx, &vardecl->ident);
-	ctx->errorPos = vardecl->pos;
-}
-
-void free_vardecls(parser_ctx_t *ctx, vardecls_t *vardecls) {
-	for (int i = 0; i < vardecls->num; i++) {
-		free_vardecl(ctx, &vardecls->vars[i]);
-	}
-	free(vardecls->vars);
-	ctx->errorPos = vardecls->pos;
-}
-
-void free_statmt(parser_ctx_t *ctx, statement_t *statmt) {
-	if (statmt->expr) free_expr(ctx, statmt->expr);
-	if (statmt->expr1) free_expr(ctx, statmt->expr1);
-	if (statmt->statement) free_statmt(ctx, statmt->statement);
-	if (statmt->statement1) free_statmt(ctx, statmt->statement1);
-	if (statmt->statements) free_statmts(ctx, statmt->statements);
-	if (statmt->decls) free_vardecls(ctx, statmt->decls);
-	ctx->errorPos = statmt->pos;
-}
-
-void free_statmts(parser_ctx_t *ctx, statements_t *statmts) {
-	for (int i = 0; i < statmts->num; i++) {
-		free_statmt(ctx, &statmts->statements[i]);
-	}
-	free(statmts->statements);
-	ctx->errorPos = statmts->pos;
-}
-
-void free_expr(parser_ctx_t *ctx, expression_t *expr) {
-	ctx->errorPos = expr->pos;
-}
-
-void free_exprs(parser_ctx_t *ctx, expressions_t *exprs) {
-	for (int i = 0; i < exprs->num; i++) {
-		free_expr(ctx, &exprs->exprs[i]);
-	}
-	free(exprs->exprs);
-	ctx->errorPos = exprs->pos;
+	
 }
 

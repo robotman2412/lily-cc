@@ -47,51 +47,51 @@ extern int yydebug;
 #line 8 "src/parser.bison"
 
 #include "parser-util.h"
+#include "debug/pront.h"
 #include <malloc.h>
 #include <string.h>
 
+extern int  yylex  (parser_ctx_t *ctx);
+extern void yyerror(parser_ctx_t *ctx, char *msg);
 
-#line 55 "src/parser.h"
+
+#line 59 "src/parser.h"
 
 /* Token type.  */
 #ifndef YYTOKENTYPE
 # define YYTOKENTYPE
   enum yytokentype
   {
-    TKN_IF = 258,
-    TKN_ELSE = 259,
-    TKN_WHILE = 260,
-    TKN_FOR = 261,
-    TKN_RETURN = 262,
-    TKN_LPAR = 263,
-    TKN_RPAR = 264,
-    TKN_LBRAC = 265,
-    TKN_RBRAC = 266,
-    TKN_SEMI = 267,
-    TKN_COMMA = 268,
-    TKN_NUM = 269,
-    TKN_IDENT = 270,
-    TKN_GARBAGE = 271,
-    TKN_INC = 272,
-    TKN_DEC = 273,
-    TKN_ADD = 274,
-    TKN_SUB = 275,
-    TKN_ASSIGN = 276,
-    TKN_MUL = 277,
-    TKN_DIV = 278,
-    TKN_REM = 279,
-    TKN_THEN = 280,
-    TKN_STRUCT = 281,
-    TKN_ENUM = 282,
-    TKN_VOID = 283,
-    TKN_SIGNED = 284,
-    TKN_UNSIGNED = 285,
-    TKN_CHAR = 286,
-    TKN_SHORT = 287,
-    TKN_LONG = 288,
-    TKN_INT = 289,
-    TKN_FLOAT = 290,
-    TKN_DOUBLE = 291
+    TKN_AUTO = 258,
+    TKN_FUNC = 259,
+    TKN_IF = 260,
+    TKN_ELSE = 261,
+    TKN_WHILE = 262,
+    TKN_RETURN = 263,
+    TKN_ASM = 264,
+    TKN_THEN = 265,
+    TKN_LPAR = 266,
+    TKN_RPAR = 267,
+    TKN_LBRAC = 268,
+    TKN_RBRAC = 269,
+    TKN_LSBRAC = 270,
+    TKN_RSBRAC = 271,
+    TKN_SEMI = 272,
+    TKN_COLON = 273,
+    TKN_COMMA = 274,
+    TKN_IVAL = 275,
+    TKN_STRVAL = 276,
+    TKN_IDENT = 277,
+    TKN_GARBAGE = 278,
+    TKN_ADD = 279,
+    TKN_SUB = 280,
+    TKN_ASSIGN = 281,
+    TKN_AMP = 282,
+    TKN_MUL = 283,
+    TKN_DIV = 284,
+    TKN_REM = 285,
+    TKN_NOT = 286,
+    TKN_INV = 287
   };
 #endif
 
@@ -99,23 +99,27 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 17 "src/parser.bison"
+#line 21 "src/parser.bison"
 
-	pos_t pos;
-	ival_t ival;
-	ident_t ident;
-	ident_t garbage;
-	funcdef_t func;
-	idents_t idents;
-	vardecl_t var;
-	vardecls_t vars;
-	statement_t statmt;
-	statements_t statmts;
-	expression_t expr;
-	expressions_t exprs;
-	type_t type;
+	pos_t		pos;
+	
+	ival_t		ival;
+	strval_t	strval;
+	
+	ident_t		ident;
+	idents_t	idents;
+	
+	funcdef_t	func;
+	
+	expr_t		expr;
+	exprs_t		exprs;
+	
+	stmt_t		stmt;
+	stmts_t		stmts;
+	
+	strval_t	garbage;
 
-#line 119 "src/parser.h"
+#line 123 "src/parser.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

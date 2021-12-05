@@ -50,9 +50,11 @@ typedef struct funcdef		funcdef_t;
 #include "definitions.h"
 #include "tokeniser.h"
 #include "main.h"
+#include "asm.h"
 
 struct parser_ctx {
 	tokeniser_ctx_t *tokeniser_ctx;
+	asm_ctx_t       *asm_ctx;
 };
 
 struct ival {
@@ -94,6 +96,7 @@ struct stmt {
 			stmt_t *code_false;
 		};
 		expr_t     *expr;
+		idents_t   *vars;
 	};
 };
 
@@ -115,15 +118,27 @@ struct stmts {
 };
 
 struct funcdef {
-	//type_t returns,
-	ident_t  ident;
-	idents_t args;
+	//type_t returns;
+	ident_t   ident;
+	idents_t  args;
+	stmts_t  *stmts;
 };
 
 extern void *make_copy(void *mem, size_t size);
 #define COPY(thing, type) ( (type *) make_copy(thing, sizeof(type)) )
 
 funcdef_t funcdef_decl(ident_t  *ident,  idents_t *args, stmts_t *code);
+
+stmts_t   stmts_empty ();
+stmts_t   stmts_cat   (stmts_t  *stmts, stmt_t  *stmt);
+
+stmt_t    stmt_multi  (stmts_t  *stmts);
+//stmt_t    stmt_if     (expr_t   *cond,  stmt_t *s_if, stmt_t *s_else);
+//stmt_t    stmt_while  (expr_t   *cond,  stmt_t *code);
+stmt_t    stmt_ret    (expr_t   *expr);
+stmt_t    stmt_var    (idents_t *decls);
+stmt_t    stmt_expr   (expr_t   *expr);
+//stmt_t    stmt_iasm   (iasm_t   *iasm);
 
 idents_t  idents_empty();
 idents_t  idents_cat  (idents_t *idents, ident_t  *ident);

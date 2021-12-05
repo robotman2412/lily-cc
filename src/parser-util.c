@@ -6,9 +6,60 @@ funcdef_t funcdef_decl(ident_t *ident, idents_t *args, stmts_t *code) {
 	return (funcdef_t) {
 		.ident = *ident,
 		.args  = *args,
-		/*.code  = *code*/
+		.stmts = code
 	};
 }
+
+
+
+stmts_t stmts_empty() {
+	return (stmts_t) {
+		.arr = NULL,
+		.num = 0
+	};
+}
+
+stmts_t stmts_cat(stmts_t *stmts, stmt_t *stmt) {
+	stmts->num ++;
+	stmts->arr = realloc(stmts->arr, stmts->num * sizeof(stmt_t));
+	stmts->arr[stmts->num - 1] = *stmt;
+	return *stmts;
+}
+
+
+
+stmt_t stmt_multi(stmts_t *stmts) {
+	return (stmt_t) {
+		.type  = STMT_TYPE_MULTI,
+		.stmts = COPY(stmts, stmts_t)
+	};
+}
+
+//stmt_t stmt_if(expr_t *cond, stmt_t *s_if, stmt_t *s_else);
+//stmt_t stmt_while(expr_t *cond, stmt_t *code);
+
+stmt_t stmt_ret(expr_t *expr) {
+	return (stmt_t) {
+		.type  = STMT_TYPE_RET,
+		.expr  = COPY(expr, expr_t)
+	};
+}
+
+stmt_t stmt_var(idents_t *decls) {
+	return (stmt_t) {
+		.type  = STMT_TYPE_VAR,
+		.vars  = COPY(decls, idents_t)
+	};
+}
+
+stmt_t stmt_expr(expr_t *expr) {
+	return (stmt_t) {
+		.type  = STMT_TYPE_EXPR,
+		.expr  = COPY(expr, expr_t)
+	};
+}
+
+//stmt_t stmt_iasm(iasm_t *iasm);
 
 
 

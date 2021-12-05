@@ -146,7 +146,7 @@ Nonterminals, with rules where they appear
     funcdef <func> (46)
         on left: 5
         on right: 3
-    vardecls (47)
+    vardecls <idents> (47)
         on left: 6
         on right: 4 19
     opt_idents <idents> (48)
@@ -155,10 +155,10 @@ Nonterminals, with rules where they appear
     idents <idents> (49)
         on left: 9 10
         on right: 6 7 9
-    stmts (50)
+    stmts <stmts> (50)
         on left: 11 12
         on right: 5 11 13
-    stmt (51)
+    stmt <stmt> (51)
         on left: 13 14 15 16 17 18 19 20 21
         on right: 11 14 15 16
     opt_exprs <exprs> (52)

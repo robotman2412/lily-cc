@@ -34,6 +34,12 @@
 #   define DEBUG_ASM(...)
 #endif
 
+#ifdef DEBUG_GENERATOR
+#   define DEBUG_GEN(...) DEBUG("[GEN] " __VA_ARGS__)
+#else
+#   define DEBUG_GEN(...)
+#endif
+
 #define IS_LITTLE_ENDIAN defined(LITTLE_ENDIAN)
 #define IS_BIG_ENDIAN    defined(BIG_ENDIAN)
 
@@ -182,7 +188,11 @@ typedef enum expr_type {
 
 typedef enum gen_var_type {
     VAR_TYPE_VOID, VAR_TYPE_CONST,
-    VAR_TYPE_LABEL
+    VAR_TYPE_LABEL,
+    VAR_TYPE_STACKFRAME,
+    VAR_TYPE_STACKOFFS,
+    VAR_TYPE_REG,
+    VAR_TYPE_RETVAL
 } gen_var_type_t;
 
 #endif //DEFINITIONS_H

@@ -13,13 +13,16 @@ struct gen_var {
     gen_var_type_t type;
     union {
         address_t   iconst;
+        address_t   offset;
         asm_label_t label;
-        uint16_t    reg;
+        reg_t       reg;
     };
 };
 
 /* ================== Functions ================== */
 
+// Function implementation for non-inlined functions. (generic fallback provided)
+void       gen_function      (asm_ctx_t *ctx, funcdef_t *funcdef);
 // Function entry for non-inlined functions. 
 void       gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef);
 // Return statement for non-inlined functions.
@@ -34,27 +37,31 @@ void       gen_inline_entry  (asm_ctx_t *ctx, funcdef_t *funcdef);
 // retval is null for void returns.
 void       gen_inline_return (asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *retval);
 
+/* ================== Statements ================= */
+
+// Statement implementation. (generic fallback provided)
+// Returns true if the statement has an explicit return.
+bool       gen_stmt          (asm_ctx_t *ctx, void *stmt, bool is_stmts);
+
 /* ================= Expressions ================= */
 
 // Every aspect of the expression to be written. (generic fallback provided)
-gen_var_t *gen_expression    (asm_ctx_t *ctx, expr_t    *expr);
+gen_var_t *gen_expression    (asm_ctx_t *ctx, expr_t    *expr,    gen_var_t *out_hint);
 // Expression: Function call.
 // args may be null for zero arguments.
-gen_var_t *gen_expr_call     (asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *callee, size_t n_args, gen_var_t **args);
+gen_var_t *gen_expr_call     (asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *callee,   size_t     n_args, gen_var_t **args);
 // Expression: Binary math operation.
-gen_var_t *gen_expr_math2    (asm_ctx_t *ctx, oper_t    *expr,    gen_var_t *a,      gen_var_t *b);
+gen_var_t *gen_expr_math2    (asm_ctx_t *ctx, oper_t     oper,    gen_var_t *out_hint, gen_var_t *a,      gen_var_t  *b);
 // Expression: Unary math operation.
-gen_var_t *gen_expr_math1    (asm_ctx_t *ctx, oper_t    *expr,    gen_var_t *a);
+gen_var_t *gen_expr_math1    (asm_ctx_t *ctx, oper_t     oper,    gen_var_t *out_hint, gen_var_t *a);
 
 /* ================== Variables ================== */
 
 // Variables: Move variable to another location.
 void       gen_mov           (asm_ctx_t *ctx, gen_var_t *dest,    gen_var_t *src);
-// Variables: Create a variable based on parameter.
-void       gen_var_arg       (asm_ctx_t *ctx, funcdef_t *funcdef, size_t     argno);
 // Variables: Create a variable based on other value.
 // Other value is null if not initialised.
-void       gen_var_dup       (asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *other);
+void       gen_var_dup       (asm_ctx_t *ctx, funcdef_t *funcdef, ident_t *ident,      gen_var_t *other);
 
 
 #endif //GEN_H

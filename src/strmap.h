@@ -38,6 +38,9 @@ void *map_set(map_t *map, char *key, void *val);
 // Returns null or removed item.
 void *map_remove(map_t *map, char *key);
 
+// Dumps the map for debug purposes.
+void map_dump(map_t *map);
+
 // Returns the number of keys in map.
 #define map_size(map) (map->numEntries)
 

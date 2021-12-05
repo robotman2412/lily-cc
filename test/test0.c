@@ -1,6 +1,6 @@
 
-// #define auto int
-// #define func int
+#define auto int
+#define func int
 
 // func strlen(str) {
 // 	auto start;
@@ -11,8 +11,10 @@
 // 	return str - start - 1;
 // }
 
-func oof(a) {
-	return a + 3;
+func mul(a, b) {
+	auto c;
+	c = a + b - 2;
+	return c;
 }
 
 // func main() {

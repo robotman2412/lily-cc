@@ -60,6 +60,11 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 %type <exprs> opt_exprs
 %type <exprs> exprs
 
+%type <stmts> stmts
+%type <stmt> stmt
+
+%type <idents> vardecls
+
 // Precedence: lowest.
 
 %right "="
@@ -95,25 +100,25 @@ global:			funcdef {function_added(ctx, &$1);}
 |				vardecls;
 
 funcdef:		"func" TKN_IDENT "(" opt_idents ")"
-				"{" stmts "}"								{$$=funcdef_decl(&$2, &$4, NULL/*&$7*/);};
-vardecls:		"auto" idents ";";
+				"{" stmts "}"								{$$=funcdef_decl(&$2, &$4, &$7);};
+vardecls:		"auto" idents ";"							{$$=$2;};
 
 opt_idents:		idents										{$$=$1;}
 |				%empty										{$$=idents_empty();};
-idents:			idents "," TKN_IDENT						{$$=idents_cat(&$1,  &$3);}
-|				TKN_IDENT									{$$=idents_one(&$1);};
-stmts:			stmts stmt
-|				%empty;
-stmt:			"{" stmts "}"
-|				"if" "(" expr ")" stmt		%prec "then"
+idents:			idents "," TKN_IDENT						{$$=idents_cat  (&$1,  &$3);}
+|				TKN_IDENT									{$$=idents_one  (&$1);};
+stmts:			stmts stmt									{$$=stmts_cat   (&$1, &$2);}
+|				%empty										{$$=stmts_empty ();};
+stmt:			"{" stmts "}"                               {$$=stmt_multi  (&$2);}
+|				"if" "(" expr ")" stmt		%prec "then"    {/*$$=stmt_if     (&$3, &$5, NULL);*/}
 |				"if" "(" expr ")" stmt
-				"else" stmt
-|				"while" "(" expr ")" stmt
-|				"return" ";"
-|				"return" expr ";"
-|				vardecls
-|				expr ";"
-|				inline_asm ";";
+				"else" stmt                                 {/*$$=stmt_if     (&$3, &$5, &$7);*/}
+|				"while" "(" expr ")" stmt                   {/*$$=stmt_while  (&$3, &$5);*/}
+|				"return" ";"                                {$$=stmt_ret    (NULL);}
+|				"return" expr ";"                           {$$=stmt_ret    (&$2);}
+|				vardecls                                    {$$=stmt_var    (&$1);}
+|				expr ";"                                    {$$=stmt_expr   (&$1);}
+|				inline_asm ";"                              {/*$$=stmt_iasm   (&$1);*/};
 
 opt_exprs:		exprs
 |				%empty;

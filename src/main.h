@@ -6,6 +6,10 @@ struct options;
 
 typedef struct options options_t;
 
+#include <config.h>
+
+extern char *reg_names[NUM_REGS];
+
 #include <stddef.h>
 #include <stdbool.h>
 #include <parser-util.h>

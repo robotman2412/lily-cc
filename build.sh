@@ -9,12 +9,12 @@ FILES=""
 
 # Options passed to compiler
 ARCH=$(cat build/.current_arch)
-CCOPTIONS="-Isrc -Isrc/arch/$ARCH -Isrc/arch -Isrc/asm -Ibuild"
+CCOPTIONS="-Isrc -Isrc/debug -Isrc/arch/$ARCH -Isrc/asm -Ibuild"
 
 for i in $*; do
 	case $i in
 		debug|--debug)
-			CCOPTIONS="$CCOPTIONS -DENABLE_DEBUG_LOGS -ggdb"
+			CCOPTIONS="$CCOPTIONS -DENABLE_DEBUG_LOGS -DDEBUG_COMPILER -ggdb"
 			;;
 		--ccoptions=*)
 			CCOPTIONS="$CCOPTIONS ${i#*=}"
@@ -49,7 +49,9 @@ CC tokeniser.c
 CC parser-util.c
 
 CC asm/asm.c
-#CC arch/gen_fallbacks.c
+CC asm/asm_postproc.c
+CC asm/gen_util.c
+CC asm/gen_fallbacks.c
 
 # Compile all the architecture-specific files.
 for i in $(find src/arch/$ARCH/ -type f -name "*.c"); do
@@ -57,6 +59,7 @@ for i in $(find src/arch/$ARCH/ -type f -name "*.c"); do
 done
 
 CC debug/pront.c
+CC debug/gen_tests.c
 
 if [ $errors -gt 0 ]; then
 	exit $errors

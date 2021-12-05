@@ -4,12 +4,21 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
 
-//#include <asm.h>
+#include <asm.h>
 #include <config.h>
 #include "tokeniser.h"
 #include "parser.h"
-//#include <gen.h>
+#include <gen.h>
+#include "asm_postproc.h"
+
+#include "stdlib.h"
+
+#ifdef DEBUG_COMPILER
+#include "pront.h"
+#include "gen_tests.h"
+#endif
 
 char *reg_names[NUM_REGS] = REG_NAMES;
 
@@ -17,19 +26,6 @@ typedef struct token {
 	enum yytokentype type;
 	YYSTYPE val;
 } token_t;
-
-/*
-func FNNAME (a) {
-	var b = 2 + a * 3;
-	return b;
-}
-*/
-
-char *someCode = \
-"func FNNAME (a) {\n" \
-"var b = 2 + a * 3;\n" \
-"return b;\n" \
-"}\n";
 
 int main(int argc, char **argv) {
 #if defined(ENABLE_DEBUG_LOGS) && YYDEBUG
@@ -121,6 +117,11 @@ int main(int argc, char **argv) {
 	}
 	apply_defaults(&options);
 	
+#if defined(FUNC_TEST) || defined(EXPR_TEST)
+	perform_gen_tests(argc, argv);
+	return 0;
+#endif
+	
 	if (options.showHelp) {
 		printf("lilly-cc " ARCH_ID " " COMPILER_VER "\n");
 		show_help(argc, argv);
@@ -156,15 +157,23 @@ int main(int argc, char **argv) {
 	// Initialise.
 	parser_ctx_t ctx;
 	tokeniser_ctx_t tokeniser_ctx;
+	asm_ctx_t asm_ctx;
 	//asm_ctx_t asm_ctx;
 	ctx.tokeniser_ctx = &tokeniser_ctx;
-	//ctx.asm_ctx = &asm_ctx;
+	ctx.asm_ctx = &asm_ctx;
 	tokeniser_init_cstr(&tokeniser_ctx, source);
 	tokeniser_ctx.filename = filename;
-	//asm_init(&asm_ctx);
+	asm_init(&asm_ctx);
 	
 	// Lol who compiles.
 	yyparse(&ctx);
+	// Output it.
+	int tempfile = open("/tmp/lilly-cc-dbg-bin", O_RDWR | O_CREAT | O_TRUNC, 0666);
+	asm_ctx.out_fd = tempfile;
+	asm_ppc(&asm_ctx);
+	output_native(&asm_ctx);
+	close(tempfile);
+	system("/usr/bin/xxd -g 1 /tmp/lilly-cc-dbg-bin");
 }
 
 // Show help on the command line.
@@ -229,6 +238,6 @@ void yyerror(parser_ctx_t *ctx, char *msg) {
 
 // Process a function.
 void function_added(parser_ctx_t *parser_ctx, funcdef_t *func) {
-	
+	gen_function(parser_ctx->asm_ctx, func);
 }
 

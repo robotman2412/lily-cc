@@ -8,7 +8,7 @@ void map_create(map_t *map) {
 	map->numEntries = 0;
 	map->capacity = MAP_DEFAULT_CAPACITY;
 	map->strings = (char **) malloc(sizeof(char *) * map->capacity);
-	map->values = (void *) malloc(sizeof(size_t) * map->capacity);
+	map->values = (void **) malloc(sizeof(void *) * map->capacity);
 }
 
 // Deletes a map.
@@ -89,5 +89,13 @@ void *map_remove(map_t *map, char *key) {
 		return ret;
 	} else {
 		return NULL;
+	}
+}
+
+// Dumps the map for debug purposes.
+void map_dump(map_t *map) {
+	printf("Map dump: %ld entries:\n", map->numEntries);
+	for (size_t i = 0; i < map->numEntries; i++) {
+		printf("  '%s': %p\n", map->strings[i], map->values[i]);
 	}
 }

@@ -14,16 +14,12 @@ There are two options at this point:
 
 ### Configure for an existing architecture:
 1. To list help and architectures: `./configure.sh --help`
-2. Pick an architecture and configure: `./configure.sh --arch=mos6502`
-
-Note: MOS 6502 is not implemented at the moment.
+2. Pick an architecture and configure: `./configure.sh --arch=gr8cpu-r3`
 
 ### Create a new architecture:
 1. Think of an appropriate architecture ID, for example: `8086`
 1. Create a directory with the desired architecture ID: `src/arch/8086`
 2. Create a `decription.txt` there, for example: `Intel 8086 desktop CPU` <sup>(1)</sup>
-3. Write `8086-config.h`, `8086-gen.c` and `8086-types.h` accordingly. <sup>(2)</sup>
+3. Write `8086_config.h`, `8086_gen.c` and `8086_gen.h` accordingly.
 
 Note 1: Description files should have exactly one trailing newline.
-
-Note 2: Refer to `src/arch/gr8cpu-r3` for examples of implementing these files.

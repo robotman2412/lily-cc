@@ -1,15 +1,13 @@
-# Slow down there kiddo
-A compiler for a very simple language (this branch only)
+# lilly-cc
+A compiler for a very simple language, destined to become a C compiler.
 
 ## Developing for lilly-c
 1. Pull git git repository: `git clone https://github.com/robotman2412/lilly-c`
 2. Configure (see [Configuration](#Configuration))
 3. Build for the first time: `./build.sh` <sup>(1)</sup>
-4. The output executable is called `comp` <sup>(2)</sup>
+4. The output executable is called `comp`
 
 Note 1: The initial build is required because several files are generated.
-
-Note 2: Executable name subject to change.
 
 ## Configuration
 There are two options at this point:
@@ -29,4 +27,3 @@ Note: MOS 6502 is not implemented at the moment.
 Note 1: Description files should have exactly one trailing newline.
 
 Note 2: Refer to `src/arch/gr8cpu-r3` for examples of implementing these files.
-

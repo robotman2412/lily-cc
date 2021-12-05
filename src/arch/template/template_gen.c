@@ -17,9 +17,9 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *callee, 
 }
 
 // Expression: Binary math operation.
-gen_var_t *gen_expr_math2(asm_ctx_t *ctx, oper_t *expr, gen_var_t *a, gen_var_t *b) {
+gen_var_t *gen_expr_math2(asm_ctx_t *ctx, oper_t oper, gen_var_t *out_hint, gen_var_t *a, gen_var_t *b) {
 }
 
 // Expression: Unary math operation.
-gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t *expr, gen_var_t *a) {
+gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *out_hint, gen_var_t *a) {
 }

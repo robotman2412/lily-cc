@@ -1,5 +1,9 @@
 #!/bin/bash
 
+ARCH=$(cat build/current_arch)
+VER=$(cat version)
+echo "Building lilly-cc $ARCH v$VER"
+
 # Convert our grammar file to actual C code.
 echo "BISON src/parser.bison"
 bison src/parser.bison -v -Wnone -Wconflicts-sr -Wconflicts-rr -o src/parser.c --defines=src/parser.h || exit 1
@@ -8,7 +12,6 @@ bison src/parser.bison -v -Wnone -Wconflicts-sr -Wconflicts-rr -o src/parser.c -
 FILES=""
 
 # Options passed to compiler
-ARCH=$(cat build/.current_arch)
 CCOPTIONS="-Isrc -Isrc/debug -Isrc/arch/$ARCH -Isrc/asm -Ibuild"
 
 for i in $*; do
@@ -62,11 +65,22 @@ CC debug/pront.c
 CC debug/gen_tests.c
 
 if [ $errors -gt 0 ]; then
+	if [ "$ARCH" = "template" ]; then
+		echo
+		echo "Did you configure 'template' by accident?"
+	fi
 	exit $errors
 fi
 
 # Link the compiled files.
 echo "LN$FILES"
 gcc $FILES -o comp || errors=1
+
+if [ $errors -gt 0 ]; then
+	if [ "$ARCH" = "template" ]; then
+		echo
+		echo "Did you configure 'template' by accident?"
+	fi
+fi
 
 exit $errors

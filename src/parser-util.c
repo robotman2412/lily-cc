@@ -15,7 +15,7 @@ funcdef_t funcdef_decl(ident_t *ident, idents_t *args, stmts_t *code) {
 stmts_t stmts_empty() {
 	return (stmts_t) {
 		.arr = NULL,
-		.num = 0
+		.num = 0,
 	};
 }
 
@@ -35,8 +35,22 @@ stmt_t stmt_multi(stmts_t *stmts) {
 	};
 }
 
-//stmt_t stmt_if(expr_t *cond, stmt_t *s_if, stmt_t *s_else);
-//stmt_t stmt_while(expr_t *cond, stmt_t *code);
+stmt_t stmt_if(expr_t *cond, stmt_t *s_if, stmt_t *s_else) {
+	return (stmt_t) {
+		.type       = STMT_TYPE_IF,
+		.cond       = COPY(cond,   expr_t),
+		.code_true  = COPY(s_if,   stmt_t),
+		.code_false = COPY(s_else, stmt_t)
+	};
+}
+
+stmt_t stmt_while(expr_t *cond, stmt_t *code) {
+	return (stmt_t) {
+		.type       = STMT_TYPE_WHILE,
+		.cond       = COPY(cond,   expr_t),
+		.code_true  = COPY(code,   stmt_t)
+	};
+}
 
 stmt_t stmt_ret(expr_t *expr) {
 	return (stmt_t) {

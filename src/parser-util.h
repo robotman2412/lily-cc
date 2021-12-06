@@ -51,6 +51,7 @@ typedef struct funcdef		funcdef_t;
 #include "tokeniser.h"
 #include "main.h"
 #include "asm.h"
+#include "gen_preproc.h"
 
 struct parser_ctx {
 	tokeniser_ctx_t *tokeniser_ctx;
@@ -86,8 +87,8 @@ struct expr {
 };
 
 struct stmt {
-	pos_t pos;
-	stmt_type_t type;
+	pos_t           pos;
+	stmt_type_t     type;
 	union {
 		stmts_t    *stmts;
 		struct {
@@ -98,30 +99,32 @@ struct stmt {
 		expr_t     *expr;
 		idents_t   *vars;
 	};
+	preproc_data_t *preproc;
 };
 
 struct idents {
-	pos_t    pos;
-	size_t   num;
-	ident_t *arr;
+	pos_t           pos;
+	size_t          num;
+	ident_t        *arr;
 };
 
 struct exprs {
-	pos_t    pos;
-	size_t   num;
-	expr_t  *arr;
+	pos_t           pos;
+	size_t          num;
+	expr_t         *arr;
 };
 struct stmts {
-	pos_t    pos;
-	size_t   num;
-	stmt_t  *arr;
+	pos_t           pos;
+	size_t          num;
+	stmt_t         *arr;
 };
 
 struct funcdef {
-	//type_t returns;
-	ident_t   ident;
-	idents_t  args;
-	stmts_t  *stmts;
+	//type_t        returns;
+	ident_t         ident;
+	idents_t        args;
+	stmts_t        *stmts;
+	preproc_data_t *preproc;
 };
 
 extern void *make_copy(void *mem, size_t size);
@@ -133,8 +136,8 @@ stmts_t   stmts_empty ();
 stmts_t   stmts_cat   (stmts_t  *stmts, stmt_t  *stmt);
 
 stmt_t    stmt_multi  (stmts_t  *stmts);
-//stmt_t    stmt_if     (expr_t   *cond,  stmt_t *s_if, stmt_t *s_else);
-//stmt_t    stmt_while  (expr_t   *cond,  stmt_t *code);
+stmt_t    stmt_if     (expr_t   *cond,  stmt_t *s_if, stmt_t *s_else);
+stmt_t    stmt_while  (expr_t   *cond,  stmt_t *code);
 stmt_t    stmt_ret    (expr_t   *expr);
 stmt_t    stmt_var    (idents_t *decls);
 stmt_t    stmt_expr   (expr_t   *expr);

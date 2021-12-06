@@ -55,6 +55,7 @@ CC asm/asm.c
 CC asm/asm_postproc.c
 CC asm/gen_util.c
 CC asm/gen_fallbacks.c
+CC asm/gen_preproc.c
 
 # Compile all the architecture-specific files.
 for i in $(find src/arch/$ARCH/ -type f -name "*.c"); do

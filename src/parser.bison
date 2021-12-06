@@ -52,6 +52,8 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 %token <pos> TKN_ADD "+" TKN_SUB "-" TKN_ASSIGN "=" TKN_AMP "&"
 %token <pos> TKN_MUL "*" TKN_DIV "/" TKN_REM "%"
 %token <pos> TKN_NOT "!" TKN_INV "~"
+%token <pos> TKN_SHL "<<" TKN_SHR ">>"
+%token <pos> TKN_LT "<" TKN_LE "<=" TKN_GT ">" TKN_GE ">=" TKN_EQ "==" TKN_NE "!="
 
 %type <idents> opt_idents
 %type <idents> idents
@@ -78,7 +80,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 
 %left "==" "!="
 %left "<" ">" "<=" ">="
-//%left "<<" ">>"
+%left "<<" ">>"
 
 %left "+" //"-"
 %left "%" "/" //"*"
@@ -93,7 +95,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 // Precedence: highest.
 
 %%
-library:		global
+library:		global library
 |				%empty;
 
 global:			funcdef {function_added(ctx, &$1);}
@@ -110,10 +112,10 @@ idents:			idents "," TKN_IDENT						{$$=idents_cat  (&$1,  &$3);}
 stmts:			stmts stmt									{$$=stmts_cat   (&$1, &$2);}
 |				%empty										{$$=stmts_empty ();};
 stmt:			"{" stmts "}"                               {$$=stmt_multi  (&$2);}
-|				"if" "(" expr ")" stmt		%prec "then"    {/*$$=stmt_if     (&$3, &$5, NULL);*/}
+|				"if" "(" expr ")" stmt		%prec "then"    {$$=stmt_if     (&$3, &$5, NULL);}
 |				"if" "(" expr ")" stmt
-				"else" stmt                                 {/*$$=stmt_if     (&$3, &$5, &$7);*/}
-|				"while" "(" expr ")" stmt                   {/*$$=stmt_while  (&$3, &$5);*/}
+				"else" stmt                                 {$$=stmt_if     (&$3, &$5, &$7);}
+|				"while" "(" expr ")" stmt                   {$$=stmt_while  (&$3, &$5);}
 |				"return" ";"                                {$$=stmt_ret    (NULL);}
 |				"return" expr ";"                           {$$=stmt_ret    (&$2);}
 |				vardecls                                    {$$=stmt_var    (&$1);}
@@ -153,6 +155,8 @@ expr:			TKN_IVAL									{$$=expr_icnst(&$1);}
 |				expr "&" expr								{$$=expr_math2(OP_BIT_AND,   &$1, &$3);}
 |				expr "^" expr								{$$=expr_math2(OP_BIT_XOR,   &$1, &$3);}
 |				expr "|" expr								{$$=expr_math2(OP_BIT_OR,    &$1, &$3);}
+|				expr "<<" expr								{$$=expr_math2(OP_SHIFT_L,   &$1, &$3);}
+|				expr ">>" expr				%prec "<<"		{$$=expr_math2(OP_SHIFT_R,   &$1, &$3);}
 
 |				expr "&&" expr								{$$=expr_math2(OP_LOGIC_AND, &$1, &$3);}
 |				expr "||" expr								{$$=expr_math2(OP_LOGIC_OR,  &$1, &$3);}
@@ -180,6 +184,7 @@ asm_regs:		TKN_STRVAL "(" expr ")" "," asm_regs
 %%
 
 void *make_copy(void *mem, size_t size) {
+	if (!mem) return NULL;
 	void *copy = malloc(size);
 	memcpy(copy, mem, size);
 	return copy;

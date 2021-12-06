@@ -91,7 +91,15 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
     TKN_DIV = 284,
     TKN_REM = 285,
     TKN_NOT = 286,
-    TKN_INV = 287
+    TKN_INV = 287,
+    TKN_SHL = 288,
+    TKN_SHR = 289,
+    TKN_LT = 290,
+    TKN_LE = 291,
+    TKN_GT = 292,
+    TKN_GE = 293,
+    TKN_EQ = 294,
+    TKN_NE = 295
   };
 #endif
 
@@ -119,7 +127,7 @@ union YYSTYPE
 	
 	strval_t	garbage;
 
-#line 123 "src/parser.h"
+#line 131 "src/parser.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

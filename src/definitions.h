@@ -40,6 +40,12 @@
 #   define DEBUG_GEN(...)
 #endif
 
+#ifdef DEBUG_PREPROC
+#   define DEBUG_PRE(...) DEBUG("[PRE] " __VA_ARGS__)
+#else
+#   define DEBUG_PRE(...)
+#endif
+
 #define IS_LITTLE_ENDIAN defined(LITTLE_ENDIAN)
 #define IS_BIG_ENDIAN    defined(BIG_ENDIAN)
 
@@ -150,6 +156,8 @@ typedef enum oper {
     OP_MOD,
     OP_LOGIC_AND,
     OP_LOGIC_OR,
+    OP_SHIFT_L,
+    OP_SHIFT_R,
     //Bitwise operators.
     OP_BIT_NOT,
     OP_BIT_AND,
@@ -187,12 +195,17 @@ typedef enum expr_type {
 } expr_type_t;
 
 typedef enum gen_var_type {
-    VAR_TYPE_VOID, VAR_TYPE_CONST,
+    VAR_TYPE_VOID,
+    VAR_TYPE_CONST,
+    
     VAR_TYPE_LABEL,
     VAR_TYPE_STACKFRAME,
     VAR_TYPE_STACKOFFS,
+    
     VAR_TYPE_REG,
-    VAR_TYPE_RETVAL
+    VAR_TYPE_RETVAL,
+    
+    VAR_TYPE_COND
 } gen_var_type_t;
 
 #endif //DEFINITIONS_H

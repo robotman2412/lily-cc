@@ -71,6 +71,8 @@ struct asm_ctx {
     funcdef_t  *current_func;
     // Whether or not the current function is an inlining.
     bool        is_inline;
+    // Number of last label in function.
+    address_t   last_label_no;
     
     /* ===== Post-processing ===== */
     // The current PC.
@@ -129,6 +131,8 @@ void asm_write_address  (asm_ctx_t *ctx, address_t  data);
 // Writes a number of arbitrary size to the current chunk.
 void asm_write_num      (asm_ctx_t *ctx, size_t     data, size_t     bytes);
 
+// Gets a new label based on asm_ctx::last_label_no.
+char *asm_get_label     (asm_ctx_t *ctx);
 // Writes label definitions to the current chunk.
 void asm_write_label    (asm_ctx_t *ctx, char      *label);
 // Writes label references to the current chunk.

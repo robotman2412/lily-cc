@@ -376,7 +376,34 @@ int tokenise(tokeniser_ctx_t *ctx) {
 			ret = TKN_REM;
 			break;
 		case ('='):
-			ret = TKN_ASSIGN;
+			if (next == '=') {
+				tokeniser_readchar(ctx);
+				ret = TKN_EQ;
+			} else {
+				ret = TKN_ASSIGN;
+			}
+			break;
+		case ('<'):
+			if (next == '<') {
+				tokeniser_readchar(ctx);
+				ret = TKN_SHL;
+			} else if (next == '=') {
+				tokeniser_readchar(ctx);
+				ret = TKN_LE;
+			} else {
+				ret = TKN_LT;
+			}
+			break;
+		case ('>'):
+			if (next == '>') {
+				tokeniser_readchar(ctx);
+				ret = TKN_SHR;
+			} else if (next == '=') {
+				tokeniser_readchar(ctx);
+				ret = TKN_GE;
+			} else {
+				ret = TKN_GT;
+			}
 			break;
 		case (','):
 			ret = TKN_COMMA;

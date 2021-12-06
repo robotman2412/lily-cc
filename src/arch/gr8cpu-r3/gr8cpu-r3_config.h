@@ -20,7 +20,9 @@
 #define REG_A 0
 #define REG_X 1
 #define REG_Y 2
+
 typedef uint8_t reg_t;
+typedef uint8_t cond_t;
 
 // Generator fallbacks used.
 #define FALLBACK_gen_expression

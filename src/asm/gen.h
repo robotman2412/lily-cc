@@ -8,6 +8,7 @@ typedef struct gen_var gen_var_t;
 
 #include <parser-util.h>
 #include <asm.h>
+#include <gen_preproc.h>
 
 struct gen_var {
     gen_var_type_t type;
@@ -16,6 +17,7 @@ struct gen_var {
         address_t   offset;
         asm_label_t label;
         reg_t       reg;
+        cond_t      cond;
     };
 };
 
@@ -41,7 +43,11 @@ void       gen_inline_return (asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *ret
 
 // Statement implementation. (generic fallback provided)
 // Returns true if the statement has an explicit return.
-bool       gen_stmt          (asm_ctx_t *ctx, void *stmt, bool is_stmts);
+bool       gen_stmt          (asm_ctx_t *ctx, void      *stmt,    bool is_stmts);
+// If statement implementation.
+bool       gen_if            (asm_ctx_t *ctx, gen_var_t *cond,    stmt_t    *s_if,     stmt_t    *s_else);
+// While statement implementation.
+bool       gen_while         (asm_ctx_t *ctx, expr_t    *cond,    stmt_t    *code,     bool       do_while);
 
 /* ================= Expressions ================= */
 
@@ -62,6 +68,8 @@ void       gen_mov           (asm_ctx_t *ctx, gen_var_t *dest,    gen_var_t *src
 // Variables: Create a variable based on other value.
 // Other value is null if not initialised.
 void       gen_var_dup       (asm_ctx_t *ctx, funcdef_t *funcdef, ident_t *ident,      gen_var_t *other);
+// Variables: Create a label for the varialbe at preprocessing time.
+char      *gen_preproc_var   (asm_ctx_t *ctx, preproc_data_t *parent, ident_t *ident);
 
 
 #endif //GEN_H

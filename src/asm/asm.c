@@ -46,8 +46,10 @@ static inline void asm_append_raw(asm_ctx_t *ctx, char *data, size_t len) {
     asm_sect_t *sect = ctx->current_section;
     if (sect->chunks_capacity < sect->chunks_len + len) {
         // Expand capacity.
+        sect->chunk_len = (size_t) sect->chunk_len - (size_t) sect->chunks;
         sect->chunks_capacity = sect->chunks_len + len + 128;
         sect->chunks = realloc(sect->chunks, sect->chunks_capacity);
+        sect->chunk_len = (size_t) sect->chunk_len + (size_t) sect->chunks;
     }
     // Append data.
     if (data) {
@@ -124,6 +126,7 @@ void asm_use_sect(asm_ctx_t *ctx, char *id, address_t align) {
     }
     ctx->current_section = sect;
     ctx->current_section_id = id;
+    DEBUG_GEN("  .section \"%s\"\n", id);
     DEBUG_ASM("s    .section \"%s\"\n", id);
 }
 
@@ -197,6 +200,21 @@ void asm_write_num(asm_ctx_t *ctx, size_t data, size_t bytes) {
     }
 }
 
+// Gets a new label based on asm_ctx::last_label_no.
+char *asm_get_label(asm_ctx_t *ctx) {
+    if (ctx->current_func) {
+        char *label = (char *) malloc(strlen(ctx->current_func->ident.strval) + 3 + ADDR_BITS / 4);
+        sprintf(label, "%s.L%x", ctx->current_func->ident.strval, ctx->last_label_no);
+        ctx->last_label_no ++;
+        return label;
+    } else {
+        char *label = (char *) malloc(2 + ADDR_BITS / 4);
+        sprintf(label, "L%x", ctx->last_label_no);
+        ctx->last_label_no ++;
+        return label;
+    }
+}
+
 static inline asm_label_def_t *get_or_create_label(asm_ctx_t *ctx, char *label) {
     asm_label_def_t *val = map_get(ctx->labels, label);
     if (!val) {
@@ -214,6 +232,7 @@ static inline asm_label_def_t *get_or_create_label(asm_ctx_t *ctx, char *label) 
 
 // Writes label definitions to the current chunk.
 void asm_write_label(asm_ctx_t *ctx, char *label) {
+    DEBUG_GEN("%s:\n", label);
     asm_label_def_t *def = get_or_create_label(ctx, label);
     def->is_defined = true;
     // New label chunk.
@@ -252,6 +271,7 @@ void asm_write_label_ref(asm_ctx_t *ctx, char *label, address_t offset, asm_labe
 
 // Writes zeroes.
 void asm_write_zero(asm_ctx_t *ctx, address_t count) {
+    DEBUG_GEN("  .zero 0x%x\n", count);
     asm_append_chunk(ctx, ASM_CHUNK_ZERO);
     asm_write_address(ctx, count);
     asm_append_chunk(ctx, ASM_CHUNK_DATA);

@@ -173,7 +173,7 @@ int main(int argc, char **argv) {
 	asm_ppc(&asm_ctx);
 	output_native(&asm_ctx);
 	close(tempfile);
-	system("/usr/bin/xxd -g 1 /tmp/lilly-cc-dbg-bin");
+	system("hexdump -ve '16/1 \"%02x \" \"\n\"' /tmp/lilly-cc-dbg-bin");
 }
 
 // Show help on the command line.

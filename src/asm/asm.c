@@ -46,10 +46,10 @@ static inline void asm_append_raw(asm_ctx_t *ctx, char *data, size_t len) {
     asm_sect_t *sect = ctx->current_section;
     if (sect->chunks_capacity < sect->chunks_len + len) {
         // Expand capacity.
-        sect->chunk_len = (size_t) sect->chunk_len - (size_t) sect->chunks;
+        sect->chunk_len = (size_t *) ((size_t) sect->chunk_len - (size_t) sect->chunks);
         sect->chunks_capacity = sect->chunks_len + len + 128;
-        sect->chunks = realloc(sect->chunks, sect->chunks_capacity);
-        sect->chunk_len = (size_t) sect->chunk_len + (size_t) sect->chunks;
+        sect->chunks    = realloc(sect->chunks, sect->chunks_capacity);
+        sect->chunk_len = (size_t *) ((size_t) sect->chunk_len + (size_t) sect->chunks);
     }
     // Append data.
     if (data) {

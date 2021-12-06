@@ -131,7 +131,7 @@ char *b_insn_names[] = {"BEQ", "BNE", "BGT", "BLE", "BLT", "BGE", "BCS", "BCC"};
 
 /* ======== Gen-specific helper functions ======== */
 
-inline void r3_branch_to_var(asm_ctx_t *ctx, uint8_t b_insn, gen_var_t *output) {
+static inline void r3_branch_to_var(asm_ctx_t *ctx, uint8_t b_insn, gen_var_t *output) {
     uint8_t regno   = REG_A;
     uint8_t n_words = 2;
     // Helper var.

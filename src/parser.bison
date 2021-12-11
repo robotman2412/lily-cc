@@ -51,7 +51,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 
 %token <pos> TKN_ADD "+" TKN_SUB "-" TKN_ASSIGN "=" TKN_AMP "&"
 %token <pos> TKN_MUL "*" TKN_DIV "/" TKN_REM "%"
-%token <pos> TKN_NOT "!" TKN_INV "~"
+%token <pos> TKN_NOT "!" TKN_INV "~" TKN_XOR "^" TKN_OR "|"
 %token <pos> TKN_SHL "<<" TKN_SHR ">>"
 %token <pos> TKN_LT "<" TKN_LE "<=" TKN_GT ">" TKN_GE ">=" TKN_EQ "==" TKN_NE "!="
 
@@ -131,7 +131,9 @@ expr:			TKN_IVAL									{$$=expr_icnst(&$1);}
 |				TKN_IDENT									{$$=expr_ident(&$1);}
 |				expr "(" opt_exprs ")"						{$$=expr_call (&$1, &$3);}
 |				expr "[" expr "]"							{$$=expr_math2(OP_INDEX,     &$1, &$3);}
+|				"(" expr ")"								{$$=$2;}
 
+|				"-" expr									{$$=expr_math1(OP_0_MINUS,   &$2);}
 |				"!" expr									{$$=expr_math1(OP_LOGIC_NOT, &$2);}
 |				"~" expr									{$$=expr_math1(OP_BIT_NOT,   &$2);}
 |				"&" expr									{$$=expr_math1(OP_ADROF,     &$2);}

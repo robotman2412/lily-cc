@@ -71,6 +71,12 @@ struct asm_ctx {
     funcdef_t  *current_func;
     // Whether or not the current function is an inlining.
     bool        is_inline;
+    // The labels for temporary variables.
+    char      **temp_labels;
+    // The usage status of each temporary variable.
+    bool       *temp_usage;
+    // The number of temporary variables in existence.
+    address_t   temp_num;
     // Number of last label in function.
     address_t   last_label_no;
     

@@ -18,6 +18,7 @@ struct gen_var {
         asm_label_t label;
         reg_t       reg;
         cond_t      cond;
+        ptr_t       ptr;
     };
 };
 
@@ -47,7 +48,7 @@ bool       gen_stmt          (asm_ctx_t *ctx, void      *stmt,    bool is_stmts)
 // If statement implementation.
 bool       gen_if            (asm_ctx_t *ctx, gen_var_t *cond,    stmt_t    *s_if,     stmt_t    *s_else);
 // While statement implementation.
-bool       gen_while         (asm_ctx_t *ctx, expr_t    *cond,    stmt_t    *code,     bool       do_while);
+void       gen_while         (asm_ctx_t *ctx, expr_t    *cond,    stmt_t    *code,     bool       do_while);
 
 /* ================= Expressions ================= */
 

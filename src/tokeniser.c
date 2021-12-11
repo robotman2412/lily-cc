@@ -85,6 +85,18 @@ bool is_numeric(char c) {
 	return c >= '0' && c <= '9';
 }
 
+// Is c a hexadecimal character?
+bool is_hexadecimal(char c) {
+	switch (c) {
+		case '0' ... '9':
+		case 'a' ... 'f':
+		case 'A' ... 'F':
+			return true;
+		default:
+			return false;
+	}
+}
+
 // Is c an alphanumberic character?
 bool is_alphanumeric(char c) {
 	switch (c) {
@@ -383,6 +395,14 @@ int tokenise(tokeniser_ctx_t *ctx) {
 				ret = TKN_ASSIGN;
 			}
 			break;
+		case ('!'):
+			if (next == '=') {
+				tokeniser_readchar(ctx);
+				ret = TKN_NE;
+			} else {
+				ret = TKN_NOT;
+			}
+			break;
 		case ('<'):
 			if (next == '<') {
 				tokeniser_readchar(ctx);
@@ -405,6 +425,15 @@ int tokenise(tokeniser_ctx_t *ctx) {
 				ret = TKN_GT;
 			}
 			break;
+		case ('^'):
+			ret = TKN_XOR;
+			break;
+		case ('~'):
+			ret = TKN_INV;
+			break;
+		case ('|'):
+			ret = TKN_OR;
+			break;
 		case (','):
 			ret = TKN_COMMA;
 			break;
@@ -426,6 +455,26 @@ int tokenise(tokeniser_ctx_t *ctx) {
 		return ret;
 	}
     
+	// This could be hexadecimal.
+	if (c == '0' && (next == 'x' || next == 'X')) {
+		int offs = 1;
+		while (is_hexadecimal(tokeniser_nextchar_no(ctx, offs))) offs++;
+		// Skip the x.
+		tokeniser_readchar(ctx);
+		// Now, grab it.
+		char *strval = (char *) malloc(sizeof(char) * offs);
+		strval[offs] = 0;
+		for (int i = 0; i < offs-1; i++) {
+			strval[i] = tokeniser_readchar(ctx);
+		}
+		// Turn it into a number, hexadecimal.
+		int ival = strtoull(strval, NULL, 16);
+		DEBUG_TKN("ival  %d (0x%s)\n", ival, strval);
+		free(strval);
+		yylval.ival.ival = ival;
+		return TKN_IVAL;
+	}
+	
 	// This could be a number.
 	if (is_numeric(c)) {
 		// Check how many of these we get.
@@ -439,10 +488,9 @@ int tokenise(tokeniser_ctx_t *ctx) {
 		for (int i = 1; i < offs; i++) {
 			strval[i] = tokeniser_readchar(ctx);
 		}
-		// Turn it into a number.
-		// TODO: Verify that the constant is in range.
-		int ival = atoi(strval);
-		DEBUG_TKN("ival  %d\n", ival);
+		// Turn it into a number, respecting octal.
+		int ival = strtoull(strval, NULL, c == '0' ? 8 : 10);
+		DEBUG_TKN("ival  %d (%s)\n", ival, strval);
 		free(strval);
 		yylval.ival.ival = ival;
 		return TKN_IVAL;
@@ -560,7 +608,7 @@ int tokenise(tokeniser_ctx_t *ctx) {
 // 	}
 // 	fputc('\n', stdout);
 // }
-
+ 
 // void report_error(parser_ctx_t *parser_ctx, char *type, pos_t pos, char *message) {
 // 	printf("%s in %s:%d:%d -> %d:%d: %s\n", type, pos.filename, pos.y0, pos.x0, pos.y1, pos.x1, message);
 // 	printf("%5d | ", pos.y0);

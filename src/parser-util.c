@@ -122,6 +122,27 @@ expr_t expr_ident(ident_t *ident) {
 }
 
 expr_t expr_math1(oper_t type, expr_t *val) {
+	if (val->type == EXPR_TYPE_CONST) {
+		// Optimise out numbers.
+		switch (type) {
+			case OP_0_MINUS:
+				val->iconst = -val->iconst;
+				break;
+			case OP_BIT_NOT:
+				val->iconst = ~val->iconst;
+				break;
+			case OP_LOGIC_NOT:
+				val->iconst = !val->iconst;
+				break;
+			case OP_ADROF:
+				// This isn't acceptable.
+			case OP_DEREF:
+				// This can't be simplified.
+				goto the_usual;
+		}
+		return *val;
+	}
+	the_usual:
 	return (expr_t) {
 		.type     = EXPR_TYPE_MATH1,
 		.oper     = type,
@@ -138,6 +159,72 @@ expr_t expr_call(expr_t *func, exprs_t *args) {
 }
 
 expr_t expr_math2(oper_t type, expr_t *val1, expr_t *val2) {
+	if (val1->type == EXPR_TYPE_CONST && val2->type == EXPR_TYPE_CONST) {
+		// Optimise out numbers.
+		address_t a = val1->iconst;
+		address_t b = val2->iconst;
+		address_t o;
+		switch (type) {
+			case OP_ADD:
+				o = a + b;
+				break;
+			case OP_SUB:
+				o = a - b;
+				break;
+			case OP_MUL:
+				o = a * b;
+				break;
+			case OP_DIV:
+				o = a / b;
+				break;
+			case OP_MOD:
+				o = a % b;
+				break;
+			case OP_BIT_AND:
+				o = a & b;
+				break;
+			case OP_BIT_OR:
+				o = a | b;
+				break;
+			case OP_BIT_XOR:
+				o = a ^ b;
+				break;
+			case OP_LOGIC_AND:
+				o = a && b;
+				break;
+			case OP_LOGIC_OR:
+				o = a || b;
+				break;
+			case OP_SHIFT_L:
+				o = a << b;
+				break;
+			case OP_SHIFT_R:
+				o = a >> b;
+				break;
+			case OP_EQ:
+				o = a == b;
+				break;
+			case OP_NE:
+				o = a != b;
+				break;
+			case OP_LE:
+				o = a <= b;
+				break;
+			case OP_GE:
+				o = a >= b;
+				break;
+			case OP_LT:
+				o = a < b;
+				break;
+			case OP_GT:
+				o = a > b;
+				break;
+		}
+		return (expr_t) {
+			.type   = EXPR_TYPE_CONST,
+			.iconst = o
+		};
+	}
 	return (expr_t) {
 		.type     = EXPR_TYPE_MATH2,
 		.oper     = type,

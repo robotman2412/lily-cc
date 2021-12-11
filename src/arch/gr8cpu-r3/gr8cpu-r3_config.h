@@ -21,8 +21,12 @@
 #define REG_X 1
 #define REG_Y 2
 
+// Type used for registers.
 typedef uint8_t reg_t;
+// Type used for conditions.
 typedef uint8_t cond_t;
+// Type used for pointers.
+typedef void *ptr_t;
 
 // Generator fallbacks used.
 #define FALLBACK_gen_expression

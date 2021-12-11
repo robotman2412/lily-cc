@@ -7,7 +7,6 @@ static inline void pre_stmt_push(asm_ctx_t *ctx, preproc_data_t **parent, stmt_t
     stmt->preproc             = malloc(sizeof(preproc_data_t));
     stmt->preproc->n_children = 0;
     stmt->preproc->children   = NULL;
-    stmt->preproc->n_temp     = 0;
     stmt->preproc->vars       = malloc(sizeof(map_t));
     map_create(stmt->preproc->vars);
     // Update the parent.
@@ -23,7 +22,6 @@ static inline void pre_stmt_push(asm_ctx_t *ctx, preproc_data_t **parent, stmt_t
 void gen_preproc_function(asm_ctx_t *ctx, funcdef_t *funcdef) {
     DEBUG_PRE("Preprocessing '%s'\n", funcdef->ident.strval);
     funcdef->preproc             = malloc(sizeof(preproc_data_t));
-    funcdef->preproc->n_temp     = 0;
     funcdef->preproc->n_children = 0;
     funcdef->preproc->children   = NULL;
     funcdef->preproc->vars       = malloc(sizeof(map_t));
@@ -51,37 +49,24 @@ bool gen_preproc_stmt(asm_ctx_t *ctx, preproc_data_t *parent, void *ptr, bool is
             // We'll completely ignore unreachable code.
             if (explicit_ret) return true;
         }
-        if (current->n_temp > parent->n_temp) {
-            parent->n_temp = current->n_temp;
-        }
         return false;
     }
     // One of the other statement types.
     switch (stmt->type) {
         case STMT_TYPE_IF: {
             // An if statement.
-            size_t num = gen_preproc_expression(ctx, current, stmt->expr);
-            if (num > current->n_temp) {
-                current->n_temp = num;
-            }
+            gen_preproc_expression(ctx, current, stmt->expr);
             bool e_if   = gen_preproc_stmt(ctx, parent, stmt->code_true,  false);
             bool e_else = stmt->code_false && gen_preproc_stmt(ctx, parent, stmt->code_false, false);
             return e_if && e_else;
         } break;
         case STMT_TYPE_WHILE: {
-            size_t num = gen_preproc_expression(ctx, current, stmt->expr);
-            if (num > current->n_temp) {
-                current->n_temp = num;
-            }
+            gen_preproc_expression(ctx, current, stmt->expr);
             gen_preproc_stmt(ctx, parent, stmt->code_true, false);
-            return false;
         } break;
         case STMT_TYPE_RET: {
             // A return statement.
-            size_t num = gen_preproc_expression(ctx, current, stmt->expr);
-            if (num > current->n_temp) {
-                current->n_temp = num;
-            }
+            gen_preproc_expression(ctx, current, stmt->expr);
             return true;
         } break;
         case STMT_TYPE_VAR: {
@@ -94,10 +79,7 @@ bool gen_preproc_stmt(asm_ctx_t *ctx, preproc_data_t *parent, void *ptr, bool is
         } break;
         case STMT_TYPE_EXPR: {
             // The expression.
-            size_t num = gen_preproc_expression(ctx, current, stmt->expr);
-            if (num > current->n_temp) {
-                current->n_temp = num;
-            }
+            gen_preproc_expression(ctx, current, stmt->expr);
         } break;
         case STMT_TYPE_IASM: {
             // TODO (low priority).
@@ -107,7 +89,7 @@ bool gen_preproc_stmt(asm_ctx_t *ctx, preproc_data_t *parent, void *ptr, bool is
 }
 
 // Preprocess an expression.
-size_t gen_preproc_expression(asm_ctx_t *ctx, preproc_data_t *parent, expr_t *expr) {
+void gen_preproc_expression(asm_ctx_t *ctx, preproc_data_t *parent, expr_t *expr) {
     
 }
 

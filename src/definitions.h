@@ -144,7 +144,6 @@ typedef enum asm_label_ref {
 
 typedef enum oper {
     // Unary operators.
-    OP_LOGIC_NOT,
     OP_ADROF,
     OP_DEREF,
     OP_0_MINUS,
@@ -154,10 +153,12 @@ typedef enum oper {
     OP_MUL,
     OP_DIV,
     OP_MOD,
-    OP_LOGIC_AND,
-    OP_LOGIC_OR,
     OP_SHIFT_L,
     OP_SHIFT_R,
+    // Logic operators.
+    OP_LOGIC_NOT,
+    OP_LOGIC_AND,
+    OP_LOGIC_OR,
     //Bitwise operators.
     OP_BIT_NOT,
     OP_BIT_AND,
@@ -175,6 +176,12 @@ typedef enum oper {
     // Miscellaneous operators.
     OP_INDEX
 } oper_t;
+
+#define OP_IS_PTR(x)   (x == OP_ADROF     || x == OP_DEREF    || OP_INDEX)
+#define OP_IS_BIT(x)   (x >= OP_BIT_NOT   && x <= OP_BIT_XOR)
+#define OP_IS_ADD(x)   (x == OP_ADD       || x == OP_SUB)
+#define OP_IS_SHIFT(x) (x == OP_SHIFT_L   || x == OP_SHIFT_R)
+#define OP_IS_LOGIC(x) (x >= OP_LOGIC_NOT && x <= OP_LOGIC_OR)
 
 typedef enum stmt_type {
     STMT_TYPE_MULTI,
@@ -195,17 +202,27 @@ typedef enum expr_type {
 } expr_type_t;
 
 typedef enum gen_var_type {
+    // For void functions.
     VAR_TYPE_VOID,
+    // Constant value.
     VAR_TYPE_CONST,
     
+    // Located at label.
     VAR_TYPE_LABEL,
+    // Located in stack.
     VAR_TYPE_STACKFRAME,
+    // Located in stack frame.
     VAR_TYPE_STACKOFFS,
     
+    // Stored in register.
     VAR_TYPE_REG,
+    // Stored as return value.
     VAR_TYPE_RETVAL,
     
-    VAR_TYPE_COND
+    // Conditions.
+    VAR_TYPE_COND,
+    // Hint to use for adrof and storing to pointers.
+    VAR_TYPE_PTR
 } gen_var_type_t;
 
 #endif //DEFINITIONS_H

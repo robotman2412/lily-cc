@@ -2,7 +2,7 @@
 A compiler for a very simple language, destined to become a C compiler.
 
 ## Developing for lilly-c
-1. Pull git git repository: `git clone https://github.com/robotman2412/lilly-c`
+1. Pull git git repository: `git clone https://github.com/robotman2412/compilertest`
 2. Configure (see [Configuration](#Configuration))
 3. Build for the first time: `./build.sh` <sup>(1)</sup>
 4. The output executable is called `comp`

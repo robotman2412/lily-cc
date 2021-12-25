@@ -156,7 +156,8 @@ bool gen_stmt(asm_ctx_t *ctx, void *ptr, bool is_stmts) {
                 free(result);
             } break;
             case STMT_TYPE_IASM: {
-                // TODO (low priority).
+                // Inline assembly for the win!
+                gen_inline_asm(ctx, stmt->iasm);
             } break;
         }
     }
@@ -164,6 +165,20 @@ bool gen_stmt(asm_ctx_t *ctx, void *ptr, bool is_stmts) {
         gen_pop_scope(ctx);
     }
     return explicit_ret;
+}
+#endif
+
+#ifdef INLINE_ASM_SUPPORTED
+// Inline assembly implementation.
+void gen_inline_asm(asm_ctx_t *ctx, iasm_t *iasm) {
+    // TODO: Clobbers, inputs and outputs.
+    gen_asm(ctx, iasm->text.strval);
+}
+#else
+// Inline assembly implementation.
+void gen_inline_asm(asm_ctx_t *ctx, iasm_t *iasm) {
+    // Inline assembly support does not exist.
+    printf("Error: inline assembly is not supported!\n");
 }
 #endif
 

@@ -25,9 +25,9 @@ struct parser_ctx;
 struct funcdef;
 struct ival;
 struct strval;
-//struct ident;
 struct expr;
 struct stmt;
+struct iasm;
 struct idents;
 struct exprs;
 struct stmts;
@@ -40,6 +40,10 @@ typedef struct strval		strval_t;
 typedef struct strval		ident_t;
 typedef struct expr			expr_t;
 typedef struct stmt			stmt_t;
+
+typedef struct iasm_reg		iasm_reg_t;
+typedef struct iasm_regs	iasm_regs_t;
+typedef struct iasm			iasm_t;
 
 typedef struct idents		idents_t;
 typedef struct exprs		exprs_t;
@@ -68,7 +72,6 @@ struct strval {
 	char *strval;
 };
 
-//struct ident;
 struct expr {
 	pos_t       pos;
 	expr_type_t type;
@@ -85,7 +88,6 @@ struct expr {
 		exprs_t *args;
 	};
 };
-
 struct stmt {
 	pos_t           pos;
 	stmt_type_t     type;
@@ -98,8 +100,16 @@ struct stmt {
 		};
 		expr_t     *expr;
 		idents_t   *vars;
+		iasm_t     *iasm;
 	};
 	preproc_data_t *preproc;
+};
+
+struct iasm {
+	strval_t        text;
+	// iasm_regs_t     inputs;
+	// iasm_regs_t     outputs;
+	// iasm_strs_t     clobbers;
 };
 
 struct idents {
@@ -141,7 +151,7 @@ stmt_t    stmt_while  (expr_t   *cond,  stmt_t *code);
 stmt_t    stmt_ret    (expr_t   *expr);
 stmt_t    stmt_var    (idents_t *decls);
 stmt_t    stmt_expr   (expr_t   *expr);
-//stmt_t    stmt_iasm   (iasm_t   *iasm);
+stmt_t    stmt_iasm   (strval_t *text,  iasm_regs_t *output, iasm_regs_t *input, void *clobbers);
 
 idents_t  idents_empty();
 idents_t  idents_cat  (idents_t *idents, ident_t  *ident);

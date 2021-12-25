@@ -73,7 +73,19 @@ stmt_t stmt_expr(expr_t *expr) {
 	};
 }
 
-//stmt_t stmt_iasm(iasm_t *iasm);
+stmt_t stmt_iasm(strval_t *text, iasm_regs_t *outputs, iasm_regs_t *inputs, void *clobbers) {
+	iasm_t *iasm = (iasm_t *) malloc(sizeof(iasm_t));
+	*iasm = (iasm_t) {
+		.text     = *text,
+		// .outputs  = outputs,
+		// .inputs   = inputs,
+		// .clobbers = clobbers
+	};
+	return (stmt_t) {
+		.type  = STMT_TYPE_IASM,
+		.iasm  = iasm
+	};
+}
 
 
 

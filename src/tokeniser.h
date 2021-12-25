@@ -52,6 +52,8 @@ bool is_space(char c);
 bool is_numeric(char c);
 // Is c an alphanumberic character?
 bool is_alphanumeric(char c);
+// Is c an hexadecimal character?
+bool is_hexadecimal(char c);
 
 // Read a single character.
 char tokeniser_readchar(tokeniser_ctx_t *ctx);

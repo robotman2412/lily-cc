@@ -28,6 +28,9 @@ typedef uint8_t cond_t;
 // Type used for pointers.
 typedef void *ptr_t;
 
+// State that inline assembly is supported
+#define INLINE_ASM_SUPPORTED
+
 // Generator fallbacks used.
 #define FALLBACK_gen_expression
 #define FALLBACK_gen_expr_inline

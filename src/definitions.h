@@ -139,7 +139,12 @@ typedef enum asm_label_ref {
     ASM_LABEL_REF_OFFS_WORD,
     // Absolute address of label.
     // Pointer size.
-    ASM_LABEL_REF_ABS_PTR
+    ASM_LABEL_REF_ABS_PTR,
+    // Absolute address of label.
+    // Word size (low word if applicable).
+    ASM_LABEL_REF_ABS_WORD,
+    // Word size (high word if applicable).
+    ASM_LABEL_REF_ABS_WORD_HIGH
 } asm_label_ref_t;
 
 typedef enum oper {

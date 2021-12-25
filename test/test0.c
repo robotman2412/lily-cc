@@ -22,8 +22,14 @@
 // 	return ptr - offs;
 // }
 
-func ptrs(a) {
-	auto c;
-	c = &a;
-	return *c;
+// func ptrs(a) {
+// 	auto c;
+// 	c = &a;
+// 	return *c;
+// }
+
+func iasm(a) {
+	asm (
+		"MOV X(0xfefc), A"
+	);
 }

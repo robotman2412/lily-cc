@@ -64,6 +64,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 
 %type <stmts> stmts
 %type <stmt> stmt
+%type <stmt> inline_asm
 
 %type <idents> vardecls
 
@@ -120,7 +121,7 @@ stmt:			"{" stmts "}"                               {$$=stmt_multi  (&$2);}
 |				"return" expr ";"                           {$$=stmt_ret    (&$2);}
 |				vardecls                                    {$$=stmt_var    (&$1);}
 |				expr ";"                                    {$$=stmt_expr   (&$1);}
-|				inline_asm ";"                              {/*$$=stmt_iasm   (&$1);*/};
+|				inline_asm ";"                              {$$=$1;};
 
 opt_exprs:		exprs
 |				%empty;
@@ -173,7 +174,7 @@ inline_asm:		"asm" "(" TKN_STRVAL
 				":" opt_asm_regs ")"
 |				"asm" "(" TKN_STRVAL
 				":" opt_asm_regs ")"
-|				"asm" "(" TKN_STRVAL ")";
+|				"asm" "(" TKN_STRVAL ")"                    {$$=stmt_iasm(&$3, NULL, NULL, NULL);};
 
 opt_asm_strs:	asm_strs
 |				%empty;

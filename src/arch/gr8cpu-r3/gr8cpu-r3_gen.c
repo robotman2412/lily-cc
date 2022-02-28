@@ -261,7 +261,7 @@ gen_var_t *r3_deref_set(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src) {
 	asm_write_memword(ctx, 1);
 	// Second word.
 	r3_load_part(ctx, src, REG_A, 1);
-	DEBUG_GEN("  MOV A, X(%s)\n", label);
+	DEBUG_GEN("  MOV X(%s), A\n", label);
 	asm_write_memword(ctx, OFFS_MOVST + OFFS_MOVM_APX + PIE(ctx));
 	asm_write_label_ref(ctx, dst->label, 0, OFFS(ctx));
 	// Additional words.

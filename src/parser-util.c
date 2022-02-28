@@ -245,3 +245,8 @@ expr_t expr_math2(oper_t type, expr_t *val1, expr_t *val2) {
 	};
 }
 
+expr_t expr_matha(oper_t type, expr_t *val1, expr_t *val2) {
+	// This is quite simple: val1 = val1 operator val2.
+	expr_t param_b = expr_math2(type, val1, val2);
+	return expr_math2(OP_ASSIGN, val1, &param_b);
+}

@@ -13,12 +13,19 @@ typedef struct gen_var gen_var_t;
 struct gen_var {
 	gen_var_type_t type;
 	union {
+		// Numeric constants.
 		address_t   iconst;
+		// Stored in the stack by offset.
 		address_t   offset;
+		// Stored in memory by label.
 		asm_label_t label;
+		// Stored in register.
 		reg_t       reg;
+		// Condition result.
 		cond_t      cond;
-		ptr_t       ptr;
+		// Pointer to dereference.
+		// The value is how the pointer is stored.
+		gen_var_t  *ptr;
 	};
 };
 
@@ -51,10 +58,8 @@ bool       gen_if            (asm_ctx_t *ctx, gen_var_t *cond,    stmt_t    *s_i
 void       gen_while         (asm_ctx_t *ctx, expr_t    *cond,    stmt_t    *code,     bool       do_while);
 // Inline assembly implementation.
 void       gen_inline_asm    (asm_ctx_t *ctx, iasm_t    *iasm);
-#ifdef INLINE_ASM_SUPPORTED
 // Single line of assembly. (only if inline assembly is supported)
 void       gen_asm           (asm_ctx_t *ctx, char      *text);
-#endif
 
 /* ================= Expressions ================= */
 

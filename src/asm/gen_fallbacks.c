@@ -214,14 +214,21 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 			//gen_expr_call(ctx, NULL, expr->func, expr->args->num, expr->args->arr);
 		} break;
 		case EXPR_TYPE_MATH1: {
+			// Unary math operations (things like ++a, &b, *c and !d)
 			oper_t oper = expr->oper;
-			if (oper == OP_LOGIC_NOT) {
+			if (oper == OP_DEREF && out_hint && out_hint->type == VAR_TYPE_PTR) {
+				// This happens when writing to a pointer dereference.
+				out_hint->ptr = gen_expression(ctx, expr->par_a, NULL);
+				return out_hint;
+			} else if (oper == OP_LOGIC_NOT) {
+				// Apply the "condition" output hint to logic not.
 				gen_var_t *cond_hint = COPY(&(gen_var_t) {
 					.type = VAR_TYPE_COND
 				}, gen_var_t);
 				gen_var_t *a = gen_expression(ctx, expr->par_a, cond_hint);
 				return gen_expr_math1(ctx, expr->oper, out_hint, a);
 			} else {
+				// Simple expression.
 				gen_var_t *a = gen_expression(ctx, expr->par_a, out_hint);
 				return gen_expr_math1(ctx, expr->oper, out_hint, a);
 			}
@@ -246,6 +253,7 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 					return a;
 				}
 			} else {
+				// Simple binary math (things like a * b, c + d, e & f, etc.)
 				gen_var_t *a   = gen_expression(ctx, expr->par_a, out_hint);
 				gen_var_t *b   = gen_expression(ctx, expr->par_b, NULL);
 				gen_var_t *out = gen_expr_math2(ctx, expr->oper, out_hint, a, b);

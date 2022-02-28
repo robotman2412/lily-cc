@@ -15,21 +15,23 @@
 // 	return out;
 // }
 
-// func strlen(ptr) {
-// 	auto offs;
-// 	offs = ptr;
-// 	while (*ptr) ptr = ptr + 1;
-// 	return ptr - offs;
-// }
-
-// func ptrs(a) {
-// 	auto c;
-// 	c = &a;
-// 	return *c;
-// }
-
-func iasm(a) {
-	asm (
-		"MOV X(0xfefc), A"
-	);
+func strlen(ptr) {
+	ptr += 1;
+	// auto offs;
+	// offs = ptr;
+	// while (*ptr) ptr = ptr + 1;
+	// return ptr - offs;
 }
+
+func ptrs(a, b, c) {
+	// auto c;
+	// c = &a;
+	// *(a+b) = c;
+	// a += 1;
+}
+
+// func iasm(a) {
+// 	asm (
+// 		"MOV X(0xfefc), A"
+// 	);
+// }

@@ -83,25 +83,35 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
     TKN_STRVAL = 276,
     TKN_IDENT = 277,
     TKN_GARBAGE = 278,
-    TKN_ADD = 279,
-    TKN_SUB = 280,
-    TKN_ASSIGN = 281,
-    TKN_AMP = 282,
-    TKN_MUL = 283,
-    TKN_DIV = 284,
-    TKN_REM = 285,
-    TKN_NOT = 286,
-    TKN_INV = 287,
-    TKN_XOR = 288,
-    TKN_OR = 289,
-    TKN_SHL = 290,
-    TKN_SHR = 291,
-    TKN_LT = 292,
-    TKN_LE = 293,
-    TKN_GT = 294,
-    TKN_GE = 295,
-    TKN_EQ = 296,
-    TKN_NE = 297
+    TKN_ASSIGN_ADD = 279,
+    TKN_ASSIGN_SUB = 280,
+    TKN_ASSIGN_MUL = 281,
+    TKN_ASSIGN_DIV = 282,
+    TKN_ASSIGN_REM = 283,
+    TKN_ASSIGN_AND = 284,
+    TKN_ASSIGN_OR = 285,
+    TKN_ASSIGN_XOR = 286,
+    TKN_INC = 287,
+    TKN_DEC = 288,
+    TKN_ADD = 289,
+    TKN_SUB = 290,
+    TKN_ASSIGN = 291,
+    TKN_AMP = 292,
+    TKN_MUL = 293,
+    TKN_DIV = 294,
+    TKN_REM = 295,
+    TKN_NOT = 296,
+    TKN_INV = 297,
+    TKN_XOR = 298,
+    TKN_OR = 299,
+    TKN_SHL = 300,
+    TKN_SHR = 301,
+    TKN_LT = 302,
+    TKN_LE = 303,
+    TKN_GT = 304,
+    TKN_GE = 305,
+    TKN_EQ = 306,
+    TKN_NE = 307
   };
 #endif
 
@@ -129,7 +139,7 @@ union YYSTYPE
 	
 	strval_t	garbage;
 
-#line 133 "src/parser.h"
+#line 143 "src/parser.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

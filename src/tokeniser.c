@@ -310,20 +310,24 @@ int tokenise(tokeniser_ctx_t *ctx) {
 	enum yytokentype ret = 0;
 	switch (c) {
 		case ('+'):
-			// if (next == '+') {
-			// 	tokeniser_readchar(ctx);
-			// 	ret = TKN_INC;
-			// } else {
+			if (next == '=') {
+				ret = TKN_ASSIGN_ADD;
+			} else if (next == '+') {
+				tokeniser_readchar(ctx);
+				ret = TKN_INC;
+			} else {
 				ret = TKN_ADD;
-			// }
+			}
 			break;
 		case ('-'):
-			// if (next == '-') {
-			// 	tokeniser_readchar(ctx);
-			// 	ret = TKN_DEC;
-			// } else {
+			if (next == '=') {
+				ret = TKN_ASSIGN_SUB;
+			} else if (next == '-') {
+				tokeniser_readchar(ctx);
+				ret = TKN_DEC;
+			} else {
 				ret = TKN_SUB;
-			// }
+			}
 			break;
 		case ('('):
 			ret = TKN_LPAR;
@@ -347,15 +351,25 @@ int tokenise(tokeniser_ctx_t *ctx) {
 			ret = TKN_RSBRAC;
 			break;
 		case ('*'):
-			ret = TKN_MUL;
+			if (next == '=') {
+				ret = TKN_ASSIGN_MUL;
+			} else {
+				ret = TKN_MUL;
+			}
 			break;
 		case ('&'):
-			ret = TKN_AMP;
+			if (next == '=') {
+				ret = TKN_ASSIGN_AND;
+			} else {
+				ret = TKN_AMP;
+			}
 			break;
 		case ('#'):
 			goto linecomment;
 		case ('/'):
-			if (next == '/') {
+			if (next == '=') {
+				ret = TKN_ASSIGN_DIV;
+			} else if (next == '/') {
 				// This starts a line commment.
 				linecomment:
 				for (long i = 1; c != '\r' && c != '\n'; i++) {
@@ -385,7 +399,11 @@ int tokenise(tokeniser_ctx_t *ctx) {
 			}
 			break;
 		case ('%'):
-			ret = TKN_REM;
+			if (next == '=') {
+				ret = TKN_ASSIGN_REM;
+			} else {
+				ret = TKN_REM;
+			}
 			break;
 		case ('='):
 			if (next == '=') {
@@ -426,13 +444,21 @@ int tokenise(tokeniser_ctx_t *ctx) {
 			}
 			break;
 		case ('^'):
-			ret = TKN_XOR;
+			if (next == '=') {
+				ret = TKN_ASSIGN_XOR;
+			} else {
+				ret = TKN_XOR;
+			}
 			break;
 		case ('~'):
 			ret = TKN_INV;
 			break;
 		case ('|'):
-			ret = TKN_OR;
+			if (next == '=') {
+				ret = TKN_ASSIGN_OR;
+			} else {
+				ret = TKN_OR;
+			}
 			break;
 		case (','):
 			ret = TKN_COMMA;

@@ -52,10 +52,12 @@ int main(int argc, char **argv) {
 			// Show version
 			if (options.showVersion) printf("Note: Show version already specified.\n");
 			options.showVersion = true;
+			
 		} else if (!strcmp(argv[argIndex], "-h") || !strcmp(argv[argIndex], "--help")) {
 			// Show help.
 			if (options.showHelp) printf("Note: Show help already specified.\n");
 			options.showHelp = true;
+			
 		} else if (!strncmp(argv[argIndex], "-I", 2)) {
 			// Add include directory.
 			char *dir = &(argv[argIndex])[2];
@@ -91,7 +93,7 @@ int main(int argc, char **argv) {
 					fflush(stdout);
 					fprintf(stderr, "Error: Permission denied for '%s'\n", argv[argIndex]);
 					options.abort = true;
-				} else puts("else");
+				}
 			} else {
 				fflush(stdout);
 				fprintf(stderr, "Error: Missing filename for '-o'\n");
@@ -135,6 +137,7 @@ int main(int argc, char **argv) {
 	if (options.abort) {
 		return 1;
 	}
+	
 	// Check for input files.
 	if (argIndex >= argc) {
 		fflush(stdout);

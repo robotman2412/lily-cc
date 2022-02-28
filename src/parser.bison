@@ -49,6 +49,10 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 %token <ident> TKN_IDENT
 %token <garbage> TKN_GARBAGE
 
+%token <pos> TKN_ASSIGN_ADD "+=" TKN_ASSIGN_SUB "-="
+%token <pos> TKN_ASSIGN_MUL "*=" TKN_ASSIGN_DIV "/=" TKN_ASSIGN_REM "%="
+%token <pos> TKN_ASSIGN_AND "&=" TKN_ASSIGN_OR "|=" TKN_ASSIGN_XOR "^="
+%token <pos> TKN_INC "++" TKN_DEC "--"
 %token <pos> TKN_ADD "+" TKN_SUB "-" TKN_ASSIGN "=" TKN_AMP "&"
 %token <pos> TKN_MUL "*" TKN_DIV "/" TKN_REM "%"
 %token <pos> TKN_NOT "!" TKN_INV "~" TKN_XOR "^" TKN_OR "|"
@@ -70,7 +74,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 
 // Precedence: lowest.
 
-%right "="
+%right "=" "+=" "-=" "*=" "/=" "%=" "&=" "|="
 
 %left "||"
 %left "&&"
@@ -163,7 +167,16 @@ expr:			TKN_IVAL									{$$=expr_icnst(&$1);}
 
 |				expr "&&" expr								{$$=expr_math2(OP_LOGIC_AND, &$1, &$3);}
 |				expr "||" expr								{$$=expr_math2(OP_LOGIC_OR,  &$1, &$3);}
-|				expr "=" expr								{$$=expr_math2(OP_ASSIGN,    &$1, &$3);};
+
+|				expr "=" expr								{$$=expr_math2(OP_ASSIGN,    &$1, &$3);}
+|				expr "+=" expr								{$$=expr_matha(OP_ADD,       &$1, &$3);}
+|				expr "-=" expr								{$$=expr_matha(OP_SUB,       &$1, &$3);}
+|				expr "*=" expr								{$$=expr_matha(OP_MUL,       &$1, &$3);}
+|				expr "/=" expr								{$$=expr_matha(OP_DIV,       &$1, &$3);}
+|				expr "%=" expr								{$$=expr_matha(OP_MOD,       &$1, &$3);}
+|				expr "&=" expr								{$$=expr_matha(OP_BIT_AND,   &$1, &$3);}
+|				expr "|=" expr								{$$=expr_matha(OP_BIT_OR,    &$1, &$3);}
+|				expr "^=" expr								{$$=expr_matha(OP_BIT_XOR,   &$1, &$3);};
 
 inline_asm:		"asm" "(" TKN_STRVAL
 				":" opt_asm_regs

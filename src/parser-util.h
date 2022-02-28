@@ -163,5 +163,6 @@ expr_t    expr_ident  (ident_t  *ident);
 expr_t    expr_math1  (oper_t    type,   expr_t   *val);
 expr_t    expr_call   (expr_t   *func,   exprs_t  *args);
 expr_t    expr_math2  (oper_t    type,   expr_t   *val1, expr_t *val2);
+expr_t    expr_matha  (oper_t    type,   expr_t   *val1, expr_t *val2);
 
 #endif // PARSER_UTIL_H

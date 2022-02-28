@@ -14,12 +14,12 @@ static void gen_test_expr();
 static void gen_test_func();
 
 void perform_gen_tests(int argc, char **argv) {
-    #ifdef EXPR_TEST
-    gen_test_expr();
-    #endif
-    #ifdef FUNC_TEST
-    gen_test_func();
-    #endif
+	#ifdef EXPR_TEST
+	gen_test_expr();
+	#endif
+	#ifdef FUNC_TEST
+	gen_test_func();
+	#endif
 }
 
 static void gen_test_expr() {
@@ -74,10 +74,10 @@ static void gen_test_func() {
 	asm_init(&asm_ctx);
 	/* The test code:
 	func epicfunction(a, b) {
-        return a + b;
-    }
+		return a + b;
+	}
 	*/
-    
+	
 	ident_t func_args[2] = {
 		{
 			.strval = "a"
@@ -86,7 +86,7 @@ static void gen_test_func() {
 			.strval = "b"
 		}
 	};
-    funcdef_t func = {
+	funcdef_t func = {
 		.ident = { .strval = "epicfunction" },
 		.args  = { .num = 2, .arr = func_args }
 	};

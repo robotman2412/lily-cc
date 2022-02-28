@@ -130,55 +130,55 @@ typedef uint_least64_t address_t;
 #endif
 
 typedef enum asm_label_ref {
-    // Offset relative to address immediately after resolved address.
-    // Pointer size.
-    ASM_LABEL_REF_OFFS_PTR,
-    // Offset relative to address immediately after resolved address.
-    // Word size.
-    ASM_LABEL_REF_OFFS_WORD,
-    // Absolute address of label.
-    // Pointer size.
-    ASM_LABEL_REF_ABS_PTR,
-    // Absolute address of label.
-    // Word size (low word if applicable).
-    ASM_LABEL_REF_ABS_WORD,
-    // Word size (high word if applicable).
-    ASM_LABEL_REF_ABS_WORD_HIGH
+	// Offset relative to address immediately after resolved address.
+	// Pointer size.
+	ASM_LABEL_REF_OFFS_PTR,
+	// Offset relative to address immediately after resolved address.
+	// Word size.
+	ASM_LABEL_REF_OFFS_WORD,
+	// Absolute address of label.
+	// Pointer size.
+	ASM_LABEL_REF_ABS_PTR,
+	// Absolute address of label.
+	// Word size (low word if applicable).
+	ASM_LABEL_REF_ABS_WORD,
+	// Word size (high word if applicable).
+	ASM_LABEL_REF_ABS_WORD_HIGH
 } asm_label_ref_t;
 
 typedef enum oper {
-    // Unary operators.
-    OP_ADROF,
-    OP_DEREF,
-    OP_0_MINUS,
-    //Binary operators.
-    OP_ADD,
-    OP_SUB,
-    OP_MUL,
-    OP_DIV,
-    OP_MOD,
-    OP_SHIFT_L,
-    OP_SHIFT_R,
-    // Logic operators.
-    OP_LOGIC_NOT,
-    OP_LOGIC_AND,
-    OP_LOGIC_OR,
-    //Bitwise operators.
-    OP_BIT_NOT,
-    OP_BIT_AND,
-    OP_BIT_OR,
-    OP_BIT_XOR,
-    // Comparison operators.
-    OP_GT,
-    OP_GE,
-    OP_LT,
-    OP_LE,
-    OP_EQ,
-    OP_NE,
-    // Assignment operators.
-    OP_ASSIGN,
-    // Miscellaneous operators.
-    OP_INDEX
+	// Unary operators.
+	OP_ADROF,
+	OP_DEREF,
+	OP_0_MINUS,
+	//Binary operators.
+	OP_ADD,
+	OP_SUB,
+	OP_MUL,
+	OP_DIV,
+	OP_MOD,
+	OP_SHIFT_L,
+	OP_SHIFT_R,
+	// Logic operators.
+	OP_LOGIC_NOT,
+	OP_LOGIC_AND,
+	OP_LOGIC_OR,
+	//Bitwise operators.
+	OP_BIT_NOT,
+	OP_BIT_AND,
+	OP_BIT_OR,
+	OP_BIT_XOR,
+	// Comparison operators.
+	OP_GT,
+	OP_GE,
+	OP_LT,
+	OP_LE,
+	OP_EQ,
+	OP_NE,
+	// Assignment operators.
+	OP_ASSIGN,
+	// Miscellaneous operators.
+	OP_INDEX
 } oper_t;
 
 #define OP_IS_PTR(x)   (x == OP_ADROF     || x == OP_DEREF    || OP_INDEX)
@@ -188,45 +188,45 @@ typedef enum oper {
 #define OP_IS_LOGIC(x) (x >= OP_LOGIC_NOT && x <= OP_LOGIC_OR)
 
 typedef enum stmt_type {
-    STMT_TYPE_MULTI,
-    STMT_TYPE_IF,
-    STMT_TYPE_WHILE,
-    STMT_TYPE_RET,
-    STMT_TYPE_VAR,
-    STMT_TYPE_EXPR,
-    STMT_TYPE_IASM
+	STMT_TYPE_MULTI,
+	STMT_TYPE_IF,
+	STMT_TYPE_WHILE,
+	STMT_TYPE_RET,
+	STMT_TYPE_VAR,
+	STMT_TYPE_EXPR,
+	STMT_TYPE_IASM
 } stmt_type_t;
 
 typedef enum expr_type {
-    EXPR_TYPE_CONST,
-    EXPR_TYPE_IDENT,
-    EXPR_TYPE_CALL,
-    EXPR_TYPE_MATH1,
-    EXPR_TYPE_MATH2
+	EXPR_TYPE_CONST,
+	EXPR_TYPE_IDENT,
+	EXPR_TYPE_CALL,
+	EXPR_TYPE_MATH1,
+	EXPR_TYPE_MATH2
 } expr_type_t;
 
 typedef enum gen_var_type {
-    // For void functions.
-    VAR_TYPE_VOID,
-    // Constant value.
-    VAR_TYPE_CONST,
-    
-    // Located at label.
-    VAR_TYPE_LABEL,
-    // Located in stack.
-    VAR_TYPE_STACKFRAME,
-    // Located in stack frame.
-    VAR_TYPE_STACKOFFS,
-    
-    // Stored in register.
-    VAR_TYPE_REG,
-    // Stored as return value.
-    VAR_TYPE_RETVAL,
-    
-    // Conditions.
-    VAR_TYPE_COND,
-    // Hint to use for adrof and storing to pointers.
-    VAR_TYPE_PTR
+	// For void functions.
+	VAR_TYPE_VOID,
+	// Constant value.
+	VAR_TYPE_CONST,
+	
+	// Located at label.
+	VAR_TYPE_LABEL,
+	// Located in stack.
+	VAR_TYPE_STACKFRAME,
+	// Located in stack frame.
+	VAR_TYPE_STACKOFFS,
+	
+	// Stored in register.
+	VAR_TYPE_REG,
+	// Stored as return value.
+	VAR_TYPE_RETVAL,
+	
+	// Conditions.
+	VAR_TYPE_COND,
+	// Hint to use for adrof and storing to pointers.
+	VAR_TYPE_PTR
 } gen_var_type_t;
 
 #endif //DEFINITIONS_H

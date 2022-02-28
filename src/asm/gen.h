@@ -11,15 +11,15 @@ typedef struct gen_var gen_var_t;
 #include <gen_preproc.h>
 
 struct gen_var {
-    gen_var_type_t type;
-    union {
-        address_t   iconst;
-        address_t   offset;
-        asm_label_t label;
-        reg_t       reg;
-        cond_t      cond;
-        ptr_t       ptr;
-    };
+	gen_var_type_t type;
+	union {
+		address_t   iconst;
+		address_t   offset;
+		asm_label_t label;
+		reg_t       reg;
+		cond_t      cond;
+		ptr_t       ptr;
+	};
 };
 
 /* ================== Functions ================== */

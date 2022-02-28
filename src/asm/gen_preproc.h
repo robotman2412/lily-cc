@@ -9,12 +9,12 @@ typedef struct preproc_data preproc_data_t;
 #include "gen.h"
 
 struct preproc_data {
-    // All variables declared in this scope.
-    map_t           *vars;
-    // The number of children.
-    size_t           n_children;
-    // The children.
-    preproc_data_t **children;
+	// All variables declared in this scope.
+	map_t           *vars;
+	// The number of children.
+	size_t           n_children;
+	// The children.
+	preproc_data_t **children;
 };
 
 // Preprocess a function.

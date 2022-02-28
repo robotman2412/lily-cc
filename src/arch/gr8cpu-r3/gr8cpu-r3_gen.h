@@ -126,7 +126,7 @@
 #define OFFS_W_LO(ctx) (DET_PIE(ctx) ? ASM_LABEL_REF_OFFS_WORD : ASM_LABEL_REF_ABS_WORD)
 #define OFFS_W_HI(ctx) (DET_PIE(ctx) ? ASM_LABEL_REF_OFFS_WORD : ASM_LABEL_REF_ABS_WORD_HIGH)
 // Macro for inverting the branch condition of a branch instruction.
-#define INV_BR(insn)   (((insn - OFFS_BRANCH) ^ 1) + OFFS_BRANCH)
+#define INV_BR(insn)   ((((insn) - OFFS_BRANCH) ^ 1) + OFFS_BRANCH)
 
 #include <gen.h>
 

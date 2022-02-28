@@ -24,7 +24,7 @@ list_archs() {
 }
 
 cd src/arch
-archs=$(echo *)
+archs=$(ls --color=never -1)
 cd ../..
 
 ver=$(cat version)

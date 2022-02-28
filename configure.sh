@@ -104,7 +104,7 @@ echo "#include <gen_fallbacks.c>"      >> build/gen.c
 
 # version_number.h
 echo -n "$warn"                        >  build/version_number.h
-echo "v$ver"                           >> build/version_number.h
+echo "#define COMPILER_VER \"v$ver\""  >> build/version_number.h
 
 # current_arch
 echo -n "$opt_arch"                    >  build/current_arch

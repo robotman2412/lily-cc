@@ -14,6 +14,7 @@
 #include "asm_postproc.h"
 
 #include "stdlib.h"
+#include "errno.h"
 
 #ifdef DEBUG_COMPILER
 #include "pront.h"
@@ -146,6 +147,12 @@ int main(int argc, char **argv) {
 	if (argc > argIndex + 1) printf("Please note: Only the first input file is compiled for now.\n");
 	char *filename = argv[argIndex];
 	FILE *file = fopen(filename, "r");
+	if (!file) {
+		fflush(stdout);
+		fprintf(stderr, "Error: Cannot access %s: %s\n", argv[argIndex], strerror(errno));
+		return 0;
+	}
+	
 	fseek(file, 0, SEEK_END);
 	size_t len = ftell(file);
 	rewind(file);

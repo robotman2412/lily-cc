@@ -2,7 +2,7 @@
 A compiler for a very simple language, destined to become a C compiler.
 
 ## Developing for lilly-c
-1. Pull git git repository: `git clone https://github.com/robotman2412/compilertest`
+1. Pull git repository: `git clone https://github.com/robotman2412/compilertest`
 2. Configure (see [Configuration](#Configuration))
 3. Build for the first time: `./build.sh` <sup>(1)</sup>
 4. The output executable is called `comp`
@@ -18,8 +18,9 @@ There are two options at this point:
 
 ### Create a new architecture:
 1. Think of an appropriate architecture ID, for example: `8086`
-1. Create a directory with the desired architecture ID: `src/arch/8086`
-2. Create a `decription.txt` there, for example: `Intel 8086 desktop CPU` <sup>(1)</sup>
-3. Write `8086_config.h`, `8086_gen.c` and `8086_gen.h` accordingly.
+2. Create a directory with the desired architecture ID: `src/arch/8086`
+3. Create a `decription.txt` there, for example: `Intel 8086 desktop CPU` <sup>(1)</sup>
+4. Write `8086_config.h`, `8086_gen.c` and `8086_gen.h` accordingly.
+5. Configure for your newly made architecture: `./configure.sh --arch=8086`
 
 Note 1: Description files should have exactly one trailing newline.

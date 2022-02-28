@@ -5,8 +5,7 @@
 #include "config.h"
 #include "stdint.h"
 #include "stddef.h"
-
-#define COMPILER_VER "v0.1"
+#include "version_number.h"
 
 /* ==== Debug information ==== */
 

@@ -1,7 +1,20 @@
 #!/bin/bash
 
+if [ ! -r build/current_arch ]; then
+	echo "Error: Not configured."
+	echo "Use 'configure.sh' to configure."
+	exit 2
+fi
+
 ARCH=$(cat build/current_arch)
 VER=$(cat version)
+
+if [ "$ARCH" == "template" ]; then
+	echo "Error: Configured for 'template', this is not allowed."
+	echo "Use 'configure.sh' to configure."
+	exit 2
+fi
+
 echo "Building lilly-cc $ARCH v$VER"
 
 # Convert our grammar file to actual C code.
@@ -66,22 +79,11 @@ CC debug/pront.c
 CC debug/gen_tests.c
 
 if [ $errors -gt 0 ]; then
-	if [ "$ARCH" = "template" ]; then
-		echo
-		echo "Did you configure 'template' by accident?"
-	fi
 	exit $errors
 fi
 
 # Link the compiled files.
 echo "LN$FILES"
 gcc $FILES -o comp || errors=1
-
-if [ $errors -gt 0 ]; then
-	if [ "$ARCH" = "template" ]; then
-		echo
-		echo "Did you configure 'template' by accident?"
-	fi
-fi
 
 exit $errors

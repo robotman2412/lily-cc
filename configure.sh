@@ -15,8 +15,10 @@ show_help() {
 list_archs() {
     echo "Architectures:"
     for i in $archs; do
-        echo "$i"
-        cat src/arch/$i/description.txt | sed 's/^/                /'
+	if [ "$i" != "template" ]; then
+            echo "$i"
+            cat src/arch/$i/description.txt | sed 's/^/                /'
+        fi
     done
     echo
 }
@@ -76,7 +78,7 @@ for i in $archs; do
         acceptable=1; break
     fi
 done
-if [ "$acceptable" = 0 ]; then
+if [ "$opt_arch" = "template" -o "$acceptable" = 0 ]; then
     echo "Error: no such architecture '$opt_arch'"
     exit
 fi
@@ -99,6 +101,10 @@ echo "#include <${opt_arch}_config.h>" >> build/config.h
 echo -n "$warn"                        >  build/gen.c
 echo "#include <${opt_arch}_gen.c>"    >> build/gen.c
 echo "#include <gen_fallbacks.c>"      >> build/gen.c
+
+# version_number.h
+echo -n "$warn"                        >  build/version_number.h
+echo "v$ver"                           >> build/version_number.h
 
 # current_arch
 echo -n "$opt_arch"                    >  build/current_arch

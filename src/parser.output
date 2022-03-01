@@ -85,22 +85,29 @@ Grammar
    64     | expr "<<=" expr
    65     | expr ">>=" expr
 
-   66 inline_asm: "asm" "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
-   67           | "asm" "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ")"
-   68           | "asm" "(" TKN_STRVAL ":" opt_asm_regs ")"
-   69           | "asm" "(" TKN_STRVAL ")"
+   66 inline_asm: "asm" asm_qual asm_code
 
-   70 opt_asm_strs: asm_strs
-   71             | %empty
+   67 asm_qual: %empty
+   68         | asm_qual "volatile"
+   69         | asm_qual "inline"
+   70         | asm_qual "goto"
 
-   72 asm_strs: TKN_STRVAL "," asm_strs
-   73         | TKN_STRVAL
+   71 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
+   72         | "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ")"
+   73         | "(" TKN_STRVAL ":" opt_asm_regs ")"
+   74         | "(" TKN_STRVAL ")"
 
-   74 opt_asm_regs: asm_regs
-   75             | %empty
+   75 opt_asm_strs: asm_strs
+   76             | %empty
 
-   76 asm_regs: TKN_STRVAL "(" expr ")" "," asm_regs
-   77         | TKN_STRVAL "(" expr ")"
+   77 asm_strs: TKN_STRVAL "," asm_strs
+   78         | TKN_STRVAL
+
+   79 opt_asm_regs: asm_regs
+   80             | %empty
+
+   81 asm_regs: TKN_STRVAL "(" expr ")" "," asm_regs
+   82         | TKN_STRVAL "(" expr ")"
 
 
 Terminals, with rules where they appear
@@ -113,19 +120,19 @@ Terminals, with rules where they appear
     "else" <pos> (261) 15
     "while" <pos> (262) 16
     "return" <pos> (263) 17 18
-    "asm" <pos> (264) 66 67 68 69
+    "asm" <pos> (264) 66
     "then" (265)
-    "(" <pos> (266) 5 14 15 16 29 31 66 67 68 69 76 77
-    ")" <pos> (267) 5 14 15 16 29 31 66 67 68 69 76 77
+    "(" <pos> (266) 5 14 15 16 29 31 71 72 73 74 81 82
+    ")" <pos> (267) 5 14 15 16 29 31 71 72 73 74 81 82
     "{" <pos> (268) 5 13
     "}" <pos> (269) 5 13
     "[" <pos> (270) 30
     "]" <pos> (271) 30
     ";" <pos> (272) 6 17 18 20 21
-    ":" <pos> (273) 66 67 68
-    "," <pos> (274) 9 24 72 76
+    ":" <pos> (273) 71 72 73
+    "," <pos> (274) 9 24 77 81
     TKN_IVAL <ival> (275) 26
-    TKN_STRVAL <strval> (276) 27 66 67 68 69 72 73 76 77
+    TKN_STRVAL <strval> (276) 27 71 72 73 74 77 78 81 82
     TKN_IDENT <ident> (277) 5 9 10 28
     TKN_GARBAGE <garbage> (278)
     "+=" <pos> (279) 56
@@ -161,60 +168,69 @@ Terminals, with rules where they appear
     "!=" <pos> (309) 47
     "||" (310) 54
     "&&" (311) 53
+    "volatile" (312) 68
+    "inline" (313) 69
+    "goto" (314) 70
 
 
 Nonterminals, with rules where they appear
 
-    $accept (57)
+    $accept (60)
         on left: 0
-    library (58)
+    library (61)
         on left: 1 2
         on right: 0 1
-    global (59)
+    global (62)
         on left: 3 4
         on right: 1
-    funcdef <func> (60)
+    funcdef <func> (63)
         on left: 5
         on right: 3
-    vardecls <idents> (61)
+    vardecls <idents> (64)
         on left: 6
         on right: 4 19
-    opt_idents <idents> (62)
+    opt_idents <idents> (65)
         on left: 7 8
         on right: 5
-    idents <idents> (63)
+    idents <idents> (66)
         on left: 9 10
         on right: 6 7 9
-    stmts <stmts> (64)
+    stmts <stmts> (67)
         on left: 11 12
         on right: 5 11 13
-    stmt <stmt> (65)
+    stmt <stmt> (68)
         on left: 13 14 15 16 17 18 19 20 21
         on right: 11 14 15 16
-    opt_exprs <exprs> (66)
+    opt_exprs <exprs> (69)
         on left: 22 23
         on right: 29
-    exprs <exprs> (67)
+    exprs <exprs> (70)
         on left: 24 25
         on right: 22 24
-    expr <expr> (68)
+    expr <expr> (71)
         on left: 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65
-        on right: 14 15 16 18 20 24 25 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 76 77
-    inline_asm <stmt> (69)
-        on left: 66 67 68 69
+        on right: 14 15 16 18 20 24 25 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 81 82
+    inline_asm <stmt> (72)
+        on left: 66
         on right: 21
-    opt_asm_strs (70)
-        on left: 70 71
+    asm_qual <asm_qual> (73)
+        on left: 67 68 69 70
+        on right: 66 68 69 70
+    asm_code <stmt> (74)
+        on left: 71 72 73 74
         on right: 66
-    asm_strs (71)
-        on left: 72 73
-        on right: 70 72
-    opt_asm_regs <asm_regs> (72)
-        on left: 74 75
-        on right: 66 67 68
-    asm_regs <asm_regs> (73)
-        on left: 76 77
-        on right: 74 76
+    opt_asm_strs (75)
+        on left: 75 76
+        on right: 71
+    asm_strs (76)
+        on left: 77 78
+        on right: 75 77
+    opt_asm_regs <asm_regs> (77)
+        on left: 79 80
+        on right: 71 72 73
+    asm_regs <asm_regs> (78)
+        on left: 81 82
+        on right: 79 81
 
 
 State 0
@@ -451,12 +467,11 @@ State 23
 
 State 24
 
-   66 inline_asm: "asm" . "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
-   67           | "asm" . "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ")"
-   68           | "asm" . "(" TKN_STRVAL ":" opt_asm_regs ")"
-   69           | "asm" . "(" TKN_STRVAL ")"
+   66 inline_asm: "asm" . asm_qual asm_code
 
-    "("  shift, and go to state 44
+    $default  reduce using rule 67 (asm_qual)
+
+    asm_qual  go to state 44
 
 
 State 25
@@ -801,12 +816,17 @@ State 43
 
 State 44
 
-   66 inline_asm: "asm" "(" . TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
-   67           | "asm" "(" . TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ")"
-   68           | "asm" "(" . TKN_STRVAL ":" opt_asm_regs ")"
-   69           | "asm" "(" . TKN_STRVAL ")"
+   66 inline_asm: "asm" asm_qual . asm_code
+   68 asm_qual: asm_qual . "volatile"
+   69         | asm_qual . "inline"
+   70         | asm_qual . "goto"
 
-    TKN_STRVAL  shift, and go to state 88
+    "("         shift, and go to state 88
+    "volatile"  shift, and go to state 89
+    "inline"    shift, and go to state 90
+    "goto"      shift, and go to state 91
+
+    asm_code  go to state 92
 
 
 State 45
@@ -845,7 +865,7 @@ State 45
    65     | expr . ">>=" expr
 
     "("    shift, and go to state 52
-    ")"    shift, and go to state 89
+    ")"    shift, and go to state 93
     "["    shift, and go to state 53
     "+="   shift, and go to state 55
     "-="   shift, and go to state 56
@@ -890,7 +910,7 @@ State 46
     "asm"       shift, and go to state 24
     "("         shift, and go to state 25
     "{"         shift, and go to state 26
-    "}"         shift, and go to state 90
+    "}"         shift, and go to state 94
     TKN_IVAL    shift, and go to state 28
     TKN_STRVAL  shift, and go to state 29
     TKN_IDENT   shift, and go to state 30
@@ -1142,9 +1162,9 @@ State 52
 
     $default  reduce using rule 23 (opt_exprs)
 
-    opt_exprs  go to state 91
-    exprs      go to state 92
-    expr       go to state 93
+    opt_exprs  go to state 95
+    exprs      go to state 96
+    expr       go to state 97
 
 
 State 53
@@ -1161,7 +1181,7 @@ State 53
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 94
+    expr  go to state 98
 
 
 State 54
@@ -1185,7 +1205,7 @@ State 55
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 95
+    expr  go to state 99
 
 
 State 56
@@ -1202,7 +1222,7 @@ State 56
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 96
+    expr  go to state 100
 
 
 State 57
@@ -1219,7 +1239,7 @@ State 57
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 97
+    expr  go to state 101
 
 
 State 58
@@ -1236,7 +1256,7 @@ State 58
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 98
+    expr  go to state 102
 
 
 State 59
@@ -1253,7 +1273,7 @@ State 59
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 99
+    expr  go to state 103
 
 
 State 60
@@ -1270,7 +1290,7 @@ State 60
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 100
+    expr  go to state 104
 
 
 State 61
@@ -1287,7 +1307,7 @@ State 61
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 101
+    expr  go to state 105
 
 
 State 62
@@ -1304,7 +1324,7 @@ State 62
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 102
+    expr  go to state 106
 
 
 State 63
@@ -1321,7 +1341,7 @@ State 63
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 103
+    expr  go to state 107
 
 
 State 64
@@ -1338,7 +1358,7 @@ State 64
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 104
+    expr  go to state 108
 
 
 State 65
@@ -1355,7 +1375,7 @@ State 65
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 105
+    expr  go to state 109
 
 
 State 66
@@ -1372,7 +1392,7 @@ State 66
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 106
+    expr  go to state 110
 
 
 State 67
@@ -1389,7 +1409,7 @@ State 67
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 107
+    expr  go to state 111
 
 
 State 68
@@ -1406,7 +1426,7 @@ State 68
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 108
+    expr  go to state 112
 
 
 State 69
@@ -1423,7 +1443,7 @@ State 69
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 109
+    expr  go to state 113
 
 
 State 70
@@ -1440,7 +1460,7 @@ State 70
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 110
+    expr  go to state 114
 
 
 State 71
@@ -1457,7 +1477,7 @@ State 71
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 111
+    expr  go to state 115
 
 
 State 72
@@ -1474,7 +1494,7 @@ State 72
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 112
+    expr  go to state 116
 
 
 State 73
@@ -1491,7 +1511,7 @@ State 73
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 113
+    expr  go to state 117
 
 
 State 74
@@ -1508,7 +1528,7 @@ State 74
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 114
+    expr  go to state 118
 
 
 State 75
@@ -1525,7 +1545,7 @@ State 75
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 115
+    expr  go to state 119
 
 
 State 76
@@ -1542,7 +1562,7 @@ State 76
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 116
+    expr  go to state 120
 
 
 State 77
@@ -1559,7 +1579,7 @@ State 77
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 117
+    expr  go to state 121
 
 
 State 78
@@ -1576,7 +1596,7 @@ State 78
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 118
+    expr  go to state 122
 
 
 State 79
@@ -1593,7 +1613,7 @@ State 79
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 119
+    expr  go to state 123
 
 
 State 80
@@ -1610,7 +1630,7 @@ State 80
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 120
+    expr  go to state 124
 
 
 State 81
@@ -1627,7 +1647,7 @@ State 81
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 121
+    expr  go to state 125
 
 
 State 82
@@ -1644,7 +1664,7 @@ State 82
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 122
+    expr  go to state 126
 
 
 State 83
@@ -1661,7 +1681,7 @@ State 83
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 123
+    expr  go to state 127
 
 
 State 84
@@ -1708,7 +1728,7 @@ State 85
    65     | expr . ">>=" expr
 
     "("    shift, and go to state 52
-    ")"    shift, and go to state 124
+    ")"    shift, and go to state 128
     "["    shift, and go to state 53
     "+="   shift, and go to state 55
     "-="   shift, and go to state 56
@@ -1777,7 +1797,7 @@ State 86
    65     | expr . ">>=" expr
 
     "("    shift, and go to state 52
-    ")"    shift, and go to state 125
+    ")"    shift, and go to state 129
     "["    shift, and go to state 53
     "+="   shift, and go to state 55
     "-="   shift, and go to state 56
@@ -1819,44 +1839,71 @@ State 87
 
 State 88
 
-   66 inline_asm: "asm" "(" TKN_STRVAL . ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
-   67           | "asm" "(" TKN_STRVAL . ":" opt_asm_regs ":" opt_asm_regs ")"
-   68           | "asm" "(" TKN_STRVAL . ":" opt_asm_regs ")"
-   69           | "asm" "(" TKN_STRVAL . ")"
+   71 asm_code: "(" . TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
+   72         | "(" . TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ")"
+   73         | "(" . TKN_STRVAL ":" opt_asm_regs ")"
+   74         | "(" . TKN_STRVAL ")"
 
-    ")"  shift, and go to state 126
-    ":"  shift, and go to state 127
+    TKN_STRVAL  shift, and go to state 130
 
 
 State 89
+
+   68 asm_qual: asm_qual "volatile" .
+
+    $default  reduce using rule 68 (asm_qual)
+
+
+State 90
+
+   69 asm_qual: asm_qual "inline" .
+
+    $default  reduce using rule 69 (asm_qual)
+
+
+State 91
+
+   70 asm_qual: asm_qual "goto" .
+
+    $default  reduce using rule 70 (asm_qual)
+
+
+State 92
+
+   66 inline_asm: "asm" asm_qual asm_code .
+
+    $default  reduce using rule 66 (inline_asm)
+
+
+State 93
 
    31 expr: "(" expr ")" .
 
     $default  reduce using rule 31 (expr)
 
 
-State 90
+State 94
 
    13 stmt: "{" stmts "}" .
 
     $default  reduce using rule 13 (stmt)
 
 
-State 91
+State 95
 
    29 expr: expr "(" opt_exprs . ")"
 
-    ")"  shift, and go to state 128
+    ")"  shift, and go to state 131
 
 
-State 92
+State 96
 
    22 opt_exprs: exprs .
 
     $default  reduce using rule 22 (opt_exprs)
 
 
-State 93
+State 97
 
    24 exprs: expr . "," exprs
    25      | expr .
@@ -1894,7 +1941,7 @@ State 93
 
     "("    shift, and go to state 52
     "["    shift, and go to state 53
-    ","    shift, and go to state 129
+    ","    shift, and go to state 132
     "+="   shift, and go to state 55
     "-="   shift, and go to state 56
     "<<="  shift, and go to state 57
@@ -1928,7 +1975,7 @@ State 93
     $default  reduce using rule 25 (exprs)
 
 
-State 94
+State 98
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -1965,7 +2012,7 @@ State 94
 
     "("    shift, and go to state 52
     "["    shift, and go to state 53
-    "]"    shift, and go to state 130
+    "]"    shift, and go to state 133
     "+="   shift, and go to state 55
     "-="   shift, and go to state 56
     "<<="  shift, and go to state 57
@@ -1997,7 +2044,7 @@ State 94
     "&&"   shift, and go to state 83
 
 
-State 95
+State 99
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2067,7 +2114,7 @@ State 95
     $default  reduce using rule 56 (expr)
 
 
-State 96
+State 100
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2137,7 +2184,7 @@ State 96
     $default  reduce using rule 57 (expr)
 
 
-State 97
+State 101
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2207,7 +2254,7 @@ State 97
     $default  reduce using rule 64 (expr)
 
 
-State 98
+State 102
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2277,7 +2324,7 @@ State 98
     $default  reduce using rule 65 (expr)
 
 
-State 99
+State 103
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2347,7 +2394,7 @@ State 99
     $default  reduce using rule 58 (expr)
 
 
-State 100
+State 104
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2417,7 +2464,7 @@ State 100
     $default  reduce using rule 59 (expr)
 
 
-State 101
+State 105
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2487,7 +2534,7 @@ State 101
     $default  reduce using rule 60 (expr)
 
 
-State 102
+State 106
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2557,7 +2604,7 @@ State 102
     $default  reduce using rule 61 (expr)
 
 
-State 103
+State 107
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2627,7 +2674,7 @@ State 103
     $default  reduce using rule 62 (expr)
 
 
-State 104
+State 108
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2697,7 +2744,7 @@ State 104
     $default  reduce using rule 63 (expr)
 
 
-State 105
+State 109
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2743,7 +2790,7 @@ State 105
     $default  reduce using rule 40 (expr)
 
 
-State 106
+State 110
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2789,7 +2836,7 @@ State 106
     $default  reduce using rule 41 (expr)
 
 
-State 107
+State 111
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2859,7 +2906,7 @@ State 107
     $default  reduce using rule 55 (expr)
 
 
-State 108
+State 112
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2903,7 +2950,7 @@ State 108
     $default  reduce using rule 48 (expr)
 
 
-State 109
+State 113
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2947,7 +2994,7 @@ State 109
     $default  reduce using rule 37 (expr)
 
 
-State 110
+State 114
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2991,7 +3038,7 @@ State 110
     $default  reduce using rule 38 (expr)
 
 
-State 111
+State 115
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3035,7 +3082,7 @@ State 111
     $default  reduce using rule 39 (expr)
 
 
-State 112
+State 116
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3090,7 +3137,7 @@ State 112
     $default  reduce using rule 49 (expr)
 
 
-State 113
+State 117
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3146,7 +3193,7 @@ State 113
     $default  reduce using rule 50 (expr)
 
 
-State 114
+State 118
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3193,7 +3240,7 @@ State 114
     $default  reduce using rule 51 (expr)
 
 
-State 115
+State 119
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3240,7 +3287,7 @@ State 115
     $default  reduce using rule 52 (expr)
 
 
-State 116
+State 120
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3289,7 +3336,7 @@ State 116
     $default  reduce using rule 42 (expr)
 
 
-State 117
+State 121
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3338,7 +3385,7 @@ State 117
     $default  reduce using rule 43 (expr)
 
 
-State 118
+State 122
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3387,7 +3434,7 @@ State 118
     $default  reduce using rule 44 (expr)
 
 
-State 119
+State 123
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3436,7 +3483,7 @@ State 119
     $default  reduce using rule 45 (expr)
 
 
-State 120
+State 124
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3489,7 +3536,7 @@ State 120
     $default  reduce using rule 46 (expr)
 
 
-State 121
+State 125
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3542,7 +3589,7 @@ State 121
     $default  reduce using rule 47 (expr)
 
 
-State 122
+State 126
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3600,7 +3647,7 @@ State 122
     $default  reduce using rule 54 (expr)
 
 
-State 123
+State 127
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3657,7 +3704,7 @@ State 123
     $default  reduce using rule 53 (expr)
 
 
-State 124
+State 128
 
    14 stmt: "if" "(" expr ")" . stmt
    15     | "if" "(" expr ")" . stmt "else" stmt
@@ -3679,12 +3726,12 @@ State 124
     "~"         shift, and go to state 35
 
     vardecls    go to state 36
-    stmt        go to state 131
+    stmt        go to state 134
     expr        go to state 38
     inline_asm  go to state 39
 
 
-State 125
+State 129
 
    16 stmt: "while" "(" expr ")" . stmt
 
@@ -3705,40 +3752,30 @@ State 125
     "~"         shift, and go to state 35
 
     vardecls    go to state 36
-    stmt        go to state 132
+    stmt        go to state 135
     expr        go to state 38
     inline_asm  go to state 39
 
 
-State 126
+State 130
 
-   69 inline_asm: "asm" "(" TKN_STRVAL ")" .
+   71 asm_code: "(" TKN_STRVAL . ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
+   72         | "(" TKN_STRVAL . ":" opt_asm_regs ":" opt_asm_regs ")"
+   73         | "(" TKN_STRVAL . ":" opt_asm_regs ")"
+   74         | "(" TKN_STRVAL . ")"
 
-    $default  reduce using rule 69 (inline_asm)
-
-
-State 127
-
-   66 inline_asm: "asm" "(" TKN_STRVAL ":" . opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
-   67           | "asm" "(" TKN_STRVAL ":" . opt_asm_regs ":" opt_asm_regs ")"
-   68           | "asm" "(" TKN_STRVAL ":" . opt_asm_regs ")"
-
-    TKN_STRVAL  shift, and go to state 133
-
-    $default  reduce using rule 75 (opt_asm_regs)
-
-    opt_asm_regs  go to state 134
-    asm_regs      go to state 135
+    ")"  shift, and go to state 136
+    ":"  shift, and go to state 137
 
 
-State 128
+State 131
 
    29 expr: expr "(" opt_exprs ")" .
 
     $default  reduce using rule 29 (expr)
 
 
-State 129
+State 132
 
    24 exprs: expr "," . exprs
 
@@ -3752,67 +3789,63 @@ State 129
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    exprs  go to state 136
-    expr   go to state 93
+    exprs  go to state 138
+    expr   go to state 97
 
 
-State 130
+State 133
 
    30 expr: expr "[" expr "]" .
 
     $default  reduce using rule 30 (expr)
 
 
-State 131
+State 134
 
    14 stmt: "if" "(" expr ")" stmt .
    15     | "if" "(" expr ")" stmt . "else" stmt
 
-    "else"  shift, and go to state 137
+    "else"  shift, and go to state 139
 
     $default  reduce using rule 14 (stmt)
 
 
-State 132
+State 135
 
    16 stmt: "while" "(" expr ")" stmt .
 
     $default  reduce using rule 16 (stmt)
 
 
-State 133
-
-   76 asm_regs: TKN_STRVAL . "(" expr ")" "," asm_regs
-   77         | TKN_STRVAL . "(" expr ")"
-
-    "("  shift, and go to state 138
-
-
-State 134
-
-   66 inline_asm: "asm" "(" TKN_STRVAL ":" opt_asm_regs . ":" opt_asm_regs ":" opt_asm_strs ")"
-   67           | "asm" "(" TKN_STRVAL ":" opt_asm_regs . ":" opt_asm_regs ")"
-   68           | "asm" "(" TKN_STRVAL ":" opt_asm_regs . ")"
-
-    ")"  shift, and go to state 139
-    ":"  shift, and go to state 140
-
-
-State 135
-
-   74 opt_asm_regs: asm_regs .
-
-    $default  reduce using rule 74 (opt_asm_regs)
-
-
 State 136
+
+   74 asm_code: "(" TKN_STRVAL ")" .
+
+    $default  reduce using rule 74 (asm_code)
+
+
+State 137
+
+   71 asm_code: "(" TKN_STRVAL ":" . opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
+   72         | "(" TKN_STRVAL ":" . opt_asm_regs ":" opt_asm_regs ")"
+   73         | "(" TKN_STRVAL ":" . opt_asm_regs ")"
+
+    TKN_STRVAL  shift, and go to state 140
+
+    $default  reduce using rule 80 (opt_asm_regs)
+
+    opt_asm_regs  go to state 141
+    asm_regs      go to state 142
+
+
+State 138
 
    24 exprs: expr "," exprs .
 
     $default  reduce using rule 24 (exprs)
 
 
-State 137
+State 139
 
    15 stmt: "if" "(" expr ")" stmt "else" . stmt
 
@@ -3833,15 +3866,47 @@ State 137
     "~"         shift, and go to state 35
 
     vardecls    go to state 36
-    stmt        go to state 141
+    stmt        go to state 143
     expr        go to state 38
     inline_asm  go to state 39
 
 
-State 138
+State 140
 
-   76 asm_regs: TKN_STRVAL "(" . expr ")" "," asm_regs
-   77         | TKN_STRVAL "(" . expr ")"
+   81 asm_regs: TKN_STRVAL . "(" expr ")" "," asm_regs
+   82         | TKN_STRVAL . "(" expr ")"
+
+    "("  shift, and go to state 144
+
+
+State 141
+
+   71 asm_code: "(" TKN_STRVAL ":" opt_asm_regs . ":" opt_asm_regs ":" opt_asm_strs ")"
+   72         | "(" TKN_STRVAL ":" opt_asm_regs . ":" opt_asm_regs ")"
+   73         | "(" TKN_STRVAL ":" opt_asm_regs . ")"
+
+    ")"  shift, and go to state 145
+    ":"  shift, and go to state 146
+
+
+State 142
+
+   79 opt_asm_regs: asm_regs .
+
+    $default  reduce using rule 79 (opt_asm_regs)
+
+
+State 143
+
+   15 stmt: "if" "(" expr ")" stmt "else" stmt .
+
+    $default  reduce using rule 15 (stmt)
+
+
+State 144
+
+   81 asm_regs: TKN_STRVAL "(" . expr ")" "," asm_regs
+   82         | TKN_STRVAL "(" . expr ")"
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -3853,37 +3918,30 @@ State 138
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 142
+    expr  go to state 147
 
 
-State 139
+State 145
 
-   68 inline_asm: "asm" "(" TKN_STRVAL ":" opt_asm_regs ")" .
+   73 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ")" .
 
-    $default  reduce using rule 68 (inline_asm)
-
-
-State 140
-
-   66 inline_asm: "asm" "(" TKN_STRVAL ":" opt_asm_regs ":" . opt_asm_regs ":" opt_asm_strs ")"
-   67           | "asm" "(" TKN_STRVAL ":" opt_asm_regs ":" . opt_asm_regs ")"
-
-    TKN_STRVAL  shift, and go to state 133
-
-    $default  reduce using rule 75 (opt_asm_regs)
-
-    opt_asm_regs  go to state 143
-    asm_regs      go to state 135
+    $default  reduce using rule 73 (asm_code)
 
 
-State 141
+State 146
 
-   15 stmt: "if" "(" expr ")" stmt "else" stmt .
+   71 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" . opt_asm_regs ":" opt_asm_strs ")"
+   72         | "(" TKN_STRVAL ":" opt_asm_regs ":" . opt_asm_regs ")"
 
-    $default  reduce using rule 15 (stmt)
+    TKN_STRVAL  shift, and go to state 140
+
+    $default  reduce using rule 80 (opt_asm_regs)
+
+    opt_asm_regs  go to state 148
+    asm_regs      go to state 142
 
 
-State 142
+State 147
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3916,11 +3974,11 @@ State 142
    63     | expr . "^=" expr
    64     | expr . "<<=" expr
    65     | expr . ">>=" expr
-   76 asm_regs: TKN_STRVAL "(" expr . ")" "," asm_regs
-   77         | TKN_STRVAL "(" expr . ")"
+   81 asm_regs: TKN_STRVAL "(" expr . ")" "," asm_regs
+   82         | TKN_STRVAL "(" expr . ")"
 
     "("    shift, and go to state 52
-    ")"    shift, and go to state 144
+    ")"    shift, and go to state 149
     "["    shift, and go to state 53
     "+="   shift, and go to state 55
     "-="   shift, and go to state 56
@@ -3953,102 +4011,102 @@ State 142
     "&&"   shift, and go to state 83
 
 
-State 143
-
-   66 inline_asm: "asm" "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs . ":" opt_asm_strs ")"
-   67           | "asm" "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs . ")"
-
-    ")"  shift, and go to state 145
-    ":"  shift, and go to state 146
-
-
-State 144
-
-   76 asm_regs: TKN_STRVAL "(" expr ")" . "," asm_regs
-   77         | TKN_STRVAL "(" expr ")" .
-
-    ","  shift, and go to state 147
-
-    $default  reduce using rule 77 (asm_regs)
-
-
-State 145
-
-   67 inline_asm: "asm" "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ")" .
-
-    $default  reduce using rule 67 (inline_asm)
-
-
-State 146
-
-   66 inline_asm: "asm" "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" . opt_asm_strs ")"
-
-    TKN_STRVAL  shift, and go to state 148
-
-    $default  reduce using rule 71 (opt_asm_strs)
-
-    opt_asm_strs  go to state 149
-    asm_strs      go to state 150
-
-
-State 147
-
-   76 asm_regs: TKN_STRVAL "(" expr ")" "," . asm_regs
-
-    TKN_STRVAL  shift, and go to state 133
-
-    asm_regs  go to state 151
-
-
 State 148
 
-   72 asm_strs: TKN_STRVAL . "," asm_strs
-   73         | TKN_STRVAL .
+   71 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs . ":" opt_asm_strs ")"
+   72         | "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs . ")"
 
-    ","  shift, and go to state 152
-
-    $default  reduce using rule 73 (asm_strs)
+    ")"  shift, and go to state 150
+    ":"  shift, and go to state 151
 
 
 State 149
 
-   66 inline_asm: "asm" "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs . ")"
+   81 asm_regs: TKN_STRVAL "(" expr ")" . "," asm_regs
+   82         | TKN_STRVAL "(" expr ")" .
 
-    ")"  shift, and go to state 153
+    ","  shift, and go to state 152
+
+    $default  reduce using rule 82 (asm_regs)
 
 
 State 150
 
-   70 opt_asm_strs: asm_strs .
+   72 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ")" .
 
-    $default  reduce using rule 70 (opt_asm_strs)
+    $default  reduce using rule 72 (asm_code)
 
 
 State 151
 
-   76 asm_regs: TKN_STRVAL "(" expr ")" "," asm_regs .
+   71 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" . opt_asm_strs ")"
 
-    $default  reduce using rule 76 (asm_regs)
+    TKN_STRVAL  shift, and go to state 153
+
+    $default  reduce using rule 76 (opt_asm_strs)
+
+    opt_asm_strs  go to state 154
+    asm_strs      go to state 155
 
 
 State 152
 
-   72 asm_strs: TKN_STRVAL "," . asm_strs
+   81 asm_regs: TKN_STRVAL "(" expr ")" "," . asm_regs
 
-    TKN_STRVAL  shift, and go to state 148
+    TKN_STRVAL  shift, and go to state 140
 
-    asm_strs  go to state 154
+    asm_regs  go to state 156
 
 
 State 153
 
-   66 inline_asm: "asm" "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")" .
+   77 asm_strs: TKN_STRVAL . "," asm_strs
+   78         | TKN_STRVAL .
 
-    $default  reduce using rule 66 (inline_asm)
+    ","  shift, and go to state 157
+
+    $default  reduce using rule 78 (asm_strs)
 
 
 State 154
 
-   72 asm_strs: TKN_STRVAL "," asm_strs .
+   71 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs . ")"
 
-    $default  reduce using rule 72 (asm_strs)
+    ")"  shift, and go to state 158
+
+
+State 155
+
+   75 opt_asm_strs: asm_strs .
+
+    $default  reduce using rule 75 (opt_asm_strs)
+
+
+State 156
+
+   81 asm_regs: TKN_STRVAL "(" expr ")" "," asm_regs .
+
+    $default  reduce using rule 81 (asm_regs)
+
+
+State 157
+
+   77 asm_strs: TKN_STRVAL "," . asm_strs
+
+    TKN_STRVAL  shift, and go to state 153
+
+    asm_strs  go to state 159
+
+
+State 158
+
+   71 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")" .
+
+    $default  reduce using rule 71 (asm_code)
+
+
+State 159
+
+   77 asm_strs: TKN_STRVAL "," asm_strs .
+
+    $default  reduce using rule 77 (asm_strs)

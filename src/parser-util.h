@@ -41,6 +41,7 @@ typedef struct strval		ident_t;
 typedef struct expr			expr_t;
 typedef struct stmt			stmt_t;
 
+typedef struct iasm_qual	iasm_qual_t;
 typedef struct iasm_reg		iasm_reg_t;
 typedef struct iasm_regs	iasm_regs_t;
 typedef struct iasm			iasm_t;
@@ -106,6 +107,12 @@ struct stmt {
 	preproc_data_t *preproc;
 };
 
+struct iasm_qual {
+	bool            is_volatile;
+	bool            is_inline;
+	bool            is_goto;
+};
+
 struct iasm_reg {
 	char           *mode;
 	expr_t         *expr;
@@ -122,6 +129,7 @@ struct iasm {
 	iasm_regs_t     inputs;
 	iasm_regs_t     outputs;
 	// iasm_strs_t     clobbers;
+	iasm_qual_t     qualifiers;
 };
 
 struct idents {

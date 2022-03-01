@@ -139,11 +139,12 @@ union YYSTYPE
 	stmt_t		stmt;
 	stmts_t		stmts;
 	
+	iasm_qual_t asm_qual;
 	iasm_regs_t asm_regs;
 	
 	strval_t	garbage;
 
-#line 147 "src/parser.h"
+#line 148 "src/parser.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

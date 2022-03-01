@@ -35,6 +35,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 	stmt_t		stmt;
 	stmts_t		stmts;
 	
+	iasm_qual_t asm_qual;
 	iasm_regs_t asm_regs;
 	
 	strval_t	garbage;
@@ -72,6 +73,8 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 %type <stmts> stmts
 %type <stmt> stmt
 %type <stmt> inline_asm
+%type <stmt> asm_code
+%type <asm_qual> asm_qual
 // %type <asm_strs> opt_asm_strs
 // %type <asm_strs> asm_strs
 %type <asm_regs> opt_asm_regs
@@ -187,23 +190,23 @@ expr:			TKN_IVAL									{$$=expr_icnst(&$1);}
 |				expr "<<=" expr				%prec "="		{$$=expr_matha(OP_SHIFT_L,   &$1, &$3);}
 |				expr ">>=" expr				%prec "="		{$$=expr_matha(OP_SHIFT_R,   &$1, &$3);};
 
-inline_asm:		"asm" iasm_spec iasm_code					{$$=$3};
+inline_asm:		"asm" asm_qual asm_code						{$$=$3; $$->iasm.qualifiers=$2;};
 
-iasm_spec:		%empty
-|				iasm_spec "volatile"
-|				iasm_spec "inline"
-|				iasm_spec "goto";
+asm_qual:		%empty										{$$=(iasm_qual_t) {.is_volatile=0, .is_inline=0, .is_goto=0};}
+|				asm_qual "volatile"							{$$=$1; $$.is_volatile=1;}
+|				asm_qual "inline"							{$$=$1; $$.is_inline=1;}
+|				asm_qual "goto"								{$$=$1; $$.is_goto=1;};
 
-inline_code:	"asm" "(" TKN_STRVAL
+asm_code:		"(" TKN_STRVAL
 				":" opt_asm_regs
 				":" opt_asm_regs
-				":" opt_asm_strs ")"						{$$=stmt_iasm(&$3, &$5,  &$7,  NULL);}
-|				"asm" "(" TKN_STRVAL
+				":" opt_asm_strs ")"						{$$=stmt_iasm(&$2, &$4,  &$6,  NULL);}
+|				"(" TKN_STRVAL
 				":" opt_asm_regs
-				":" opt_asm_regs ")"						{$$=stmt_iasm(&$3, &$5,  &$7,  NULL);}
-|				"asm" "(" TKN_STRVAL
-				":" opt_asm_regs ")"						{$$=stmt_iasm(&$3, &$5,  NULL, NULL);}
-|				"asm" "(" TKN_STRVAL ")"					{$$=stmt_iasm(&$3, NULL, NULL, NULL);};
+				":" opt_asm_regs ")"						{$$=stmt_iasm(&$2, &$4,  &$6,  NULL);}
+|				"(" TKN_STRVAL
+				":" opt_asm_regs ")"						{$$=stmt_iasm(&$2, &$4,  NULL, NULL);}
+|				"(" TKN_STRVAL ")"							{$$=stmt_iasm(&$2, NULL, NULL, NULL);};
 
 opt_asm_strs:	asm_strs
 |				%empty;

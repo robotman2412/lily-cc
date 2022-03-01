@@ -303,6 +303,7 @@ int tokenise(tokeniser_ctx_t *ctx) {
 	if (!c) return c;
     
 	char next = tokeniser_nextchar(ctx);
+	char next2 = tokeniser_nextchar_no(ctx, 1);
 	size_t index0 = ctx->index - 1;
 	int x0 = ctx->x, y0 = ctx->y;
     
@@ -311,6 +312,7 @@ int tokenise(tokeniser_ctx_t *ctx) {
 	switch (c) {
 		case ('+'):
 			if (next == '=') {
+				tokeniser_readchar(ctx);
 				ret = TKN_ASSIGN_ADD;
 			} else if (next == '+') {
 				tokeniser_readchar(ctx);
@@ -321,6 +323,7 @@ int tokenise(tokeniser_ctx_t *ctx) {
 			break;
 		case ('-'):
 			if (next == '=') {
+				tokeniser_readchar(ctx);
 				ret = TKN_ASSIGN_SUB;
 			} else if (next == '-') {
 				tokeniser_readchar(ctx);
@@ -352,6 +355,7 @@ int tokenise(tokeniser_ctx_t *ctx) {
 			break;
 		case ('*'):
 			if (next == '=') {
+				tokeniser_readchar(ctx);
 				ret = TKN_ASSIGN_MUL;
 			} else {
 				ret = TKN_MUL;
@@ -359,6 +363,7 @@ int tokenise(tokeniser_ctx_t *ctx) {
 			break;
 		case ('&'):
 			if (next == '=') {
+				tokeniser_readchar(ctx);
 				ret = TKN_ASSIGN_AND;
 			} else {
 				ret = TKN_AMP;
@@ -368,6 +373,7 @@ int tokenise(tokeniser_ctx_t *ctx) {
 			goto linecomment;
 		case ('/'):
 			if (next == '=') {
+				tokeniser_readchar(ctx);
 				ret = TKN_ASSIGN_DIV;
 			} else if (next == '/') {
 				// This starts a line commment.
@@ -400,6 +406,7 @@ int tokenise(tokeniser_ctx_t *ctx) {
 			break;
 		case ('%'):
 			if (next == '=') {
+				tokeniser_readchar(ctx);
 				ret = TKN_ASSIGN_REM;
 			} else {
 				ret = TKN_REM;
@@ -424,7 +431,12 @@ int tokenise(tokeniser_ctx_t *ctx) {
 		case ('<'):
 			if (next == '<') {
 				tokeniser_readchar(ctx);
-				ret = TKN_SHL;
+				if (next2 == '=') {
+					tokeniser_readchar(ctx);
+					ret = TKN_ASSIGN_SHL;
+				} else {
+					ret = TKN_SHL;
+				}
 			} else if (next == '=') {
 				tokeniser_readchar(ctx);
 				ret = TKN_LE;
@@ -435,7 +447,12 @@ int tokenise(tokeniser_ctx_t *ctx) {
 		case ('>'):
 			if (next == '>') {
 				tokeniser_readchar(ctx);
-				ret = TKN_SHR;
+				if (next2 == '=') {
+					tokeniser_readchar(ctx);
+					ret = TKN_ASSIGN_SHR;
+				} else {
+					ret = TKN_SHR;
+				}
 			} else if (next == '=') {
 				tokeniser_readchar(ctx);
 				ret = TKN_GE;
@@ -445,6 +462,7 @@ int tokenise(tokeniser_ctx_t *ctx) {
 			break;
 		case ('^'):
 			if (next == '=') {
+				tokeniser_readchar(ctx);
 				ret = TKN_ASSIGN_XOR;
 			} else {
 				ret = TKN_XOR;
@@ -455,6 +473,7 @@ int tokenise(tokeniser_ctx_t *ctx) {
 			break;
 		case ('|'):
 			if (next == '=') {
+				tokeniser_readchar(ctx);
 				ret = TKN_ASSIGN_OR;
 			} else {
 				ret = TKN_OR;
@@ -477,7 +496,16 @@ int tokenise(tokeniser_ctx_t *ctx) {
 		// 	.index0 = index0,
 		// 	.index1 = ctx->index - 1
 		// };
-		DEBUG_TKN("token '%c'\n", c);
+#ifdef DEBUG_TOKENISER
+		size_t num = ctx->index - index0;
+		if (num == 3) {
+			DEBUG_TKN("token '%c%c%c'\n", c, next, next2);
+		} else if (num == 2) {
+			DEBUG_TKN("token '%c%c'\n", c, next);
+		} else {
+			DEBUG_TKN("token '%c'\n", c);
+		}
+#endif
 		return ret;
 	}
     

@@ -23,12 +23,12 @@ func strlen(ptr) {
 	// return ptr - offs;
 }
 
-func ptrs(a, b, c) {
-	// auto c;
-	// c = &a;
-	// *(a+b) = c;
-	// a += 1;
-}
+// func ptrs(a, b, c) {
+// 	auto c;
+// 	c = &a;
+// 	*(a+b) = c;
+// 	a += 1;
+// }
 
 // func iasm(a) {
 // 	asm (

@@ -33,9 +33,9 @@ static inline void asm_ppc_iterate(asm_ctx_t *ctx, size_t n_sect, char **sect_id
 			}
 		
 			if (sects[i]->align) {
-				printf("%s (%d): 0x%04x\n", sect_ids[i], sects[i]->align, offs);
+				printf("%-9s (aligned %5d): 0x%04x\n", sect_ids[i], sects[i]->align, offs);
 			} else {
-				printf("%s (not aligned): 0x%04x\n", sect_ids[i], offs);
+				printf("%-9s (unligned     ): 0x%04x\n", sect_ids[i], offs);
 			}
 		}
 		

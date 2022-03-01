@@ -50,6 +50,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 %token <garbage> TKN_GARBAGE
 
 %token <pos> TKN_ASSIGN_ADD "+=" TKN_ASSIGN_SUB "-="
+%token <pos> TKN_ASSIGN_SHL "<<=" TKN_ASSIGN_SHR ">>="
 %token <pos> TKN_ASSIGN_MUL "*=" TKN_ASSIGN_DIV "/=" TKN_ASSIGN_REM "%="
 %token <pos> TKN_ASSIGN_AND "&=" TKN_ASSIGN_OR "|=" TKN_ASSIGN_XOR "^="
 %token <pos> TKN_INC "++" TKN_DEC "--"
@@ -74,7 +75,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 
 // Precedence: lowest.
 
-%right "=" "+=" "-=" "*=" "/=" "%=" "&=" "|="
+%right "=" "+=" "-=" "*=" "/=" "%=" "&=" "|=" "^=" "<<=" ">>="
 
 %left "||"
 %left "&&"
@@ -169,14 +170,16 @@ expr:			TKN_IVAL									{$$=expr_icnst(&$1);}
 |				expr "||" expr								{$$=expr_math2(OP_LOGIC_OR,  &$1, &$3);}
 
 |				expr "=" expr								{$$=expr_math2(OP_ASSIGN,    &$1, &$3);}
-|				expr "+=" expr								{$$=expr_matha(OP_ADD,       &$1, &$3);}
-|				expr "-=" expr								{$$=expr_matha(OP_SUB,       &$1, &$3);}
-|				expr "*=" expr								{$$=expr_matha(OP_MUL,       &$1, &$3);}
-|				expr "/=" expr								{$$=expr_matha(OP_DIV,       &$1, &$3);}
-|				expr "%=" expr								{$$=expr_matha(OP_MOD,       &$1, &$3);}
-|				expr "&=" expr								{$$=expr_matha(OP_BIT_AND,   &$1, &$3);}
-|				expr "|=" expr								{$$=expr_matha(OP_BIT_OR,    &$1, &$3);}
-|				expr "^=" expr								{$$=expr_matha(OP_BIT_XOR,   &$1, &$3);};
+|				expr "+=" expr				%prec "="		{$$=expr_matha(OP_ADD,       &$1, &$3);}
+|				expr "-=" expr				%prec "="		{$$=expr_matha(OP_SUB,       &$1, &$3);}
+|				expr "*=" expr				%prec "="		{$$=expr_matha(OP_MUL,       &$1, &$3);}
+|				expr "/=" expr				%prec "="		{$$=expr_matha(OP_DIV,       &$1, &$3);}
+|				expr "%=" expr				%prec "="		{$$=expr_matha(OP_MOD,       &$1, &$3);}
+|				expr "&=" expr				%prec "="		{$$=expr_matha(OP_BIT_AND,   &$1, &$3);}
+|				expr "|=" expr				%prec "="		{$$=expr_matha(OP_BIT_OR,    &$1, &$3);}
+|				expr "^=" expr				%prec "="		{$$=expr_matha(OP_BIT_XOR,   &$1, &$3);}
+|				expr "<<=" expr				%prec "="		{$$=expr_matha(OP_SHIFT_L,   &$1, &$3);}
+|				expr ">>=" expr				%prec "="		{$$=expr_matha(OP_SHIFT_R,   &$1, &$3);};
 
 inline_asm:		"asm" "(" TKN_STRVAL
 				":" opt_asm_regs

@@ -29,6 +29,8 @@
 #define A_REG_STL   0xf2
 #define A_REG_STH   0xf3
 
+#define A_IS_MEM(mode) (((mode) & 0xf0) == 0x10)
+
 // All keywords that occur.
 char *r3_iasm_keyw[] = {
 	"bki",  "brk",  "call", "ret", 
@@ -656,59 +658,48 @@ void gen_asm(asm_ctx_t *ctx, char *text) {
 	tokeniser_ctx_t lex_ctx;
 	tokeniser_init_cstr(&lex_ctx, text);
 	
-	r3_token_t ooer;
-	
-	// do {
-	//     ooer = r3_iasm_lex(&lex_ctx);
-	//     if (ooer.type < R3_NUM_KEYW) DEBUG_GEN("keyw %s\n", r3_iasm_keyw[(size_t) ooer.type]);
-	//     else if (ooer.type == R3_TKN_IDENT) DEBUG_GEN("ident %s\n", ooer.ident);
-	//     else if (ooer.type == R3_TKN_IVAL) DEBUG_GEN("ival %lld\n", ooer.ival);
-	//     else if (ooer.type == R3_TKN_END) DEBUG_GEN("end\n");
-	//     else DEBUG_GEN("type %d\n", ooer.type);
-	// } while (ooer.type != R3_TKN_END);
-	
-	// bool succ = r3_iasm_parse_addr(ctx, &lex_ctx, &ooer);
-	// if (!succ) return;
-	// if (ooer.type < R3_NUM_KEYW) DEBUG_GEN("keyw %s mode %d\n", r3_iasm_keyw[(size_t) ooer.type], ooer.addr_mode);
-	// else if (ooer.type == R3_TKN_IDENT) DEBUG_GEN("ident %s mode %d\n", ooer.ident, ooer.addr_mode);
-	// else DEBUG_GEN("type %d mode %d\n", ooer.type, ooer.addr_mode);
-	
-	// r3_token_t *list;
-	// size_t len = r3_iasm_parse_addrs(ctx, &lex_ctx, &list);
-	// DEBUG_GEN("There's %ld%c\n", len, len > 0 ? ':' : '\0');
-	// for (size_t i = 0; i < len; i++) {
-	//     r3_token_t ooer = list[i];
-	//     if (ooer.type < R3_NUM_KEYW) DEBUG_GEN("keyw %s mode %d\n", r3_iasm_keyw[(size_t) ooer.type], ooer.addr_mode);
-	//     else if (ooer.type == R3_TKN_IDENT) DEBUG_GEN("ident %s mode %d\n", ooer.ident, ooer.addr_mode);
-	//     else if (ooer.type == R3_TKN_IVAL) DEBUG_GEN("ival %lld mode %d\n", ooer.ival, ooer.addr_mode);
-	//     else DEBUG_GEN("type %d mode %d\n", ooer.type, ooer.addr_mode);
-	// }
-	
-	// return;
-	
 	// Instruction.
 	r3_token_t tkn = r3_iasm_lex(&lex_ctx);
 	if (tkn.type == R3_TKN_IDENT) {
-		// This is some garbage instruction.
+		// This is not an instruction.
 		printf("No instruction with name '%s'.\n", tkn.ident);
+		
 	} else if (tkn.type < R3_TKN_INSN_KEYWORDS) {
 		// This is an instruction keyword.
 		r3_token_t *args;
+		// Parse the funny parameters.
 		size_t n_args = r3_iasm_parse_addrs(ctx, &lex_ctx, &args);
-		// Check for matching address patterns.
+		
 		bool found_len = false;
+		// The parameters array for this attempt.
 		r3_iasm_modes_t *arr = &r3_insn_lut[(size_t) tkn.type];
+		
+		// Check for matching address patterns.
 		for (size_t i = 0; i < arr->num; i++) {
 			// Check length.
 			r3_iasm_mode_t *mode = &arr->modes[i];
+			// If not equal, try another.
 			if (mode->n_args != n_args) continue;
+			
+			// To tell between number of arguments and exact arguments mismatch conditions.
 			found_len = true;
-			// Check all the bits.
+			// Whether to allow position-independant execution.
+			bool allow_pie = true;
+			
+			// Check every argument.
 			for (size_t x = 0; x < n_args; x++) {
+				// Check whether the argument modes match.
 				if (mode->arg_modes[x] != args[x].addr_mode) goto outer_cont;
+				
+				// Disable PIE for immediate addresses.
+				// It is assumed an absolute address is meant.
+				if (A_IS_MEM(args[x].addr_mode) && args[x].type == R3_TKN_IVAL) {
+					allow_pie = false;
+				}
 			}
+			
 			// If we get here, we got good a match.
-			asm_write_memword(ctx, mode->opcode + PIE(ctx));
+			asm_write_memword(ctx, mode->opcode | (allow_pie ? PIE(ctx) : 0));
 			for (size_t x = 0; x < n_args; x++) {
 				if (args[x].type == R3_TKN_IDENT) {
 					if (mode->n_words == 1)
@@ -719,27 +710,30 @@ void gen_asm(asm_ctx_t *ctx, char *text) {
 					asm_write_num(ctx, args[x].ival, mode->n_words);
 				}
 			}
+			// Done!
 			return;
-			// What.
+			
+			// Unfortunately, we need this to continue the outer loop.
 			outer_cont:;
 		}
-		// If we got here, there's no match.
+		
+		// No matching parameters for instruction.
 		if (found_len) {
 			printf("No '%s' found for given arguments.\n", r3_iasm_keyw[(size_t) tkn.type]);
 		} else {
-			printf("No '%s' found for %ld arguments.\n", r3_iasm_keyw[(size_t) tkn.type], n_args);
+			printf("No '%s' found for %ld argument%s.\n", r3_iasm_keyw[(size_t) tkn.type], n_args, n_args == 1 ? "" : "s");
 		}
 	} else if (tkn.type < R3_NUM_KEYW) {
-		// This is a keyword.
+		// This is a keyword, but not an instruction.
 		printf("No instruction with name '%s'.\n", r3_iasm_keyw[(size_t) tkn.type]);
+		
 	} else if (tkn.type == R3_TKN_END) {
-		// End of the assembly.
+		// End of line.
 		return;
+		
 	} else {
-		// This is not allowed.
+		// Anything else is not allowed.
 		printf("Expected INSTRUCTION or IDENT.\n");
-		do {
-			tkn = r3_iasm_lex(&lex_ctx);
-		} while (tkn.type != R3_TKN_END);
+		// TODO: Finalise the tokeniser context.
 	}
 }

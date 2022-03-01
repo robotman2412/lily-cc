@@ -208,9 +208,11 @@ union YYSTYPE
 	stmt_t		stmt;
 	stmts_t		stmts;
 	
+	iasm_regs_t asm_regs;
+	
 	strval_t	garbage;
 
-#line 214 "src/parser.c"
+#line 216 "src/parser.c"
 
 };
 typedef union YYSTYPE YYSTYPE;
@@ -591,14 +593,14 @@ static const yytype_int8 yytranslate[] =
   /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_uint8 yyrline[] =
 {
-       0,   104,   104,   105,   107,   108,   110,   112,   114,   115,
-     116,   117,   118,   119,   120,   121,   122,   124,   125,   126,
-     127,   128,   129,   131,   132,   133,   134,   135,   136,   137,
-     138,   139,   140,   142,   143,   144,   145,   146,   148,   149,
-     150,   152,   153,   155,   156,   157,   158,   160,   161,   163,
-     164,   165,   166,   167,   169,   170,   172,   173,   174,   175,
-     176,   177,   178,   179,   180,   181,   182,   184,   188,   191,
-     193,   195,   196,   197,   198,   199,   200,   201,   202
+       0,   110,   110,   111,   113,   114,   116,   118,   120,   121,
+     122,   123,   124,   125,   126,   127,   128,   130,   131,   132,
+     133,   134,   135,   137,   138,   139,   140,   141,   142,   143,
+     144,   145,   146,   148,   149,   150,   151,   152,   154,   155,
+     156,   158,   159,   161,   162,   163,   164,   166,   167,   169,
+     170,   171,   172,   173,   175,   176,   178,   179,   180,   181,
+     182,   183,   184,   185,   186,   187,   188,   190,   194,   197,
+     199,   201,   202,   203,   204,   205,   206,   207,   208
 };
 #endif
 
@@ -1617,361 +1619,379 @@ yyreduce:
   switch (yyn)
     {
   case 4:
-#line 107 "src/parser.bison"
+#line 113 "src/parser.bison"
                                 {function_added(ctx, &(yyvsp[0].func));}
-#line 1623 "src/parser.c"
+#line 1625 "src/parser.c"
     break;
 
   case 6:
-#line 111 "src/parser.bison"
+#line 117 "src/parser.bison"
                                                                                                         {(yyval.func)=funcdef_decl(&(yyvsp[-6].ident), &(yyvsp[-4].idents), &(yyvsp[-1].stmts));}
-#line 1629 "src/parser.c"
+#line 1631 "src/parser.c"
     break;
 
   case 7:
-#line 112 "src/parser.bison"
+#line 118 "src/parser.bison"
                                                                                                 {(yyval.idents)=(yyvsp[-1].idents);}
-#line 1635 "src/parser.c"
+#line 1637 "src/parser.c"
     break;
 
   case 8:
-#line 114 "src/parser.bison"
+#line 120 "src/parser.bison"
                                                                                                         {(yyval.idents)=(yyvsp[0].idents);}
-#line 1641 "src/parser.c"
+#line 1643 "src/parser.c"
     break;
 
   case 9:
-#line 115 "src/parser.bison"
+#line 121 "src/parser.bison"
                                                                                                                 {(yyval.idents)=idents_empty();}
-#line 1647 "src/parser.c"
+#line 1649 "src/parser.c"
     break;
 
   case 10:
-#line 116 "src/parser.bison"
+#line 122 "src/parser.bison"
                                                                                         {(yyval.idents)=idents_cat  (&(yyvsp[-2].idents),  &(yyvsp[0].ident));}
-#line 1653 "src/parser.c"
+#line 1655 "src/parser.c"
     break;
 
   case 11:
-#line 117 "src/parser.bison"
+#line 123 "src/parser.bison"
                                                                                                                 {(yyval.idents)=idents_one  (&(yyvsp[0].ident));}
-#line 1659 "src/parser.c"
+#line 1661 "src/parser.c"
     break;
 
   case 12:
-#line 118 "src/parser.bison"
+#line 124 "src/parser.bison"
                                                                                                         {(yyval.stmts)=stmts_cat   (&(yyvsp[-1].stmts), &(yyvsp[0].stmt));}
-#line 1665 "src/parser.c"
+#line 1667 "src/parser.c"
     break;
 
   case 13:
-#line 119 "src/parser.bison"
+#line 125 "src/parser.bison"
                                                                                                                 {(yyval.stmts)=stmts_empty ();}
-#line 1671 "src/parser.c"
+#line 1673 "src/parser.c"
     break;
 
   case 14:
-#line 120 "src/parser.bison"
-                                                                    {(yyval.stmt)=stmt_multi  (&(yyvsp[-1].stmts));}
-#line 1677 "src/parser.c"
+#line 126 "src/parser.bison"
+                                                                                                {(yyval.stmt)=stmt_multi  (&(yyvsp[-1].stmts));}
+#line 1679 "src/parser.c"
     break;
 
   case 15:
-#line 121 "src/parser.bison"
+#line 127 "src/parser.bison"
                                                                                 {(yyval.stmt)=stmt_if     (&(yyvsp[-2].expr), &(yyvsp[0].stmt), NULL);}
-#line 1683 "src/parser.c"
+#line 1685 "src/parser.c"
     break;
 
   case 16:
-#line 123 "src/parser.bison"
-                                                                            {(yyval.stmt)=stmt_if     (&(yyvsp[-4].expr), &(yyvsp[-2].stmt), &(yyvsp[0].stmt));}
-#line 1689 "src/parser.c"
+#line 129 "src/parser.bison"
+                                                                                                                {(yyval.stmt)=stmt_if     (&(yyvsp[-4].expr), &(yyvsp[-2].stmt), &(yyvsp[0].stmt));}
+#line 1691 "src/parser.c"
     break;
 
   case 17:
-#line 124 "src/parser.bison"
-                                                                            {(yyval.stmt)=stmt_while  (&(yyvsp[-2].expr), &(yyvsp[0].stmt));}
-#line 1695 "src/parser.c"
+#line 130 "src/parser.bison"
+                                                                                                {(yyval.stmt)=stmt_while  (&(yyvsp[-2].expr), &(yyvsp[0].stmt));}
+#line 1697 "src/parser.c"
     break;
 
   case 18:
-#line 125 "src/parser.bison"
-                                                                            {(yyval.stmt)=stmt_ret    (NULL);}
-#line 1701 "src/parser.c"
+#line 131 "src/parser.bison"
+                                                                                                        {(yyval.stmt)=stmt_ret    (NULL);}
+#line 1703 "src/parser.c"
     break;
 
   case 19:
-#line 126 "src/parser.bison"
-                                                                            {(yyval.stmt)=stmt_ret    (&(yyvsp[-1].expr));}
-#line 1707 "src/parser.c"
+#line 132 "src/parser.bison"
+                                                                                                        {(yyval.stmt)=stmt_ret    (&(yyvsp[-1].expr));}
+#line 1709 "src/parser.c"
     break;
 
   case 20:
-#line 127 "src/parser.bison"
-                                                                            {(yyval.stmt)=stmt_var    (&(yyvsp[0].idents));}
-#line 1713 "src/parser.c"
+#line 133 "src/parser.bison"
+                                                                                                                {(yyval.stmt)=stmt_var    (&(yyvsp[0].idents));}
+#line 1715 "src/parser.c"
     break;
 
   case 21:
-#line 128 "src/parser.bison"
-                                                                            {(yyval.stmt)=stmt_expr   (&(yyvsp[-1].expr));}
-#line 1719 "src/parser.c"
+#line 134 "src/parser.bison"
+                                                                                                                {(yyval.stmt)=stmt_expr   (&(yyvsp[-1].expr));}
+#line 1721 "src/parser.c"
     break;
 
   case 22:
-#line 129 "src/parser.bison"
-                                                                            {(yyval.stmt)=(yyvsp[-1].stmt);}
-#line 1725 "src/parser.c"
+#line 135 "src/parser.bison"
+                                                                                                        {(yyval.stmt)=(yyvsp[-1].stmt);}
+#line 1727 "src/parser.c"
     break;
 
   case 27:
-#line 135 "src/parser.bison"
+#line 141 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_icnst(&(yyvsp[0].ival));}
-#line 1731 "src/parser.c"
+#line 1733 "src/parser.c"
     break;
 
   case 28:
-#line 136 "src/parser.bison"
+#line 142 "src/parser.bison"
                                                                                                                 {(yyval.expr)=expr_scnst(&(yyvsp[0].strval));}
-#line 1737 "src/parser.c"
+#line 1739 "src/parser.c"
     break;
 
   case 29:
-#line 137 "src/parser.bison"
+#line 143 "src/parser.bison"
                                                                                                                 {(yyval.expr)=expr_ident(&(yyvsp[0].ident));}
-#line 1743 "src/parser.c"
+#line 1745 "src/parser.c"
     break;
 
   case 30:
-#line 138 "src/parser.bison"
+#line 144 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_call (&(yyvsp[-3].expr), &(yyvsp[-1].exprs));}
-#line 1749 "src/parser.c"
+#line 1751 "src/parser.c"
     break;
 
   case 31:
-#line 139 "src/parser.bison"
+#line 145 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(OP_INDEX,     &(yyvsp[-3].expr), &(yyvsp[-1].expr));}
-#line 1755 "src/parser.c"
+#line 1757 "src/parser.c"
     break;
 
   case 32:
-#line 140 "src/parser.bison"
+#line 146 "src/parser.bison"
                                                                                                         {(yyval.expr)=(yyvsp[-1].expr);}
-#line 1761 "src/parser.c"
+#line 1763 "src/parser.c"
     break;
 
   case 33:
-#line 142 "src/parser.bison"
+#line 148 "src/parser.bison"
                                                                                                                 {(yyval.expr)=expr_math1(OP_0_MINUS,   &(yyvsp[0].expr));}
-#line 1767 "src/parser.c"
+#line 1769 "src/parser.c"
     break;
 
   case 34:
-#line 143 "src/parser.bison"
+#line 149 "src/parser.bison"
                                                                                                                 {(yyval.expr)=expr_math1(OP_LOGIC_NOT, &(yyvsp[0].expr));}
-#line 1773 "src/parser.c"
+#line 1775 "src/parser.c"
     break;
 
   case 35:
-#line 144 "src/parser.bison"
+#line 150 "src/parser.bison"
                                                                                                                 {(yyval.expr)=expr_math1(OP_BIT_NOT,   &(yyvsp[0].expr));}
-#line 1779 "src/parser.c"
+#line 1781 "src/parser.c"
     break;
 
   case 36:
-#line 145 "src/parser.bison"
+#line 151 "src/parser.bison"
                                                                                                                 {(yyval.expr)=expr_math1(OP_ADROF,     &(yyvsp[0].expr));}
-#line 1785 "src/parser.c"
+#line 1787 "src/parser.c"
     break;
 
   case 37:
-#line 146 "src/parser.bison"
+#line 152 "src/parser.bison"
                                                                                                                 {(yyval.expr)=expr_math1(OP_DEREF,     &(yyvsp[0].expr));}
-#line 1791 "src/parser.c"
+#line 1793 "src/parser.c"
     break;
 
   case 38:
-#line 148 "src/parser.bison"
+#line 154 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(OP_MUL,       &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1797 "src/parser.c"
+#line 1799 "src/parser.c"
     break;
 
   case 39:
-#line 149 "src/parser.bison"
+#line 155 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_math2(OP_DIV,       &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1803 "src/parser.c"
+#line 1805 "src/parser.c"
     break;
 
   case 40:
-#line 150 "src/parser.bison"
+#line 156 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_math2(OP_MOD,       &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1809 "src/parser.c"
+#line 1811 "src/parser.c"
     break;
 
   case 41:
-#line 152 "src/parser.bison"
+#line 158 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(OP_ADD,       &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1815 "src/parser.c"
+#line 1817 "src/parser.c"
     break;
 
   case 42:
-#line 153 "src/parser.bison"
+#line 159 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_math2(OP_SUB,       &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1821 "src/parser.c"
+#line 1823 "src/parser.c"
     break;
 
   case 43:
-#line 155 "src/parser.bison"
+#line 161 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(OP_LT,        &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1827 "src/parser.c"
+#line 1829 "src/parser.c"
     break;
 
   case 44:
-#line 156 "src/parser.bison"
+#line 162 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_math2(OP_LE,        &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1833 "src/parser.c"
+#line 1835 "src/parser.c"
     break;
 
   case 45:
-#line 157 "src/parser.bison"
+#line 163 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_math2(OP_GT,        &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1839 "src/parser.c"
+#line 1841 "src/parser.c"
     break;
 
   case 46:
-#line 158 "src/parser.bison"
+#line 164 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_math2(OP_GE,        &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1845 "src/parser.c"
+#line 1847 "src/parser.c"
     break;
 
   case 47:
-#line 160 "src/parser.bison"
+#line 166 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(OP_NE,        &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1851 "src/parser.c"
+#line 1853 "src/parser.c"
     break;
 
   case 48:
-#line 161 "src/parser.bison"
+#line 167 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_math2(OP_EQ,        &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1857 "src/parser.c"
+#line 1859 "src/parser.c"
     break;
 
   case 49:
-#line 163 "src/parser.bison"
+#line 169 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(OP_BIT_AND,   &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1863 "src/parser.c"
+#line 1865 "src/parser.c"
     break;
 
   case 50:
-#line 164 "src/parser.bison"
+#line 170 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(OP_BIT_XOR,   &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1869 "src/parser.c"
+#line 1871 "src/parser.c"
     break;
 
   case 51:
-#line 165 "src/parser.bison"
+#line 171 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(OP_BIT_OR,    &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1875 "src/parser.c"
+#line 1877 "src/parser.c"
     break;
 
   case 52:
-#line 166 "src/parser.bison"
+#line 172 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(OP_SHIFT_L,   &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1881 "src/parser.c"
+#line 1883 "src/parser.c"
     break;
 
   case 53:
-#line 167 "src/parser.bison"
+#line 173 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_math2(OP_SHIFT_R,   &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1887 "src/parser.c"
+#line 1889 "src/parser.c"
     break;
 
   case 54:
-#line 169 "src/parser.bison"
+#line 175 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(OP_LOGIC_AND, &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1893 "src/parser.c"
+#line 1895 "src/parser.c"
     break;
 
   case 55:
-#line 170 "src/parser.bison"
+#line 176 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(OP_LOGIC_OR,  &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1899 "src/parser.c"
+#line 1901 "src/parser.c"
     break;
 
   case 56:
-#line 172 "src/parser.bison"
+#line 178 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(OP_ASSIGN,    &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1905 "src/parser.c"
+#line 1907 "src/parser.c"
     break;
 
   case 57:
-#line 173 "src/parser.bison"
+#line 179 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(OP_ADD,       &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1911 "src/parser.c"
+#line 1913 "src/parser.c"
     break;
 
   case 58:
-#line 174 "src/parser.bison"
+#line 180 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(OP_SUB,       &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1917 "src/parser.c"
+#line 1919 "src/parser.c"
     break;
 
   case 59:
-#line 175 "src/parser.bison"
+#line 181 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(OP_MUL,       &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1923 "src/parser.c"
+#line 1925 "src/parser.c"
     break;
 
   case 60:
-#line 176 "src/parser.bison"
+#line 182 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(OP_DIV,       &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1929 "src/parser.c"
+#line 1931 "src/parser.c"
     break;
 
   case 61:
-#line 177 "src/parser.bison"
+#line 183 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(OP_MOD,       &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1935 "src/parser.c"
+#line 1937 "src/parser.c"
     break;
 
   case 62:
-#line 178 "src/parser.bison"
+#line 184 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(OP_BIT_AND,   &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1941 "src/parser.c"
+#line 1943 "src/parser.c"
     break;
 
   case 63:
-#line 179 "src/parser.bison"
+#line 185 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(OP_BIT_OR,    &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1947 "src/parser.c"
+#line 1949 "src/parser.c"
     break;
 
   case 64:
-#line 180 "src/parser.bison"
+#line 186 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(OP_BIT_XOR,   &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1953 "src/parser.c"
+#line 1955 "src/parser.c"
     break;
 
   case 65:
-#line 181 "src/parser.bison"
+#line 187 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(OP_SHIFT_L,   &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1959 "src/parser.c"
+#line 1961 "src/parser.c"
     break;
 
   case 66:
-#line 182 "src/parser.bison"
+#line 188 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(OP_SHIFT_R,   &(yyvsp[-2].expr), &(yyvsp[0].expr));}
-#line 1965 "src/parser.c"
+#line 1967 "src/parser.c"
+    break;
+
+  case 67:
+#line 193 "src/parser.bison"
+                                                                                                {(yyval.stmt)=stmt_iasm(&(yyvsp[-7].strval), &(yyvsp[-5].asm_regs),  &(yyvsp[-3].asm_regs),  NULL);}
+#line 1973 "src/parser.c"
+    break;
+
+  case 68:
+#line 196 "src/parser.bison"
+                                                                                                {(yyval.stmt)=stmt_iasm(&(yyvsp[-5].strval), &(yyvsp[-3].asm_regs),  &(yyvsp[-1].asm_regs),  NULL);}
+#line 1979 "src/parser.c"
+    break;
+
+  case 69:
+#line 198 "src/parser.bison"
+                                                                                                {(yyval.stmt)=stmt_iasm(&(yyvsp[-3].strval), &(yyvsp[-1].asm_regs),  NULL, NULL);}
+#line 1985 "src/parser.c"
     break;
 
   case 70:
-#line 193 "src/parser.bison"
-                                                                            {(yyval.stmt)=stmt_iasm(&(yyvsp[-1].strval), NULL, NULL, NULL);}
-#line 1971 "src/parser.c"
+#line 199 "src/parser.bison"
+                                                                                                {(yyval.stmt)=stmt_iasm(&(yyvsp[-1].strval), NULL, NULL, NULL);}
+#line 1991 "src/parser.c"
     break;
 
 
-#line 1975 "src/parser.c"
+#line 1995 "src/parser.c"
 
       default: break;
     }
@@ -2203,7 +2223,7 @@ yyreturn:
 #endif
   return yyresult;
 }
-#line 203 "src/parser.bison"
+#line 209 "src/parser.bison"
 
 
 void *make_copy(void *mem, size_t size) {

@@ -2,6 +2,16 @@
 #include "parser-util.h"
 #include <malloc.h>
 
+// Incomplete function definition (without code).
+funcdef_t funcdef_def (ident_t  *ident,  idents_t *args) {
+	return (funcdef_t) {
+		.ident = *ident,
+		.args  = *args,
+		.stmts = NULL
+	};
+}
+
+// Complete function declaration (with code).
 funcdef_t funcdef_decl(ident_t *ident, idents_t *args, stmts_t *code) {
 	return (funcdef_t) {
 		.ident = *ident,
@@ -12,6 +22,7 @@ funcdef_t funcdef_decl(ident_t *ident, idents_t *args, stmts_t *code) {
 
 
 
+// An empty list of statements.
 stmts_t stmts_empty() {
 	return (stmts_t) {
 		.arr = NULL,
@@ -19,6 +30,7 @@ stmts_t stmts_empty() {
 	};
 }
 
+// Concatenate to a list of statements.
 stmts_t stmts_cat(stmts_t *stmts, stmt_t *stmt) {
 	stmts->num ++;
 	stmts->arr = realloc(stmts->arr, stmts->num * sizeof(stmt_t));
@@ -28,6 +40,7 @@ stmts_t stmts_cat(stmts_t *stmts, stmt_t *stmt) {
 
 
 
+// Statements contained in curly brackets.
 stmt_t stmt_multi(stmts_t *stmts) {
 	return (stmt_t) {
 		.type  = STMT_TYPE_MULTI,
@@ -35,6 +48,7 @@ stmt_t stmt_multi(stmts_t *stmts) {
 	};
 }
 
+// If-else statements.
 stmt_t stmt_if(expr_t *cond, stmt_t *s_if, stmt_t *s_else) {
 	return (stmt_t) {
 		.type       = STMT_TYPE_IF,
@@ -44,6 +58,7 @@ stmt_t stmt_if(expr_t *cond, stmt_t *s_if, stmt_t *s_else) {
 	};
 }
 
+// While loops.
 stmt_t stmt_while(expr_t *cond, stmt_t *code) {
 	return (stmt_t) {
 		.type       = STMT_TYPE_WHILE,
@@ -52,6 +67,7 @@ stmt_t stmt_while(expr_t *cond, stmt_t *code) {
 	};
 }
 
+// Return statements.
 stmt_t stmt_ret(expr_t *expr) {
 	return (stmt_t) {
 		.type  = STMT_TYPE_RET,
@@ -59,6 +75,7 @@ stmt_t stmt_ret(expr_t *expr) {
 	};
 }
 
+// Variable declaration statements.
 stmt_t stmt_var(idents_t *decls) {
 	return (stmt_t) {
 		.type  = STMT_TYPE_VAR,
@@ -66,6 +83,7 @@ stmt_t stmt_var(idents_t *decls) {
 	};
 }
 
+// Expression statements (most code).
 stmt_t stmt_expr(expr_t *expr) {
 	return (stmt_t) {
 		.type  = STMT_TYPE_EXPR,
@@ -73,13 +91,14 @@ stmt_t stmt_expr(expr_t *expr) {
 	};
 }
 
+// Assembly statements (archtitecture-specific assembly code).
 stmt_t stmt_iasm(strval_t *text, iasm_regs_t *outputs, iasm_regs_t *inputs, void *clobbers) {
 	iasm_t *iasm = (iasm_t *) malloc(sizeof(iasm_t));
 	*iasm = (iasm_t) {
 		.text     = *text,
-		// .outputs  = outputs,
-		// .inputs   = inputs,
-		// .clobbers = clobbers
+		.outputs  = COPY(outputs,  iasm_regs_t),
+		.inputs   = COPY(inputs,   iasm_regs_t),
+		// .clobbers = COPY(clobbers, lolwutidownknow)
 	};
 	return (stmt_t) {
 		.type  = STMT_TYPE_IASM,
@@ -89,6 +108,7 @@ stmt_t stmt_iasm(strval_t *text, iasm_regs_t *outputs, iasm_regs_t *inputs, void
 
 
 
+// An empty list of identities.
 idents_t idents_empty() {
 	return (idents_t) {
 		.arr = NULL,
@@ -96,6 +116,7 @@ idents_t idents_empty() {
 	};
 }
 
+// Concatenate to a list of identities.
 idents_t idents_cat(idents_t *idents, ident_t *ident) {
 	idents->num ++;
 	idents->arr = realloc(idents->arr, idents->num * sizeof(ident_t));
@@ -103,6 +124,7 @@ idents_t idents_cat(idents_t *idents, ident_t *ident) {
 	return *idents;
 }
 
+// A list of one identity.
 idents_t idents_one(ident_t *ident) {
 	return (idents_t) {
 		.arr = COPY(ident, ident_t),
@@ -112,6 +134,7 @@ idents_t idents_one(ident_t *ident) {
 
 
 
+// Numeric constant expression.
 expr_t expr_icnst(ival_t *val) {
 	return (expr_t) {
 		.type     = EXPR_TYPE_CONST,
@@ -119,6 +142,7 @@ expr_t expr_icnst(ival_t *val) {
 	};
 }
 
+// String constant expression.
 expr_t expr_scnst(strval_t *val) {
 	return (expr_t) {
 		.type     = EXPR_TYPE_CONST,
@@ -126,6 +150,7 @@ expr_t expr_scnst(strval_t *val) {
 	};
 }
 
+// Identity expression (things like variables and functions).
 expr_t expr_ident(ident_t *ident) {
 	return (expr_t) {
 		.type     = EXPR_TYPE_IDENT,
@@ -133,6 +158,7 @@ expr_t expr_ident(ident_t *ident) {
 	};
 }
 
+// Unary math expression (things like &a, b++ and !c).
 expr_t expr_math1(oper_t type, expr_t *val) {
 	if (val->type == EXPR_TYPE_CONST) {
 		// Optimise out numbers.
@@ -162,6 +188,7 @@ expr_t expr_math1(oper_t type, expr_t *val) {
 	};
 }
 
+// Function call expression.
 expr_t expr_call(expr_t *func, exprs_t *args) {
 	return (expr_t) {
 		.type     = EXPR_TYPE_CALL,
@@ -170,6 +197,7 @@ expr_t expr_call(expr_t *func, exprs_t *args) {
 	};
 }
 
+// Binary math expression (things like a + b, c = d and e[f]).
 expr_t expr_math2(oper_t type, expr_t *val1, expr_t *val2) {
 	if (val1->type == EXPR_TYPE_CONST && val2->type == EXPR_TYPE_CONST) {
 		// Optimise out numbers.
@@ -245,6 +273,8 @@ expr_t expr_math2(oper_t type, expr_t *val1, expr_t *val2) {
 	};
 }
 
+// Assignment math expression (things like a += b, c *= d and e |= f).
+// Generalises to a combination of an assignment and expr_math2.
 expr_t expr_matha(oper_t type, expr_t *val1, expr_t *val2) {
 	// This is quite simple: val1 = val1 operator val2.
 	expr_t param_b = expr_math2(type, val1, val2);

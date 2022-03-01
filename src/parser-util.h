@@ -88,6 +88,7 @@ struct expr {
 		exprs_t *args;
 	};
 };
+
 struct stmt {
 	pos_t           pos;
 	stmt_type_t     type;
@@ -105,10 +106,21 @@ struct stmt {
 	preproc_data_t *preproc;
 };
 
+struct iasm_reg {
+	char           *mode;
+	expr_t         *expr;
+};
+
+struct iasm_regs {
+	pos_t           pos;
+	size_t          num;
+	iasm_reg_t     *arr;
+};
+
 struct iasm {
 	strval_t        text;
-	// iasm_regs_t     inputs;
-	// iasm_regs_t     outputs;
+	iasm_regs_t     inputs;
+	iasm_regs_t     outputs;
 	// iasm_strs_t     clobbers;
 };
 
@@ -123,6 +135,7 @@ struct exprs {
 	size_t          num;
 	expr_t         *arr;
 };
+
 struct stmts {
 	pos_t           pos;
 	size_t          num;
@@ -140,29 +153,52 @@ struct funcdef {
 extern void *make_copy(void *mem, size_t size);
 #define COPY(thing, type) ( (type *) make_copy(thing, sizeof(type)) )
 
+// Incomplete function definition (without code).
+funcdef_t funcdef_def (ident_t  *ident,  idents_t *args);
+// Complete function declaration (with code).
 funcdef_t funcdef_decl(ident_t  *ident,  idents_t *args, stmts_t *code);
 
+// An empty list of statements.
 stmts_t   stmts_empty ();
+// Concatenate to a list of statements.
 stmts_t   stmts_cat   (stmts_t  *stmts, stmt_t  *stmt);
 
+// Statements contained in curly brackets.
 stmt_t    stmt_multi  (stmts_t  *stmts);
+// If-else statements.
 stmt_t    stmt_if     (expr_t   *cond,  stmt_t *s_if, stmt_t *s_else);
+// While loops.
 stmt_t    stmt_while  (expr_t   *cond,  stmt_t *code);
+// Return statements.
 stmt_t    stmt_ret    (expr_t   *expr);
+// Variable declaration statements.
 stmt_t    stmt_var    (idents_t *decls);
+// Expression statements (most code).
 stmt_t    stmt_expr   (expr_t   *expr);
+// Assembly statements (archtitecture-specific assembly code).
 stmt_t    stmt_iasm   (strval_t *text,  iasm_regs_t *output, iasm_regs_t *input, void *clobbers);
 
+// An empty list of identities.
 idents_t  idents_empty();
+// Concatenate to a list of identities.
 idents_t  idents_cat  (idents_t *idents, ident_t  *ident);
+// A list of one identity.
 idents_t  idents_one  (ident_t  *ident);
 
+// Numeric constant expression.
 expr_t    expr_icnst  (ival_t   *val);
+// String constant expression.
 expr_t    expr_scnst  (strval_t *val);
+// Identity expression (things like variables and functions).
 expr_t    expr_ident  (ident_t  *ident);
+// Unary math expression (things like &a, b++ and !c).
 expr_t    expr_math1  (oper_t    type,   expr_t   *val);
+// Function call expression.
 expr_t    expr_call   (expr_t   *func,   exprs_t  *args);
+// Binary math expression (things like a + b, c = d and e[f]).
 expr_t    expr_math2  (oper_t    type,   expr_t   *val1, expr_t *val2);
+// Assignment math expression (things like a += b, c *= d and e |= f).
+// Generalises to a combination of an assignment and expr_math2.
 expr_t    expr_matha  (oper_t    type,   expr_t   *val1, expr_t *val2);
 
 #endif // PARSER_UTIL_H

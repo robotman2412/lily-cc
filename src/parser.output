@@ -209,10 +209,10 @@ Nonterminals, with rules where they appear
     asm_strs (71)
         on left: 72 73
         on right: 70 72
-    opt_asm_regs (72)
+    opt_asm_regs <asm_regs> (72)
         on left: 74 75
         on right: 66 67 68
-    asm_regs (73)
+    asm_regs <asm_regs> (73)
         on left: 76 77
         on right: 74 76
 

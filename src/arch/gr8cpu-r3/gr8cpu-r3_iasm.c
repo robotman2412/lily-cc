@@ -449,7 +449,7 @@ r3_token_t r3_iasm_lex(tokeniser_ctx_t *ctx) {
 		}
 		// Turn it into a number, hexadecimal.
 		unsigned long long ival = strtoull(strval, NULL, 16);
-		DEBUG_TKN("ival  %d (0x%s)\n", ival, strval);
+		DEBUG_TKN("ival  %lld (0x%s)\n", ival, strval);
 		free(strval);
 		return (r3_token_t) {
 			.type = R3_TKN_IVAL,
@@ -472,7 +472,7 @@ r3_token_t r3_iasm_lex(tokeniser_ctx_t *ctx) {
 		}
 		// Turn it into a number, respecting octal.
 		unsigned long long ival = strtoull(strval, NULL, c == '0' ? 8 : 10);
-		DEBUG_TKN("ival  %d (%s)\n", ival, strval);
+		DEBUG_TKN("ival  %lld (%s)\n", ival, strval);
 		free(strval);
 		return (r3_token_t) {
 			.type = R3_TKN_IVAL,

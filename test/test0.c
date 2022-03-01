@@ -33,5 +33,7 @@
 func iasm(a) {
 	asm (
 		"MOV X(iasm.LA0000), A"
+		: "=r" (a) // Outputs.
+		: [c] "r" (a) // Inputs.
 	);
 }

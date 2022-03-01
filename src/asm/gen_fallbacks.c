@@ -4,6 +4,7 @@
 #include "gen_util.h"
 #include "malloc.h"
 #include "gen_preproc.h"
+#include <string.h>
 
 /* ================== Functions ================== */
 
@@ -169,10 +170,40 @@ bool gen_stmt(asm_ctx_t *ctx, void *ptr, bool is_stmts) {
 #endif
 
 #ifdef INLINE_ASM_SUPPORTED
+// Preprocessing of inline assembly text.
+// Converts all the inputs and outputs found the the raw text.
+static char *iasm_preproc(asm_ctx_t *ctx, iasm_t *iasm, size_t magic_number) {
+	// Allocate a small bit of buffer.
+	size_t cap   = strlen(iasm->text.strval);
+	char *output = malloc(cap);
+	*output      = 0;
+}
+
 // Inline assembly implementation.
 void gen_inline_asm(asm_ctx_t *ctx, iasm_t *iasm) {
+	// Used to assert that, including clobbers, there are enough free registers.
+	size_t num_input_reg  = 0;
+	size_t num_output_reg = 0;
+	for (size_t i = 0; i < iasm->inputs->num; i++) {
+		
+		if (iasm->inputs->arr[i].symbol) {
+			DEBUG_GEN("Input '%s' mode '%s'\n", iasm->inputs->arr[i].symbol, iasm->inputs->arr[i].mode);
+		} else {
+			DEBUG_GEN("Input anonymous mode '%s'\n", iasm->inputs->arr[i].mode);
+		}
+	}
+	for (size_t i = 0; i < iasm->outputs->num; i++) {
+		if (iasm->outputs->arr[i].symbol) {
+			DEBUG_GEN("Output '%s' mode '%s'\n", iasm->outputs->arr[i].symbol, iasm->outputs->arr[i].mode);
+		} else {
+			DEBUG_GEN("Output anonymous mode '%s'\n", iasm->outputs->arr[i].mode);
+		}
+	}
+
 	// TODO: Clobbers, inputs and outputs.
+	char *text = iasm_preproc(ctx, iasm, 0);
 	gen_asm(ctx, iasm->text.strval);
+	free(text);
 }
 #else
 // Inline assembly implementation.

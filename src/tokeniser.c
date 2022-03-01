@@ -166,7 +166,7 @@ char tokeniser_nextchar_no(tokeniser_ctx_t *ctx, int no) {
 	}
 }
 
-
+// Hexadecimal to binary.
 static inline int8_t unhex_char(char c) {
 	return	(c >= '0' && c <= '9') ? c - '0' :
 			(c >= 'a' && c <= 'f') ? c - 'a' + 0x0A :
@@ -174,6 +174,7 @@ static inline int8_t unhex_char(char c) {
 			-1;
 }
 
+// Unescape an escaped c-string.
 static char *tokeniser_getstr(tokeniser_ctx_t *ctx, char term) {
 	// Make the buf.
 	size_t buf_len   = 256;
@@ -579,6 +580,12 @@ int tokenise(tokeniser_ctx_t *ctx) {
 			keyw = TKN_AUTO;
 		} else if (!strcmp(strval, "func")) {
 			keyw = TKN_FUNC;
+		} else if (!strcmp(strval, "goto")) {
+			keyw = TKN_GOTO;
+		} else if (!strcmp(strval, "volatile")) {
+			keyw = TKN_VOLATILE;
+		} else if (!strcmp(strval, "inline")) {
+			keyw = TKN_INLINE;
 		}
 		// Return the appropriate alternative.
 		if (keyw) {

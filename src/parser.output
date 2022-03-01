@@ -106,71 +106,74 @@ Grammar
    79 opt_asm_regs: asm_regs
    80             | %empty
 
-   81 asm_regs: TKN_STRVAL "(" expr ")" "," asm_regs
-   82         | TKN_STRVAL "(" expr ")"
+   81 asm_regs: asm_reg "," asm_regs
+   82         | asm_reg
+
+   83 asm_reg: "[" TKN_IDENT "]" TKN_STRVAL "(" expr ")"
+   84        | TKN_STRVAL "(" expr ")"
 
 
 Terminals, with rules where they appear
 
     $end (0) 0
     error (256)
-    "auto" <pos> (258) 6
-    "func" <pos> (259) 5
-    "if" <pos> (260) 14 15
-    "else" <pos> (261) 15
-    "while" <pos> (262) 16
-    "return" <pos> (263) 17 18
-    "asm" <pos> (264) 66
-    "then" (265)
-    "(" <pos> (266) 5 14 15 16 29 31 71 72 73 74 81 82
-    ")" <pos> (267) 5 14 15 16 29 31 71 72 73 74 81 82
-    "{" <pos> (268) 5 13
-    "}" <pos> (269) 5 13
-    "[" <pos> (270) 30
-    "]" <pos> (271) 30
-    ";" <pos> (272) 6 17 18 20 21
-    ":" <pos> (273) 71 72 73
-    "," <pos> (274) 9 24 77 81
-    TKN_IVAL <ival> (275) 26
-    TKN_STRVAL <strval> (276) 27 71 72 73 74 77 78 81 82
-    TKN_IDENT <ident> (277) 5 9 10 28
-    TKN_GARBAGE <garbage> (278)
-    "+=" <pos> (279) 56
-    "-=" <pos> (280) 57
-    "<<=" <pos> (281) 64
-    ">>=" <pos> (282) 65
-    "*=" <pos> (283) 58
-    "/=" <pos> (284) 59
-    "%=" <pos> (285) 60
-    "&=" <pos> (286) 61
-    "|=" <pos> (287) 62
-    "^=" <pos> (288) 63
-    "++" <pos> (289)
-    "--" <pos> (290)
-    "+" <pos> (291) 40
-    "-" <pos> (292) 32 41
-    "=" <pos> (293) 55
-    "&" <pos> (294) 35 48
-    "*" <pos> (295) 36 37
-    "/" <pos> (296) 38
-    "%" <pos> (297) 39
-    "!" <pos> (298) 33
-    "~" <pos> (299) 34
-    "^" <pos> (300) 49
-    "|" <pos> (301) 50
-    "<<" <pos> (302) 51
-    ">>" <pos> (303) 52
-    "<" <pos> (304) 42
-    "<=" <pos> (305) 43
-    ">" <pos> (306) 44
-    ">=" <pos> (307) 45
-    "==" <pos> (308) 46
-    "!=" <pos> (309) 47
-    "||" (310) 54
-    "&&" (311) 53
-    "volatile" (312) 68
-    "inline" (313) 69
-    "goto" (314) 70
+    "volatile" <pos> (258) 68
+    "inline" <pos> (259) 69
+    "goto" <pos> (260) 70
+    "auto" <pos> (261) 6
+    "func" <pos> (262) 5
+    "if" <pos> (263) 14 15
+    "else" <pos> (264) 15
+    "while" <pos> (265) 16
+    "return" <pos> (266) 17 18
+    "asm" <pos> (267) 66
+    "then" (268)
+    "(" <pos> (269) 5 14 15 16 29 31 71 72 73 74 83 84
+    ")" <pos> (270) 5 14 15 16 29 31 71 72 73 74 83 84
+    "{" <pos> (271) 5 13
+    "}" <pos> (272) 5 13
+    "[" <pos> (273) 30 83
+    "]" <pos> (274) 30 83
+    ";" <pos> (275) 6 17 18 20 21
+    ":" <pos> (276) 71 72 73
+    "," <pos> (277) 9 24 77 81
+    TKN_IVAL <ival> (278) 26
+    TKN_STRVAL <strval> (279) 27 71 72 73 74 77 78 83 84
+    TKN_IDENT <ident> (280) 5 9 10 28 83
+    TKN_GARBAGE <garbage> (281)
+    "+=" <pos> (282) 56
+    "-=" <pos> (283) 57
+    "<<=" <pos> (284) 64
+    ">>=" <pos> (285) 65
+    "*=" <pos> (286) 58
+    "/=" <pos> (287) 59
+    "%=" <pos> (288) 60
+    "&=" <pos> (289) 61
+    "|=" <pos> (290) 62
+    "^=" <pos> (291) 63
+    "++" <pos> (292)
+    "--" <pos> (293)
+    "&&" <pos> (294) 53
+    "||" <pos> (295) 54
+    "+" <pos> (296) 40
+    "-" <pos> (297) 32 41
+    "=" <pos> (298) 55
+    "&" <pos> (299) 35 48
+    "*" <pos> (300) 36 37
+    "/" <pos> (301) 38
+    "%" <pos> (302) 39
+    "!" <pos> (303) 33
+    "~" <pos> (304) 34
+    "^" <pos> (305) 49
+    "|" <pos> (306) 50
+    "<<" <pos> (307) 51
+    ">>" <pos> (308) 52
+    "<" <pos> (309) 42
+    "<=" <pos> (310) 43
+    ">" <pos> (311) 44
+    ">=" <pos> (312) 45
+    "==" <pos> (313) 46
+    "!=" <pos> (314) 47
 
 
 Nonterminals, with rules where they appear
@@ -209,7 +212,7 @@ Nonterminals, with rules where they appear
         on right: 22 24
     expr <expr> (71)
         on left: 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65
-        on right: 14 15 16 18 20 24 25 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 81 82
+        on right: 14 15 16 18 20 24 25 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 83 84
     inline_asm <stmt> (72)
         on left: 66
         on right: 21
@@ -231,6 +234,9 @@ Nonterminals, with rules where they appear
     asm_regs <asm_regs> (78)
         on left: 81 82
         on right: 79 81
+    asm_reg <asm_reg> (79)
+        on left: 83 84
+        on right: 81 82
 
 
 State 0
@@ -675,25 +681,25 @@ State 38
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
 
 State 39
@@ -793,25 +799,25 @@ State 43
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
 
 State 44
@@ -821,10 +827,10 @@ State 44
    69         | asm_qual . "inline"
    70         | asm_qual . "goto"
 
-    "("         shift, and go to state 88
-    "volatile"  shift, and go to state 89
-    "inline"    shift, and go to state 90
-    "goto"      shift, and go to state 91
+    "volatile"  shift, and go to state 88
+    "inline"    shift, and go to state 89
+    "goto"      shift, and go to state 90
+    "("         shift, and go to state 91
 
     asm_code  go to state 92
 
@@ -877,25 +883,25 @@ State 45
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
 
 State 46
@@ -963,9 +969,9 @@ State 47
 
     "("  shift, and go to state 52
     "["  shift, and go to state 53
-    "-"  shift, and go to state 66
-    "&"  shift, and go to state 68
-    "*"  shift, and go to state 69
+    "-"  shift, and go to state 68
+    "&"  shift, and go to state 70
+    "*"  shift, and go to state 71
 
     $default  reduce using rule 32 (expr)
 
@@ -1007,9 +1013,9 @@ State 48
 
     "("  shift, and go to state 52
     "["  shift, and go to state 53
-    "-"  shift, and go to state 66
-    "&"  shift, and go to state 68
-    "*"  shift, and go to state 69
+    "-"  shift, and go to state 68
+    "&"  shift, and go to state 70
+    "*"  shift, and go to state 71
 
     $default  reduce using rule 35 (expr)
 
@@ -1051,9 +1057,9 @@ State 49
 
     "("  shift, and go to state 52
     "["  shift, and go to state 53
-    "-"  shift, and go to state 66
-    "&"  shift, and go to state 68
-    "*"  shift, and go to state 69
+    "-"  shift, and go to state 68
+    "&"  shift, and go to state 70
+    "*"  shift, and go to state 71
 
     $default  reduce using rule 36 (expr)
 
@@ -1095,9 +1101,9 @@ State 50
 
     "("  shift, and go to state 52
     "["  shift, and go to state 53
-    "-"  shift, and go to state 66
-    "&"  shift, and go to state 68
-    "*"  shift, and go to state 69
+    "-"  shift, and go to state 68
+    "&"  shift, and go to state 70
+    "*"  shift, and go to state 71
 
     $default  reduce using rule 33 (expr)
 
@@ -1139,9 +1145,9 @@ State 51
 
     "("  shift, and go to state 52
     "["  shift, and go to state 53
-    "-"  shift, and go to state 66
-    "&"  shift, and go to state 68
-    "*"  shift, and go to state 69
+    "-"  shift, and go to state 68
+    "&"  shift, and go to state 70
+    "*"  shift, and go to state 71
 
     $default  reduce using rule 34 (expr)
 
@@ -1363,7 +1369,7 @@ State 64
 
 State 65
 
-   40 expr: expr "+" . expr
+   53 expr: expr "&&" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1380,7 +1386,7 @@ State 65
 
 State 66
 
-   41 expr: expr "-" . expr
+   54 expr: expr "||" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1397,7 +1403,7 @@ State 66
 
 State 67
 
-   55 expr: expr "=" . expr
+   40 expr: expr "+" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1414,7 +1420,7 @@ State 67
 
 State 68
 
-   48 expr: expr "&" . expr
+   41 expr: expr "-" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1431,7 +1437,7 @@ State 68
 
 State 69
 
-   37 expr: expr "*" . expr
+   55 expr: expr "=" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1448,7 +1454,7 @@ State 69
 
 State 70
 
-   38 expr: expr "/" . expr
+   48 expr: expr "&" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1465,7 +1471,7 @@ State 70
 
 State 71
 
-   39 expr: expr "%" . expr
+   37 expr: expr "*" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1482,7 +1488,7 @@ State 71
 
 State 72
 
-   49 expr: expr "^" . expr
+   38 expr: expr "/" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1499,7 +1505,7 @@ State 72
 
 State 73
 
-   50 expr: expr "|" . expr
+   39 expr: expr "%" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1516,7 +1522,7 @@ State 73
 
 State 74
 
-   51 expr: expr "<<" . expr
+   49 expr: expr "^" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1533,7 +1539,7 @@ State 74
 
 State 75
 
-   52 expr: expr ">>" . expr
+   50 expr: expr "|" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1550,7 +1556,7 @@ State 75
 
 State 76
 
-   42 expr: expr "<" . expr
+   51 expr: expr "<<" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1567,7 +1573,7 @@ State 76
 
 State 77
 
-   43 expr: expr "<=" . expr
+   52 expr: expr ">>" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1584,7 +1590,7 @@ State 77
 
 State 78
 
-   44 expr: expr ">" . expr
+   42 expr: expr "<" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1601,7 +1607,7 @@ State 78
 
 State 79
 
-   45 expr: expr ">=" . expr
+   43 expr: expr "<=" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1618,7 +1624,7 @@ State 79
 
 State 80
 
-   46 expr: expr "==" . expr
+   44 expr: expr ">" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1635,7 +1641,7 @@ State 80
 
 State 81
 
-   47 expr: expr "!=" . expr
+   45 expr: expr ">=" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1652,7 +1658,7 @@ State 81
 
 State 82
 
-   54 expr: expr "||" . expr
+   46 expr: expr "==" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1669,7 +1675,7 @@ State 82
 
 State 83
 
-   53 expr: expr "&&" . expr
+   47 expr: expr "!=" . expr
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -1740,25 +1746,25 @@ State 85
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
 
 State 86
@@ -1809,25 +1815,25 @@ State 86
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
 
 State 87
@@ -1839,33 +1845,33 @@ State 87
 
 State 88
 
-   71 asm_code: "(" . TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
-   72         | "(" . TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ")"
-   73         | "(" . TKN_STRVAL ":" opt_asm_regs ")"
-   74         | "(" . TKN_STRVAL ")"
-
-    TKN_STRVAL  shift, and go to state 130
-
-
-State 89
-
    68 asm_qual: asm_qual "volatile" .
 
     $default  reduce using rule 68 (asm_qual)
 
 
-State 90
+State 89
 
    69 asm_qual: asm_qual "inline" .
 
     $default  reduce using rule 69 (asm_qual)
 
 
-State 91
+State 90
 
    70 asm_qual: asm_qual "goto" .
 
     $default  reduce using rule 70 (asm_qual)
+
+
+State 91
+
+   71 asm_code: "(" . TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
+   72         | "(" . TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ")"
+   73         | "(" . TKN_STRVAL ":" opt_asm_regs ")"
+   74         | "(" . TKN_STRVAL ")"
+
+    TKN_STRVAL  shift, and go to state 130
 
 
 State 92
@@ -1952,25 +1958,25 @@ State 97
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
     $default  reduce using rule 25 (exprs)
 
@@ -2023,25 +2029,25 @@ State 98
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
 
 State 99
@@ -2091,25 +2097,25 @@ State 99
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
     $default  reduce using rule 56 (expr)
 
@@ -2161,25 +2167,25 @@ State 100
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
     $default  reduce using rule 57 (expr)
 
@@ -2231,25 +2237,25 @@ State 101
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
     $default  reduce using rule 64 (expr)
 
@@ -2301,25 +2307,25 @@ State 102
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
     $default  reduce using rule 65 (expr)
 
@@ -2371,25 +2377,25 @@ State 103
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
     $default  reduce using rule 58 (expr)
 
@@ -2441,25 +2447,25 @@ State 104
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
     $default  reduce using rule 59 (expr)
 
@@ -2511,25 +2517,25 @@ State 105
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
     $default  reduce using rule 60 (expr)
 
@@ -2581,25 +2587,25 @@ State 106
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
     $default  reduce using rule 61 (expr)
 
@@ -2651,25 +2657,25 @@ State 107
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
     $default  reduce using rule 62 (expr)
 
@@ -2721,30 +2727,145 @@ State 108
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
     $default  reduce using rule 63 (expr)
 
 
 State 109
+
+   29 expr: expr . "(" opt_exprs ")"
+   30     | expr . "[" expr "]"
+   37     | expr . "*" expr
+   38     | expr . "/" expr
+   39     | expr . "%" expr
+   40     | expr . "+" expr
+   41     | expr . "-" expr
+   42     | expr . "<" expr
+   43     | expr . "<=" expr
+   44     | expr . ">" expr
+   45     | expr . ">=" expr
+   46     | expr . "==" expr
+   47     | expr . "!=" expr
+   48     | expr . "&" expr
+   49     | expr . "^" expr
+   50     | expr . "|" expr
+   51     | expr . "<<" expr
+   52     | expr . ">>" expr
+   53     | expr . "&&" expr
+   53     | expr "&&" expr .
+   54     | expr . "||" expr
+   55     | expr . "=" expr
+   56     | expr . "+=" expr
+   57     | expr . "-=" expr
+   58     | expr . "*=" expr
+   59     | expr . "/=" expr
+   60     | expr . "%=" expr
+   61     | expr . "&=" expr
+   62     | expr . "|=" expr
+   63     | expr . "^=" expr
+   64     | expr . "<<=" expr
+   65     | expr . ">>=" expr
+
+    "("   shift, and go to state 52
+    "["   shift, and go to state 53
+    "+"   shift, and go to state 67
+    "-"   shift, and go to state 68
+    "&"   shift, and go to state 70
+    "*"   shift, and go to state 71
+    "/"   shift, and go to state 72
+    "%"   shift, and go to state 73
+    "^"   shift, and go to state 74
+    "|"   shift, and go to state 75
+    "<<"  shift, and go to state 76
+    ">>"  shift, and go to state 77
+    "<"   shift, and go to state 78
+    "<="  shift, and go to state 79
+    ">"   shift, and go to state 80
+    ">="  shift, and go to state 81
+    "=="  shift, and go to state 82
+    "!="  shift, and go to state 83
+
+    $default  reduce using rule 53 (expr)
+
+
+State 110
+
+   29 expr: expr . "(" opt_exprs ")"
+   30     | expr . "[" expr "]"
+   37     | expr . "*" expr
+   38     | expr . "/" expr
+   39     | expr . "%" expr
+   40     | expr . "+" expr
+   41     | expr . "-" expr
+   42     | expr . "<" expr
+   43     | expr . "<=" expr
+   44     | expr . ">" expr
+   45     | expr . ">=" expr
+   46     | expr . "==" expr
+   47     | expr . "!=" expr
+   48     | expr . "&" expr
+   49     | expr . "^" expr
+   50     | expr . "|" expr
+   51     | expr . "<<" expr
+   52     | expr . ">>" expr
+   53     | expr . "&&" expr
+   54     | expr . "||" expr
+   54     | expr "||" expr .
+   55     | expr . "=" expr
+   56     | expr . "+=" expr
+   57     | expr . "-=" expr
+   58     | expr . "*=" expr
+   59     | expr . "/=" expr
+   60     | expr . "%=" expr
+   61     | expr . "&=" expr
+   62     | expr . "|=" expr
+   63     | expr . "^=" expr
+   64     | expr . "<<=" expr
+   65     | expr . ">>=" expr
+
+    "("   shift, and go to state 52
+    "["   shift, and go to state 53
+    "&&"  shift, and go to state 65
+    "+"   shift, and go to state 67
+    "-"   shift, and go to state 68
+    "&"   shift, and go to state 70
+    "*"   shift, and go to state 71
+    "/"   shift, and go to state 72
+    "%"   shift, and go to state 73
+    "^"   shift, and go to state 74
+    "|"   shift, and go to state 75
+    "<<"  shift, and go to state 76
+    ">>"  shift, and go to state 77
+    "<"   shift, and go to state 78
+    "<="  shift, and go to state 79
+    ">"   shift, and go to state 80
+    ">="  shift, and go to state 81
+    "=="  shift, and go to state 82
+    "!="  shift, and go to state 83
+
+    $default  reduce using rule 54 (expr)
+
+
+State 111
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2781,16 +2902,16 @@ State 109
 
     "("  shift, and go to state 52
     "["  shift, and go to state 53
-    "-"  shift, and go to state 66
-    "&"  shift, and go to state 68
-    "*"  shift, and go to state 69
-    "/"  shift, and go to state 70
-    "%"  shift, and go to state 71
+    "-"  shift, and go to state 68
+    "&"  shift, and go to state 70
+    "*"  shift, and go to state 71
+    "/"  shift, and go to state 72
+    "%"  shift, and go to state 73
 
     $default  reduce using rule 40 (expr)
 
 
-State 110
+State 112
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2827,16 +2948,16 @@ State 110
 
     "("  shift, and go to state 52
     "["  shift, and go to state 53
-    "-"  shift, and go to state 66
-    "&"  shift, and go to state 68
-    "*"  shift, and go to state 69
-    "/"  shift, and go to state 70
-    "%"  shift, and go to state 71
+    "-"  shift, and go to state 68
+    "&"  shift, and go to state 70
+    "*"  shift, and go to state 71
+    "/"  shift, and go to state 72
+    "%"  shift, and go to state 73
 
     $default  reduce using rule 41 (expr)
 
 
-State 111
+State 113
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2883,30 +3004,30 @@ State 111
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
     $default  reduce using rule 55 (expr)
 
 
-State 112
+State 114
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2943,14 +3064,14 @@ State 112
 
     "("  shift, and go to state 52
     "["  shift, and go to state 53
-    "-"  shift, and go to state 66
-    "&"  shift, and go to state 68
-    "*"  shift, and go to state 69
+    "-"  shift, and go to state 68
+    "&"  shift, and go to state 70
+    "*"  shift, and go to state 71
 
     $default  reduce using rule 48 (expr)
 
 
-State 113
+State 115
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -2987,14 +3108,14 @@ State 113
 
     "("  shift, and go to state 52
     "["  shift, and go to state 53
-    "-"  shift, and go to state 66
-    "&"  shift, and go to state 68
-    "*"  shift, and go to state 69
+    "-"  shift, and go to state 68
+    "&"  shift, and go to state 70
+    "*"  shift, and go to state 71
 
     $default  reduce using rule 37 (expr)
 
 
-State 114
+State 116
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3031,14 +3152,14 @@ State 114
 
     "("  shift, and go to state 52
     "["  shift, and go to state 53
-    "-"  shift, and go to state 66
-    "&"  shift, and go to state 68
-    "*"  shift, and go to state 69
+    "-"  shift, and go to state 68
+    "&"  shift, and go to state 70
+    "*"  shift, and go to state 71
 
     $default  reduce using rule 38 (expr)
 
 
-State 115
+State 117
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3075,14 +3196,14 @@ State 115
 
     "("  shift, and go to state 52
     "["  shift, and go to state 53
-    "-"  shift, and go to state 66
-    "&"  shift, and go to state 68
-    "*"  shift, and go to state 69
+    "-"  shift, and go to state 68
+    "&"  shift, and go to state 70
+    "*"  shift, and go to state 71
 
     $default  reduce using rule 39 (expr)
 
 
-State 116
+State 118
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3119,25 +3240,25 @@ State 116
 
     "("   shift, and go to state 52
     "["   shift, and go to state 53
-    "+"   shift, and go to state 65
-    "-"   shift, and go to state 66
-    "&"   shift, and go to state 68
-    "*"   shift, and go to state 69
-    "/"   shift, and go to state 70
-    "%"   shift, and go to state 71
-    "<<"  shift, and go to state 74
-    ">>"  shift, and go to state 75
-    "<"   shift, and go to state 76
-    "<="  shift, and go to state 77
-    ">"   shift, and go to state 78
-    ">="  shift, and go to state 79
-    "=="  shift, and go to state 80
-    "!="  shift, and go to state 81
+    "+"   shift, and go to state 67
+    "-"   shift, and go to state 68
+    "&"   shift, and go to state 70
+    "*"   shift, and go to state 71
+    "/"   shift, and go to state 72
+    "%"   shift, and go to state 73
+    "<<"  shift, and go to state 76
+    ">>"  shift, and go to state 77
+    "<"   shift, and go to state 78
+    "<="  shift, and go to state 79
+    ">"   shift, and go to state 80
+    ">="  shift, and go to state 81
+    "=="  shift, and go to state 82
+    "!="  shift, and go to state 83
 
     $default  reduce using rule 49 (expr)
 
 
-State 117
+State 119
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3174,26 +3295,26 @@ State 117
 
     "("   shift, and go to state 52
     "["   shift, and go to state 53
-    "+"   shift, and go to state 65
-    "-"   shift, and go to state 66
-    "&"   shift, and go to state 68
-    "*"   shift, and go to state 69
-    "/"   shift, and go to state 70
-    "%"   shift, and go to state 71
-    "^"   shift, and go to state 72
-    "<<"  shift, and go to state 74
-    ">>"  shift, and go to state 75
-    "<"   shift, and go to state 76
-    "<="  shift, and go to state 77
-    ">"   shift, and go to state 78
-    ">="  shift, and go to state 79
-    "=="  shift, and go to state 80
-    "!="  shift, and go to state 81
+    "+"   shift, and go to state 67
+    "-"   shift, and go to state 68
+    "&"   shift, and go to state 70
+    "*"   shift, and go to state 71
+    "/"   shift, and go to state 72
+    "%"   shift, and go to state 73
+    "^"   shift, and go to state 74
+    "<<"  shift, and go to state 76
+    ">>"  shift, and go to state 77
+    "<"   shift, and go to state 78
+    "<="  shift, and go to state 79
+    ">"   shift, and go to state 80
+    ">="  shift, and go to state 81
+    "=="  shift, and go to state 82
+    "!="  shift, and go to state 83
 
     $default  reduce using rule 50 (expr)
 
 
-State 118
+State 120
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3230,17 +3351,17 @@ State 118
 
     "("  shift, and go to state 52
     "["  shift, and go to state 53
-    "+"  shift, and go to state 65
-    "-"  shift, and go to state 66
-    "&"  shift, and go to state 68
-    "*"  shift, and go to state 69
-    "/"  shift, and go to state 70
-    "%"  shift, and go to state 71
+    "+"  shift, and go to state 67
+    "-"  shift, and go to state 68
+    "&"  shift, and go to state 70
+    "*"  shift, and go to state 71
+    "/"  shift, and go to state 72
+    "%"  shift, and go to state 73
 
     $default  reduce using rule 51 (expr)
 
 
-State 119
+State 121
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3277,17 +3398,17 @@ State 119
 
     "("  shift, and go to state 52
     "["  shift, and go to state 53
-    "+"  shift, and go to state 65
-    "-"  shift, and go to state 66
-    "&"  shift, and go to state 68
-    "*"  shift, and go to state 69
-    "/"  shift, and go to state 70
-    "%"  shift, and go to state 71
+    "+"  shift, and go to state 67
+    "-"  shift, and go to state 68
+    "&"  shift, and go to state 70
+    "*"  shift, and go to state 71
+    "/"  shift, and go to state 72
+    "%"  shift, and go to state 73
 
     $default  reduce using rule 52 (expr)
 
 
-State 120
+State 122
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3324,19 +3445,19 @@ State 120
 
     "("   shift, and go to state 52
     "["   shift, and go to state 53
-    "+"   shift, and go to state 65
-    "-"   shift, and go to state 66
-    "&"   shift, and go to state 68
-    "*"   shift, and go to state 69
-    "/"   shift, and go to state 70
-    "%"   shift, and go to state 71
-    "<<"  shift, and go to state 74
-    ">>"  shift, and go to state 75
+    "+"   shift, and go to state 67
+    "-"   shift, and go to state 68
+    "&"   shift, and go to state 70
+    "*"   shift, and go to state 71
+    "/"   shift, and go to state 72
+    "%"   shift, and go to state 73
+    "<<"  shift, and go to state 76
+    ">>"  shift, and go to state 77
 
     $default  reduce using rule 42 (expr)
 
 
-State 121
+State 123
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3373,19 +3494,19 @@ State 121
 
     "("   shift, and go to state 52
     "["   shift, and go to state 53
-    "+"   shift, and go to state 65
-    "-"   shift, and go to state 66
-    "&"   shift, and go to state 68
-    "*"   shift, and go to state 69
-    "/"   shift, and go to state 70
-    "%"   shift, and go to state 71
-    "<<"  shift, and go to state 74
-    ">>"  shift, and go to state 75
+    "+"   shift, and go to state 67
+    "-"   shift, and go to state 68
+    "&"   shift, and go to state 70
+    "*"   shift, and go to state 71
+    "/"   shift, and go to state 72
+    "%"   shift, and go to state 73
+    "<<"  shift, and go to state 76
+    ">>"  shift, and go to state 77
 
     $default  reduce using rule 43 (expr)
 
 
-State 122
+State 124
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3422,19 +3543,19 @@ State 122
 
     "("   shift, and go to state 52
     "["   shift, and go to state 53
-    "+"   shift, and go to state 65
-    "-"   shift, and go to state 66
-    "&"   shift, and go to state 68
-    "*"   shift, and go to state 69
-    "/"   shift, and go to state 70
-    "%"   shift, and go to state 71
-    "<<"  shift, and go to state 74
-    ">>"  shift, and go to state 75
+    "+"   shift, and go to state 67
+    "-"   shift, and go to state 68
+    "&"   shift, and go to state 70
+    "*"   shift, and go to state 71
+    "/"   shift, and go to state 72
+    "%"   shift, and go to state 73
+    "<<"  shift, and go to state 76
+    ">>"  shift, and go to state 77
 
     $default  reduce using rule 44 (expr)
 
 
-State 123
+State 125
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3471,19 +3592,19 @@ State 123
 
     "("   shift, and go to state 52
     "["   shift, and go to state 53
-    "+"   shift, and go to state 65
-    "-"   shift, and go to state 66
-    "&"   shift, and go to state 68
-    "*"   shift, and go to state 69
-    "/"   shift, and go to state 70
-    "%"   shift, and go to state 71
-    "<<"  shift, and go to state 74
-    ">>"  shift, and go to state 75
+    "+"   shift, and go to state 67
+    "-"   shift, and go to state 68
+    "&"   shift, and go to state 70
+    "*"   shift, and go to state 71
+    "/"   shift, and go to state 72
+    "%"   shift, and go to state 73
+    "<<"  shift, and go to state 76
+    ">>"  shift, and go to state 77
 
     $default  reduce using rule 45 (expr)
 
 
-State 124
+State 126
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3520,23 +3641,23 @@ State 124
 
     "("   shift, and go to state 52
     "["   shift, and go to state 53
-    "+"   shift, and go to state 65
-    "-"   shift, and go to state 66
-    "&"   shift, and go to state 68
-    "*"   shift, and go to state 69
-    "/"   shift, and go to state 70
-    "%"   shift, and go to state 71
-    "<<"  shift, and go to state 74
-    ">>"  shift, and go to state 75
-    "<"   shift, and go to state 76
-    "<="  shift, and go to state 77
-    ">"   shift, and go to state 78
-    ">="  shift, and go to state 79
+    "+"   shift, and go to state 67
+    "-"   shift, and go to state 68
+    "&"   shift, and go to state 70
+    "*"   shift, and go to state 71
+    "/"   shift, and go to state 72
+    "%"   shift, and go to state 73
+    "<<"  shift, and go to state 76
+    ">>"  shift, and go to state 77
+    "<"   shift, and go to state 78
+    "<="  shift, and go to state 79
+    ">"   shift, and go to state 80
+    ">="  shift, and go to state 81
 
     $default  reduce using rule 46 (expr)
 
 
-State 125
+State 127
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3573,135 +3694,20 @@ State 125
 
     "("   shift, and go to state 52
     "["   shift, and go to state 53
-    "+"   shift, and go to state 65
-    "-"   shift, and go to state 66
-    "&"   shift, and go to state 68
-    "*"   shift, and go to state 69
-    "/"   shift, and go to state 70
-    "%"   shift, and go to state 71
-    "<<"  shift, and go to state 74
-    ">>"  shift, and go to state 75
-    "<"   shift, and go to state 76
-    "<="  shift, and go to state 77
-    ">"   shift, and go to state 78
-    ">="  shift, and go to state 79
+    "+"   shift, and go to state 67
+    "-"   shift, and go to state 68
+    "&"   shift, and go to state 70
+    "*"   shift, and go to state 71
+    "/"   shift, and go to state 72
+    "%"   shift, and go to state 73
+    "<<"  shift, and go to state 76
+    ">>"  shift, and go to state 77
+    "<"   shift, and go to state 78
+    "<="  shift, and go to state 79
+    ">"   shift, and go to state 80
+    ">="  shift, and go to state 81
 
     $default  reduce using rule 47 (expr)
-
-
-State 126
-
-   29 expr: expr . "(" opt_exprs ")"
-   30     | expr . "[" expr "]"
-   37     | expr . "*" expr
-   38     | expr . "/" expr
-   39     | expr . "%" expr
-   40     | expr . "+" expr
-   41     | expr . "-" expr
-   42     | expr . "<" expr
-   43     | expr . "<=" expr
-   44     | expr . ">" expr
-   45     | expr . ">=" expr
-   46     | expr . "==" expr
-   47     | expr . "!=" expr
-   48     | expr . "&" expr
-   49     | expr . "^" expr
-   50     | expr . "|" expr
-   51     | expr . "<<" expr
-   52     | expr . ">>" expr
-   53     | expr . "&&" expr
-   54     | expr . "||" expr
-   54     | expr "||" expr .
-   55     | expr . "=" expr
-   56     | expr . "+=" expr
-   57     | expr . "-=" expr
-   58     | expr . "*=" expr
-   59     | expr . "/=" expr
-   60     | expr . "%=" expr
-   61     | expr . "&=" expr
-   62     | expr . "|=" expr
-   63     | expr . "^=" expr
-   64     | expr . "<<=" expr
-   65     | expr . ">>=" expr
-
-    "("   shift, and go to state 52
-    "["   shift, and go to state 53
-    "+"   shift, and go to state 65
-    "-"   shift, and go to state 66
-    "&"   shift, and go to state 68
-    "*"   shift, and go to state 69
-    "/"   shift, and go to state 70
-    "%"   shift, and go to state 71
-    "^"   shift, and go to state 72
-    "|"   shift, and go to state 73
-    "<<"  shift, and go to state 74
-    ">>"  shift, and go to state 75
-    "<"   shift, and go to state 76
-    "<="  shift, and go to state 77
-    ">"   shift, and go to state 78
-    ">="  shift, and go to state 79
-    "=="  shift, and go to state 80
-    "!="  shift, and go to state 81
-    "&&"  shift, and go to state 83
-
-    $default  reduce using rule 54 (expr)
-
-
-State 127
-
-   29 expr: expr . "(" opt_exprs ")"
-   30     | expr . "[" expr "]"
-   37     | expr . "*" expr
-   38     | expr . "/" expr
-   39     | expr . "%" expr
-   40     | expr . "+" expr
-   41     | expr . "-" expr
-   42     | expr . "<" expr
-   43     | expr . "<=" expr
-   44     | expr . ">" expr
-   45     | expr . ">=" expr
-   46     | expr . "==" expr
-   47     | expr . "!=" expr
-   48     | expr . "&" expr
-   49     | expr . "^" expr
-   50     | expr . "|" expr
-   51     | expr . "<<" expr
-   52     | expr . ">>" expr
-   53     | expr . "&&" expr
-   53     | expr "&&" expr .
-   54     | expr . "||" expr
-   55     | expr . "=" expr
-   56     | expr . "+=" expr
-   57     | expr . "-=" expr
-   58     | expr . "*=" expr
-   59     | expr . "/=" expr
-   60     | expr . "%=" expr
-   61     | expr . "&=" expr
-   62     | expr . "|=" expr
-   63     | expr . "^=" expr
-   64     | expr . "<<=" expr
-   65     | expr . ">>=" expr
-
-    "("   shift, and go to state 52
-    "["   shift, and go to state 53
-    "+"   shift, and go to state 65
-    "-"   shift, and go to state 66
-    "&"   shift, and go to state 68
-    "*"   shift, and go to state 69
-    "/"   shift, and go to state 70
-    "%"   shift, and go to state 71
-    "^"   shift, and go to state 72
-    "|"   shift, and go to state 73
-    "<<"  shift, and go to state 74
-    ">>"  shift, and go to state 75
-    "<"   shift, and go to state 76
-    "<="  shift, and go to state 77
-    ">"   shift, and go to state 78
-    ">="  shift, and go to state 79
-    "=="  shift, and go to state 80
-    "!="  shift, and go to state 81
-
-    $default  reduce using rule 53 (expr)
 
 
 State 128
@@ -3830,12 +3836,14 @@ State 137
    72         | "(" TKN_STRVAL ":" . opt_asm_regs ":" opt_asm_regs ")"
    73         | "(" TKN_STRVAL ":" . opt_asm_regs ")"
 
-    TKN_STRVAL  shift, and go to state 140
+    "["         shift, and go to state 140
+    TKN_STRVAL  shift, and go to state 141
 
     $default  reduce using rule 80 (opt_asm_regs)
 
-    opt_asm_regs  go to state 141
-    asm_regs      go to state 142
+    opt_asm_regs  go to state 142
+    asm_regs      go to state 143
+    asm_reg       go to state 144
 
 
 State 138
@@ -3866,47 +3874,69 @@ State 139
     "~"         shift, and go to state 35
 
     vardecls    go to state 36
-    stmt        go to state 143
+    stmt        go to state 145
     expr        go to state 38
     inline_asm  go to state 39
 
 
 State 140
 
-   81 asm_regs: TKN_STRVAL . "(" expr ")" "," asm_regs
-   82         | TKN_STRVAL . "(" expr ")"
+   83 asm_reg: "[" . TKN_IDENT "]" TKN_STRVAL "(" expr ")"
 
-    "("  shift, and go to state 144
+    TKN_IDENT  shift, and go to state 146
 
 
 State 141
+
+   84 asm_reg: TKN_STRVAL . "(" expr ")"
+
+    "("  shift, and go to state 147
+
+
+State 142
 
    71 asm_code: "(" TKN_STRVAL ":" opt_asm_regs . ":" opt_asm_regs ":" opt_asm_strs ")"
    72         | "(" TKN_STRVAL ":" opt_asm_regs . ":" opt_asm_regs ")"
    73         | "(" TKN_STRVAL ":" opt_asm_regs . ")"
 
-    ")"  shift, and go to state 145
-    ":"  shift, and go to state 146
+    ")"  shift, and go to state 148
+    ":"  shift, and go to state 149
 
 
-State 142
+State 143
 
    79 opt_asm_regs: asm_regs .
 
     $default  reduce using rule 79 (opt_asm_regs)
 
 
-State 143
+State 144
+
+   81 asm_regs: asm_reg . "," asm_regs
+   82         | asm_reg .
+
+    ","  shift, and go to state 150
+
+    $default  reduce using rule 82 (asm_regs)
+
+
+State 145
 
    15 stmt: "if" "(" expr ")" stmt "else" stmt .
 
     $default  reduce using rule 15 (stmt)
 
 
-State 144
+State 146
 
-   81 asm_regs: TKN_STRVAL "(" . expr ")" "," asm_regs
-   82         | TKN_STRVAL "(" . expr ")"
+   83 asm_reg: "[" TKN_IDENT . "]" TKN_STRVAL "(" expr ")"
+
+    "]"  shift, and go to state 151
+
+
+State 147
+
+   84 asm_reg: TKN_STRVAL "(" . expr ")"
 
     "("         shift, and go to state 25
     TKN_IVAL    shift, and go to state 28
@@ -3918,30 +3948,50 @@ State 144
     "!"         shift, and go to state 34
     "~"         shift, and go to state 35
 
-    expr  go to state 147
+    expr  go to state 152
 
 
-State 145
+State 148
 
    73 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ")" .
 
     $default  reduce using rule 73 (asm_code)
 
 
-State 146
+State 149
 
    71 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" . opt_asm_regs ":" opt_asm_strs ")"
    72         | "(" TKN_STRVAL ":" opt_asm_regs ":" . opt_asm_regs ")"
 
-    TKN_STRVAL  shift, and go to state 140
+    "["         shift, and go to state 140
+    TKN_STRVAL  shift, and go to state 141
 
     $default  reduce using rule 80 (opt_asm_regs)
 
-    opt_asm_regs  go to state 148
-    asm_regs      go to state 142
+    opt_asm_regs  go to state 153
+    asm_regs      go to state 143
+    asm_reg       go to state 144
 
 
-State 147
+State 150
+
+   81 asm_regs: asm_reg "," . asm_regs
+
+    "["         shift, and go to state 140
+    TKN_STRVAL  shift, and go to state 141
+
+    asm_regs  go to state 154
+    asm_reg   go to state 144
+
+
+State 151
+
+   83 asm_reg: "[" TKN_IDENT "]" . TKN_STRVAL "(" expr ")"
+
+    TKN_STRVAL  shift, and go to state 155
+
+
+State 152
 
    29 expr: expr . "(" opt_exprs ")"
    30     | expr . "[" expr "]"
@@ -3974,11 +4024,10 @@ State 147
    63     | expr . "^=" expr
    64     | expr . "<<=" expr
    65     | expr . ">>=" expr
-   81 asm_regs: TKN_STRVAL "(" expr . ")" "," asm_regs
-   82         | TKN_STRVAL "(" expr . ")"
+   84 asm_reg: TKN_STRVAL "(" expr . ")"
 
     "("    shift, and go to state 52
-    ")"    shift, and go to state 149
+    ")"    shift, and go to state 156
     "["    shift, and go to state 53
     "+="   shift, and go to state 55
     "-="   shift, and go to state 56
@@ -3990,122 +4039,210 @@ State 147
     "&="   shift, and go to state 62
     "|="   shift, and go to state 63
     "^="   shift, and go to state 64
-    "+"    shift, and go to state 65
-    "-"    shift, and go to state 66
-    "="    shift, and go to state 67
-    "&"    shift, and go to state 68
-    "*"    shift, and go to state 69
-    "/"    shift, and go to state 70
-    "%"    shift, and go to state 71
-    "^"    shift, and go to state 72
-    "|"    shift, and go to state 73
-    "<<"   shift, and go to state 74
-    ">>"   shift, and go to state 75
-    "<"    shift, and go to state 76
-    "<="   shift, and go to state 77
-    ">"    shift, and go to state 78
-    ">="   shift, and go to state 79
-    "=="   shift, and go to state 80
-    "!="   shift, and go to state 81
-    "||"   shift, and go to state 82
-    "&&"   shift, and go to state 83
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
 
-State 148
+State 153
 
    71 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs . ":" opt_asm_strs ")"
    72         | "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs . ")"
 
-    ")"  shift, and go to state 150
-    ":"  shift, and go to state 151
+    ")"  shift, and go to state 157
+    ":"  shift, and go to state 158
 
 
-State 149
+State 154
 
-   81 asm_regs: TKN_STRVAL "(" expr ")" . "," asm_regs
-   82         | TKN_STRVAL "(" expr ")" .
+   81 asm_regs: asm_reg "," asm_regs .
 
-    ","  shift, and go to state 152
-
-    $default  reduce using rule 82 (asm_regs)
+    $default  reduce using rule 81 (asm_regs)
 
 
-State 150
+State 155
+
+   83 asm_reg: "[" TKN_IDENT "]" TKN_STRVAL . "(" expr ")"
+
+    "("  shift, and go to state 159
+
+
+State 156
+
+   84 asm_reg: TKN_STRVAL "(" expr ")" .
+
+    $default  reduce using rule 84 (asm_reg)
+
+
+State 157
 
    72 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ")" .
 
     $default  reduce using rule 72 (asm_code)
 
 
-State 151
+State 158
 
    71 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" . opt_asm_strs ")"
 
-    TKN_STRVAL  shift, and go to state 153
+    TKN_STRVAL  shift, and go to state 160
 
     $default  reduce using rule 76 (opt_asm_strs)
 
-    opt_asm_strs  go to state 154
-    asm_strs      go to state 155
+    opt_asm_strs  go to state 161
+    asm_strs      go to state 162
 
 
-State 152
+State 159
 
-   81 asm_regs: TKN_STRVAL "(" expr ")" "," . asm_regs
+   83 asm_reg: "[" TKN_IDENT "]" TKN_STRVAL "(" . expr ")"
 
-    TKN_STRVAL  shift, and go to state 140
+    "("         shift, and go to state 25
+    TKN_IVAL    shift, and go to state 28
+    TKN_STRVAL  shift, and go to state 29
+    TKN_IDENT   shift, and go to state 30
+    "-"         shift, and go to state 31
+    "&"         shift, and go to state 32
+    "*"         shift, and go to state 33
+    "!"         shift, and go to state 34
+    "~"         shift, and go to state 35
 
-    asm_regs  go to state 156
+    expr  go to state 163
 
 
-State 153
+State 160
 
    77 asm_strs: TKN_STRVAL . "," asm_strs
    78         | TKN_STRVAL .
 
-    ","  shift, and go to state 157
+    ","  shift, and go to state 164
 
     $default  reduce using rule 78 (asm_strs)
 
 
-State 154
+State 161
 
    71 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs . ")"
 
-    ")"  shift, and go to state 158
+    ")"  shift, and go to state 165
 
 
-State 155
+State 162
 
    75 opt_asm_strs: asm_strs .
 
     $default  reduce using rule 75 (opt_asm_strs)
 
 
-State 156
+State 163
 
-   81 asm_regs: TKN_STRVAL "(" expr ")" "," asm_regs .
+   29 expr: expr . "(" opt_exprs ")"
+   30     | expr . "[" expr "]"
+   37     | expr . "*" expr
+   38     | expr . "/" expr
+   39     | expr . "%" expr
+   40     | expr . "+" expr
+   41     | expr . "-" expr
+   42     | expr . "<" expr
+   43     | expr . "<=" expr
+   44     | expr . ">" expr
+   45     | expr . ">=" expr
+   46     | expr . "==" expr
+   47     | expr . "!=" expr
+   48     | expr . "&" expr
+   49     | expr . "^" expr
+   50     | expr . "|" expr
+   51     | expr . "<<" expr
+   52     | expr . ">>" expr
+   53     | expr . "&&" expr
+   54     | expr . "||" expr
+   55     | expr . "=" expr
+   56     | expr . "+=" expr
+   57     | expr . "-=" expr
+   58     | expr . "*=" expr
+   59     | expr . "/=" expr
+   60     | expr . "%=" expr
+   61     | expr . "&=" expr
+   62     | expr . "|=" expr
+   63     | expr . "^=" expr
+   64     | expr . "<<=" expr
+   65     | expr . ">>=" expr
+   83 asm_reg: "[" TKN_IDENT "]" TKN_STRVAL "(" expr . ")"
 
-    $default  reduce using rule 81 (asm_regs)
+    "("    shift, and go to state 52
+    ")"    shift, and go to state 166
+    "["    shift, and go to state 53
+    "+="   shift, and go to state 55
+    "-="   shift, and go to state 56
+    "<<="  shift, and go to state 57
+    ">>="  shift, and go to state 58
+    "*="   shift, and go to state 59
+    "/="   shift, and go to state 60
+    "%="   shift, and go to state 61
+    "&="   shift, and go to state 62
+    "|="   shift, and go to state 63
+    "^="   shift, and go to state 64
+    "&&"   shift, and go to state 65
+    "||"   shift, and go to state 66
+    "+"    shift, and go to state 67
+    "-"    shift, and go to state 68
+    "="    shift, and go to state 69
+    "&"    shift, and go to state 70
+    "*"    shift, and go to state 71
+    "/"    shift, and go to state 72
+    "%"    shift, and go to state 73
+    "^"    shift, and go to state 74
+    "|"    shift, and go to state 75
+    "<<"   shift, and go to state 76
+    ">>"   shift, and go to state 77
+    "<"    shift, and go to state 78
+    "<="   shift, and go to state 79
+    ">"    shift, and go to state 80
+    ">="   shift, and go to state 81
+    "=="   shift, and go to state 82
+    "!="   shift, and go to state 83
 
 
-State 157
+State 164
 
    77 asm_strs: TKN_STRVAL "," . asm_strs
 
-    TKN_STRVAL  shift, and go to state 153
+    TKN_STRVAL  shift, and go to state 160
 
-    asm_strs  go to state 159
+    asm_strs  go to state 167
 
 
-State 158
+State 165
 
    71 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")" .
 
     $default  reduce using rule 71 (asm_code)
 
 
-State 159
+State 166
+
+   83 asm_reg: "[" TKN_IDENT "]" TKN_STRVAL "(" expr ")" .
+
+    $default  reduce using rule 83 (asm_reg)
+
+
+State 167
 
    77 asm_strs: TKN_STRVAL "," asm_strs .
 

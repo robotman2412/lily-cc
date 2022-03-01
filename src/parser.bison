@@ -37,10 +37,12 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 	
 	iasm_qual_t asm_qual;
 	iasm_regs_t asm_regs;
+	iasm_reg_t  asm_reg;
 	
 	strval_t	garbage;
 }
 
+%token <pos> TKN_VOLATILE "volatile" TKN_INLINE "inline" TKN_GOTO "goto"
 %token <pos> TKN_AUTO "auto" TKN_FUNC "func"
 %token <pos> TKN_IF "if" TKN_ELSE "else" TKN_WHILE "while" TKN_RETURN "return" TKN_ASM "asm"
 %token TKN_THEN "then"
@@ -57,6 +59,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 %token <pos> TKN_ASSIGN_MUL "*=" TKN_ASSIGN_DIV "/=" TKN_ASSIGN_REM "%="
 %token <pos> TKN_ASSIGN_AND "&=" TKN_ASSIGN_OR "|=" TKN_ASSIGN_XOR "^="
 %token <pos> TKN_INC "++" TKN_DEC "--"
+%token <pos> TKN_LOGIC_AND "&&" TKN_LOGIC_OR "||"
 %token <pos> TKN_ADD "+" TKN_SUB "-" TKN_ASSIGN "=" TKN_AMP "&"
 %token <pos> TKN_MUL "*" TKN_DIV "/" TKN_REM "%"
 %token <pos> TKN_NOT "!" TKN_INV "~" TKN_XOR "^" TKN_OR "|"
@@ -79,6 +82,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 // %type <asm_strs> asm_strs
 %type <asm_regs> opt_asm_regs
 %type <asm_regs> asm_regs
+%type <asm_reg> asm_reg
 
 %type <idents> vardecls
 
@@ -190,7 +194,7 @@ expr:			TKN_IVAL									{$$=expr_icnst(&$1);}
 |				expr "<<=" expr				%prec "="		{$$=expr_matha(OP_SHIFT_L,   &$1, &$3);}
 |				expr ">>=" expr				%prec "="		{$$=expr_matha(OP_SHIFT_R,   &$1, &$3);};
 
-inline_asm:		"asm" asm_qual asm_code						{$$=$3; $$->iasm.qualifiers=$2;};
+inline_asm:		"asm" asm_qual asm_code						{$$=$3; $$.iasm->qualifiers=$2;};
 
 asm_qual:		%empty										{$$=(iasm_qual_t) {.is_volatile=0, .is_inline=0, .is_goto=0};}
 |				asm_qual "volatile"							{$$=$1; $$.is_volatile=1;}
@@ -212,10 +216,12 @@ opt_asm_strs:	asm_strs
 |				%empty;
 asm_strs:		TKN_STRVAL "," asm_strs
 |				TKN_STRVAL;
-opt_asm_regs:	asm_regs
-|				%empty;
-asm_regs:		TKN_STRVAL "(" expr ")" "," asm_regs
-|				TKN_STRVAL "(" expr ")";
+opt_asm_regs:	asm_regs									{$$=$1;}
+|				%empty										{$$=iasm_regs_empty();};
+asm_regs:		asm_reg "," asm_regs						{$$=iasm_regs_cat(&$3, &$1);}
+|				asm_reg										{$$=iasm_regs_one(&$1);};
+asm_reg:		"[" TKN_IDENT "]" TKN_STRVAL "(" expr ")"	{$$=stmt_iasm_reg(&$2,  &$4, &$6);}
+|				TKN_STRVAL "(" expr ")"						{$$=stmt_iasm_reg(NULL, &$1, &$3);};
 %%
 
 void *make_copy(void *mem, size_t size) {

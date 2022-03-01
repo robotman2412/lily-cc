@@ -108,6 +108,41 @@ stmt_t stmt_iasm(strval_t *text, iasm_regs_t *outputs, iasm_regs_t *inputs, void
 
 
 
+// Assembly parameter definition.
+iasm_reg_t stmt_iasm_reg(ident_t *symbol, strval_t *mode, expr_t *expr) {
+	return (iasm_reg_t) {
+		.symbol = symbol ? symbol->strval : NULL,
+		.mode   = mode->strval,
+		.expr   = expr
+	};
+}
+
+// An empty list of iasm_reg.
+iasm_regs_t iasm_regs_empty() {
+	return (iasm_regs_t) {
+		.arr = NULL,
+		.num = 0
+	};
+}
+
+// Concatenate to a list of iasm_reg.
+iasm_regs_t iasm_regs_cat(iasm_regs_t *iasm_regs, iasm_reg_t *iasm_reg) {
+	iasm_regs->num ++;
+	iasm_regs->arr = realloc(iasm_regs->arr, iasm_regs->num * sizeof(ident_t));
+	iasm_regs->arr[iasm_regs->num - 1] = *iasm_reg;
+	return *iasm_regs;
+}
+
+// A list of one iasm_reg.
+iasm_regs_t iasm_regs_one(iasm_reg_t *iasm_reg) {
+	return (iasm_regs_t) {
+		.arr = COPY(iasm_reg, iasm_reg_t),
+		.num = 1
+	};
+}
+
+
+
 // An empty list of identities.
 idents_t idents_empty() {
 	return (idents_t) {

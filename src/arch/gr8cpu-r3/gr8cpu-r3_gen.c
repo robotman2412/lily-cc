@@ -680,7 +680,12 @@ void gen_while(asm_ctx_t *ctx, expr_t *cond, stmt_t *code, bool do_while) {
 // Expression: Function call.
 // args may be null for zero arguments.
 gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *callee, size_t n_args, gen_var_t **args) {
-	
+	// TODO.
+	gen_var_t dummy = {
+		.type   = VAR_TYPE_CONST,
+		.iconst = 0
+	};
+	return COPY(&dummy, gen_var_t);
 }
 
 // Expression: Binary math operation.
@@ -690,8 +695,18 @@ gen_var_t *gen_expr_math2(asm_ctx_t *ctx, oper_t oper, gen_var_t *out_hint, gen_
 			return r3_shift(ctx, oper == OP_SHIFT_L, out_hint, a, b->iconst);
 		}
 		// TODO: Have this done by a function.
+		gen_var_t dummy = {
+			.type   = VAR_TYPE_CONST,
+			.iconst = 0
+		};
+		return COPY(&dummy, gen_var_t);
 	} else if (oper == OP_MUL || oper == OP_DIV || oper == OP_MOD) {
 		// TODO: Have this done by a function.
+		gen_var_t dummy = {
+			.type   = VAR_TYPE_CONST,
+			.iconst = 0
+		};
+		return COPY(&dummy, gen_var_t);
 	} else if (b->type == VAR_TYPE_CONST && b->iconst == 1 && OP_IS_ADD(oper)) {
 		// Adding or subtracting one can be simplified.
 		return r3_math1_l(ctx, oper, out_hint, a);

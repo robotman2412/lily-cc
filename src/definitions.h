@@ -5,6 +5,7 @@
 #include "config.h"
 #include "stdint.h"
 #include "stddef.h"
+#include "stdbool.h"
 #include "version_number.h"
 
 /* ==== Debug information ==== */
@@ -129,6 +130,7 @@ typedef uint_least64_t address_t;
 #define MEMWORDS_TO_ADDRESS 1
 #endif
 
+// Methods by which a label can be referenced in assembly.
 typedef enum asm_label_ref {
 	// Offset relative to address immediately after resolved address.
 	// Pointer size.
@@ -146,6 +148,7 @@ typedef enum asm_label_ref {
 	ASM_LABEL_REF_ABS_WORD_HIGH
 } asm_label_ref_t;
 
+// All operators defined by the C language.
 typedef enum oper {
 	// Unary operators.
 	OP_ADROF,
@@ -181,30 +184,50 @@ typedef enum oper {
 	OP_INDEX
 } oper_t;
 
+// Whether an oper_t is an instance of pointer handling.
 #define OP_IS_PTR(x)   (x == OP_ADROF     || x == OP_DEREF    || OP_INDEX)
+// Whether an oper_t is an instance of bitwise math.
 #define OP_IS_BIT(x)   (x >= OP_BIT_NOT   && x <= OP_BIT_XOR)
+// Whether an oper_t is an instance of additive math.
 #define OP_IS_ADD(x)   (x == OP_ADD       || x == OP_SUB)
+// Whether an oper_t is an instance of bitwise shifting.
 #define OP_IS_SHIFT(x) (x == OP_SHIFT_L   || x == OP_SHIFT_R)
+// Whether an oper_t is an instance of boolean math.
 #define OP_IS_LOGIC(x) (x >= OP_LOGIC_NOT && x <= OP_LOGIC_OR)
 
+// Types of statement.
 typedef enum stmt_type {
+	// Statements in { curly brackets }
 	STMT_TYPE_MULTI,
+	// if ; else { statements }
 	STMT_TYPE_IF,
+	// while (loops);
 	STMT_TYPE_WHILE,
+	// return statements;
 	STMT_TYPE_RET,
+	// variable declaration = statements;
 	STMT_TYPE_VAR,
+	// expression * statements
 	STMT_TYPE_EXPR,
+	// asm ( "inline assembly" : "=r" (statements));
 	STMT_TYPE_IASM
 } stmt_type_t;
 
+// Types of expression.
 typedef enum expr_type {
+	// Constant value (e.g. number constant, string constant or predefined pointer).
 	EXPR_TYPE_CONST,
+	// Identity (e.g. variable references).
 	EXPR_TYPE_IDENT,
+	// Method calls.
 	EXPR_TYPE_CALL,
+	// Unary math (e.g. !a, -b or *c).
 	EXPR_TYPE_MATH1,
+	// Binary meth (e.g. a+b, c*d or e^f).
 	EXPR_TYPE_MATH2
 } expr_type_t;
 
+// Locations in which a variable can be stored at runtime.
 typedef enum gen_var_type {
 	// For void functions.
 	VAR_TYPE_VOID,
@@ -228,5 +251,115 @@ typedef enum gen_var_type {
 	// Hint to use for adrof and storing to pointers.
 	VAR_TYPE_PTR
 } gen_var_type_t;
+
+// Things like numeric types and alike.
+// This is also a shorthand for the value of pointers end enumerations.
+typedef enum simple_type {
+	/* ==== Integer types ==== */
+	
+	// unsigned char
+	CTYPE_U_CHAR,
+	// signed char
+	CTYPE_S_CHAR,
+	// unsigned short int
+	CTYPE_U_SHORT,
+	// signed short int
+	CTYPE_S_SHORT,
+	// unsigned int
+	CTYPE_U_INT,
+	// signed int
+	CTYPE_S_INT,
+	// unsigned long int
+	CTYPE_U_LONG,
+	// signed long int
+	CTYPE_S_LONG,
+	// unsigned long long int
+	CTYPE_U_LONGER,
+	// signed long long int
+	CTYPE_S_LONGER,
+	
+	/* ===== Float types ===== */
+	
+	// float
+	CTYPE_FLOAT,
+	// double
+	CTYPE_DOUBLE,
+	// long double
+	CTYPE_LONG_DOUBLE,
+	
+	/* ===== Other types ===== */
+	
+	// _Bool (bool)
+	CTYPE_BOOL,
+	
+} simple_type_t;
+
+// Size of 'char' types, in memory words.
+#define CSIZE_CHAR   ((CHAR_BITS   - 1) / MEM_BITS + 1)
+// Size of 'short' types, in memory words.
+#define CSIZE_SHORT  ((SHORT_BITS  - 1) / MEM_BITS + 1)
+// Size of 'int' types, in memory words.
+#define CSIZE_INT    ((INT_BITS    - 1) / MEM_BITS + 1)
+// Size of 'long' types, in memory words.
+#define CSIZE_LONG   ((LONG_BITS   - 1) / MEM_BITS + 1)
+// Size of 'long long' types, in memory words.
+#define CSIZE_LONGER ((LONGER_BITS - 1) / MEM_BITS + 1)
+
+// Size of 'float' types, in memory words.
+#define CSIZE_FLOAT       ((FLOAT_BITS   - 1) / MEM_BITS + 1)
+// Size of 'double' types, in memory words.
+#define CSIZE_DOUBLE      ((DOUBLE_BITS   - 1) / MEM_BITS + 1)
+// Size of 'long double' types, in memory words.
+#define CSIZE_LONG_DOUBLE ((LONG_DOUBLE_BITS   - 1) / MEM_BITS + 1)
+
+// Size of 'bool' types, in memory words.
+#define CSIZE_BOOL 1
+
+// Sizes of the simple types, in memory words, by index.
+extern size_t simple_type_size[14];
+#define CSIZE_SIMPLE(index) (simple_type_size[index])
+#define CSIZE_BY_INDEX {\
+	CSIZE_CHAR,   CSIZE_CHAR,\
+	CSIZE_SHORT,  CSIZE_SHORT,\
+	CSIZE_INT,    CSIZE_INT,\
+	CSIZE_LONG,    CSIZE_LONG,\
+	CSIZE_LONGER, CSIZE_LONGER,\
+	CSIZE_FLOAT,\
+	CSIZE_DOUBLE,\
+	CSIZE_LONG_DOUBLE,\
+	CSIZE_BOOL,\
+}
+
+// Categories of types.
+typedef enum type_cat {
+	// Simple types.
+	TYPE_CAT_SIMPLE,
+	// Pointer types.
+	TYPE_CAT_POINTER,
+	// Array types.
+	TYPE_CAT_ARRAY,
+	// Struct types
+	TYPE_CAT_STRUCT,
+	// Union types
+	TYPE_CAT_UNION,
+} type_cat_t;
+
+// Definitions of types, pointer types and structs.
+typedef struct var_type {
+	// Shorthand for the size, in memory words, of this type.
+	size_t        size;
+	
+	// The simple type underlying this type.
+	// Does not apply to union, struct nor array types.
+	simple_type_t simple_type;
+	// Whether this type is complete: whether the union or struct type has it's members already defined.
+	bool          is_complete;
+	
+	// The category in which this type lies.
+	type_cat_t    category;
+	union {
+		
+	};
+} var_type_t;
 
 #endif //DEFINITIONS_H

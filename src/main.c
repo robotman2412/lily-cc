@@ -21,7 +21,11 @@
 #include "gen_tests.h"
 #endif
 
+// Filling in of an external array.
 char *reg_names[NUM_REGS] = REG_NAMES;
+
+// Filling in of another external array.
+size_t simple_type_size[] = CSIZE_BY_INDEX;
 
 typedef struct token {
 	enum yytokentype type;

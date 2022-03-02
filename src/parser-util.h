@@ -115,6 +115,8 @@ struct iasm_reg {
 	char           *mode;
 	// Operand expression (e.g. a, *b or c[d])
 	expr_t         *expr;
+	// Result of expression.
+	gen_var_t      *expr_result;
 	
 	/* ==== simple constraints ==== */
 	

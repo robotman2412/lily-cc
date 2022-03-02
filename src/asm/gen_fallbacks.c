@@ -170,6 +170,105 @@ bool gen_stmt(asm_ctx_t *ctx, void *ptr, bool is_stmts) {
 #endif
 
 #ifdef INLINE_ASM_SUPPORTED
+// Decodes a constraints string.
+// Returns 1 on success.
+static bool iasm_preproc_reg(asm_ctx_t *ctx, iasm_regs_t *regs, int index) {
+	iasm_reg_t *reg = &regs->arr[index];
+	reg->mode_read = true;
+	char *str = reg->mode;
+	
+	// Initialise all constraints.
+	reg->mode_read = false;
+	reg->mode_write = false;
+	reg->mode_early_clobber = false;
+	reg->mode_known_const = false;
+	reg->mode_unknown_const = false;
+	reg->mode_register = false;
+	reg->mode_memory = false;
+	reg->mode_commutative_next = false;
+	reg->mode_commutative_prev = false;
+	
+	// COMPUTE the string.
+	for (int i = 0; *str; i++) {
+		char c = *str;
+		switch (c) {
+			case ' ':
+			case '\t':
+			case '\r':
+			case '\n':
+				// Ignore whitespace.
+				break;
+				
+			case '&':
+				// Early clobber: this may not be in the same place as an input.
+				reg->mode_early_clobber = true;
+				break;
+				
+			case '%':
+				// Commutative with the next one.
+				if (index < regs->num - 1) {
+					reg->mode_commutative_next = true;
+					regs->arr[index + 1].mode_commutative_prev = true;
+				} else {
+					printf("Error: '%%' constraint used with last operand\n");
+					return false;
+				}
+				break;
+				
+			case '=':
+				// Write-only.
+				reg->mode_read = false;
+			case '+':
+				// Read-write.
+				reg->mode_write = true;
+				break;
+				
+			case 'r':
+				// Allow registers.
+				reg->mode_register = true;
+				break;
+				
+			case 'm':
+				// Allow memory.
+				reg->mode_memory = true;
+				break;
+				
+			case 'i':
+				// Allow integers whose value is not necessarily known.
+				reg->mode_unknown_const = true;
+			case 's':
+			case 'n':
+				// Allow integers whose value is already known.
+				reg->mode_known_const = true;
+				break;
+				
+			case 'g':
+			case 'X':
+				// Allow anything.
+				reg->mode_register = true;
+				reg->mode_memory = true;
+				reg->mode_known_const = true;
+				reg->mode_unknown_const = true;
+				break;
+				
+			default:
+				// Unknown stuff, we'll ignore the rest of the constraint.
+				printf("Warning: Unrecognised constraint '%c'\n", c);
+				return false;
+		}
+		str ++;
+	}
+	
+	// Test the constraint to ensure it is possible.
+	if (!reg->mode_register && !reg->mode_memory && !reg->mode_known_const) {
+		// If no type of thing is allowed, then it is impossible.
+		printf("Error: Impossible constraint '%s'\n", reg->mode);
+		return false;
+	}
+	
+	return true;
+}
+
 // Preprocessing of inline assembly text.
 // Converts all the inputs and outputs found the the raw text.
 static char *iasm_preproc(asm_ctx_t *ctx, iasm_t *iasm, size_t magic_number) {
@@ -184,22 +283,56 @@ void gen_inline_asm(asm_ctx_t *ctx, iasm_t *iasm) {
 	// Used to assert that, including clobbers, there are enough free registers.
 	size_t num_input_reg  = 0;
 	size_t num_output_reg = 0;
-	for (size_t i = 0; i < iasm->inputs->num; i++) {
-		
-		if (iasm->inputs->arr[i].symbol) {
-			DEBUG_GEN("Input '%s' mode '%s'\n", iasm->inputs->arr[i].symbol, iasm->inputs->arr[i].mode);
-		} else {
-			DEBUG_GEN("Input anonymous mode '%s'\n", iasm->inputs->arr[i].mode);
-		}
-	}
+	
+	// Process outputs.
 	for (size_t i = 0; i < iasm->outputs->num; i++) {
+		// Process the constraints string.
+		if (!iasm_preproc_reg(ctx, iasm->outputs, i)) return;
+		iasm_reg_t *reg = &iasm->outputs->arr[i];
+		
+		// Output operands must be marked as written to (even if they aren't).
+		if (!reg->mode_write) {
+			printf("Error: output operand constraint '%s' lacks '='\n", reg->mode);
+			return;
+		}
+		
 		if (iasm->outputs->arr[i].symbol) {
-			DEBUG_GEN("Output '%s' mode '%s'\n", iasm->outputs->arr[i].symbol, iasm->outputs->arr[i].mode);
+			DEBUG_GEN("Output '%s' mode '%s'\n", reg->symbol, reg->mode);
 		} else {
-			DEBUG_GEN("Output anonymous mode '%s'\n", iasm->outputs->arr[i].mode);
+			DEBUG_GEN("Output anonymous mode '%s'\n", reg->mode);
 		}
 	}
-
+	
+	// Process inputs.
+	for (size_t i = 0; i < iasm->inputs->num; i++) {
+		// Process the constraints string.
+		if (!iasm_preproc_reg(ctx, iasm->inputs, i)) return;
+		iasm_reg_t *reg = &iasm->inputs->arr[i];
+		
+		// Input operands may not be written to.
+		if (reg->mode_write) {
+			printf("Error: input operand constraint '%s' contains '%c'\n", reg->mode, reg->mode_read ? '+' : '=');
+			return;
+		}
+		
+		if (reg->symbol) {
+			DEBUG_GEN("Input '%s' mode '%s'\n", reg->symbol, reg->mode);
+		} else {
+			DEBUG_GEN("Input anonymous mode '%s'\n", reg->mode);
+		}
+	}
+	
+	// Now, process output expressions.
+	for (size_t i = 0; i < iasm->outputs->num; i++) {
+		iasm_reg_t *reg = &iasm->outputs->arr[i];
+		reg->expr_result = gen_expression(ctx, reg->expr, NULL);
+	}
+	// And input expression.
+	for (size_t i = 0; i < iasm->inputs->num; i++) {
+		iasm_reg_t *reg = &iasm->inputs->arr[i];
+		reg->expr_result = gen_expression(ctx, reg->expr, NULL);
+	}
+	
 	// TODO: Clobbers, inputs and outputs.
 	char *text = iasm_preproc(ctx, iasm, 0);
 	gen_asm(ctx, iasm->text.strval);

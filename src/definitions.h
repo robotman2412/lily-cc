@@ -222,7 +222,7 @@ typedef enum stmt_type {
 	STMT_TYPE_VAR,
 	// expression * statements
 	STMT_TYPE_EXPR,
-	// asm ( "inline assembly" : "=r" (statements));
+	// asm ("inline assembly" : "=r" (statements));
 	STMT_TYPE_IASM
 } stmt_type_t;
 

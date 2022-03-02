@@ -446,10 +446,7 @@ gen_var_t *r3_math2_l(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_var_t 
 }
 
 // Performs a unary math operation for numbers of one byte.
-gen_var_t *r3_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *out_hint, gen_var_t *a);
-
-// Performs a unary math operation for numbers two bytes or larger.
-gen_var_t *r3_math1_l(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_var_t *a) {
+gen_var_t *r3_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_var_t *a) {
 	bool use_mem     = gen_cmp(ctx, a, output) || oper == OP_SHIFT_L || oper == OP_SHIFT_R;
 	// Number of words to operate on.
 	uint8_t n_words  = 2;
@@ -468,6 +465,7 @@ gen_var_t *r3_math1_l(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_var_t 
 		// If output != input, copy to output first.
 		gen_mov(ctx, output, a);
 	}
+	
 #ifdef DEBUG_GENERATOR
 	char *insn_name = "???";
 	char *insn_cc_name = "???";
@@ -507,6 +505,100 @@ gen_var_t *r3_math1_l(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_var_t 
 #endif
 			break;
 	}
+	
+	if (oper == OP_SHIFT_R) {
+		// Iterate in reverse order because of the nature of shifting right.
+		for (uint8_t i = n_words - 1; i != (uint8_t)-1; i--) {
+			// Add the instruction.
+			DEBUG_GEN("  %s [%s+%d]\n", i!=n_words-1 ? insn_cc_name : insn_name, output->label, i);
+			asm_write_memword(ctx, i!=n_words-1 ? insn_cc : insn);
+			asm_write_label_ref(ctx, output->label, i, OFFS(ctx));
+		}
+	} else if (use_mem) {
+		// Perform on memory.
+		for (uint8_t i = 0; i < n_words; i++) {
+			// Add the instruction.
+			DEBUG_GEN("  %s [%s+%d]\n", i ? insn_cc_name : insn_name, output->label, i);
+			asm_write_memword(ctx, i ? insn_cc : insn);
+			asm_write_label_ref(ctx, output->label, i, OFFS(ctx));
+		}
+	} else {
+		uint8_t regno = REG_A;
+		// Perform on registers.
+		for (uint8_t i = 0; i < n_words; i++) {
+			// Load part of the thing.
+			r3_load_part(ctx, a, regno, i);
+			// Label reference.
+			DEBUG_GEN("  %s %s\n", i ? insn_cc_name : insn_name, reg_names[regno]);
+			asm_write_memword(ctx, i ? insn_cc : insn);
+			// Store part of the thing.
+			r3_store_part(ctx, output, regno, i);
+		}
+	}
+	return output;
+}
+
+// Performs a unary math operation for numbers two bytes or larger.
+gen_var_t *r3_math1_l(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_var_t *a) {
+	bool use_mem     = gen_cmp(ctx, a, output) || oper == OP_SHIFT_L || oper == OP_SHIFT_R;
+	// Number of words to operate on.
+	uint8_t n_words  = 2;
+	// Instruction for the occasion.
+	uint8_t insn     = 0;
+	uint8_t insn_cc  = 0;
+	// If there's no output hint, create one ourselves.
+	if (!output) {
+		output = (gen_var_t *) malloc(sizeof(gen_var_t));
+		*output = (gen_var_t) {
+			.label = r3_get_tmp(ctx),
+			.type  = VAR_TYPE_LABEL
+		};
+	}
+	if (!gen_cmp(ctx, a, output)) {
+		// If output != input, copy to output first.
+		gen_mov(ctx, output, a);
+	}
+	
+#ifdef DEBUG_GENERATOR
+	char *insn_name = "???";
+	char *insn_cc_name = "???";
+#endif
+	// Find the correct instruction.
+	switch (oper) {
+		case OP_ADD:
+			insn      = use_mem ? INSN_INC_M  + PIE(ctx) : INSN_INC_A;
+			insn_cc   = use_mem ? INSN_INCC_M + PIE(ctx) : INSN_INCC_A;
+#ifdef DEBUG_GENERATOR
+			insn_name    = "INC";
+			insn_cc_name = "INCC";
+#endif
+			break;
+		case OP_SUB:
+			insn      = use_mem ? INSN_DEC_M  + PIE(ctx) : INSN_INC_A;
+			insn_cc   = use_mem ? INSN_DECC_M + PIE(ctx) : INSN_INCC_A;
+#ifdef DEBUG_GENERATOR
+			insn_name    = "DEC";
+			insn_cc_name = "DECC";
+#endif
+			break;
+		case OP_SHIFT_L:
+			insn      = OFFS_SHM + OFFS_SHM_L + PIE(ctx);
+			insn_cc   = OFFS_SHM + OFFS_SHM_L + OFFS_SHM_CC + PIE(ctx);
+#ifdef DEBUG_GENERATOR
+			insn_name    = "SHL";
+			insn_cc_name = "SHLC";
+#endif
+			break;
+		case OP_SHIFT_R:
+			insn      = OFFS_SHM + OFFS_SHM_R + PIE(ctx);
+			insn_cc   = OFFS_SHM + OFFS_SHM_R + OFFS_SHM_CC + PIE(ctx);
+#ifdef DEBUG_GENERATOR
+			insn_name    = "SHR";
+			insn_cc_name = "SHRC";
+#endif
+			break;
+	}
+	
 	if (oper == OP_SHIFT_R) {
 		// Iterate in reverse order because of the nature of shifting right.
 		for (uint8_t i = n_words - 1; i != (uint8_t)-1; i--) {

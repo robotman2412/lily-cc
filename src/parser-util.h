@@ -7,6 +7,7 @@ struct parser_ctx;
 struct funcdef;
 struct ival;
 struct strval;
+struct ident;
 struct expr;
 struct stmt;
 struct iasm_qual;
@@ -22,7 +23,7 @@ typedef struct parser_ctx	parser_ctx_t;
 typedef struct ival			ival_t;
 typedef struct strval		strval_t;
 
-typedef struct strval		ident_t;
+typedef struct ident		ident_t;
 typedef struct expr			expr_t;
 typedef struct stmt			stmt_t;
 
@@ -58,16 +59,24 @@ struct strval {
 	char *strval;
 };
 
+struct ident {
+	pos_t       pos;
+	// Name of the identity.
+	char       *strval;
+	// Type associated, if any.
+	var_type_t *type;
+};
+
 struct expr {
 	pos_t       pos;
 	expr_type_t type;
 	oper_t      oper;
 	union {
-		long     iconst;
-		char    *strconst;
-		ident_t *ident;
-		expr_t  *func;
-		expr_t  *par_a;
+		long      iconst;
+		char     *strconst;
+		strval_t *ident;
+		expr_t   *func;
+		expr_t   *par_a;
 	};
 	union {
 		expr_t  *par_b;
@@ -167,7 +176,7 @@ struct stmts {
 
 struct funcdef {
 	//type_t        returns;
-	ident_t         ident;
+	strval_t        ident;
 	idents_t        args;
 	stmts_t        *stmts;
 	preproc_data_t *preproc;
@@ -177,9 +186,9 @@ extern void *make_copy(void *mem, size_t size);
 #define COPY(thing, type) ( (type *) make_copy(thing, sizeof(type)) )
 
 // Incomplete function definition (without code).
-funcdef_t funcdef_def    (ident_t  *ident,  idents_t *args);
+funcdef_t funcdef_def    (strval_t *ident,  idents_t *args);
 // Complete function declaration (with code).
-funcdef_t funcdef_decl   (ident_t  *ident,  idents_t *args, stmts_t *code);
+funcdef_t funcdef_decl   (strval_t *ident,  idents_t *args, stmts_t *code);
 
 // An empty list of statements.
 stmts_t     stmts_empty    ();
@@ -202,7 +211,7 @@ stmt_t      stmt_expr      (expr_t   *expr);
 stmt_t      stmt_iasm      (strval_t *text,  iasm_regs_t *output, iasm_regs_t *input, void *clobbers);
 
 // Assembly parameter definition.
-iasm_reg_t  stmt_iasm_reg  (ident_t *symbol, strval_t *mode, expr_t *expr);
+iasm_reg_t  stmt_iasm_reg  (strval_t *symbol, strval_t *mode, expr_t *expr);
 // An empty list of iasm_reg.
 iasm_regs_t iasm_regs_empty();
 // Concatenate to a list of iasm_reg.
@@ -210,19 +219,22 @@ iasm_regs_t iasm_regs_cat  (iasm_regs_t *iasm_regs, iasm_reg_t *iasm_reg);
 // A list of one iasm_reg.
 iasm_regs_t iasm_regs_one  (iasm_reg_t  *iasm_reg);
 
+
 // An empty list of identities.
 idents_t    idents_empty   ();
 // Concatenate to a list of identities.
-idents_t    idents_cat     (idents_t *idents, ident_t  *ident);
+idents_t    idents_cat     (idents_t      *idents, simple_type_t *type, strval_t *ident);
 // A list of one identity.
-idents_t    idents_one     (ident_t  *ident);
+idents_t    idents_one     (simple_type_t *type,   strval_t      *ident);
+// Set the type of all identities contained.
+idents_t    idents_settype (idents_t      *idents, simple_type_t *type);
 
 // Numeric constant expression.
 expr_t      expr_icnst     (ival_t   *val);
 // String constant expression.
 expr_t      expr_scnst     (strval_t *val);
 // Identity expression (things like variables and functions).
-expr_t      expr_ident     (ident_t  *ident);
+expr_t      expr_ident     (strval_t *ident);
 // Unary math expression (things like &a, b++ and !c).
 expr_t      expr_math1     (oper_t    type,   expr_t   *val);
 // Function call expression.

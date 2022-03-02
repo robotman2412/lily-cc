@@ -293,6 +293,36 @@ static char *tokeniser_getstr(tokeniser_ctx_t *ctx, char term) {
 	return buf;
 }
 
+typedef struct {
+	int keyw;
+	char *str;
+} keyw_map_t;
+
+static const keyw_map_t keyw_map[] = {
+	// (keyw_map_t) { .keyw=TKN_, .str="" },
+	(keyw_map_t) { .keyw=TKN_VOID, .str="void" },
+	(keyw_map_t) { .keyw=TKN_SHORT, .str="short" },
+	(keyw_map_t) { .keyw=TKN_INT, .str="int" },
+	(keyw_map_t) { .keyw=TKN_LONG, .str="long" },
+	(keyw_map_t) { .keyw=TKN_CHAR, .str="char" },
+	(keyw_map_t) { .keyw=TKN_FLOAT, .str="float" },
+	(keyw_map_t) { .keyw=TKN_DOUBLE, .str="double" },
+	(keyw_map_t) { .keyw=TKN_BOOL, .str="bool" },
+	(keyw_map_t) { .keyw=TKN_SIGNED, .str="signed" },
+	(keyw_map_t) { .keyw=TKN_UNSIGNED, .str="unsigned" },
+	(keyw_map_t) { .keyw=TKN_IF, .str="if" },
+	(keyw_map_t) { .keyw=TKN_ELSE, .str="else" },
+	(keyw_map_t) { .keyw=TKN_WHILE, .str="while" },
+	(keyw_map_t) { .keyw=TKN_RETURN, .str="return" },
+	(keyw_map_t) { .keyw=TKN_ASM, .str="asm" },
+	(keyw_map_t) { .keyw=TKN_AUTO, .str="auto" },
+	(keyw_map_t) { .keyw=TKN_FUNC, .str="func" },
+	(keyw_map_t) { .keyw=TKN_GOTO, .str="goto" },
+	(keyw_map_t) { .keyw=TKN_VOLATILE, .str="volatile" },
+	(keyw_map_t) { .keyw=TKN_INLINE, .str="inline" },
+};
+static const size_t keyw_map_len = sizeof(keyw_map) / sizeof(keyw_map_t);
+
 // Grab next non-space token.
 int tokenise(tokeniser_ctx_t *ctx) {
 	// Get the first non-space character.
@@ -566,26 +596,11 @@ int tokenise(tokeniser_ctx_t *ctx) {
 		}
 		// Next, check for keywords.
 		int keyw = 0;
-		if (!strcmp(strval, "if")) {
-			keyw = TKN_IF;
-		} else if (!strcmp(strval, "else")) {
-			keyw = TKN_ELSE;
-		} else if (!strcmp(strval, "while")) {
-			keyw = TKN_WHILE;
-		} else if (!strcmp(strval, "return")) {
-			keyw = TKN_RETURN;
-		} else if (!strcmp(strval, "asm")) {
-			keyw = TKN_ASM;
-		} else if (!strcmp(strval, "auto")) {
-			keyw = TKN_AUTO;
-		} else if (!strcmp(strval, "func")) {
-			keyw = TKN_FUNC;
-		} else if (!strcmp(strval, "goto")) {
-			keyw = TKN_GOTO;
-		} else if (!strcmp(strval, "volatile")) {
-			keyw = TKN_VOLATILE;
-		} else if (!strcmp(strval, "inline")) {
-			keyw = TKN_INLINE;
+		for (int i = 0; i < keyw_map_len; i++) {
+			if (!strcmp(strval, keyw_map[i].str)) {
+				keyw = keyw_map[i].keyw;
+				break;
+			}
 		}
 		// Return the appropriate alternative.
 		if (keyw) {

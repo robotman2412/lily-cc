@@ -3,8 +3,10 @@
 #define GEN_H
 
 struct gen_var;
+struct var_type;
 
-typedef struct gen_var gen_var_t;
+typedef struct gen_var  gen_var_t;
+typedef struct var_type var_type_t;
 
 #include <parser-util.h>
 #include <asm.h>
@@ -26,6 +28,27 @@ struct gen_var {
 		// Pointer to dereference.
 		// The value is how the pointer is stored.
 		gen_var_t  *ptr;
+	};
+};
+
+// Definitions of types, pointer types and structs.
+struct var_type {
+	// Shorthand for the size, in memory words, of this type.
+	size_t          size;
+	
+	// The simple type underlying this type.
+	// Does not apply to union, struct nor array types.
+	simple_type_t   simple_type;
+	// Whether this type is complete: whether the union or struct type has it's members already defined.
+	bool            is_complete;
+	
+	// The category in which this type lies.
+	type_cat_t      category;
+	union {
+		// Pointers and arrays: The underlying type.
+		var_type_t *underlying;
+		// Structs and unions: The members.
+		map_t      *members;
 	};
 };
 

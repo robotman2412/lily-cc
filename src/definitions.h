@@ -46,9 +46,22 @@
 #   define DEBUG_PRE(...)
 #endif
 
+#define IS_CHAR_SIGNED   defined(CHAR_IS_SIGNED)
+#define IS_CHAR_UNSIGNED defined(CHAR_IS_UNSIGNED)
+
+#if defined(CHAR_IS_SIGNED) && defined(CHAR_IS_UNSIGNED)
+#error "Cannot be both CHAR_IS_SIGNED and CHAR_IS_UNSIGNED, change in arch_config.h"
+#endif
+#if !defined(CHAR_IS_SIGNED) && !defined(CHAR_IS_UNSIGNED)
+#error "Please define either CHAR_IS_SIGNED or CHAR_IS_UNSIGNED in arch_config.h"
+#endif
+
 #define IS_LITTLE_ENDIAN defined(LITTLE_ENDIAN)
 #define IS_BIG_ENDIAN    defined(BIG_ENDIAN)
 
+#if defined(LITTLE_ENDIAN) && defined(BIG_ENDIAN)
+#error "Cannot be both LITTLE_ENDIAN and BIG_ENDIAN, change in arch_config.h"
+#endif
 #if !defined(LITTLE_ENDIAN) && !defined(BIG_ENDIAN)
 #error "Please define either LITTLE_ENDIAN or BIG_ENDIAN in arch_config.h"
 #endif
@@ -291,8 +304,20 @@ typedef enum simple_type {
 	
 	// _Bool (bool)
 	CTYPE_BOOL,
+	// void
+	CTYPE_VOID
 	
 } simple_type_t;
+
+#ifdef CHAR_IS_SIGNED
+// 'char' type
+// The character's default signedness depends on the machine.
+#define CTYPE_CHAR CTYPE_S_CHAR
+#else
+// 'char' type
+// The character's default signedness depends on the machine.
+#define CTYPE_CHAR CTYPE_U_CHAR
+#endif
 
 // Size of 'char' types, in memory words.
 #define CSIZE_CHAR   ((CHAR_BITS   - 1) / MEM_BITS + 1)
@@ -316,7 +341,7 @@ typedef enum simple_type {
 #define CSIZE_BOOL 1
 
 // Sizes of the simple types, in memory words, by index.
-extern size_t simple_type_size[14];
+extern size_t simple_type_size[];
 #define CSIZE_SIMPLE(index) (simple_type_size[index])
 #define CSIZE_BY_INDEX {\
 	CSIZE_CHAR,   CSIZE_CHAR,\
@@ -328,6 +353,7 @@ extern size_t simple_type_size[14];
 	CSIZE_DOUBLE,\
 	CSIZE_LONG_DOUBLE,\
 	CSIZE_BOOL,\
+	0,\
 }
 
 // Categories of types.
@@ -343,23 +369,5 @@ typedef enum type_cat {
 	// Union types
 	TYPE_CAT_UNION,
 } type_cat_t;
-
-// Definitions of types, pointer types and structs.
-typedef struct var_type {
-	// Shorthand for the size, in memory words, of this type.
-	size_t        size;
-	
-	// The simple type underlying this type.
-	// Does not apply to union, struct nor array types.
-	simple_type_t simple_type;
-	// Whether this type is complete: whether the union or struct type has it's members already defined.
-	bool          is_complete;
-	
-	// The category in which this type lies.
-	type_cat_t    category;
-	union {
-		
-	};
-} var_type_t;
 
 #endif //DEFINITIONS_H

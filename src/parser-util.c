@@ -3,7 +3,7 @@
 #include <malloc.h>
 
 // Incomplete function definition (without code).
-funcdef_t funcdef_def (ident_t  *ident,  idents_t *args) {
+funcdef_t funcdef_def (strval_t *ident, idents_t *args) {
 	return (funcdef_t) {
 		.ident = *ident,
 		.args  = *args,
@@ -12,7 +12,7 @@ funcdef_t funcdef_def (ident_t  *ident,  idents_t *args) {
 }
 
 // Complete function declaration (with code).
-funcdef_t funcdef_decl(ident_t *ident, idents_t *args, stmts_t *code) {
+funcdef_t funcdef_decl(strval_t *ident, idents_t *args, stmts_t *code) {
 	return (funcdef_t) {
 		.ident = *ident,
 		.args  = *args,
@@ -109,7 +109,7 @@ stmt_t stmt_iasm(strval_t *text, iasm_regs_t *outputs, iasm_regs_t *inputs, void
 
 
 // Assembly parameter definition.
-iasm_reg_t stmt_iasm_reg(ident_t *symbol, strval_t *mode, expr_t *expr) {
+iasm_reg_t stmt_iasm_reg(strval_t *symbol, strval_t *mode, expr_t *expr) {
 	return (iasm_reg_t) {
 		.symbol = symbol ? symbol->strval : NULL,
 		.mode   = mode->strval,
@@ -152,21 +152,60 @@ idents_t idents_empty() {
 }
 
 // Concatenate to a list of identities.
-idents_t idents_cat(idents_t *idents, ident_t *ident) {
+idents_t idents_cat(idents_t *idents, simple_type_t *s_type, strval_t *name) {
 	idents->num ++;
 	idents->arr = realloc(idents->arr, idents->num * sizeof(ident_t));
-	idents->arr[idents->num - 1] = *ident;
+	var_type_t type;
+	if (s_type) {
+		type = (var_type_t) {
+			.category    = TYPE_CAT_SIMPLE,
+			.is_complete = true,
+			.simple_type = *s_type,
+			.size        = CSIZE_SIMPLE(*s_type)
+		};
+	}
+	idents->arr[idents->num - 1] = (ident_t) {
+		.pos    = name->pos,
+		.strval = name->strval,
+		.type   = s_type ? COPY(&type, var_type_t) : NULL
+	};
 	return *idents;
 }
 
 // A list of one identity.
-idents_t idents_one(ident_t *ident) {
+idents_t idents_one(simple_type_t *s_type, strval_t *name) {
+	var_type_t type;
+	if (s_type) {
+		type = (var_type_t) {
+			.category    = TYPE_CAT_SIMPLE,
+			.is_complete = true,
+			.simple_type = *s_type,
+			.size        = CSIZE_SIMPLE(*s_type)
+		};
+	}
+	ident_t ident = {
+		.pos    = name->pos,
+		.strval = name->strval,
+		.type   = s_type ? COPY(&type, var_type_t) : NULL
+	};
 	return (idents_t) {
-		.arr = COPY(ident, ident_t),
+		.arr = COPY(&ident, ident_t),
 		.num = 1
 	};
 }
 
+// Set the type of all identities contained.
+idents_t idents_settype(idents_t *idents, simple_type_t *s_type) {
+	var_type_t type = {
+		.category    = TYPE_CAT_SIMPLE,
+		.is_complete = true,
+		.simple_type = *s_type,
+		.size        = CSIZE_SIMPLE(*s_type)
+	};
+	for (size_t i = 0; i < idents->num; i++) {
+		idents->arr[i].type = COPY(&type, var_type_t);
+	}
+}
 
 
 // Numeric constant expression.
@@ -186,10 +225,10 @@ expr_t expr_scnst(strval_t *val) {
 }
 
 // Identity expression (things like variables and functions).
-expr_t expr_ident(ident_t *ident) {
+expr_t expr_ident(strval_t *ident) {
 	return (expr_t) {
 		.type     = EXPR_TYPE_IDENT,
-		.ident    = COPY(ident, ident_t)
+		.ident    = COPY(ident, strval_t)
 	};
 }
 

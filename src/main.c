@@ -247,6 +247,12 @@ void yyerror(parser_ctx_t *ctx, char *msg) {
 	fflush(stdout);
 	fputs(msg, stderr);
 	fputc('\n', stderr);
+	fprintf(
+		stderr, "Note: Near %s line %d col %d\n",
+		ctx->tokeniser_ctx->filename,
+		ctx->tokeniser_ctx->y,
+		ctx->tokeniser_ctx->x + 1
+	);
 	fflush(stderr);
 }
 

@@ -7,6 +7,7 @@
 #define ARCH_ID "GR8CPU"
 
 // Endianness.
+// Define BIG_ENDIAN instead if your machine is big endian.
 #define LITTLE_ENDIAN
 
 // Word sizes.
@@ -28,6 +29,11 @@
 #define DOUBLE_BITS      32
 #define LONG_DOUBLE_BITS 64
 
+// Character default signedness.
+// This is a property of the machine and not the language.
+// Only applies to 'char' without 'signed' nor 'unsigned'.
+#define CHAR_IS_UNSIGNED
+
 // Register names.
 #define NUM_REGS  3
 #define REG_NAMES { "A", "X", "Y" }
@@ -40,7 +46,7 @@ typedef uint8_t reg_t;
 // Type used for conditions.
 typedef uint8_t cond_t;
 // Type used for pointers.
-typedef void *ptr_t;
+typedef uint16_t ptr_t;
 
 // State that inline assembly is supported
 #define INLINE_ASM_SUPPORTED

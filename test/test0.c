@@ -30,10 +30,18 @@
 // 	a += 1;
 // }
 
-func iasm(a) {
-	asm (
-		"MOV X(iasm.LA0000), A"
-		: "=r" (a) // Outputs.
-		: [c] "r" (a) // Inputs.
+void putc(char c) {
+	asm volatile (
+		"MOV [0xfefc], %[reg]"
+		: // Outputs.
+		: [reg] "r" (c) // Inputs.
 	);
 }
+
+// int iasm(char a) {
+// 	asm (
+// 		"MOV X(iasm.LA0000), A"
+// 		: "=r" (a) // Outputs.
+// 		: [c] "r" (a) // Inputs.
+// 	);
+// }

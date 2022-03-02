@@ -6,6 +6,7 @@
 %}
 
 %code requires {
+
 #include "parser-util.h"
 #include "debug/pront.h"
 #include <malloc.h>
@@ -19,29 +20,34 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 %param { parser_ctx_t *ctx };
 
 %union {
-	pos_t		pos;
+	pos_t			pos;
 	
-	ival_t		ival;
-	strval_t	strval;
+	ival_t			ival;
+	strval_t		strval;
 	
-	ident_t		ident;
-	idents_t	idents;
+	ident_t			ident;
+	idents_t		idents;
 	
-	funcdef_t	func;
+	funcdef_t		func;
 	
-	expr_t		expr;
-	exprs_t		exprs;
+	expr_t			expr;
+	exprs_t			exprs;
 	
-	stmt_t		stmt;
-	stmts_t		stmts;
+	stmt_t			stmt;
+	stmts_t			stmts;
 	
-	iasm_qual_t asm_qual;
-	iasm_regs_t asm_regs;
-	iasm_reg_t  asm_reg;
+	iasm_qual_t		asm_qual;
+	iasm_regs_t		asm_regs;
+	iasm_reg_t		asm_reg;
 	
-	strval_t	garbage;
+	simple_type_t	simple_type;
+	
+	strval_t		garbage;
 }
 
+%token <pos> TKN_UNSIGNED "unsigned" TKN_SIGNED "signed" TKN_FLOAT "float" TKN_DOUBLE "double" TKN_BOOL "_Bool"
+%token <pos> TKN_CHAR "char" TKN_SHORT "short" TKN_INT "int" TKN_LONG "long"
+%token <pos> TKN_VOID "void"
 %token <pos> TKN_VOLATILE "volatile" TKN_INLINE "inline" TKN_GOTO "goto"
 %token <pos> TKN_AUTO "auto" TKN_FUNC "func"
 %token <pos> TKN_IF "if" TKN_ELSE "else" TKN_WHILE "while" TKN_RETURN "return" TKN_ASM "asm"
@@ -51,7 +57,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 
 %token <ival> TKN_IVAL
 %token <strval> TKN_STRVAL
-%token <ident> TKN_IDENT
+%token <strval> TKN_IDENT
 %token <garbage> TKN_GARBAGE
 
 %token <pos> TKN_ASSIGN_ADD "+=" TKN_ASSIGN_SUB "-="
@@ -66,7 +72,8 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 %token <pos> TKN_SHL "<<" TKN_SHR ">>"
 %token <pos> TKN_LT "<" TKN_LE "<=" TKN_GT ">" TKN_GE ">=" TKN_EQ "==" TKN_NE "!="
 
-%type <idents> opt_idents
+%type <idents> opt_params
+%type <idents> params
 %type <idents> idents
 %type <func> funcdef
 %type <expr> expr
@@ -84,6 +91,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 %type <asm_regs> asm_regs
 %type <asm_reg> asm_reg
 
+%type <simple_type> simple_type
 %type <idents> vardecls
 
 // Precedence: lowest.
@@ -120,14 +128,38 @@ library:		global library
 global:			funcdef {function_added(ctx, &$1);}
 |				vardecls;
 
-funcdef:		"func" TKN_IDENT "(" opt_idents ")"
-				"{" stmts "}"								{$$=funcdef_decl(&$2, &$4, &$7);};
-vardecls:		"auto" idents ";"							{$$=$2;};
+opt_int:		"int"
+|				%empty;
+opt_signed:		"signed"
+|				%empty;
+simple_type:	"char"										{$$=CTYPE_CHAR;}
+|				"signed" "char"								{$$=CTYPE_S_CHAR;}
+|				"unsigned" "char"							{$$=CTYPE_U_CHAR;}
+|				opt_signed "short" opt_int					{$$=CTYPE_S_SHORT;}
+|				opt_signed "int"							{$$=CTYPE_S_INT;}
+|				opt_signed "long" opt_int					{$$=CTYPE_S_LONG;}
+|				opt_signed "long" "long" opt_int			{$$=CTYPE_S_LONGER;}
+|				"unsigned" "short" opt_int					{$$=CTYPE_U_SHORT;}
+|				"unsigned" "int"							{$$=CTYPE_U_INT;}
+|				"unsigned" "long" opt_int					{$$=CTYPE_U_LONG;}
+|				"unsigned" "long" "long" opt_int			{$$=CTYPE_U_LONGER;}
+|				"float"										{$$=CTYPE_FLOAT;}
+|				"double"									{$$=CTYPE_DOUBLE;}
+|				"long" "double"								{$$=CTYPE_LONG_DOUBLE;}
+|				"_Bool"										{$$=CTYPE_BOOL;}
+|				"void"										{$$=CTYPE_VOID;};
 
-opt_idents:		idents										{$$=$1;}
+funcdef:		simple_type TKN_IDENT "(" opt_params ")"
+				"{" stmts "}"								{$$=funcdef_decl(&$2, &$4, &$7);};
+vardecls:		simple_type idents ";"						{$$=$2; idents_settype(&$$, &$1);};
+
+opt_params:		params										{$$=$1;}
 |				%empty										{$$=idents_empty();};
-idents:			idents "," TKN_IDENT						{$$=idents_cat  (&$1,  &$3);}
-|				TKN_IDENT									{$$=idents_one  (&$1);};
+params:			params "," simple_type TKN_IDENT			{$$=idents_cat  (&$1,  &$3, &$4);}
+|				simple_type TKN_IDENT						{$$=idents_one  (&$1, &$2);};
+idents:			idents "," TKN_IDENT						{$$=idents_cat  (&$1,  NULL, &$3);}
+|				TKN_IDENT									{$$=idents_one  (NULL, &$1);};
+
 stmts:			stmts stmt									{$$=stmts_cat   (&$1, &$2);}
 |				%empty										{$$=stmts_empty ();};
 stmt:			"{" stmts "}"								{$$=stmt_multi  (&$2);}
@@ -194,7 +226,7 @@ expr:			TKN_IVAL									{$$=expr_icnst(&$1);}
 |				expr "<<=" expr				%prec "="		{$$=expr_matha(OP_SHIFT_L,   &$1, &$3);}
 |				expr ">>=" expr				%prec "="		{$$=expr_matha(OP_SHIFT_R,   &$1, &$3);};
 
-inline_asm:		"asm" asm_qual asm_code						{$$=$3; $$.iasm->qualifiers=$2;};
+inline_asm:		"asm" asm_qual asm_code						{$$=$3; $$.iasm->qualifiers=$2; $$.iasm->qualifiers.is_volatile |= !$$.iasm->outputs; };
 
 asm_qual:		%empty										{$$=(iasm_qual_t) {.is_volatile=0, .is_inline=0, .is_goto=0};}
 |				asm_qual "volatile"							{$$=$1; $$.is_volatile=1;}

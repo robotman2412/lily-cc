@@ -130,6 +130,8 @@
 
 #include <gen.h>
 
+// Detects and updates the calling convention that is to be used for the given function.
+void       r3_update_cc  (asm_ctx_t *ctx, funcdef_t *funcdef);
 // Creates a set of branch instructions for the given conditions.
 void       r3_branch     (asm_ctx_t *ctx, gen_var_t *cond, char *l_true, char *l_false);
 
@@ -163,6 +165,6 @@ gen_var_t *r3_math1_l    (asm_ctx_t *ctx, oper_t     oper, gen_var_t *out_hint, 
 // Generates .bss labels for variables and temporary variables in a function.
 void       r3_gen_var    (asm_ctx_t *ctx, funcdef_t *func);
 // Gets or adds a temp var.
-char      *r3_get_tmp    (asm_ctx_t *ctx);
+char      *r3_get_tmp    (asm_ctx_t *ctx, size_t     size);
 
 #endif // GR8CPU_R3_GEN_H

@@ -48,6 +48,20 @@ typedef uint8_t cond_t;
 // Type used for pointers.
 typedef uint16_t ptr_t;
 
+// Extra data added to funcdef_t.
+typedef enum {
+	// Functions with one two-byte parameter.
+	// Stored in the X and Y registers.
+	R3_CC_INT,
+	// Functions with 0 to 3 one-byte parameters.
+	// Stored in the A, X and Y registers.
+	R3_CC_CHAR,
+	// Functions with any other pattern.
+	// Stored in labeled memory addresses.
+	R3_CC_MEM
+} r3_call_conv_t;
+#define FUNCDEF_EXTRAS r3_call_conv_t call_conv;
+
 // State that inline assembly is supported
 #define INLINE_ASM_SUPPORTED
 

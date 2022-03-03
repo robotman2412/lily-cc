@@ -354,6 +354,7 @@ void gen_inline_asm(asm_ctx_t *ctx, iasm_t *iasm) {
 gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 	switch (expr->type) {
 		case EXPR_TYPE_CONST: {
+			// Constants are very simple.
 			gen_var_t *val = (gen_var_t *) malloc(sizeof(gen_var_t));
 			*val = (gen_var_t) {
 				.type = VAR_TYPE_CONST,
@@ -361,22 +362,27 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 			};
 			return val;
 		} break;
+		
 		case EXPR_TYPE_IDENT: {
+			// Variable references.
 			gen_var_t *val = (gen_var_t *) malloc(sizeof(gen_var_t));
 			*val = (gen_var_t) {
 				.type = VAR_TYPE_LABEL,
 				.label = gen_translate_label(ctx, expr->ident->strval)
 			};
 			if (!val->label) {
+				// TODO: Some fix or error report goes here.
 				val->label = expr->ident->strval;
 				DEBUG_GEN("unknown \"%s\"\n", expr->ident->strval);
 			}
 			return val;
 		} break;
+		
 		case EXPR_TYPE_CALL: {
 			// TODO: check for inlining possibilities.
 			//gen_expr_call(ctx, NULL, expr->func, expr->args->num, expr->args->arr);
 		} break;
+		
 		case EXPR_TYPE_MATH1: {
 			// Unary math operations (things like ++a, &b, *c and !d)
 			oper_t oper = expr->oper;
@@ -384,35 +390,47 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 				// This happens when writing to a pointer dereference.
 				out_hint->ptr = gen_expression(ctx, expr->par_a, NULL);
 				return out_hint;
+				
 			} else if (oper == OP_LOGIC_NOT) {
 				// Apply the "condition" output hint to logic not.
 				gen_var_t *cond_hint = COPY(&(gen_var_t) {
 					.type = VAR_TYPE_COND
 				}, gen_var_t);
+				// And do the rest as usual.
 				gen_var_t *a = gen_expression(ctx, expr->par_a, cond_hint);
 				return gen_expr_math1(ctx, expr->oper, out_hint, a);
+				
 			} else {
 				// Simple expression.
 				gen_var_t *a = gen_expression(ctx, expr->par_a, out_hint);
 				return gen_expr_math1(ctx, expr->oper, out_hint, a);
 			}
 		} break;
+		
 		case EXPR_TYPE_MATH2: {
 			if (expr->oper == OP_ASSIGN) {
 				// Handle assignment seperately.
 				if (expr->par_a->type == EXPR_TYPE_IDENT) {
+					// Assignment to an identity (explicit variable).
 					gen_var_t *a = gen_expression(ctx, expr->par_a, NULL);
 					gen_var_t *b = gen_expression(ctx, expr->par_b, a);
+					// Have the move performed.
 					gen_mov(ctx, a, b);
+					// Free up variables if necessary.
 					if (!gen_cmp(ctx, a, b)) gen_unuse(ctx, a);
 					return a;
+					
 				} else {
+					// Assignment to a different type (usually pointer dereference).
 					gen_var_t *ptr_hint = COPY(&(gen_var_t) {
 						.type = VAR_TYPE_PTR
 					}, gen_var_t);
+					// Generate with the pointer hint.
 					gen_var_t *a = gen_expression(ctx, expr->par_a, ptr_hint);
 					gen_var_t *b = gen_expression(ctx, expr->par_b, NULL);
+					// Have the move performed.
 					gen_mov(ctx, a, b);
+					// Free up variables if necessary.
 					if (!gen_cmp(ctx, a, b)) gen_unuse(ctx, a);
 					return a;
 				}
@@ -421,6 +439,7 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 				gen_var_t *a   = gen_expression(ctx, expr->par_a, out_hint);
 				gen_var_t *b   = gen_expression(ctx, expr->par_b, NULL);
 				gen_var_t *out = gen_expr_math2(ctx, expr->oper, out_hint, a, b);
+				// Free up variables if necessary.
 				if (!gen_cmp(ctx, a, out)) gen_unuse(ctx, a);
 				if (!gen_cmp(ctx, b, out)) gen_unuse(ctx, b);
 				return out;

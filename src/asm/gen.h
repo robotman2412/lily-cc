@@ -13,7 +13,7 @@ typedef struct var_type var_type_t;
 #include <gen_preproc.h>
 
 struct gen_var {
-	gen_var_type_t type;
+	gen_var_type_t  type;
 	union {
 		// Numeric constants.
 		address_t   iconst;
@@ -29,6 +29,8 @@ struct gen_var {
 		// The value is how the pointer is stored.
 		gen_var_t  *ptr;
 	};
+	// The type associated with the variable, if any.
+	var_type_t     *ctype;
 };
 
 // Definitions of types, pointer types and structs.

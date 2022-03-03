@@ -177,11 +177,18 @@ struct stmts {
 };
 
 struct funcdef {
-	//type_t        returns;
+	// Return type.
+	var_type_t     *returns;
+	// Function name.
 	strval_t        ident;
+	// Arguments list.
 	idents_t        args;
+	// Code, if that is defined.
 	stmts_t        *stmts;
+	// Preprocessor data.
 	preproc_data_t *preproc;
+	// Architecture-specific extra data.
+	FUNCDEF_EXTRAS
 };
 
 extern void *make_copy(void *mem, size_t size);

@@ -65,6 +65,8 @@ struct asm_ctx {
     asm_scope_t  global_scope;
     // The current scope.
     asm_scope_t *current_scope;
+    // Extra bits of context on an architecture basis.
+    ASM_CTX_EXTRAS
     
     /* ======== Function ========= */
     // The current function.

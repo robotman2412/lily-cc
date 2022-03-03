@@ -343,7 +343,7 @@ typedef enum simple_type {
 // Sizes of the simple types, in memory words, by index.
 extern size_t simple_type_size[];
 #define CSIZE_SIMPLE(index) (simple_type_size[index])
-#define CSIZE_BY_INDEX {\
+#define arrCSIZE_BY_INDEX {\
 	CSIZE_CHAR,   CSIZE_CHAR,\
 	CSIZE_SHORT,  CSIZE_SHORT,\
 	CSIZE_INT,    CSIZE_INT,\
@@ -369,5 +369,22 @@ typedef enum type_cat {
 	// Union types
 	TYPE_CAT_UNION,
 } type_cat_t;
+
+// If no extra data groups have been defined, define them as empty.
+
+// Extras added to 'struct preprocessor_data'.
+#ifndef PREPROC_EXTRAS
+#define PREPROC_EXTRAS
+#endif
+
+// Extras added to 'struct asm_ctx'.
+#ifndef ASM_CTX_EXTRAS
+#define ASM_CTX_EXTRAS
+#endif
+
+// Extras added to 'struct funcdef'.
+#ifndef FUNCDEF_EXTRAS
+#define FUNCDEF_EXTRAS
+#endif
 
 #endif //DEFINITIONS_H

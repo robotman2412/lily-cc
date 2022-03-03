@@ -15,6 +15,8 @@ struct preproc_data {
 	size_t           n_children;
 	// The children.
 	preproc_data_t **children;
+	// Extra data on an architecture basis.
+	PREPROC_EXTRAS
 };
 
 // Preprocess a function.

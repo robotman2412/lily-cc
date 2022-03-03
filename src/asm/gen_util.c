@@ -40,9 +40,15 @@ bool gen_define_temp(asm_ctx_t *ctx, char *label) {
 void gen_unuse(asm_ctx_t *ctx, gen_var_t *var) {
 	if (var->type != VAR_TYPE_LABEL) return;
 	char *label = var->label;
+	// Free up all the marked temp labels.
+	// Because one temp label is one memory word, many variables use two or more.
 	for (size_t i = 0; i < ctx->temp_num; i++) {
+		// Find the first temp label.
 		if (!strcmp(label, ctx->temp_labels[i])) {
-			ctx->temp_usage[i] = 0;
+			// Then mark all the used temp labels as not in use.
+			for (size_t x = i; x < i + var->ctype->size; x++) {
+				ctx->temp_usage[i] = 0;
+			}
 			return;
 		}
 	}

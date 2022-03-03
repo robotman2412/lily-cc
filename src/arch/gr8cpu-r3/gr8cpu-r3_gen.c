@@ -12,31 +12,61 @@ char *b_insn_names[] = {"BEQ", "BNE", "BGT", "BLE", "BLT", "BGE", "BCS", "BCC"};
 
 /* ======== Gen-specific helper functions ======== */
 
+// Detects and updates the calling convention that is to be used for the given function.
+void r3_update_cc(asm_ctx_t *ctx, funcdef_t *funcdef) {
+	// Test whether the argument list is exactly one int.
+	bool int_param = funcdef->args.num == 1 && funcdef->args.arr[0].type->size == 2;
+	
+	// Test whether the argument list is up to three chars.
+	bool char_params = !int_param && funcdef->args.num <= 3;
+	if (char_params) {
+		// Test every argument to be 1 byte in size.
+		for (size_t i = 0; i < funcdef->args.num; i++) {
+			size_t arg_size = funcdef->args.arr[i].type->size;
+			if (arg_size != 1) {
+				// If not, then arguments must live in memory.
+				char_params = false;
+				break;
+			}
+		}
+	}
+	
+	// Convert it into the enumeration.
+	r3_call_conv_t conv = int_param ? R3_CC_INT : char_params ? R3_CC_CHAR : R3_CC_MEM;
+	funcdef->call_conv = conv;
+}
+
 static inline void r3_branch_to_var(asm_ctx_t *ctx, uint8_t b_insn, gen_var_t *output) {
 	uint8_t regno   = REG_A;
 	uint8_t n_words = 2;
+	
 	// Helper var.
 	gen_var_t helper = {
 		.type = VAR_TYPE_CONST,
 		.iconst = 0
 	};
+	
 	// Write coditional assignment.
 	char *l_true = asm_get_label(ctx);
 	char *l_skip = asm_get_label(ctx);
 	DEBUG_GEN("  %s %s\n", b_insn_names[b_insn - OFFS_BRANCH - PIE(ctx)], l_true);
 	asm_write_memword(ctx, b_insn);
 	asm_write_label_ref(ctx, l_true, 0, OFFS(ctx));
+	
 	// Code for false.
 	r3_load_part(ctx, &helper, regno, 0);
 	DEBUG_GEN("  JMP %s\n", l_skip);
 	asm_write_memword(ctx, INSN_JMP);
 	asm_write_label_ref(ctx, l_skip, 0, OFFS(ctx));
+	
 	// Code for true.
 	helper.iconst = 1;
 	asm_write_label(ctx, l_true);
 	r3_load_part(ctx, &helper, regno, 0);
+	
 	// Skip label.
 	asm_write_label(ctx, l_skip);
+	
 	// Storage code.
 	r3_store_part(ctx, output, regno, 0);
 	r3_load_part(ctx, &helper, regno, 1);
@@ -134,33 +164,39 @@ gen_var_t *r3_movl_to_mem(asm_ctx_t *ctx, char *label) {
 	DEBUG_GEN("  MOV [%s+0], X\n", label);
 	asm_write_memword  (ctx, OFFS_MOVST + OFFS_MOVM_XM + PIE(ctx));
 	asm_write_label_ref(ctx, label, 0, OFFS(ctx));
+	
 	// Move Y to memory.
 	DEBUG_GEN("  MOV [%s+0], Y\n", label);
 	asm_write_memword  (ctx, OFFS_MOVST + OFFS_MOVM_YM + PIE(ctx));
 	asm_write_label_ref(ctx, label, 1, OFFS(ctx));
 }
 
-// Moves a long into memory.
+// Moves a long into memory (two bytes).
 // Used before function return from functions which return exactly one two-byte integer.
 void r3_movl_to_reg(asm_ctx_t *ctx, gen_var_t *var) {
 	if (var->type == VAR_TYPE_LABEL) {
 		// Label-ish.
 		char *label = var->label;
+		
 		// Move memory to X.
 		DEBUG_GEN("  MOV X, [%s+0]\n", label);
 		asm_write_memword  (ctx, OFFS_MOVLD + OFFS_MOVM_XM + PIE(ctx));
 		asm_write_label_ref(ctx, label, 0, OFFS(ctx));
+		
 		// Move memory to Y.
 		DEBUG_GEN("  MOV Y, [%s+1]\n", label);
 		asm_write_memword  (ctx, OFFS_MOVLD + OFFS_MOVM_YM + PIE(ctx));
 		asm_write_label_ref(ctx, label, 1, OFFS(ctx));
+		
 	} else if (var->type == VAR_TYPE_CONST) {
 		// The constant.
 		address_t iconst = var->iconst;
+		
 		// Move memory to X.
 		DEBUG_GEN("  MOV X, %02x\n", iconst & 255);
 		asm_write_memword  (ctx, OFFS_MOV_RI + REG_X);
 		asm_write_memword  (ctx, iconst & 255);
+		
 		// Move memory to Y.
 		DEBUG_GEN("  MOV Y, %02x\n", iconst >> 8);
 		asm_write_memword  (ctx, OFFS_MOV_RI + REG_Y);
@@ -173,14 +209,18 @@ void r3_movl_to_reg(asm_ctx_t *ctx, gen_var_t *var) {
 // Dereference a pointer.
 gen_var_t *r3_deref(asm_ctx_t *ctx, gen_var_t *output, gen_var_t *ptr) {
 	uint8_t n_words = 2;
+	
 	if (!output || output->type == VAR_TYPE_COND || (ptr->type != VAR_TYPE_CONST && output->type == VAR_TYPE_RETVAL)) {
+		// Create our own output.
 		output = (gen_var_t *) malloc(sizeof(gen_var_t));
 		*output = (gen_var_t) {
-			.label = r3_get_tmp(ctx),
+			.label = r3_get_tmp(ctx, n_words),
 			.type  = VAR_TYPE_LABEL
 		};
 	}
+	
 	if (ptr->type == VAR_TYPE_CONST) {
+		// A constant can be substituted for a limple load
 		address_t addr = ptr->iconst;
 		for (address_t i = 0; i < n_words; i++) {
 			DEBUG_GEN("  MOV A, [0x%04x]\n", addr + i);
@@ -190,29 +230,37 @@ gen_var_t *r3_deref(asm_ctx_t *ctx, gen_var_t *output, gen_var_t *ptr) {
 		}
 		return output;
 	}
+	
 	char *label = ptr->label;
 	if (ptr->type != VAR_TYPE_LABEL) {
-		label = r3_get_tmp(ctx);
+		// If the pointer isn't a label (AKA not in memory), move it to a new one.
+		// GR8CPU Rev3.2 can only use pointers stored in memory.
+		label = r3_get_tmp(ctx, n_words);
 		gen_var_t dst = {
 			.type = VAR_TYPE_LABEL,
 			.label = label
 		};
 		gen_mov(ctx, &dst, ptr);
 	}
+	
 	// Wirst word.
 	DEBUG_GEN("  MOV A, (%s)\n", label);
 	asm_write_memword(ctx, OFFS_MOVLD + OFFS_MOVM_AP + PIE(ctx));
 	asm_write_label_ref(ctx, ptr->label, 0, OFFS(ctx));
 	r3_store_part(ctx, output, REG_A, 0);
-	// Set offset.
-	DEBUG_GEN("  MOV X, 0x01\n");
-	asm_write_memword(ctx, INSN_MOV_XI);
-	asm_write_memword(ctx, 1);
-	// Second word.
-	DEBUG_GEN("  MOV A, X(%s)\n", label);
-	asm_write_memword(ctx, OFFS_MOVLD + OFFS_MOVM_APX + PIE(ctx));
-	asm_write_label_ref(ctx, ptr->label, 0, OFFS(ctx));
-	r3_store_part(ctx, output, REG_A, 1);
+	
+	if (n_words > 1) {
+		// Set offset.
+		DEBUG_GEN("  MOV X, 0x01\n");
+		asm_write_memword(ctx, INSN_MOV_XI);
+		asm_write_memword(ctx, 1);
+		// Second word.
+		DEBUG_GEN("  MOV A, X(%s)\n", label);
+		asm_write_memword(ctx, OFFS_MOVLD + OFFS_MOVM_APX + PIE(ctx));
+		asm_write_label_ref(ctx, ptr->label, 0, OFFS(ctx));
+		r3_store_part(ctx, output, REG_A, 1);
+	}
+	
 	// Additional words.
 	for (address_t i = 2; i < n_words; i++) {
 		DEBUG_GEN("  INC X\n");
@@ -243,7 +291,7 @@ gen_var_t *r3_deref_set(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src) {
 	char *label = dst->label;
 	if (dst->type != VAR_TYPE_LABEL) {
 		// Ensure the pointer is a label here.
-		label = r3_get_tmp(ctx);
+		label = r3_get_tmp(ctx, n_words);
 		gen_var_t tmp = {
 			.type = VAR_TYPE_LABEL,
 			.label = label
@@ -255,15 +303,19 @@ gen_var_t *r3_deref_set(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src) {
 	DEBUG_GEN("  MOV (%s), A\n", label);
 	asm_write_memword(ctx, OFFS_MOVST + OFFS_MOVM_AP + PIE(ctx));
 	asm_write_label_ref(ctx, dst->label, 0, OFFS(ctx));
-	// Set offset.
-	DEBUG_GEN("  MOV X, 0x01\n");
-	asm_write_memword(ctx, INSN_MOV_XI);
-	asm_write_memword(ctx, 1);
-	// Second word.
-	r3_load_part(ctx, src, REG_A, 1);
-	DEBUG_GEN("  MOV X(%s), A\n", label);
-	asm_write_memword(ctx, OFFS_MOVST + OFFS_MOVM_APX + PIE(ctx));
-	asm_write_label_ref(ctx, dst->label, 0, OFFS(ctx));
+	
+	if (n_words > 1) {
+		// Set offset.
+		DEBUG_GEN("  MOV X, 0x01\n");
+		asm_write_memword(ctx, INSN_MOV_XI);
+		asm_write_memword(ctx, 1);
+		// Second word.
+		r3_load_part(ctx, src, REG_A, 1);
+		DEBUG_GEN("  MOV X(%s), A\n", label);
+		asm_write_memword(ctx, OFFS_MOVST + OFFS_MOVM_APX + PIE(ctx));
+		asm_write_label_ref(ctx, dst->label, 0, OFFS(ctx));
+	}
+	
 	// Additional words.
 	for (address_t i = 2; i < n_words; i++) {
 		DEBUG_GEN("  INC X\n");
@@ -300,7 +352,7 @@ gen_var_t *r3_shift(asm_ctx_t *ctx, bool left, gen_var_t *output, gen_var_t *a, 
 	if (!output) {
 		output = (gen_var_t *) malloc(sizeof(gen_var_t));
 		*output = (gen_var_t) {
-			.label = r3_get_tmp(ctx),
+			.label = r3_get_tmp(ctx, n_words),
 			.type  = VAR_TYPE_LABEL
 		};
 	}
@@ -310,7 +362,7 @@ gen_var_t *r3_shift(asm_ctx_t *ctx, bool left, gen_var_t *output, gen_var_t *a, 
 		// TODO: Use a temporary variable.
 		store = (gen_var_t *) malloc(sizeof(gen_var_t));
 		*store = (gen_var_t) {
-			.label = r3_get_tmp(ctx),
+			.label = r3_get_tmp(ctx, n_words),
 			.type  = VAR_TYPE_LABEL
 		};
 		gen_mov(ctx, store, a);
@@ -353,7 +405,7 @@ gen_var_t *r3_math2_l(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_var_t 
 	if (!output || output->type == VAR_TYPE_COND && (oper >= OP_BIT_AND && oper <= OP_BIT_XOR)) {
 		output = (gen_var_t *) malloc(sizeof(gen_var_t));
 		*output = (gen_var_t) {
-			.label = r3_get_tmp(ctx),
+			.label = r3_get_tmp(ctx, n_words),
 			.type  = VAR_TYPE_LABEL
 		};
 		is_comp = 0;
@@ -448,16 +500,13 @@ gen_var_t *r3_math2_l(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_var_t 
 // Performs a unary math operation for numbers of one byte.
 gen_var_t *r3_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_var_t *a) {
 	bool use_mem     = gen_cmp(ctx, a, output) || oper == OP_SHIFT_L || oper == OP_SHIFT_R;
-	// Number of words to operate on.
-	uint8_t n_words  = 2;
 	// Instruction for the occasion.
 	uint8_t insn     = 0;
-	uint8_t insn_cc  = 0;
 	// If there's no output hint, create one ourselves.
 	if (!output) {
 		output = (gen_var_t *) malloc(sizeof(gen_var_t));
 		*output = (gen_var_t) {
-			.label = r3_get_tmp(ctx),
+			.label = r3_get_tmp(ctx, 1),
 			.type  = VAR_TYPE_LABEL
 		};
 	}
@@ -468,72 +517,50 @@ gen_var_t *r3_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_var_t *a
 	
 #ifdef DEBUG_GENERATOR
 	char *insn_name = "???";
-	char *insn_cc_name = "???";
 #endif
 	// Find the correct instruction.
 	switch (oper) {
 		case OP_ADD:
 			insn      = use_mem ? INSN_INC_M  + PIE(ctx) : INSN_INC_A;
-			insn_cc   = use_mem ? INSN_INCC_M + PIE(ctx) : INSN_INCC_A;
 #ifdef DEBUG_GENERATOR
 			insn_name    = "INC";
-			insn_cc_name = "INCC";
 #endif
 			break;
 		case OP_SUB:
-			insn      = use_mem ? INSN_DEC_M  + PIE(ctx) : INSN_INC_A;
-			insn_cc   = use_mem ? INSN_DECC_M + PIE(ctx) : INSN_INCC_A;
+			insn      = use_mem ? INSN_DEC_M  + PIE(ctx) : INSN_DEC_A;
 #ifdef DEBUG_GENERATOR
 			insn_name    = "DEC";
-			insn_cc_name = "DECC";
 #endif
 			break;
 		case OP_SHIFT_L:
 			insn      = OFFS_SHM + OFFS_SHM_L + PIE(ctx);
-			insn_cc   = OFFS_SHM + OFFS_SHM_L + OFFS_SHM_CC + PIE(ctx);
 #ifdef DEBUG_GENERATOR
 			insn_name    = "SHL";
-			insn_cc_name = "SHLC";
 #endif
 			break;
 		case OP_SHIFT_R:
 			insn      = OFFS_SHM + OFFS_SHM_R + PIE(ctx);
-			insn_cc   = OFFS_SHM + OFFS_SHM_R + OFFS_SHM_CC + PIE(ctx);
 #ifdef DEBUG_GENERATOR
 			insn_name    = "SHR";
-			insn_cc_name = "SHRC";
 #endif
 			break;
 	}
 	
-	if (oper == OP_SHIFT_R) {
-		// Iterate in reverse order because of the nature of shifting right.
-		for (uint8_t i = n_words - 1; i != (uint8_t)-1; i--) {
-			// Add the instruction.
-			DEBUG_GEN("  %s [%s+%d]\n", i!=n_words-1 ? insn_cc_name : insn_name, output->label, i);
-			asm_write_memword(ctx, i!=n_words-1 ? insn_cc : insn);
-			asm_write_label_ref(ctx, output->label, i, OFFS(ctx));
-		}
-	} else if (use_mem) {
-		// Perform on memory.
-		for (uint8_t i = 0; i < n_words; i++) {
-			// Add the instruction.
-			DEBUG_GEN("  %s [%s+%d]\n", i ? insn_cc_name : insn_name, output->label, i);
-			asm_write_memword(ctx, i ? insn_cc : insn);
-			asm_write_label_ref(ctx, output->label, i, OFFS(ctx));
-		}
+	if (use_mem) {
+		// Operate on memory.
+		DEBUG_GEN("  %s [%s]\n", insn_name, output->label);
+		asm_write_memword(ctx, insn);
+		asm_write_label_ref(ctx, output->label, 0, OFFS(ctx));
 	} else {
+		// Operate on registers.
 		uint8_t regno = REG_A;
-		// Perform on registers.
-		for (uint8_t i = 0; i < n_words; i++) {
-			// Load part of the thing.
-			r3_load_part(ctx, a, regno, i);
-			// Label reference.
-			DEBUG_GEN("  %s %s\n", i ? insn_cc_name : insn_name, reg_names[regno]);
-			asm_write_memword(ctx, i ? insn_cc : insn);
-			// Store part of the thing.
-			r3_store_part(ctx, output, regno, i);
-		}
+		// Load part of the thing.
+		r3_load_part(ctx, a, regno, 0);
+		// Label reference.
+		DEBUG_GEN("  %s %s\n", insn_name, reg_names[regno]);
+		asm_write_memword(ctx, insn);
+		// Store part of the thing.
+		r3_store_part(ctx, output, regno, 0);
 	}
 	return output;
 }
@@ -550,7 +577,7 @@ gen_var_t *r3_math1_l(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_var_t 
 	if (!output) {
 		output = (gen_var_t *) malloc(sizeof(gen_var_t));
 		*output = (gen_var_t) {
-			.label = r3_get_tmp(ctx),
+			.label = r3_get_tmp(ctx, n_words),
 			.type  = VAR_TYPE_LABEL
 		};
 	}
@@ -574,8 +601,8 @@ gen_var_t *r3_math1_l(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_var_t 
 #endif
 			break;
 		case OP_SUB:
-			insn      = use_mem ? INSN_DEC_M  + PIE(ctx) : INSN_INC_A;
-			insn_cc   = use_mem ? INSN_DECC_M + PIE(ctx) : INSN_INCC_A;
+			insn      = use_mem ? INSN_DEC_M  + PIE(ctx) : INSN_DEC_A;
+			insn_cc   = use_mem ? INSN_DECC_M + PIE(ctx) : INSN_DECC_A;
 #ifdef DEBUG_GENERATOR
 			insn_name    = "DEC";
 			insn_cc_name = "DECC";
@@ -635,8 +662,13 @@ gen_var_t *r3_math1_l(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_var_t 
 
 // Function entry for non-inlined functions. 
 void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
-	if (funcdef->args.num == 1 /*&& funcdef->args.arr[0].size == 2*/) {
-		// Exactly one long for an argument.
+	// Update the calling conventions.
+	r3_update_cc(ctx, funcdef);
+	
+	if (funcdef->call_conv == R3_CC_CHAR) {
+		// Exactly one int for an argument.
+		DEBUG_GEN("Function entry 'int in X/Y' for %s\n", funcdef->ident.strval);
+		
 		// Define label.
 		char *sect_id = ctx->current_section_id;
 		asm_use_sect(ctx, ".bss", ASM_NOT_ALIGNED);
@@ -661,8 +693,34 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 		asm_write_label_ref(ctx, label, 1, OFFS(ctx));
 		
 		free(label);
+	} else if (funcdef->call_conv == R3_CC_CHAR) {
+		// Arguments in registers.
+		DEBUG_GEN("Function entry 'bytes in A/X/Y' for %s\n", funcdef->ident.strval);
+		
+		if (funcdef->args.num) {
+			// Define labels (mandatory for all varialbes in GR8CPU R3).
+			char *sect_id = ctx->current_section_id;
+			asm_use_sect(ctx, ".bss", ASM_NOT_ALIGNED);
+			char *label = malloc(strlen(funcdef->ident.strval) + 8);
+			for (address_t i = 0; i < funcdef->args.num; i++) {
+				sprintf(label, "%s.LA%04x", funcdef->ident.strval, i);
+				asm_write_label(ctx, label);
+				asm_write_zero (ctx, funcdef->args.arr[i].type->size);
+				gen_define_var (ctx, strdup(label), funcdef->args.arr[i].strval);
+			}
+			r3_gen_var(ctx, funcdef);
+			
+			// Go back to the original section the function was in.
+			asm_use_sect(ctx, sect_id, ASM_NOT_ALIGNED);
+			free(label);
+		}
+		
+		// Add the entry label.
+		asm_write_label(ctx, funcdef->ident.strval);
 	} else {
 		// Arguments in memory.
+		DEBUG_GEN("Function entry 'labels' for %s\n", funcdef->ident.strval);
+		
 		// Define labels.
 		char *sect_id = ctx->current_section_id;
 		asm_use_sect(ctx, ".bss", ASM_NOT_ALIGNED);
@@ -670,7 +728,7 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 		for (address_t i = 0; i < funcdef->args.num; i++) {
 			sprintf(label, "%s.LA%04x", funcdef->ident.strval, i);
 			asm_write_label(ctx, label);
-			asm_write_zero (ctx, 2);
+			asm_write_zero (ctx, funcdef->args.arr[i].type->size);
 			gen_define_var (ctx, strdup(label), funcdef->args.arr[i].strval);
 		}
 		r3_gen_var(ctx, funcdef);
@@ -846,13 +904,14 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 		}
 	} else if (oper == OP_ADROF) {
 		if (!output || output->type != VAR_TYPE_LABEL) {
+			// Get a label to store the pointer in.
 			output = (gen_var_t *) malloc(sizeof(gen_var_t));
 			*output = (gen_var_t) {
 				.type = VAR_TYPE_LABEL,
-				.label = r3_get_tmp(ctx)
+				.label = r3_get_tmp(ctx, 2)
 			};
 		}
-		// Get le addr of a.
+		// Use the GPTR instruction to get the address.
 		if (a->type == VAR_TYPE_LABEL) {
 			char *label = a->label;
 			DEBUG_GEN("  GPTR [%s]\n", label);
@@ -880,7 +939,7 @@ void gen_mov(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src) {
 			// Squeeze this out first.
 			gen_var_t tmp = {
 				.type  = VAR_TYPE_LABEL,
-				.label = r3_get_tmp(ctx)
+				.label = r3_get_tmp(ctx, n_words)
 			};
 			r3_branch_to_var(ctx, src->cond, &tmp);
 			src = COPY(&tmp, gen_var_t);
@@ -912,16 +971,29 @@ void r3_gen_var(asm_ctx_t *ctx, funcdef_t *func) {
 }
 
 // Gets or adds a temp var.
-char *r3_get_tmp(asm_ctx_t *ctx) {
+// Each temp label represents one byte, so some variables will use multiple.
+char *r3_get_tmp(asm_ctx_t *ctx, size_t size) {
 	// Check existing.
+	size_t remaining = size;
 	for (size_t i = 0; i < ctx->temp_num; i++) {
 		if (!ctx->temp_usage[i]) {
-			ctx->temp_usage[i] = 1;
-			return ctx->temp_labels[i];
+			remaining --;
+		} else {
+			remaining = size;
+		}
+		if (!remaining) {
+			// Find the index.
+			size_t index = i - size + 1;
+			// Mark all labels overwritten as used.
+			for (size_t x = index; x <= i; x++) {
+				ctx->temp_usage[x] = true;
+			}
+			// Return the found labels.
+			return ctx->temp_labels[index];
 		}
 	}
 	
-	// Make one more.
+	// Make some more.
 	char *func_label;
 	char *label;
 	make_one:

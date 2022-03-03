@@ -269,13 +269,99 @@ static bool iasm_preproc_reg(asm_ctx_t *ctx, iasm_regs_t *regs, int index) {
 	return true;
 }
 
+// Helper for the string concatenation magic.
+static void va_strcat(char **dst, size_t *cap, size_t *len, char *src, size_t add_len) {
+	// Ensure enough capacity.
+	if (add_len + *len > *cap - 1) {
+		// Expand the capacity.
+		*cap = add_len + *len + 32;
+		*dst = realloc(*dst, *cap);
+	}
+	// And concatenate.
+	strncat(*dst, src, add_len);
+	*len += add_len;
+}
+
 // Preprocessing of inline assembly text.
 // Converts all the inputs and outputs found the the raw text.
 static char *iasm_preproc(asm_ctx_t *ctx, iasm_t *iasm, size_t magic_number) {
 	// Allocate a small bit of buffer.
-	size_t cap   = strlen(iasm->text.strval);
-	char *output = malloc(cap);
-	*output      = 0;
+	size_t cap    = strlen(iasm->text.strval) + 32 * (iasm->inputs->num + iasm->outputs->num);
+	size_t len    = 0;
+	char  *output = malloc(cap);
+	*output       = 0;
+	char  *input  = iasm->text.strval;
+	
+	// OVERRIDE_%
+	while (*input) {
+		char *index = strchr(input, '%');
+		char next = index ? index[1] : 0;
+		if (!index || !next) {
+			// There are no more things to substitute.
+			va_strcat(&output, &cap, &len, input, strlen(input));
+			goto done;
+		} else {
+			// CONCATENATE excluding the %.
+			va_strcat(&output, &cap, &len, input, index - input);
+			input = index + 2;
+		}
+		
+		// COMPUTE the %.
+		switch (next) {
+				char *add;
+				
+			case '%':
+			case '{':
+			case '|':
+			case '}':
+				// Just dump it out.
+				va_strcat(&output, &cap, &len, &next, 1);
+				break;
+				
+			case '0' ... '9':
+				// Decode the DECIMalATE.
+				// And the pick an OPERAND.
+				break;
+				
+			case '[':
+				// Grab the string inbetween the [].
+				index = strchr(index, ']');
+				
+				// And find the matching operand, of.
+				iasm_reg_t *match = NULL;
+				for (size_t i = 0; i < iasm->outputs->num; i++) {
+					char *symbol = iasm->outputs->arr[i].symbol;
+					if (symbol && !strncmp(input, symbol, index - input)) {
+						// We found a match.
+						match = &iasm->outputs->arr[i];
+						// Now exclude the ].
+						input = index + 1;
+						goto wegotmatch;
+					}
+				}
+				for (size_t i = 0; i < iasm->inputs->num; i++) {
+					char *symbol = iasm->inputs->arr[i].symbol;
+					if (symbol && !strncmp(input, symbol, index - input)) {
+						// We found a match.
+						match = &iasm->inputs->arr[i];
+						// Now exclude the ].
+						input = index + 1;
+						goto wegotmatch;
+					}
+				}
+				break;
+				
+				wegotmatch:
+				// Compute the funny input operand.
+				add = gen_iasm_var(ctx, match->expr_result, match);
+				va_strcat(&output, &cap, &len, add, strlen(add));
+				free(add);
+				break;
+		}
+	}
+	
+	done:
+	return output;
 }
 
 // Inline assembly implementation.
@@ -335,7 +421,8 @@ void gen_inline_asm(asm_ctx_t *ctx, iasm_t *iasm) {
 	
 	// TODO: Clobbers, inputs and outputs.
 	char *text = iasm_preproc(ctx, iasm, 0);
-	gen_asm(ctx, iasm->text.strval);
+	DEBUG_GEN("Final assembly:\n\t%s\n", text);
+	gen_asm(ctx, text);
 	free(text);
 }
 #else

@@ -130,6 +130,11 @@
 
 #include <gen.h>
 
+// Picks a register.
+// Set do_vacate to true to allow automatically vacating the register.
+reg_t      r3_pick_reg   (asm_ctx_t *ctx, bool do_vacate);
+// Vacate one or more registers of their current values automatically.
+void       r3_vacate     (asm_ctx_t *ctx, bool vac_a, bool vac_x, bool vac_y);
 // Detects and updates the calling convention that is to be used for the given function.
 void       r3_update_cc  (asm_ctx_t *ctx, funcdef_t *funcdef);
 // Creates a set of branch instructions for the given conditions.

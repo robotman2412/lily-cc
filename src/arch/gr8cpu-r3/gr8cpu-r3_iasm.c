@@ -396,14 +396,19 @@ r3_token_t r3_iasm_lex(tokeniser_ctx_t *ctx) {
 	// Check for comments and single-character tokens.
 	switch (c) {
 		case (','):
+			DEBUG_TKN("token ','\n");
 			return (r3_token_t) {.type = R3_TKN_COMMA};
 		case ('['):
+			DEBUG_TKN("token '['\n");
 			return (r3_token_t) {.type = R3_TKN_LBRAC};
 		case (']'):
+			DEBUG_TKN("token ']'\n");
 			return (r3_token_t) {.type = R3_TKN_RBRAC};
 		case ('('):
+			DEBUG_TKN("token '('\n");
 			return (r3_token_t) {.type = R3_TKN_LPAR};
 		case (')'):
+			DEBUG_TKN("token ')'\n");
 			return (r3_token_t) {.type = R3_TKN_RPAR};
 		case (';'):
 			goto linecomment;
@@ -498,6 +503,7 @@ r3_token_t r3_iasm_lex(tokeniser_ctx_t *ctx) {
 		// Next, check for keywords.
 		for (size_t i = 0; i < R3_NUM_KEYW; i++) {
 			if (!strcasecmp(strval, r3_iasm_keyw[i])) {
+				DEBUG_TKN("keyw  '%s'\n", strval);
 				free(strval);
 				return (r3_token_t) {
 					.type  = (r3_iasm_token_id_t) i,
@@ -505,6 +511,7 @@ r3_token_t r3_iasm_lex(tokeniser_ctx_t *ctx) {
 				};
 			}
 		}
+		DEBUG_TKN("ident '%s'\n", strval);
 		// Return the appropriate alternative.
 		return (r3_token_t) {
 			.type  = R3_TKN_IDENT,
@@ -512,6 +519,7 @@ r3_token_t r3_iasm_lex(tokeniser_ctx_t *ctx) {
 		};
 	}
 	
+	DEBUG_TKN("other '%c'\n", c);
 	return (r3_token_t) {
 		.type  = R3_TKN_OTHER,
 		.other = c

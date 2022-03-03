@@ -12,6 +12,17 @@ char *b_insn_names[] = {"BEQ", "BNE", "BGT", "BLE", "BLT", "BGE", "BCS", "BCC"};
 
 /* ======== Gen-specific helper functions ======== */
 
+// Picks a register.
+// Set do_vacate to true to allow automatically vacating the register.
+reg_t r3_pick_reg(asm_ctx_t *ctx, bool do_vacate) {
+	
+}
+
+// Vacate one or more registers of their current values automatically.
+void r3_vacate(asm_ctx_t *ctx, bool vac_a, bool vac_x, bool vac_y) {
+	
+}
+
 // Detects and updates the calling convention that is to be used for the given function.
 void r3_update_cc(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	// Test whether the argument list is exactly one int.
@@ -823,6 +834,74 @@ void gen_while(asm_ctx_t *ctx, expr_t *cond, stmt_t *code, bool do_while) {
 	gen_var_t *cond_res = gen_expression(ctx, cond, &cond_hint);
 	// Perform branch.
 	r3_branch(ctx, cond_res, loop_label, NULL);
+}
+
+// Create a string for the variable to insert into the assembly. (only if inline assembly is supported)
+char *gen_iasm_var(asm_ctx_t *ctx, gen_var_t *var, iasm_reg_t *reg) {
+	// Classify the type of location the variable is already in.
+	bool loc_pointer  = var->type == VAR_TYPE_PTR;
+	bool loc_memory   = var->type == VAR_TYPE_STACKOFFS || var->type == VAR_TYPE_LABEL || loc_pointer;
+	bool loc_register = var->type == VAR_TYPE_REG;
+	bool loc_const    = var->type == VAR_TYPE_CONST;
+	
+	// Find a type that matches the constraints.
+	gen_var_type_t convert_to = var->type;
+	if (loc_memory && !reg->mode_memory) {
+		convert_to = VAR_TYPE_REG;
+	} else if (loc_register && !reg->mode_register) {
+		convert_to = VAR_TYPE_LABEL;
+	} else if (loc_const && !reg->mode_known_const) {
+		convert_to = reg->mode_memory ? VAR_TYPE_LABEL : VAR_TYPE_REG;
+	}
+	
+	// Then convert the constraints if required.
+	if (convert_to != var->type) {
+		if (convert_to == VAR_TYPE_REG) {
+			// TODO: Pick a register.
+			DEBUG_GEN("Converting parameter to VAR_TYPE_REG\n");
+			reg_t regno = REG_A;
+			r3_load_part(ctx, var, regno, 0);
+			var->type = VAR_TYPE_REG;
+			var->reg  = regno;
+			
+		} else if (convert_to == VAR_TYPE_LABEL) {
+			// Make a temporary bit.
+			DEBUG_GEN("Converting parameter to VAR_TYPE_LABEL\n");
+			gen_var_t temp = {
+				.type  = VAR_TYPE_LABEL,
+				.label = r3_get_tmp(ctx, var->ctype->size),
+				.ctype = var->ctype
+			};
+			// And move it in.
+			gen_mov(ctx, &temp, var);
+			*var = temp;
+		}
+	} else {
+		DEBUG_GEN("Keeping parameter type\n");
+	}
+	
+	// Now that we matched the constraints, generate the string.
+	if (var->type == VAR_TYPE_LABEL) {
+		// Label of variables.
+		char *orig = var->label;
+		char *buf  = malloc(strlen(orig) + 3);
+		*buf = 0;
+		sprintf(buf, "[%s]", orig);
+		return buf;
+		
+	} else if (var->type == VAR_TYPE_CONST) {
+		// A constant.
+		char *buf  = malloc(19);
+		snprintf(buf, 18, "0x%x", var->iconst);
+		return buf;
+		
+	} else if (var->type == VAR_TYPE_REG) {
+		// A register.
+		char *buf  = malloc(2);
+		buf[0]     = reg_names[var->reg][0];
+		buf[1]     = 0;
+		return buf;
+	}
 }
 
 /* ================= Expressions ================= */

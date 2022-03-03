@@ -31,6 +31,8 @@ struct gen_var {
 	};
 	// The type associated with the variable, if any.
 	var_type_t     *ctype;
+	// The associated memory location, if any.
+	gen_var_t      *mem_loc;
 };
 
 // Definitions of types, pointer types and structs.
@@ -81,10 +83,13 @@ bool       gen_stmt          (asm_ctx_t *ctx, void      *stmt,    bool is_stmts)
 bool       gen_if            (asm_ctx_t *ctx, gen_var_t *cond,    stmt_t    *s_if,     stmt_t    *s_else);
 // While statement implementation.
 void       gen_while         (asm_ctx_t *ctx, expr_t    *cond,    stmt_t    *code,     bool       do_while);
-// Inline assembly implementation.
+// Inline assembly implementation. (only if inline assembly is supported)
 void       gen_inline_asm    (asm_ctx_t *ctx, iasm_t    *iasm);
 // Single line of assembly. (only if inline assembly is supported)
 void       gen_asm           (asm_ctx_t *ctx, char      *text);
+// Create a string for the variable to insert into the assembly. (only if inline assembly is supported)
+// The string will be freed later and it is allowed to generate code in this method.
+char      *gen_iasm_var      (asm_ctx_t *ctx, gen_var_t *var,     iasm_reg_t *asm_reg);
 
 /* ================= Expressions ================= */
 

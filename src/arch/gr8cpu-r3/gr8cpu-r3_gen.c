@@ -43,7 +43,7 @@ void r3_update_cc(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	}
 	
 	// Convert it into the enumeration.
-	r3_call_conv_t conv = int_param ? R3_CC_INT : char_params ? R3_CC_CHAR : R3_CC_MEM;
+	r3_call_conv_t conv = int_param ? R3_CC_INT : (char_params ? R3_CC_CHAR : R3_CC_MEM);
 	funcdef->call_conv = conv;
 }
 

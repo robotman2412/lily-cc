@@ -5,6 +5,9 @@
 - When that is complete: Add support for arrays, unions and structs.
 
 ## Generator
+- Add a table of registers and their current values.
+- Add a default location attribute for variables.
+- Add a variable owner attribute for gen_var_t.
 - Associate types with variables.
 - Create a system to match variables' sizes before an operation.
 

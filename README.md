@@ -6,6 +6,7 @@ A compiler for a very simple language, destined to become a C compiler.
 2. Configure (see [Configuration](#Configuration))
 3. Build for the first time: `./build.sh` <sup>(1)</sup>
 4. The output executable is called `comp`
+5. Start editing!
 
 Note 1: The initial build is required because several files are generated.
 

@@ -286,10 +286,11 @@ static void va_strcat(char **dst, size_t *cap, size_t *len, char *src, size_t ad
 // Converts all the inputs and outputs found the the raw text.
 static char *iasm_preproc(asm_ctx_t *ctx, iasm_t *iasm, size_t magic_number) {
 	// Allocate a small bit of buffer.
-	size_t cap    = strlen(iasm->text.strval) + 32 * (iasm->inputs->num + iasm->outputs->num);
+	size_t cap    = strlen(iasm->text.strval) + 2 + 32 * (iasm->inputs->num + iasm->outputs->num);
 	size_t len    = 0;
 	char  *output = malloc(cap);
-	*output       = 0;
+	output[0]     = '\t';
+	output[1]     = 0;
 	char  *input  = iasm->text.strval;
 	
 	// OVERRIDE_%
@@ -364,6 +365,76 @@ static char *iasm_preproc(asm_ctx_t *ctx, iasm_t *iasm, size_t magic_number) {
 	return output;
 }
 
+// Whether the character fits ident restrictions, allowing for the period character.
+static bool asm_is_ident(char c, bool allow_numeric) {
+	if (c >= '0' && c <= '9' && allow_numeric) {
+		return true;
+	}
+	switch (c) {
+		case 'a' ... 'z':
+		case 'A' ... 'Z':
+		case '.':
+		case '_':
+			return true;
+		default:
+			return false;
+	}
+}
+
+// Test whether the first next data matches the pattern for an ident.
+// Also allows for the period '.' character.
+// Returns the length found if true, 0 otherwise.
+static size_t asm_expect_ident(char *str) {
+	bool allow_numeric = false;
+	size_t offset = 0;
+	while (true) {
+		if (!asm_is_ident(str[offset], allow_numeric)) {
+			return offset;
+		}
+		allow_numeric = true;
+		offset ++;
+	}
+}
+
+// Complete file of assembly. (only if inline assembly is supported)
+// Splits the assembly file into lines and nicely asks the backend to fix it.
+void gen_asm_file(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
+	
+	// TODO: Split into lines more properly.
+	char *line_ptr = lex_ctx->source;
+	
+	// Remove spaces.
+	char *line = line_ptr;
+	while (is_space(*line)) {
+		line ++;
+	}
+	
+	// Check for a label.
+	size_t len = asm_expect_ident(line);
+	if (len && line[len] == ':') {
+		// CONSUME label.
+		line[len] = 0;
+		asm_write_label(ctx, line);
+		line += len;
+	}
+	
+	// Check for directives.
+	if (*line == '.') {
+		// Handle directive.
+		line ++;
+		size_t len = asm_expect_ident(line);
+		if (len == 7 && !strncmp("section", line)) {
+			
+		} else {
+			// TODO: Report ereurs for empty names.
+		}
+		// TODO: Enforce end of line.
+	} else {
+		// Hand it off.
+		gen_asm(ctx, line);
+	}
+}
+
 // Inline assembly implementation.
 void gen_inline_asm(asm_ctx_t *ctx, iasm_t *iasm) {
 	// Used to assert that, including clobbers, there are enough free registers.
@@ -388,7 +459,6 @@ void gen_inline_asm(asm_ctx_t *ctx, iasm_t *iasm) {
 			DEBUG_GEN("Output anonymous mode '%s'\n", reg->mode);
 		}
 	}
-	
 	// Process inputs.
 	for (size_t i = 0; i < iasm->inputs->num; i++) {
 		// Process the constraints string.
@@ -419,13 +489,23 @@ void gen_inline_asm(asm_ctx_t *ctx, iasm_t *iasm) {
 		reg->expr_result = gen_expression(ctx, reg->expr, NULL);
 	}
 	
-	// TODO: Clobbers, inputs and outputs.
+	// Process clobbers, inputs and outputs.
 	char *text = iasm_preproc(ctx, iasm, 0);
 	DEBUG_GEN("Final assembly:\n\t%s\n", text);
-	gen_asm(ctx, text);
+	// Now treat this like a normal assembly file.
+	tokeniser_ctx_t lex_ctx;
+	tokeniser_init_cstr(&lex_ctx, text);
+	gen_asm_file(ctx, &lex_ctx);
+	// And finish up.
 	free(text);
 }
 #else
+// Complete file of assembly.
+void gen_asm_file(asm_ctx_t *ctx, tokeniser_ctx_t *lex) {
+	// Inline assembly support does not exist.
+	printf("Error: inline assembly is not supported!\n");
+}
+
 // Inline assembly implementation.
 void gen_inline_asm(asm_ctx_t *ctx, iasm_t *iasm) {
 	// Inline assembly support does not exist.

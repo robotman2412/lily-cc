@@ -83,6 +83,8 @@ bool       gen_stmt          (asm_ctx_t *ctx, void      *stmt,    bool is_stmts)
 bool       gen_if            (asm_ctx_t *ctx, gen_var_t *cond,    stmt_t    *s_if,     stmt_t    *s_else);
 // While statement implementation.
 void       gen_while         (asm_ctx_t *ctx, expr_t    *cond,    stmt_t    *code,     bool       do_while);
+// Complete file of assembly. (only if inline assembly is supported)
+void       gen_asm_file      (asm_ctx_t *ctx, tokeniser_ctx_t *lex);
 // Inline assembly implementation. (only if inline assembly is supported)
 void       gen_inline_asm    (asm_ctx_t *ctx, iasm_t    *iasm);
 // Single line of assembly. (only if inline assembly is supported)

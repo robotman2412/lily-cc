@@ -25,9 +25,9 @@
 // 	return ptr - offs;
 // }
 
-int iasm(int q) {
+int iasm() {
 	asm volatile (
-		"funnylabel:"
+		"MOV A, 0\nMOV A, Y"
 	);
 }
 

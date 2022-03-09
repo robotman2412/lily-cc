@@ -550,9 +550,12 @@ bool r3_iasm_parse_addr(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx, r3_token_t *ou
 	r3_token_t tkn = r3_iasm_lex(lex_ctx);
 	r3_token_t addressed;
 	if (tkn.type == R3_KEYW_X) {
-		// X[%] or X(%) or X(%)Y
+		// X or X[%] or X(%) or X(%)Y
 		tkn = r3_iasm_lex(lex_ctx);
-		if (tkn.type == R3_TKN_LPAR) {
+		if (tkn.type == R3_TKN_COMMA || tkn.type == R3_TKN_END) {
+			// X
+			addressed.addr_mode = A_REG_X;
+		} else if (tkn.type == R3_TKN_LPAR) {
 			addressed = r3_iasm_lex(lex_ctx);
 			TKN_EXPECT(lex_ctx, R3_TKN_RPAR, ")");
 			tkn = r3_iasm_lex(lex_ctx);
@@ -577,12 +580,21 @@ bool r3_iasm_parse_addr(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx, r3_token_t *ou
 			goto check_addressed;
 		}
 	} else if (tkn.type == R3_KEYW_Y) {
-		// Y[%]
-		TKN_EXPECT(lex_ctx, R3_TKN_RBRAC, "[");
-		addressed = r3_iasm_lex(lex_ctx);
-		TKN_EXPECT(lex_ctx, R3_TKN_RBRAC, "]");
-		TKN_EXPECT_EOL(lex_ctx);
-		addressed.addr_mode = A_MEM_Y;
+		// Y or Y[%]
+		tkn = r3_iasm_lex(lex_ctx);
+		if (tkn.type == R3_TKN_COMMA || tkn.type == R3_TKN_END) {
+			// Y
+			addressed.addr_mode = A_REG_Y;
+		} else if (tkn.type == R3_TKN_LBRAC) {
+			// Y[%]
+			addressed = r3_iasm_lex(lex_ctx);
+			TKN_EXPECT(lex_ctx, R3_TKN_RBRAC, "]");
+			TKN_EXPECT_EOL(lex_ctx);
+			addressed.addr_mode = A_MEM_Y;
+		} else {
+			printf("Expected '['.\n");
+			goto nope;
+		}
 		goto check_addressed;
 	} else if (tkn.type == R3_TKN_LBRAC) {
 		// [%]
@@ -734,7 +746,7 @@ void gen_asm(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 		
 		// No matching parameters for instruction.
 		if (found_len) {
-			printf("No '%s' found for given arguments.\n", r3_iasm_keyw[(size_t) tkn.type]);
+			printf("No '%s' found for given arguments (%zd).\n", r3_iasm_keyw[(size_t) tkn.type], n_args);
 		} else {
 			printf("No '%s' found for %ld argument%s.\n", r3_iasm_keyw[(size_t) tkn.type], n_args, n_args == 1 ? "" : "s");
 		}

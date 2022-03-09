@@ -26,7 +26,7 @@ void r3_vacate(asm_ctx_t *ctx, bool vac_a, bool vac_x, bool vac_y) {
 // Detects and updates the calling convention that is to be used for the given function.
 void r3_update_cc(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	// Test whether the argument list is exactly one int.
-	bool int_param = funcdef->args.num == 1 && funcdef->args.arr[0].type->size == 2;
+	bool int_param = (funcdef->args.num == 1) && (funcdef->args.arr[0].type->size == 2);
 	
 	// Test whether the argument list is up to three chars.
 	bool char_params = !int_param && funcdef->args.num <= 3;
@@ -676,7 +676,7 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	// Update the calling conventions.
 	r3_update_cc(ctx, funcdef);
 	
-	if (funcdef->call_conv == R3_CC_CHAR) {
+	if (funcdef->call_conv == R3_CC_INT) {
 		// Exactly one int for an argument.
 		DEBUG_GEN("Function entry 'int in X/Y' for %s\n", funcdef->ident.strval);
 		

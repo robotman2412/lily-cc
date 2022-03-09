@@ -94,10 +94,22 @@ stmt_t stmt_expr(expr_t *expr) {
 // Assembly statements (archtitecture-specific assembly code).
 stmt_t stmt_iasm(strval_t *text, iasm_regs_t *outputs, iasm_regs_t *inputs, void *clobbers) {
 	iasm_t *iasm = (iasm_t *) malloc(sizeof(iasm_t));
+	if (outputs) {
+		outputs = COPY(outputs,  iasm_regs_t);
+	} else {
+		iasm_regs_t dummy = iasm_regs_empty();
+		outputs = COPY(&dummy,  iasm_regs_t);
+	}
+	if (inputs) {
+		inputs = COPY(inputs,  iasm_regs_t);
+	} else {
+		iasm_regs_t dummy = iasm_regs_empty();
+		inputs = COPY(&dummy,  iasm_regs_t);
+	}
 	*iasm = (iasm_t) {
 		.text     = *text,
-		.outputs  = COPY(outputs,  iasm_regs_t),
-		.inputs   = COPY(inputs,   iasm_regs_t),
+		.outputs  = outputs,
+		.inputs   = inputs,
 		// .clobbers = COPY(clobbers, lolwutidownknow)
 	};
 	return (stmt_t) {

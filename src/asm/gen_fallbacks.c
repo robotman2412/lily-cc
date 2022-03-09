@@ -381,6 +381,14 @@ static bool asm_is_ident(char c, bool allow_numeric) {
 	}
 }
 
+static inline void nomore_whitespace(tokeniser_ctx_t *lex_ctx) {
+	while (1) {
+		char c = tokeniser_nextchar(lex_ctx);
+		if (!is_space(c)) return;
+		tokeniser_readchar(lex_ctx);
+	}
+}
+
 static inline void nomore_spaces(tokeniser_ctx_t *lex_ctx) {
 	while (1) {
 		char c = tokeniser_nextchar(lex_ctx);
@@ -433,43 +441,47 @@ void gen_asm_file(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 	// TODO: Split into lines more properly.
 	char *line_ptr = lex_ctx->source;
 	
-	// Remove spaces.
-	nomore_spaces(lex_ctx);
-	
-	// Check for a label.
-	size_t len = asm_expect_ident(lex_ctx);
-	if (len && tokeniser_nextchar_no(lex_ctx, len) == ':') {
-		// CONSUME label.
-		char *label = asm_extract(lex_ctx, len);
-		asm_write_label(ctx, label);
-		free(label);
-	}
-	
-	// Check for directives.
-	if (tokeniser_nextchar(lex_ctx) == '.') {
-		tokeniser_readchar(lex_ctx);
-		// Handle directive.
+	// While there is things to process.
+	while (tokeniser_nextchar(lex_ctx)) {
+		// Remove spaces.
+		nomore_whitespace(lex_ctx);
+		
+		// Check for a label.
 		size_t len = asm_expect_ident(lex_ctx);
-		char *directive = asm_extract(lex_ctx, len);
-		if (!strcmp(directive, "text") || !strcmp(directive, "bss")
-		 || !strcmp(directive, "rodata") || !strcmp(directive, "data")) {
-			asm_use_sect(ctx, directive, ASM_NOT_ALIGNED);
-		} else if (!strcmp(directive, "section")) {
-			char *sect_id = asm_expect_str(lex_ctx);
-			if (sect_id) {
-				asm_use_sect(ctx, sect_id, ASM_NOT_ALIGNED);
-				free(sect_id);
-			} else {
-				printf("Error: Expected STRING after '.section'");
-			}
-		} else {
-			// TODO: Report ereurs for empty names.
+		if (len && tokeniser_nextchar_no(lex_ctx, len) == ':') {
+			// CONSUME label.
+			char *label = asm_extract(lex_ctx, len);
+			asm_write_label(ctx, label);
+			free(label);
+			tokeniser_readchar(lex_ctx);
 		}
-		free(directive);
-		// TODO: Enforce end of line.
-	} else {
-		// Hand it off.
-		gen_asm(ctx, lex_ctx);
+		
+		// Check for directives.
+		if (tokeniser_nextchar(lex_ctx) == '.') {
+			tokeniser_readchar(lex_ctx);
+			// Handle directive.
+			size_t len = asm_expect_ident(lex_ctx);
+			char *directive = asm_extract(lex_ctx, len);
+			if (!strcmp(directive, "text") || !strcmp(directive, "bss")
+			|| !strcmp(directive, "rodata") || !strcmp(directive, "data")) {
+				asm_use_sect(ctx, directive, ASM_NOT_ALIGNED);
+			} else if (!strcmp(directive, "section")) {
+				char *sect_id = asm_expect_str(lex_ctx);
+				if (sect_id) {
+					asm_use_sect(ctx, sect_id, ASM_NOT_ALIGNED);
+					free(sect_id);
+				} else {
+					printf("Error: Expected STRING after '.section'\n");
+				}
+			} else {
+				printf("Warning: Unknown directive '%s'\n", directive);
+			}
+			free(directive);
+			// TODO: Enforce end of line.
+		} else {
+			// Hand it off.
+			gen_asm(ctx, lex_ctx);
+		}
 	}
 }
 

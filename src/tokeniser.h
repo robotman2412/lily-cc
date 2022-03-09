@@ -63,6 +63,9 @@ char tokeniser_nextchar(tokeniser_ctx_t *ctx);
 // Next character + offset.
 char tokeniser_nextchar_no(tokeniser_ctx_t *ctx, int no);
 
+// Unescape an escaped c-string.
+char *tokeniser_getstr(tokeniser_ctx_t *ctx, char term);
+
 // Grab next non-space token.
 int tokenise(tokeniser_ctx_t *ctx);
 

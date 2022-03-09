@@ -386,8 +386,19 @@ r3_token_t r3_iasm_lex(tokeniser_ctx_t *ctx) {
 	retry:
 	do {
 		c = tokeniser_readchar(ctx);
-	} while(is_space(c));
+	} while(c == ' ' || c == '\t');
 	if (!c) return (r3_token_t) {.type = R3_TKN_END};
+	
+	// Check for end of line.
+	if (c == '\r') {
+		if (tokeniser_nextchar(ctx) == '\n') {
+			tokeniser_readchar(ctx);
+		}
+	}
+	if (c == '\r' || c == '\n') {
+		DEBUG_TKN("eol\n");
+		return (r3_token_t) {.type = R3_TKN_END};
+	}
 	
 	char next = tokeniser_nextchar(ctx);
 	size_t index0 = ctx->index - 1;
@@ -659,15 +670,11 @@ size_t r3_iasm_parse_addrs(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx, r3_token_t 
 }
 
 // Do a blob of assembly.
-void gen_asm(asm_ctx_t *ctx, char *text) {
+void gen_asm(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 	DEBUG_GEN("// inline assembly\n");
 	
-	// Make a little tokeniser context.
-	tokeniser_ctx_t lex_ctx;
-	tokeniser_init_cstr(&lex_ctx, text);
-	
 	// Instruction.
-	r3_token_t tkn = r3_iasm_lex(&lex_ctx);
+	r3_token_t tkn = r3_iasm_lex(lex_ctx);
 	if (tkn.type == R3_TKN_IDENT) {
 		// This is not an instruction.
 		printf("No instruction with name '%s'.\n", tkn.ident);
@@ -676,7 +683,7 @@ void gen_asm(asm_ctx_t *ctx, char *text) {
 		// This is an instruction keyword.
 		r3_token_t *args;
 		// Parse the funny parameters.
-		size_t n_args = r3_iasm_parse_addrs(ctx, &lex_ctx, &args);
+		size_t n_args = r3_iasm_parse_addrs(ctx, lex_ctx, &args);
 		
 		bool found_len = false;
 		// The parameters array for this attempt.

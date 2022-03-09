@@ -175,7 +175,7 @@ static inline int8_t unhex_char(char c) {
 }
 
 // Unescape an escaped c-string.
-static char *tokeniser_getstr(tokeniser_ctx_t *ctx, char term) {
+char *tokeniser_getstr(tokeniser_ctx_t *ctx, char term) {
 	// Make the buf.
 	size_t buf_len   = 256;
 	size_t buf_index = 0;

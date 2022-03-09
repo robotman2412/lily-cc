@@ -381,19 +381,49 @@ static bool asm_is_ident(char c, bool allow_numeric) {
 	}
 }
 
+static inline void nomore_spaces(tokeniser_ctx_t *lex_ctx) {
+	while (1) {
+		char c = tokeniser_nextchar(lex_ctx);
+		if (c != ' ' && c != '\t') return;
+		tokeniser_readchar(lex_ctx);
+	}
+}
+
 // Test whether the first next data matches the pattern for an ident.
 // Also allows for the period '.' character.
 // Returns the length found if true, 0 otherwise.
-static size_t asm_expect_ident(char *str) {
+static size_t asm_expect_ident(tokeniser_ctx_t *lex_ctx) {
 	bool allow_numeric = false;
 	size_t offset = 0;
 	while (true) {
-		if (!asm_is_ident(str[offset], allow_numeric)) {
+		if (!asm_is_ident(tokeniser_nextchar_no(lex_ctx, offset), allow_numeric)) {
 			return offset;
 		}
 		allow_numeric = true;
 		offset ++;
 	}
+}
+
+// Expect a string and if so, return it.
+static char *asm_expect_str(tokeniser_ctx_t *lex_ctx) {
+	nomore_spaces(lex_ctx);
+	char c = tokeniser_nextchar(lex_ctx);
+	if (c == '\'' || c == '\"') {
+		tokeniser_readchar(lex_ctx);
+		return tokeniser_getstr(lex_ctx, c);
+	} else {
+		return NULL;
+	}
+}
+
+// Extracts len characters from lex_ctx in a c-string.
+static char *asm_extract(tokeniser_ctx_t *lex_ctx, size_t len) {
+	char *cstr = malloc(len + 1);
+	for (size_t i = 0; i < len; i++) {
+		cstr[i] = tokeniser_readchar(lex_ctx);
+	}
+	cstr[len] = 0;
+	return cstr;
 }
 
 // Complete file of assembly. (only if inline assembly is supported)
@@ -404,34 +434,42 @@ void gen_asm_file(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 	char *line_ptr = lex_ctx->source;
 	
 	// Remove spaces.
-	char *line = line_ptr;
-	while (is_space(*line)) {
-		line ++;
-	}
+	nomore_spaces(lex_ctx);
 	
 	// Check for a label.
-	size_t len = asm_expect_ident(line);
-	if (len && line[len] == ':') {
+	size_t len = asm_expect_ident(lex_ctx);
+	if (len && tokeniser_nextchar_no(lex_ctx, len) == ':') {
 		// CONSUME label.
-		line[len] = 0;
-		asm_write_label(ctx, line);
-		line += len;
+		char *label = asm_extract(lex_ctx, len);
+		asm_write_label(ctx, label);
+		free(label);
 	}
 	
 	// Check for directives.
-	if (*line == '.') {
+	if (tokeniser_nextchar(lex_ctx) == '.') {
+		tokeniser_readchar(lex_ctx);
 		// Handle directive.
-		line ++;
-		size_t len = asm_expect_ident(line);
-		if (len == 7 && !strncmp("section", line)) {
-			
+		size_t len = asm_expect_ident(lex_ctx);
+		char *directive = asm_extract(lex_ctx, len);
+		if (!strcmp(directive, "text") || !strcmp(directive, "bss")
+		 || !strcmp(directive, "rodata") || !strcmp(directive, "data")) {
+			asm_use_sect(ctx, directive, ASM_NOT_ALIGNED);
+		} else if (!strcmp(directive, "section")) {
+			char *sect_id = asm_expect_str(lex_ctx);
+			if (sect_id) {
+				asm_use_sect(ctx, sect_id, ASM_NOT_ALIGNED);
+				free(sect_id);
+			} else {
+				printf("Error: Expected STRING after '.section'");
+			}
 		} else {
 			// TODO: Report ereurs for empty names.
 		}
+		free(directive);
 		// TODO: Enforce end of line.
 	} else {
 		// Hand it off.
-		gen_asm(ctx, line);
+		gen_asm(ctx, lex_ctx);
 	}
 }
 

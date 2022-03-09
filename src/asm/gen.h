@@ -88,7 +88,7 @@ void       gen_asm_file      (asm_ctx_t *ctx, tokeniser_ctx_t *lex);
 // Inline assembly implementation. (only if inline assembly is supported)
 void       gen_inline_asm    (asm_ctx_t *ctx, iasm_t    *iasm);
 // Single line of assembly. (only if inline assembly is supported)
-void       gen_asm           (asm_ctx_t *ctx, char      *text);
+void       gen_asm           (asm_ctx_t *ctx, tokeniser_ctx_t *lex);
 // Create a string for the variable to insert into the assembly. (only if inline assembly is supported)
 // The string will be freed later and it is allowed to generate code in this method.
 char      *gen_iasm_var      (asm_ctx_t *ctx, gen_var_t *var,     iasm_reg_t *asm_reg);

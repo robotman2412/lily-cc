@@ -551,11 +551,13 @@ bool r3_iasm_parse_addr(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx, r3_token_t *ou
 	r3_token_t addressed;
 	if (tkn.type == R3_KEYW_X) {
 		// X or X[%] or X(%) or X(%)Y
-		tkn = r3_iasm_lex(lex_ctx);
-		if (tkn.type == R3_TKN_COMMA || tkn.type == R3_TKN_END) {
+		r3_token_t next = r3_iasm_lex(lex_ctx);
+		if (next.type == R3_TKN_COMMA || next.type == R3_TKN_END) {
 			// X
-			addressed.addr_mode = A_REG_X;
-		} else if (tkn.type == R3_TKN_LPAR) {
+			tkn.addr_mode = A_REG_X;
+			*out = tkn;
+			return true;
+		} else if (next.type == R3_TKN_LPAR) {
 			addressed = r3_iasm_lex(lex_ctx);
 			TKN_EXPECT(lex_ctx, R3_TKN_RPAR, ")");
 			tkn = r3_iasm_lex(lex_ctx);
@@ -571,7 +573,7 @@ bool r3_iasm_parse_addr(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx, r3_token_t *ou
 				goto nope;
 			}
 			goto check_addressed;
-		} else if (tkn.type == R3_TKN_LBRAC) {
+		} else if (next.type == R3_TKN_LBRAC) {
 			// X[%]
 			addressed = r3_iasm_lex(lex_ctx);
 			TKN_EXPECT(lex_ctx, R3_TKN_RBRAC, "]");
@@ -581,11 +583,13 @@ bool r3_iasm_parse_addr(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx, r3_token_t *ou
 		}
 	} else if (tkn.type == R3_KEYW_Y) {
 		// Y or Y[%]
-		tkn = r3_iasm_lex(lex_ctx);
-		if (tkn.type == R3_TKN_COMMA || tkn.type == R3_TKN_END) {
+		r3_token_t next = r3_iasm_lex(lex_ctx);
+		if (next.type == R3_TKN_COMMA || next.type == R3_TKN_END) {
 			// Y
-			addressed.addr_mode = A_REG_Y;
-		} else if (tkn.type == R3_TKN_LBRAC) {
+			tkn.addr_mode = A_REG_Y;
+			*out = tkn;
+			return true;
+		} else if (next.type == R3_TKN_LBRAC) {
 			// Y[%]
 			addressed = r3_iasm_lex(lex_ctx);
 			TKN_EXPECT(lex_ctx, R3_TKN_RBRAC, "]");

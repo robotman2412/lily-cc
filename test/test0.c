@@ -27,7 +27,7 @@
 
 int iasm() {
 	asm volatile (
-		"MOV A, 0\nMOV A, Y"
+		"MOV A, 0\nMOV A, X"
 	);
 }
 

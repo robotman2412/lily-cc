@@ -1097,7 +1097,7 @@ void gen_var_dup(asm_ctx_t *ctx, funcdef_t *funcdef, ident_t *ident, gen_var_t *
 	// TODO: Account for other value.
 }
 
-// Variables: Create a label for the varialbe at preprocessing time.
+// Variables: Create a label for the variable at preprocessing time.
 char *gen_preproc_var(asm_ctx_t *ctx, preproc_data_t *parent, ident_t *ident) {
 	char *fn_label = ctx->current_func->ident.strval;
 	char *label = malloc(strlen(fn_label) + 8);

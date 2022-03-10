@@ -171,7 +171,7 @@ void asm_write_address(asm_ctx_t *ctx, address_t data) {
 // Writes a number of arbitrary size to the current chunk.
 void asm_write_num(asm_ctx_t *ctx, size_t data, size_t bytes) {
 	if (bytes > 1) {
-		char buf[bytes];
+		unsigned char buf[bytes];
 		// Encode endianness.
 #if IS_LITTLE_ENDIAN
 		// For little endian.

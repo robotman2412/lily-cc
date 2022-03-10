@@ -31,8 +31,8 @@ struct gen_var {
 	};
 	// The type associated with the variable, if any.
 	var_type_t     *ctype;
-	// The associated memory location, if any.
-	gen_var_t      *mem_loc;
+	// The associated owner variable, if any.
+	void           *owner;
 };
 
 // Definitions of types, pointer types and structs.
@@ -50,8 +50,10 @@ struct var_type {
 	type_cat_t      category;
 	union {
 		// Pointers and arrays: The underlying type.
+		// Pointer to one var_type_t.
 		var_type_t *underlying;
 		// Structs and unions: The members.
+		// Map of var_type_t.
 		map_t      *members;
 	};
 };

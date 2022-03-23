@@ -85,7 +85,8 @@ static inline void asm_append_chunk(asm_ctx_t *ctx, char type) {
 	*ctx->current_section->chunk_len = 0;
 }
 
-// Creates the section.
+// Creates the section, optionally aligned.
+// Any alignment, even outside of powers of two accepted.
 static inline asm_sect_t *asm_create_sect(asm_ctx_t *ctx, char *id, address_t align) {
 	asm_sect_t *sect      = (asm_sect_t *) malloc(sizeof(asm_sect_t));
 	sect->chunks          = (uint8_t *)    malloc(256);
@@ -99,7 +100,8 @@ static inline asm_sect_t *asm_create_sect(asm_ctx_t *ctx, char *id, address_t al
 	return sect;
 }
 
-// Aligns the section.
+// Aligns the section to be an integer multiple of align.
+// Any alignment, even outside of powers of two accepted.
 static inline void asm_align_sect(asm_sect_t *sect, address_t align) {
 	if (align) {
 		if (!sect->align) {

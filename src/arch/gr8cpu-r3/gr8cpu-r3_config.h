@@ -42,11 +42,11 @@
 #define REG_Y     2
 
 // Type used for registers.
-typedef uint8_t reg_t;
+typedef uint_least8_t reg_t;
 // Type used for conditions.
-typedef uint8_t cond_t;
+typedef uint_least8_t cond_t;
 // Type used for pointers.
-typedef uint16_t ptr_t;
+typedef uint_least16_t ptr_t;
 
 // Extra data added to funcdef_t.
 typedef enum {

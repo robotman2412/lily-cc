@@ -111,11 +111,9 @@ gen_var_t *gen_expr_math1    (asm_ctx_t *ctx, oper_t     oper,    gen_var_t *out
 
 // Variables: Move variable to another location.
 void       gen_mov           (asm_ctx_t *ctx, gen_var_t *dest,    gen_var_t *src);
-// Variables: Create a variable based on other value.
-// Other value is null if not initialised.
-void       gen_var_dup       (asm_ctx_t *ctx, funcdef_t *funcdef, ident_t *ident,      gen_var_t *other);
-// Variables: Create a label for the varialbe at preprocessing time.
-char      *gen_preproc_var   (asm_ctx_t *ctx, preproc_data_t *parent, ident_t *ident);
+// Variables: Create a memory location for the varialbe at preprocessing time.
+// Must allocate a new gen_var_t object.
+gen_var_t *gen_preproc_var   (asm_ctx_t *ctx, preproc_data_t *parent, ident_t *ident);
 
 
 #endif //GEN_H

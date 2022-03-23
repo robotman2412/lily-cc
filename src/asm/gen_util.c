@@ -4,15 +4,9 @@
 #include "string.h"
 #include "malloc.h"
 
-// Find the correct label to correspond to the variable in the current scope.
-char *gen_translate_label(asm_ctx_t *ctx, char *label) {
-	asm_scope_t *scope = ctx->current_scope;
-	while (scope) {
-		char *val = map_get(&scope->vars, label);
-		if (val) return val;
-		scope = scope->parent;
-	}
-	return NULL;
+// Find and return the location of the variable with the given name.
+gen_var_t *gen_get_variable(asm_ctx_t *ctx, char *label) {
+	
 }
 
 // Define the variable with the given ident.

@@ -9,7 +9,9 @@ typedef struct preproc_data preproc_data_t;
 #include "gen.h"
 
 struct preproc_data {
-	// All variables declared in this scope.
+	// All variables declared in this scope and their default memory location.
+	// Maps char* to gen_var_t*.
+	// Duplicate the value before modification.
 	map_t           *vars;
 	// The number of children.
 	size_t           n_children;

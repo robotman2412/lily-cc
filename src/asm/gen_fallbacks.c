@@ -582,16 +582,17 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 		
 		case EXPR_TYPE_IDENT: {
 			// Variable references.
-			gen_var_t *val = (gen_var_t *) malloc(sizeof(gen_var_t));
-			*val = (gen_var_t) {
-				.type = VAR_TYPE_LABEL,
-				.label = gen_translate_label(ctx, expr->ident->strval)
-			};
-			if (!val->label) {
+			gen_var_t *val = gen_get_variable(ctx, expr->ident->strval);
+			if (!val) {
 				// TODO: Some fix or error report goes here.
-				val->label = expr->ident->strval;
+				gen_var_t dummy = {
+					.type  = VAR_TYPE_LABEL,
+					.label = expr->ident->strval
+				};
+				val = COPY(&dummy, gen_var_t)
 				DEBUG_GEN("unknown \"%s\"\n", expr->ident->strval);
 			}
+			val->owner = expr->ident->strval;
 			return val;
 		} break;
 		

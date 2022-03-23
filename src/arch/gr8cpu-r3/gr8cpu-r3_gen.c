@@ -1091,16 +1091,21 @@ char *r3_get_tmp(asm_ctx_t *ctx, size_t size) {
 	return label;
 }
 
-// Variables: Create a variable based on other value.
-// Other value is null if not initialised.
-void gen_var_dup(asm_ctx_t *ctx, funcdef_t *funcdef, ident_t *ident, gen_var_t *other) {
-	// TODO: Account for other value.
-}
-
 // Variables: Create a label for the variable at preprocessing time.
-char *gen_preproc_var(asm_ctx_t *ctx, preproc_data_t *parent, ident_t *ident) {
+// Must allocate a new gen_var_t object.
+gen_var_t *gen_preproc_var(asm_ctx_t *ctx, preproc_data_t *parent, ident_t *ident) {
+	// Create a label.
 	char *fn_label = ctx->current_func->ident.strval;
 	char *label = malloc(strlen(fn_label) + 8);
 	sprintf(label, "%s.LV%04lx", fn_label, ctx->current_scope->local_num);
-	return label;
+	
+	// Package it into a gen_var_t.
+	gen_var_t loc = {
+		.type  = VAR_TYPE_LABEL,
+		.label = label,
+		.owner = ident
+	};
+	
+	// And return a copy.
+	return COPY(&loc, gen_var_t);
 }

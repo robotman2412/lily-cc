@@ -72,9 +72,9 @@ bool gen_preproc_stmt(asm_ctx_t *ctx, preproc_data_t *parent, void *ptr, bool is
 		case STMT_TYPE_VAR: {
 			// TODO: Vardecls structure to change later.
 			for (size_t i = 0; i < stmt->vars->num; i++) {
-				char *label = gen_preproc_var(ctx, current, &stmt->vars->arr[i]);
-				DEBUG_PRE("var '%s': %s\n", stmt->vars->arr[i].strval, label);
-				char *repl  = map_set(current->vars, stmt->vars->arr[i].strval, label);
+				gen_var_t *loc = gen_preproc_var(ctx, current, &stmt->vars->arr[i]);
+				DEBUG_PRE("var '%s'\n", stmt->vars->arr[i].strval);
+				map_set(current->vars, stmt->vars->arr[i].strval, loc);
 			}
 		} break;
 		case STMT_TYPE_EXPR: {

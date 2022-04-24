@@ -81,6 +81,8 @@ struct asm_ctx {
     address_t   temp_num;
     // Number of last label in function.
     address_t   last_label_no;
+    // Relative size of the stack.
+    address_t   stack_size;
     
     /* ===== Post-processing ===== */
     // The current PC.

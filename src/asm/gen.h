@@ -17,7 +17,7 @@ struct gen_var {
 	union {
 		// Numeric constants.
 		address_t   iconst;
-		// Stored in the stack by offset.
+		// Stored in the stack by offset or by stack frame.
 		address_t   offset;
 		// Stored in memory by label.
 		asm_label_t label;
@@ -84,7 +84,7 @@ bool       gen_stmt          (asm_ctx_t *ctx, void      *stmt,    bool is_stmts)
 // If statement implementation.
 bool       gen_if            (asm_ctx_t *ctx, gen_var_t *cond,    stmt_t    *s_if,     stmt_t    *s_else);
 // While statement implementation.
-void       gen_while         (asm_ctx_t *ctx, expr_t    *cond,    stmt_t    *code,     bool       do_while);
+void       gen_while         (asm_ctx_t *ctx, expr_t    *cond,    stmt_t    *code,     bool       is_do_while);
 // Complete file of assembly. (only if inline assembly is supported)
 void       gen_asm_file      (asm_ctx_t *ctx, tokeniser_ctx_t *lex);
 // Inline assembly implementation. (only if inline assembly is supported)

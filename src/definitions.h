@@ -249,9 +249,9 @@ typedef enum gen_var_type {
 	
 	// Located at label.
 	VAR_TYPE_LABEL,
-	// Located in stack.
-	VAR_TYPE_STACKFRAME,
 	// Located in stack frame.
+	VAR_TYPE_STACKFRAME,
+	// Located in stack by offset.
 	VAR_TYPE_STACKOFFS,
 	
 	// Stored in register.

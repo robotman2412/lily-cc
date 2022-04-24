@@ -29,6 +29,7 @@ void gen_function(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	ctx->temp_usage    = NULL;
 	ctx->last_label_no = 0;
 	ctx->temp_num      = 0;
+	ctx->stack_size  = 0;
 	gen_preproc_function(ctx, funcdef);
 	
 	// New function, new scope.

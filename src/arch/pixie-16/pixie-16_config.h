@@ -35,7 +35,7 @@
 #define CHAR_IS_SIGNED
 
 // Register names.
-#define NUM_REGS  7
+#define NUM_REGS  4
 #define REG_NAMES { "R0", "R1", "R2", "R3", "ST", "PF", "PC", "imm" }
 #define REG_R0    0
 #define REG_R1    1

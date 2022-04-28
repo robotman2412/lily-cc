@@ -129,6 +129,7 @@ static inline void output_native_padd(int fd, address_t n) {
 	if (n) {
 		write(fd, buf, n);
 	}
+	free(buf);
 }
 
 // Reduce: write everything we know as a chunk of machine code.

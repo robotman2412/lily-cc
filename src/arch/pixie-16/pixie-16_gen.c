@@ -24,6 +24,8 @@ char *b_insn_names[] = {
 void PX_DESC_INSN(px_insn_t insn, char *imm0, char *imm1) {
 	if (!imm0) imm0 = "???";
 	if (!imm1) imm1 = "???";
+	if (insn.a < 7) imm0 = reg_names[insn.a];
+	if (insn.b < 7) imm1 = reg_names[insn.b];
 	
 	// Determine instruction name.
 	bool  is_math1  = false;
@@ -81,16 +83,18 @@ void PX_DESC_INSN(px_insn_t insn, char *imm0, char *imm1) {
 /* ======== Gen-specific helper functions ======== */
 
 // Function for packing an instruction.
-memword_t px_pack_insn(px_insn_t insn) __attribute__((pure)) {
+ __attribute__((pure))
+memword_t px_pack_insn(px_insn_t insn) {
 	return (insn.y & 1) << 15
 		 | (insn.x & 7) << 12
 		 | (insn.b & 7) <<  9
 		 | (insn.a & 7) <<  6
-		 | (insn.o & 31);
+		 | (insn.o & 63);
 }
 
 // Function for unpacking an instruction.
-px_insn_t px_unpack_insn(memword_t packed) __attribute__((pure)) {
+ __attribute__((pure))
+px_insn_t px_unpack_insn(memword_t packed) {
 	return (px_insn_t) {
 		.y = (packed & 0x8000) >> 15,
 		.x = (packed & 0x7000) >> 12,
@@ -195,12 +199,26 @@ px_insn_t px_insn_label(asm_ctx_t *ctx, asm_label_t label, bool y, asm_label_ref
 	}
 }
 
+// Pick a register to use.
+reg_t px_pick_reg(asm_ctx_t *ctx, bool do_vacate) {
+	// Check for a free register.
+	for (size_t i = 0; i < NUM_REGS; i++) {
+		if (!ctx->current_scope->reg_usage[i]) {
+			return i;
+		}
+	}
+	// Otherwise, free up a pseudorandom one.
+	// Eenie meenie minie moe...
+	// TODO: Detect least used?
+	return (((*ctx->current_func->ident.strval + ctx->stack_size) * 27483676) >> 21) % 4;
+}
+
 // Move a value to a register.
 void px_mov_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest) {
 	if (val->type == VAR_TYPE_REG) {
 		if (val->reg == dest) return;
 		// Register to register move.
-		DEBUG_GEN("  MOV %s, %s\n", dest, val->reg);
+		DEBUG_GEN("  MOV %s, %s\n", reg_names[dest], reg_names[val->reg]);
 		px_insn_t insn = {
 			.y = 0,
 			.x = ADDR_IMM,
@@ -220,7 +238,7 @@ void px_mov_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest) {
 		asm_write_label_ref(ctx, val->label, 0, ref);
 	} else if (val->type == VAR_TYPE_CONST) {
 		// Copy constant to register.
-		DEBUG_GEN("  MOV %s, 0x%04x\n", dest, val->iconst);
+		DEBUG_GEN("  MOV %s, 0x%04x\n", reg_names[dest], val->iconst);
 		px_insn_t insn = {
 			.y = 0,
 			.x = ADDR_IMM,
@@ -234,7 +252,7 @@ void px_mov_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest) {
 		// Condition to boolean.
 		
 		// Set to 0 by default.
-		DEBUG_GEN("  MOV %s, 0\n", dest);
+		DEBUG_GEN("  MOV %s, 0\n", reg_names[dest]);
 		px_insn_t insn = {
 			.y = 0,
 			.x = ADDR_IMM,
@@ -245,13 +263,13 @@ void px_mov_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest) {
 		asm_write_memword(ctx, px_pack_insn(insn));
 		asm_write_memword(ctx, 0);
 		// Then set to 1 if condition matches.
-		DEBUG_GEN("  MOV%s %s, 1\n", b_insn_names[val->cond & 017], dest);
+		DEBUG_GEN("  MOV%s %s, 1\n", b_insn_names[val->cond & 017], reg_names[dest]);
 		insn.o = 040 | val->cond;
 		asm_write_memword(ctx, px_pack_insn(insn));
 		asm_write_memword(ctx, 1);
 	} else if (val->type == VAR_TYPE_STACKOFFS) {
 		// Stack offset to register.
-		DEBUG_GEN("  MOS %s, [ST+%d]\n", dest, ctx->stack_size - val->offset);
+		DEBUG_GEN("  MOS %s, [ST+%d]\n", reg_names[dest], ctx->stack_size - val->offset);
 		px_insn_t insn = {
 			.y = 1,
 			.x = ADDR_ST,
@@ -270,6 +288,37 @@ void px_mov_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest) {
 void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	// Update the calling conventions.
 	px_update_cc(ctx, funcdef);
+	
+	if (funcdef->call_conv == PX_CC_REGS) {
+		DEBUG_GEN("// calling convention: registers\n");
+		// Define variables in registers.
+		for (size_t i = 0; i < funcdef->args.num; i++) {
+			gen_var_t *var = malloc(sizeof(gen_var_t));
+			*var = (gen_var_t) {
+				.type  = VAR_TYPE_REG,
+				.reg   = i,
+				.owner = funcdef->args.arr[i].strval
+			};
+			gen_define_var(ctx, var, funcdef->args.arr[i].strval);
+		}
+	} else if (funcdef->call_conv == PX_CC_STACK) {
+		DEBUG_GEN("// calling convention: stack\n");
+		// Define variables in stack, first parameter pushed last.
+		// First parameter has least offset.
+		for (size_t i = 0; i < funcdef->args.num; i++) {
+			gen_var_t *var = malloc(sizeof(gen_var_t));
+			*var = (gen_var_t) {
+				.type   = VAR_TYPE_STACKOFFS,
+				.offset = i,
+				.owner  = funcdef->args.arr[i].strval
+			};
+			gen_define_var(ctx, var, funcdef->args.arr[i].strval);
+		}
+		// Update stack size.
+		ctx->current_scope->stack_size = funcdef->args.num;
+	} else {
+		DEBUG_GEN("// calling convention: no parameters\n");
+	}
 }
 
 // Return statement for non-inlined functions.
@@ -345,22 +394,50 @@ void gen_while(asm_ctx_t *ctx, expr_t *cond, stmt_t *code, bool is_do_while) {
 		.type = VAR_TYPE_COND,
 	};
 	gen_var_t *cond_res = gen_expression(ctx, cond, &cond_hint);
-	if (cond_res->type == VAR_TYPE_COND) {
-		px_branch(ctx, cond_res->cond, loop_label, NULL);
-	} else {
-		// Convert to condition first.
-		cond_t converted = 0;
-		px_branch(ctx, converted, loop_label, NULL);
-	}
-	if (cond != &cond_hint) {
-		gen_unuse(ctx, cond);
+	px_branch(ctx, cond_res, loop_label, NULL);
+	if (cond_res != &cond_hint) {
+		gen_unuse(ctx, cond_res);
 	}
 }
 
 // Create a string for the variable to insert into the assembly. (only if inline assembly is supported)
+// The string will be freed later and it is allowed to generate code in this method.
 char *gen_iasm_var(asm_ctx_t *ctx, gen_var_t *var, iasm_reg_t *reg) {
-	// TODO
-	return NULL;
+	bool needs_change = false;
+	if (var->type == VAR_TYPE_CONST && !reg->mode_known_const) {
+		needs_change = true;
+	} else if (var->type == VAR_TYPE_REG && !reg->mode_register) {
+		needs_change = true;
+	} else if (var->type == VAR_TYPE_LABEL && !reg->mode_memory) {
+		needs_change = true;
+	}
+	
+	if (!needs_change) goto conversion;
+	if (reg->mode_register) {
+		px_mov_to_reg(ctx, var, px_pick_reg(ctx, true));
+	}
+	
+	conversion:
+	// Convert the variable to assembly craps.
+	if (var->type == VAR_TYPE_CONST) {
+		// Constant.
+		char *buf = malloc(7);
+		sprintf(buf, "0x%04x", var->iconst);
+		return buf;
+	} else if (var->type == VAR_TYPE_REG) {
+		// Register.
+		return strdup(reg_names[var->reg]);
+	} else if (var->type == VAR_TYPE_LABEL) {
+		// Label.
+		char *buf = malloc(strlen(var->label) + 3);
+		sprintf(buf, "[%s]", var->label);
+		return buf;
+	} else if (var->type == VAR_TYPE_STACKOFFS) {
+		// In stack.
+		char *buf = malloc(12);
+		sprintf(buf, "[ST+%u]", ctx->stack_size - var->offset);
+		return buf;
+	}
 }
 
 /* ================= Expressions ================= */
@@ -453,13 +530,13 @@ void gen_mov(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src) {
 // Generates .bss labels for variables and temporary variables in a function.
 void px_gen_var(asm_ctx_t *ctx, funcdef_t *func) {
 	// TODO: A per-scope implementation.
-	preproc_data_t *data = func->preproc;
-	for (size_t i = 0; i < map_size(data->vars); i++) {
-		char *label = (char *) data->vars->values[i];
-		gen_define_var(ctx, label, data->vars->strings[i]);
-		asm_write_label(ctx, label);
-		asm_write_zero(ctx, 2);
-	}
+	// preproc_data_t *data = func->preproc;
+	// for (size_t i = 0; i < map_size(data->vars); i++) {
+	// 	char *label = (char *) data->vars->values[i];
+	// 	gen_define_var(ctx, label, data->vars->strings[i]);
+	// 	asm_write_label(ctx, label);
+	// 	asm_write_zero(ctx, 2);
+	// }
 }
 
 // Gets or adds a temp var.
@@ -516,7 +593,7 @@ gen_var_t *gen_preproc_var(asm_ctx_t *ctx, preproc_data_t *parent, ident_t *iden
 	gen_var_t loc = {
 		.type  = VAR_TYPE_LABEL,
 		.label = label,
-		.owner = ident
+		.owner = ident->strval
 	};
 	
 	// And return a copy.

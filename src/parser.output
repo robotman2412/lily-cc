@@ -235,7 +235,7 @@ Nonterminals, with rules where they appear
     global (72)
         on left: 3 4
         on right: 1
-    opt_int (73)
+    opt_int <pos> (73)
         on left: 5 6
         on right: 12 14 15 16 18 19
     opt_signed (74)
@@ -302,7 +302,7 @@ Nonterminals, with rules where they appear
 
 State 0
 
-    0 $accept: . library $end
+    0 $accept: • library $end
 
     "unsigned"  shift, and go to state 1
     "signed"    shift, and go to state 2
@@ -327,11 +327,11 @@ State 0
 
 State 1
 
-   11 simple_type: "unsigned" . "char"
-   16            | "unsigned" . "short" opt_int
-   17            | "unsigned" . "int"
-   18            | "unsigned" . "long" opt_int
-   19            | "unsigned" . "long" "long" opt_int
+   11 simple_type: "unsigned" • "char"
+   16            | "unsigned" • "short" opt_int
+   17            | "unsigned" • "int"
+   18            | "unsigned" • "long" opt_int
+   19            | "unsigned" • "long" "long" opt_int
 
     "char"   shift, and go to state 15
     "short"  shift, and go to state 16
@@ -341,8 +341,8 @@ State 1
 
 State 2
 
-    7 opt_signed: "signed" .
-   10 simple_type: "signed" . "char"
+    7 opt_signed: "signed" •
+   10 simple_type: "signed" • "char"
 
     "char"  shift, and go to state 19
 
@@ -351,56 +351,56 @@ State 2
 
 State 3
 
-   20 simple_type: "float" .
+   20 simple_type: "float" •
 
     $default  reduce using rule 20 (simple_type)
 
 
 State 4
 
-   21 simple_type: "double" .
+   21 simple_type: "double" •
 
     $default  reduce using rule 21 (simple_type)
 
 
 State 5
 
-   23 simple_type: "_Bool" .
+   23 simple_type: "_Bool" •
 
     $default  reduce using rule 23 (simple_type)
 
 
 State 6
 
-    9 simple_type: "char" .
+    9 simple_type: "char" •
 
     $default  reduce using rule 9 (simple_type)
 
 
 State 7
 
-   22 simple_type: "long" . "double"
+   22 simple_type: "long" • "double"
 
     "double"  shift, and go to state 20
 
 
 State 8
 
-   24 simple_type: "void" .
+   24 simple_type: "void" •
 
     $default  reduce using rule 24 (simple_type)
 
 
 State 9
 
-    0 $accept: library . $end
+    0 $accept: library • $end
 
     $end  shift, and go to state 21
 
 
 State 10
 
-    1 library: global . library
+    1 library: global • library
 
     "unsigned"  shift, and go to state 1
     "signed"    shift, and go to state 2
@@ -425,10 +425,10 @@ State 10
 
 State 11
 
-   12 simple_type: opt_signed . "short" opt_int
-   13            | opt_signed . "int"
-   14            | opt_signed . "long" opt_int
-   15            | opt_signed . "long" "long" opt_int
+   12 simple_type: opt_signed • "short" opt_int
+   13            | opt_signed • "int"
+   14            | opt_signed • "long" opt_int
+   15            | opt_signed • "long" "long" opt_int
 
     "short"  shift, and go to state 23
     "int"    shift, and go to state 24
@@ -437,8 +437,8 @@ State 11
 
 State 12
 
-   25 funcdef: simple_type . TKN_IDENT "(" opt_params ")" "{" stmts "}"
-   26 vardecls: simple_type . idents ";"
+   25 funcdef: simple_type • TKN_IDENT "(" opt_params ")" "{" stmts "}"
+   26 vardecls: simple_type • idents ";"
 
     TKN_IDENT  shift, and go to state 26
 
@@ -447,28 +447,28 @@ State 12
 
 State 13
 
-    3 global: funcdef .
+    3 global: funcdef •
 
     $default  reduce using rule 3 (global)
 
 
 State 14
 
-    4 global: vardecls .
+    4 global: vardecls •
 
     $default  reduce using rule 4 (global)
 
 
 State 15
 
-   11 simple_type: "unsigned" "char" .
+   11 simple_type: "unsigned" "char" •
 
     $default  reduce using rule 11 (simple_type)
 
 
 State 16
 
-   16 simple_type: "unsigned" "short" . opt_int
+   16 simple_type: "unsigned" "short" • opt_int
 
     "int"  shift, and go to state 28
 
@@ -479,15 +479,15 @@ State 16
 
 State 17
 
-   17 simple_type: "unsigned" "int" .
+   17 simple_type: "unsigned" "int" •
 
     $default  reduce using rule 17 (simple_type)
 
 
 State 18
 
-   18 simple_type: "unsigned" "long" . opt_int
-   19            | "unsigned" "long" . "long" opt_int
+   18 simple_type: "unsigned" "long" • opt_int
+   19            | "unsigned" "long" • "long" opt_int
 
     "int"   shift, and go to state 28
     "long"  shift, and go to state 30
@@ -499,35 +499,35 @@ State 18
 
 State 19
 
-   10 simple_type: "signed" "char" .
+   10 simple_type: "signed" "char" •
 
     $default  reduce using rule 10 (simple_type)
 
 
 State 20
 
-   22 simple_type: "long" "double" .
+   22 simple_type: "long" "double" •
 
     $default  reduce using rule 22 (simple_type)
 
 
 State 21
 
-    0 $accept: library $end .
+    0 $accept: library $end •
 
     $default  accept
 
 
 State 22
 
-    1 library: global library .
+    1 library: global library •
 
     $default  reduce using rule 1 (library)
 
 
 State 23
 
-   12 simple_type: opt_signed "short" . opt_int
+   12 simple_type: opt_signed "short" • opt_int
 
     "int"  shift, and go to state 28
 
@@ -538,15 +538,15 @@ State 23
 
 State 24
 
-   13 simple_type: opt_signed "int" .
+   13 simple_type: opt_signed "int" •
 
     $default  reduce using rule 13 (simple_type)
 
 
 State 25
 
-   14 simple_type: opt_signed "long" . opt_int
-   15            | opt_signed "long" . "long" opt_int
+   14 simple_type: opt_signed "long" • opt_int
+   15            | opt_signed "long" • "long" opt_int
 
     "int"   shift, and go to state 28
     "long"  shift, and go to state 33
@@ -558,8 +558,8 @@ State 25
 
 State 26
 
-   25 funcdef: simple_type TKN_IDENT . "(" opt_params ")" "{" stmts "}"
-   32 idents: TKN_IDENT .
+   25 funcdef: simple_type TKN_IDENT • "(" opt_params ")" "{" stmts "}"
+   32 idents: TKN_IDENT •
 
     "("  shift, and go to state 35
 
@@ -568,8 +568,8 @@ State 26
 
 State 27
 
-   26 vardecls: simple_type idents . ";"
-   31 idents: idents . "," TKN_IDENT
+   26 vardecls: simple_type idents • ";"
+   31 idents: idents • "," TKN_IDENT
 
     ";"  shift, and go to state 36
     ","  shift, and go to state 37
@@ -577,21 +577,21 @@ State 27
 
 State 28
 
-    5 opt_int: "int" .
+    5 opt_int: "int" •
 
     $default  reduce using rule 5 (opt_int)
 
 
 State 29
 
-   16 simple_type: "unsigned" "short" opt_int .
+   16 simple_type: "unsigned" "short" opt_int •
 
     $default  reduce using rule 16 (simple_type)
 
 
 State 30
 
-   19 simple_type: "unsigned" "long" "long" . opt_int
+   19 simple_type: "unsigned" "long" "long" • opt_int
 
     "int"  shift, and go to state 28
 
@@ -602,21 +602,21 @@ State 30
 
 State 31
 
-   18 simple_type: "unsigned" "long" opt_int .
+   18 simple_type: "unsigned" "long" opt_int •
 
     $default  reduce using rule 18 (simple_type)
 
 
 State 32
 
-   12 simple_type: opt_signed "short" opt_int .
+   12 simple_type: opt_signed "short" opt_int •
 
     $default  reduce using rule 12 (simple_type)
 
 
 State 33
 
-   15 simple_type: opt_signed "long" "long" . opt_int
+   15 simple_type: opt_signed "long" "long" • opt_int
 
     "int"  shift, and go to state 28
 
@@ -627,14 +627,14 @@ State 33
 
 State 34
 
-   14 simple_type: opt_signed "long" opt_int .
+   14 simple_type: opt_signed "long" opt_int •
 
     $default  reduce using rule 14 (simple_type)
 
 
 State 35
 
-   25 funcdef: simple_type TKN_IDENT "(" . opt_params ")" "{" stmts "}"
+   25 funcdef: simple_type TKN_IDENT "(" • opt_params ")" "{" stmts "}"
 
     "unsigned"  shift, and go to state 1
     "signed"    shift, and go to state 2
@@ -657,50 +657,50 @@ State 35
 
 State 36
 
-   26 vardecls: simple_type idents ";" .
+   26 vardecls: simple_type idents ";" •
 
     $default  reduce using rule 26 (vardecls)
 
 
 State 37
 
-   31 idents: idents "," . TKN_IDENT
+   31 idents: idents "," • TKN_IDENT
 
     TKN_IDENT  shift, and go to state 43
 
 
 State 38
 
-   19 simple_type: "unsigned" "long" "long" opt_int .
+   19 simple_type: "unsigned" "long" "long" opt_int •
 
     $default  reduce using rule 19 (simple_type)
 
 
 State 39
 
-   15 simple_type: opt_signed "long" "long" opt_int .
+   15 simple_type: opt_signed "long" "long" opt_int •
 
     $default  reduce using rule 15 (simple_type)
 
 
 State 40
 
-   30 params: simple_type . TKN_IDENT
+   30 params: simple_type • TKN_IDENT
 
     TKN_IDENT  shift, and go to state 44
 
 
 State 41
 
-   25 funcdef: simple_type TKN_IDENT "(" opt_params . ")" "{" stmts "}"
+   25 funcdef: simple_type TKN_IDENT "(" opt_params • ")" "{" stmts "}"
 
     ")"  shift, and go to state 45
 
 
 State 42
 
-   27 opt_params: params .
-   29 params: params . "," simple_type TKN_IDENT
+   27 opt_params: params •
+   29 params: params • "," simple_type TKN_IDENT
 
     ","  shift, and go to state 46
 
@@ -709,28 +709,28 @@ State 42
 
 State 43
 
-   31 idents: idents "," TKN_IDENT .
+   31 idents: idents "," TKN_IDENT •
 
     $default  reduce using rule 31 (idents)
 
 
 State 44
 
-   30 params: simple_type TKN_IDENT .
+   30 params: simple_type TKN_IDENT •
 
     $default  reduce using rule 30 (params)
 
 
 State 45
 
-   25 funcdef: simple_type TKN_IDENT "(" opt_params ")" . "{" stmts "}"
+   25 funcdef: simple_type TKN_IDENT "(" opt_params ")" • "{" stmts "}"
 
     "{"  shift, and go to state 47
 
 
 State 46
 
-   29 params: params "," . simple_type TKN_IDENT
+   29 params: params "," • simple_type TKN_IDENT
 
     "unsigned"  shift, and go to state 1
     "signed"    shift, and go to state 2
@@ -750,7 +750,7 @@ State 46
 
 State 47
 
-   25 funcdef: simple_type TKN_IDENT "(" opt_params ")" "{" . stmts "}"
+   25 funcdef: simple_type TKN_IDENT "(" opt_params ")" "{" • stmts "}"
 
     $default  reduce using rule 34 (stmts)
 
@@ -759,15 +759,15 @@ State 47
 
 State 48
 
-   29 params: params "," simple_type . TKN_IDENT
+   29 params: params "," simple_type • TKN_IDENT
 
     TKN_IDENT  shift, and go to state 50
 
 
 State 49
 
-   25 funcdef: simple_type TKN_IDENT "(" opt_params ")" "{" stmts . "}"
-   33 stmts: stmts . stmt
+   25 funcdef: simple_type TKN_IDENT "(" opt_params ")" "{" stmts • "}"
+   33 stmts: stmts • stmt
 
     "unsigned"  shift, and go to state 1
     "signed"    shift, and go to state 2
@@ -806,30 +806,30 @@ State 49
 
 State 50
 
-   29 params: params "," simple_type TKN_IDENT .
+   29 params: params "," simple_type TKN_IDENT •
 
     $default  reduce using rule 29 (params)
 
 
 State 51
 
-   36 stmt: "if" . "(" expr ")" stmt
-   37     | "if" . "(" expr ")" stmt "else" stmt
+   36 stmt: "if" • "(" expr ")" stmt
+   37     | "if" • "(" expr ")" stmt "else" stmt
 
     "("  shift, and go to state 71
 
 
 State 52
 
-   38 stmt: "while" . "(" expr ")" stmt
+   38 stmt: "while" • "(" expr ")" stmt
 
     "("  shift, and go to state 72
 
 
 State 53
 
-   39 stmt: "return" . ";"
-   40     | "return" . expr ";"
+   39 stmt: "return" • ";"
+   40     | "return" • expr ";"
 
     "("         shift, and go to state 55
     ";"         shift, and go to state 73
@@ -847,7 +847,7 @@ State 53
 
 State 54
 
-   88 inline_asm: "asm" . asm_qual asm_code
+   88 inline_asm: "asm" • asm_qual asm_code
 
     $default  reduce using rule 89 (asm_qual)
 
@@ -856,7 +856,7 @@ State 54
 
 State 55
 
-   53 expr: "(" . expr ")"
+   53 expr: "(" • expr ")"
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -873,7 +873,7 @@ State 55
 
 State 56
 
-   35 stmt: "{" . stmts "}"
+   35 stmt: "{" • stmts "}"
 
     $default  reduce using rule 34 (stmts)
 
@@ -882,35 +882,35 @@ State 56
 
 State 57
 
-   25 funcdef: simple_type TKN_IDENT "(" opt_params ")" "{" stmts "}" .
+   25 funcdef: simple_type TKN_IDENT "(" opt_params ")" "{" stmts "}" •
 
     $default  reduce using rule 25 (funcdef)
 
 
 State 58
 
-   48 expr: TKN_IVAL .
+   48 expr: TKN_IVAL •
 
     $default  reduce using rule 48 (expr)
 
 
 State 59
 
-   49 expr: TKN_STRVAL .
+   49 expr: TKN_STRVAL •
 
     $default  reduce using rule 49 (expr)
 
 
 State 60
 
-   50 expr: TKN_IDENT .
+   50 expr: TKN_IDENT •
 
     $default  reduce using rule 50 (expr)
 
 
 State 61
 
-   54 expr: "-" . expr
+   54 expr: "-" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -927,7 +927,7 @@ State 61
 
 State 62
 
-   57 expr: "&" . expr
+   57 expr: "&" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -944,7 +944,7 @@ State 62
 
 State 63
 
-   58 expr: "*" . expr
+   58 expr: "*" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -961,7 +961,7 @@ State 63
 
 State 64
 
-   55 expr: "!" . expr
+   55 expr: "!" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -978,7 +978,7 @@ State 64
 
 State 65
 
-   56 expr: "~" . expr
+   56 expr: "~" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -995,7 +995,7 @@ State 65
 
 State 66
 
-   26 vardecls: simple_type . idents ";"
+   26 vardecls: simple_type • idents ";"
 
     TKN_IDENT  shift, and go to state 83
 
@@ -1004,52 +1004,52 @@ State 66
 
 State 67
 
-   41 stmt: vardecls .
+   41 stmt: vardecls •
 
     $default  reduce using rule 41 (stmt)
 
 
 State 68
 
-   33 stmts: stmts stmt .
+   33 stmts: stmts stmt •
 
     $default  reduce using rule 33 (stmts)
 
 
 State 69
 
-   42 stmt: expr . ";"
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   42 stmt: expr • ";"
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     "["    shift, and go to state 85
@@ -1087,15 +1087,15 @@ State 69
 
 State 70
 
-   43 stmt: inline_asm . ";"
+   43 stmt: inline_asm • ";"
 
     ";"  shift, and go to state 116
 
 
 State 71
 
-   36 stmt: "if" "(" . expr ")" stmt
-   37     | "if" "(" . expr ")" stmt "else" stmt
+   36 stmt: "if" "(" • expr ")" stmt
+   37     | "if" "(" • expr ")" stmt "else" stmt
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1112,7 +1112,7 @@ State 71
 
 State 72
 
-   38 stmt: "while" "(" . expr ")" stmt
+   38 stmt: "while" "(" • expr ")" stmt
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1129,45 +1129,45 @@ State 72
 
 State 73
 
-   39 stmt: "return" ";" .
+   39 stmt: "return" ";" •
 
     $default  reduce using rule 39 (stmt)
 
 
 State 74
 
-   40 stmt: "return" expr . ";"
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   40 stmt: "return" expr • ";"
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     "["    shift, and go to state 85
@@ -1205,10 +1205,10 @@ State 74
 
 State 75
 
-   88 inline_asm: "asm" asm_qual . asm_code
-   90 asm_qual: asm_qual . "volatile"
-   91         | asm_qual . "inline"
-   92         | asm_qual . "goto"
+   88 inline_asm: "asm" asm_qual • asm_code
+   90 asm_qual: asm_qual • "volatile"
+   91         | asm_qual • "inline"
+   92         | asm_qual • "goto"
 
     "volatile"  shift, and go to state 120
     "inline"    shift, and go to state 121
@@ -1220,38 +1220,38 @@ State 75
 
 State 76
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   53     | "(" expr . ")"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   53     | "(" expr • ")"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     ")"    shift, and go to state 125
@@ -1289,8 +1289,8 @@ State 76
 
 State 77
 
-   33 stmts: stmts . stmt
-   35 stmt: "{" stmts . "}"
+   33 stmts: stmts • stmt
+   35 stmt: "{" stmts • "}"
 
     "unsigned"  shift, and go to state 1
     "signed"    shift, and go to state 2
@@ -1329,38 +1329,38 @@ State 77
 
 State 78
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   54     | "-" expr .
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   54     | "-" expr •
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("  shift, and go to state 84
     "["  shift, and go to state 85
@@ -1373,38 +1373,38 @@ State 78
 
 State 79
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   57     | "&" expr .
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   57     | "&" expr •
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("  shift, and go to state 84
     "["  shift, and go to state 85
@@ -1417,38 +1417,38 @@ State 79
 
 State 80
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   58     | "*" expr .
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   58     | "*" expr •
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("  shift, and go to state 84
     "["  shift, and go to state 85
@@ -1461,38 +1461,38 @@ State 80
 
 State 81
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   55     | "!" expr .
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   55     | "!" expr •
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("  shift, and go to state 84
     "["  shift, and go to state 85
@@ -1505,38 +1505,38 @@ State 81
 
 State 82
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   56     | "~" expr .
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   56     | "~" expr •
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("  shift, and go to state 84
     "["  shift, and go to state 85
@@ -1549,14 +1549,14 @@ State 82
 
 State 83
 
-   32 idents: TKN_IDENT .
+   32 idents: TKN_IDENT •
 
     $default  reduce using rule 32 (idents)
 
 
 State 84
 
-   51 expr: expr "(" . opt_exprs ")"
+   51 expr: expr "(" • opt_exprs ")"
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1577,7 +1577,7 @@ State 84
 
 State 85
 
-   52 expr: expr "[" . expr "]"
+   52 expr: expr "[" • expr "]"
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1594,14 +1594,14 @@ State 85
 
 State 86
 
-   42 stmt: expr ";" .
+   42 stmt: expr ";" •
 
     $default  reduce using rule 42 (stmt)
 
 
 State 87
 
-   78 expr: expr "+=" . expr
+   78 expr: expr "+=" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1618,7 +1618,7 @@ State 87
 
 State 88
 
-   79 expr: expr "-=" . expr
+   79 expr: expr "-=" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1635,7 +1635,7 @@ State 88
 
 State 89
 
-   86 expr: expr "<<=" . expr
+   86 expr: expr "<<=" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1652,7 +1652,7 @@ State 89
 
 State 90
 
-   87 expr: expr ">>=" . expr
+   87 expr: expr ">>=" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1669,7 +1669,7 @@ State 90
 
 State 91
 
-   80 expr: expr "*=" . expr
+   80 expr: expr "*=" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1686,7 +1686,7 @@ State 91
 
 State 92
 
-   81 expr: expr "/=" . expr
+   81 expr: expr "/=" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1703,7 +1703,7 @@ State 92
 
 State 93
 
-   82 expr: expr "%=" . expr
+   82 expr: expr "%=" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1720,7 +1720,7 @@ State 93
 
 State 94
 
-   83 expr: expr "&=" . expr
+   83 expr: expr "&=" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1737,7 +1737,7 @@ State 94
 
 State 95
 
-   84 expr: expr "|=" . expr
+   84 expr: expr "|=" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1754,7 +1754,7 @@ State 95
 
 State 96
 
-   85 expr: expr "^=" . expr
+   85 expr: expr "^=" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1771,7 +1771,7 @@ State 96
 
 State 97
 
-   75 expr: expr "&&" . expr
+   75 expr: expr "&&" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1788,7 +1788,7 @@ State 97
 
 State 98
 
-   76 expr: expr "||" . expr
+   76 expr: expr "||" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1805,7 +1805,7 @@ State 98
 
 State 99
 
-   62 expr: expr "+" . expr
+   62 expr: expr "+" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1822,7 +1822,7 @@ State 99
 
 State 100
 
-   63 expr: expr "-" . expr
+   63 expr: expr "-" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1839,7 +1839,7 @@ State 100
 
 State 101
 
-   77 expr: expr "=" . expr
+   77 expr: expr "=" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1856,7 +1856,7 @@ State 101
 
 State 102
 
-   70 expr: expr "&" . expr
+   70 expr: expr "&" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1873,7 +1873,7 @@ State 102
 
 State 103
 
-   59 expr: expr "*" . expr
+   59 expr: expr "*" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1890,7 +1890,7 @@ State 103
 
 State 104
 
-   60 expr: expr "/" . expr
+   60 expr: expr "/" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1907,7 +1907,7 @@ State 104
 
 State 105
 
-   61 expr: expr "%" . expr
+   61 expr: expr "%" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1924,7 +1924,7 @@ State 105
 
 State 106
 
-   71 expr: expr "^" . expr
+   71 expr: expr "^" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1941,7 +1941,7 @@ State 106
 
 State 107
 
-   72 expr: expr "|" . expr
+   72 expr: expr "|" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1958,7 +1958,7 @@ State 107
 
 State 108
 
-   73 expr: expr "<<" . expr
+   73 expr: expr "<<" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1975,7 +1975,7 @@ State 108
 
 State 109
 
-   74 expr: expr ">>" . expr
+   74 expr: expr ">>" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -1992,7 +1992,7 @@ State 109
 
 State 110
 
-   64 expr: expr "<" . expr
+   64 expr: expr "<" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -2009,7 +2009,7 @@ State 110
 
 State 111
 
-   65 expr: expr "<=" . expr
+   65 expr: expr "<=" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -2026,7 +2026,7 @@ State 111
 
 State 112
 
-   66 expr: expr ">" . expr
+   66 expr: expr ">" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -2043,7 +2043,7 @@ State 112
 
 State 113
 
-   67 expr: expr ">=" . expr
+   67 expr: expr ">=" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -2060,7 +2060,7 @@ State 113
 
 State 114
 
-   68 expr: expr "==" . expr
+   68 expr: expr "==" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -2077,7 +2077,7 @@ State 114
 
 State 115
 
-   69 expr: expr "!=" . expr
+   69 expr: expr "!=" • expr
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -2094,46 +2094,46 @@ State 115
 
 State 116
 
-   43 stmt: inline_asm ";" .
+   43 stmt: inline_asm ";" •
 
     $default  reduce using rule 43 (stmt)
 
 
 State 117
 
-   36 stmt: "if" "(" expr . ")" stmt
-   37     | "if" "(" expr . ")" stmt "else" stmt
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   36 stmt: "if" "(" expr • ")" stmt
+   37     | "if" "(" expr • ")" stmt "else" stmt
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     ")"    shift, and go to state 160
@@ -2171,38 +2171,38 @@ State 117
 
 State 118
 
-   38 stmt: "while" "(" expr . ")" stmt
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   38 stmt: "while" "(" expr • ")" stmt
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     ")"    shift, and go to state 161
@@ -2240,112 +2240,112 @@ State 118
 
 State 119
 
-   40 stmt: "return" expr ";" .
+   40 stmt: "return" expr ";" •
 
     $default  reduce using rule 40 (stmt)
 
 
 State 120
 
-   90 asm_qual: asm_qual "volatile" .
+   90 asm_qual: asm_qual "volatile" •
 
     $default  reduce using rule 90 (asm_qual)
 
 
 State 121
 
-   91 asm_qual: asm_qual "inline" .
+   91 asm_qual: asm_qual "inline" •
 
     $default  reduce using rule 91 (asm_qual)
 
 
 State 122
 
-   92 asm_qual: asm_qual "goto" .
+   92 asm_qual: asm_qual "goto" •
 
     $default  reduce using rule 92 (asm_qual)
 
 
 State 123
 
-   93 asm_code: "(" . TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
-   94         | "(" . TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ")"
-   95         | "(" . TKN_STRVAL ":" opt_asm_regs ")"
-   96         | "(" . TKN_STRVAL ")"
+   93 asm_code: "(" • TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
+   94         | "(" • TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ")"
+   95         | "(" • TKN_STRVAL ":" opt_asm_regs ")"
+   96         | "(" • TKN_STRVAL ")"
 
     TKN_STRVAL  shift, and go to state 162
 
 
 State 124
 
-   88 inline_asm: "asm" asm_qual asm_code .
+   88 inline_asm: "asm" asm_qual asm_code •
 
     $default  reduce using rule 88 (inline_asm)
 
 
 State 125
 
-   53 expr: "(" expr ")" .
+   53 expr: "(" expr ")" •
 
     $default  reduce using rule 53 (expr)
 
 
 State 126
 
-   35 stmt: "{" stmts "}" .
+   35 stmt: "{" stmts "}" •
 
     $default  reduce using rule 35 (stmt)
 
 
 State 127
 
-   51 expr: expr "(" opt_exprs . ")"
+   51 expr: expr "(" opt_exprs • ")"
 
     ")"  shift, and go to state 163
 
 
 State 128
 
-   44 opt_exprs: exprs .
+   44 opt_exprs: exprs •
 
     $default  reduce using rule 44 (opt_exprs)
 
 
 State 129
 
-   46 exprs: expr . "," exprs
-   47      | expr .
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   46 exprs: expr • "," exprs
+   47      | expr •
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     "["    shift, and go to state 85
@@ -2385,38 +2385,38 @@ State 129
 
 State 130
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   52     | expr "[" expr . "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   52     | expr "[" expr • "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     "["    shift, and go to state 85
@@ -2454,38 +2454,38 @@ State 130
 
 State 131
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   78     | expr "+=" expr .
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   78     | expr "+=" expr •
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     "["    shift, and go to state 85
@@ -2524,38 +2524,38 @@ State 131
 
 State 132
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   79     | expr "-=" expr .
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   79     | expr "-=" expr •
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     "["    shift, and go to state 85
@@ -2594,38 +2594,38 @@ State 132
 
 State 133
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   86     | expr "<<=" expr .
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   86     | expr "<<=" expr •
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     "["    shift, and go to state 85
@@ -2664,38 +2664,38 @@ State 133
 
 State 134
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
-   87     | expr ">>=" expr .
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
+   87     | expr ">>=" expr •
 
     "("    shift, and go to state 84
     "["    shift, and go to state 85
@@ -2734,38 +2734,38 @@ State 134
 
 State 135
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   80     | expr "*=" expr .
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   80     | expr "*=" expr •
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     "["    shift, and go to state 85
@@ -2804,38 +2804,38 @@ State 135
 
 State 136
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   81     | expr "/=" expr .
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   81     | expr "/=" expr •
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     "["    shift, and go to state 85
@@ -2874,38 +2874,38 @@ State 136
 
 State 137
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   82     | expr "%=" expr .
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   82     | expr "%=" expr •
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     "["    shift, and go to state 85
@@ -2944,38 +2944,38 @@ State 137
 
 State 138
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   83     | expr "&=" expr .
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   83     | expr "&=" expr •
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     "["    shift, and go to state 85
@@ -3014,38 +3014,38 @@ State 138
 
 State 139
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   84     | expr "|=" expr .
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   84     | expr "|=" expr •
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     "["    shift, and go to state 85
@@ -3084,38 +3084,38 @@ State 139
 
 State 140
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   85     | expr "^=" expr .
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   85     | expr "^=" expr •
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     "["    shift, and go to state 85
@@ -3154,38 +3154,38 @@ State 140
 
 State 141
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   75     | expr "&&" expr .
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   75     | expr "&&" expr •
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("   shift, and go to state 84
     "["   shift, and go to state 85
@@ -3211,38 +3211,38 @@ State 141
 
 State 142
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   76     | expr "||" expr .
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   76     | expr "||" expr •
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("   shift, and go to state 84
     "["   shift, and go to state 85
@@ -3269,38 +3269,38 @@ State 142
 
 State 143
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   62     | expr "+" expr .
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   62     | expr "+" expr •
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("  shift, and go to state 84
     "["  shift, and go to state 85
@@ -3315,38 +3315,38 @@ State 143
 
 State 144
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   63     | expr "-" expr .
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   63     | expr "-" expr •
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("  shift, and go to state 84
     "["  shift, and go to state 85
@@ -3361,38 +3361,38 @@ State 144
 
 State 145
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   77     | expr "=" expr .
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   77     | expr "=" expr •
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("    shift, and go to state 84
     "["    shift, and go to state 85
@@ -3431,38 +3431,38 @@ State 145
 
 State 146
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   70     | expr "&" expr .
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   70     | expr "&" expr •
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("  shift, and go to state 84
     "["  shift, and go to state 85
@@ -3475,38 +3475,38 @@ State 146
 
 State 147
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   59     | expr "*" expr .
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   59     | expr "*" expr •
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("  shift, and go to state 84
     "["  shift, and go to state 85
@@ -3519,38 +3519,38 @@ State 147
 
 State 148
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   60     | expr "/" expr .
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   60     | expr "/" expr •
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("  shift, and go to state 84
     "["  shift, and go to state 85
@@ -3563,38 +3563,38 @@ State 148
 
 State 149
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   61     | expr "%" expr .
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   61     | expr "%" expr •
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("  shift, and go to state 84
     "["  shift, and go to state 85
@@ -3607,38 +3607,38 @@ State 149
 
 State 150
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   71     | expr "^" expr .
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   71     | expr "^" expr •
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("   shift, and go to state 84
     "["   shift, and go to state 85
@@ -3662,38 +3662,38 @@ State 150
 
 State 151
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   72     | expr "|" expr .
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   72     | expr "|" expr •
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("   shift, and go to state 84
     "["   shift, and go to state 85
@@ -3718,38 +3718,38 @@ State 151
 
 State 152
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   73     | expr "<<" expr .
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   73     | expr "<<" expr •
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("  shift, and go to state 84
     "["  shift, and go to state 85
@@ -3765,38 +3765,38 @@ State 152
 
 State 153
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   74     | expr ">>" expr .
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   74     | expr ">>" expr •
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("  shift, and go to state 84
     "["  shift, and go to state 85
@@ -3812,38 +3812,38 @@ State 153
 
 State 154
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   64     | expr "<" expr .
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   64     | expr "<" expr •
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("   shift, and go to state 84
     "["   shift, and go to state 85
@@ -3861,38 +3861,38 @@ State 154
 
 State 155
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   65     | expr "<=" expr .
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   65     | expr "<=" expr •
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("   shift, and go to state 84
     "["   shift, and go to state 85
@@ -3910,38 +3910,38 @@ State 155
 
 State 156
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   66     | expr ">" expr .
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   66     | expr ">" expr •
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("   shift, and go to state 84
     "["   shift, and go to state 85
@@ -3959,38 +3959,38 @@ State 156
 
 State 157
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   67     | expr ">=" expr .
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   67     | expr ">=" expr •
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("   shift, and go to state 84
     "["   shift, and go to state 85
@@ -4008,38 +4008,38 @@ State 157
 
 State 158
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   68     | expr "==" expr .
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   68     | expr "==" expr •
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("   shift, and go to state 84
     "["   shift, and go to state 85
@@ -4061,38 +4061,38 @@ State 158
 
 State 159
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   69     | expr "!=" expr .
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   69     | expr "!=" expr •
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
 
     "("   shift, and go to state 84
     "["   shift, and go to state 85
@@ -4114,8 +4114,8 @@ State 159
 
 State 160
 
-   36 stmt: "if" "(" expr ")" . stmt
-   37     | "if" "(" expr ")" . stmt "else" stmt
+   36 stmt: "if" "(" expr ")" • stmt
+   37     | "if" "(" expr ")" • stmt "else" stmt
 
     "unsigned"  shift, and go to state 1
     "signed"    shift, and go to state 2
@@ -4153,7 +4153,7 @@ State 160
 
 State 161
 
-   38 stmt: "while" "(" expr ")" . stmt
+   38 stmt: "while" "(" expr ")" • stmt
 
     "unsigned"  shift, and go to state 1
     "signed"    shift, and go to state 2
@@ -4191,10 +4191,10 @@ State 161
 
 State 162
 
-   93 asm_code: "(" TKN_STRVAL . ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
-   94         | "(" TKN_STRVAL . ":" opt_asm_regs ":" opt_asm_regs ")"
-   95         | "(" TKN_STRVAL . ":" opt_asm_regs ")"
-   96         | "(" TKN_STRVAL . ")"
+   93 asm_code: "(" TKN_STRVAL • ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
+   94         | "(" TKN_STRVAL • ":" opt_asm_regs ":" opt_asm_regs ")"
+   95         | "(" TKN_STRVAL • ":" opt_asm_regs ")"
+   96         | "(" TKN_STRVAL • ")"
 
     ")"  shift, and go to state 168
     ":"  shift, and go to state 169
@@ -4202,14 +4202,14 @@ State 162
 
 State 163
 
-   51 expr: expr "(" opt_exprs ")" .
+   51 expr: expr "(" opt_exprs ")" •
 
     $default  reduce using rule 51 (expr)
 
 
 State 164
 
-   46 exprs: expr "," . exprs
+   46 exprs: expr "," • exprs
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -4227,15 +4227,15 @@ State 164
 
 State 165
 
-   52 expr: expr "[" expr "]" .
+   52 expr: expr "[" expr "]" •
 
     $default  reduce using rule 52 (expr)
 
 
 State 166
 
-   36 stmt: "if" "(" expr ")" stmt .
-   37     | "if" "(" expr ")" stmt . "else" stmt
+   36 stmt: "if" "(" expr ")" stmt •
+   37     | "if" "(" expr ")" stmt • "else" stmt
 
     "else"  shift, and go to state 171
 
@@ -4244,23 +4244,23 @@ State 166
 
 State 167
 
-   38 stmt: "while" "(" expr ")" stmt .
+   38 stmt: "while" "(" expr ")" stmt •
 
     $default  reduce using rule 38 (stmt)
 
 
 State 168
 
-   96 asm_code: "(" TKN_STRVAL ")" .
+   96 asm_code: "(" TKN_STRVAL ")" •
 
     $default  reduce using rule 96 (asm_code)
 
 
 State 169
 
-   93 asm_code: "(" TKN_STRVAL ":" . opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
-   94         | "(" TKN_STRVAL ":" . opt_asm_regs ":" opt_asm_regs ")"
-   95         | "(" TKN_STRVAL ":" . opt_asm_regs ")"
+   93 asm_code: "(" TKN_STRVAL ":" • opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"
+   94         | "(" TKN_STRVAL ":" • opt_asm_regs ":" opt_asm_regs ")"
+   95         | "(" TKN_STRVAL ":" • opt_asm_regs ")"
 
     "["         shift, and go to state 172
     TKN_STRVAL  shift, and go to state 173
@@ -4274,14 +4274,14 @@ State 169
 
 State 170
 
-   46 exprs: expr "," exprs .
+   46 exprs: expr "," exprs •
 
     $default  reduce using rule 46 (exprs)
 
 
 State 171
 
-   37 stmt: "if" "(" expr ")" stmt "else" . stmt
+   37 stmt: "if" "(" expr ")" stmt "else" • stmt
 
     "unsigned"  shift, and go to state 1
     "signed"    shift, and go to state 2
@@ -4319,23 +4319,23 @@ State 171
 
 State 172
 
-  105 asm_reg: "[" . TKN_IDENT "]" TKN_STRVAL "(" expr ")"
+  105 asm_reg: "[" • TKN_IDENT "]" TKN_STRVAL "(" expr ")"
 
     TKN_IDENT  shift, and go to state 178
 
 
 State 173
 
-  106 asm_reg: TKN_STRVAL . "(" expr ")"
+  106 asm_reg: TKN_STRVAL • "(" expr ")"
 
     "("  shift, and go to state 179
 
 
 State 174
 
-   93 asm_code: "(" TKN_STRVAL ":" opt_asm_regs . ":" opt_asm_regs ":" opt_asm_strs ")"
-   94         | "(" TKN_STRVAL ":" opt_asm_regs . ":" opt_asm_regs ")"
-   95         | "(" TKN_STRVAL ":" opt_asm_regs . ")"
+   93 asm_code: "(" TKN_STRVAL ":" opt_asm_regs • ":" opt_asm_regs ":" opt_asm_strs ")"
+   94         | "(" TKN_STRVAL ":" opt_asm_regs • ":" opt_asm_regs ")"
+   95         | "(" TKN_STRVAL ":" opt_asm_regs • ")"
 
     ")"  shift, and go to state 180
     ":"  shift, and go to state 181
@@ -4343,15 +4343,15 @@ State 174
 
 State 175
 
-  101 opt_asm_regs: asm_regs .
+  101 opt_asm_regs: asm_regs •
 
     $default  reduce using rule 101 (opt_asm_regs)
 
 
 State 176
 
-  103 asm_regs: asm_reg . "," asm_regs
-  104         | asm_reg .
+  103 asm_regs: asm_reg • "," asm_regs
+  104         | asm_reg •
 
     ","  shift, and go to state 182
 
@@ -4360,21 +4360,21 @@ State 176
 
 State 177
 
-   37 stmt: "if" "(" expr ")" stmt "else" stmt .
+   37 stmt: "if" "(" expr ")" stmt "else" stmt •
 
     $default  reduce using rule 37 (stmt)
 
 
 State 178
 
-  105 asm_reg: "[" TKN_IDENT . "]" TKN_STRVAL "(" expr ")"
+  105 asm_reg: "[" TKN_IDENT • "]" TKN_STRVAL "(" expr ")"
 
     "]"  shift, and go to state 183
 
 
 State 179
 
-  106 asm_reg: TKN_STRVAL "(" . expr ")"
+  106 asm_reg: TKN_STRVAL "(" • expr ")"
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -4391,15 +4391,15 @@ State 179
 
 State 180
 
-   95 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ")" .
+   95 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ")" •
 
     $default  reduce using rule 95 (asm_code)
 
 
 State 181
 
-   93 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" . opt_asm_regs ":" opt_asm_strs ")"
-   94         | "(" TKN_STRVAL ":" opt_asm_regs ":" . opt_asm_regs ")"
+   93 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" • opt_asm_regs ":" opt_asm_strs ")"
+   94         | "(" TKN_STRVAL ":" opt_asm_regs ":" • opt_asm_regs ")"
 
     "["         shift, and go to state 172
     TKN_STRVAL  shift, and go to state 173
@@ -4413,7 +4413,7 @@ State 181
 
 State 182
 
-  103 asm_regs: asm_reg "," . asm_regs
+  103 asm_regs: asm_reg "," • asm_regs
 
     "["         shift, and go to state 172
     TKN_STRVAL  shift, and go to state 173
@@ -4424,45 +4424,45 @@ State 182
 
 State 183
 
-  105 asm_reg: "[" TKN_IDENT "]" . TKN_STRVAL "(" expr ")"
+  105 asm_reg: "[" TKN_IDENT "]" • TKN_STRVAL "(" expr ")"
 
     TKN_STRVAL  shift, and go to state 187
 
 
 State 184
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
-  106 asm_reg: TKN_STRVAL "(" expr . ")"
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
+  106 asm_reg: TKN_STRVAL "(" expr • ")"
 
     "("    shift, and go to state 84
     ")"    shift, and go to state 188
@@ -4500,8 +4500,8 @@ State 184
 
 State 185
 
-   93 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs . ":" opt_asm_strs ")"
-   94         | "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs . ")"
+   93 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs • ":" opt_asm_strs ")"
+   94         | "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs • ")"
 
     ")"  shift, and go to state 189
     ":"  shift, and go to state 190
@@ -4509,35 +4509,35 @@ State 185
 
 State 186
 
-  103 asm_regs: asm_reg "," asm_regs .
+  103 asm_regs: asm_reg "," asm_regs •
 
     $default  reduce using rule 103 (asm_regs)
 
 
 State 187
 
-  105 asm_reg: "[" TKN_IDENT "]" TKN_STRVAL . "(" expr ")"
+  105 asm_reg: "[" TKN_IDENT "]" TKN_STRVAL • "(" expr ")"
 
     "("  shift, and go to state 191
 
 
 State 188
 
-  106 asm_reg: TKN_STRVAL "(" expr ")" .
+  106 asm_reg: TKN_STRVAL "(" expr ")" •
 
     $default  reduce using rule 106 (asm_reg)
 
 
 State 189
 
-   94 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ")" .
+   94 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ")" •
 
     $default  reduce using rule 94 (asm_code)
 
 
 State 190
 
-   93 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" . opt_asm_strs ")"
+   93 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" • opt_asm_strs ")"
 
     TKN_STRVAL  shift, and go to state 192
 
@@ -4549,7 +4549,7 @@ State 190
 
 State 191
 
-  105 asm_reg: "[" TKN_IDENT "]" TKN_STRVAL "(" . expr ")"
+  105 asm_reg: "[" TKN_IDENT "]" TKN_STRVAL "(" • expr ")"
 
     "("         shift, and go to state 55
     TKN_IVAL    shift, and go to state 58
@@ -4566,8 +4566,8 @@ State 191
 
 State 192
 
-   99 asm_strs: TKN_STRVAL . "," asm_strs
-  100         | TKN_STRVAL .
+   99 asm_strs: TKN_STRVAL • "," asm_strs
+  100         | TKN_STRVAL •
 
     ","  shift, and go to state 196
 
@@ -4576,52 +4576,52 @@ State 192
 
 State 193
 
-   93 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs . ")"
+   93 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs • ")"
 
     ")"  shift, and go to state 197
 
 
 State 194
 
-   97 opt_asm_strs: asm_strs .
+   97 opt_asm_strs: asm_strs •
 
     $default  reduce using rule 97 (opt_asm_strs)
 
 
 State 195
 
-   51 expr: expr . "(" opt_exprs ")"
-   52     | expr . "[" expr "]"
-   59     | expr . "*" expr
-   60     | expr . "/" expr
-   61     | expr . "%" expr
-   62     | expr . "+" expr
-   63     | expr . "-" expr
-   64     | expr . "<" expr
-   65     | expr . "<=" expr
-   66     | expr . ">" expr
-   67     | expr . ">=" expr
-   68     | expr . "==" expr
-   69     | expr . "!=" expr
-   70     | expr . "&" expr
-   71     | expr . "^" expr
-   72     | expr . "|" expr
-   73     | expr . "<<" expr
-   74     | expr . ">>" expr
-   75     | expr . "&&" expr
-   76     | expr . "||" expr
-   77     | expr . "=" expr
-   78     | expr . "+=" expr
-   79     | expr . "-=" expr
-   80     | expr . "*=" expr
-   81     | expr . "/=" expr
-   82     | expr . "%=" expr
-   83     | expr . "&=" expr
-   84     | expr . "|=" expr
-   85     | expr . "^=" expr
-   86     | expr . "<<=" expr
-   87     | expr . ">>=" expr
-  105 asm_reg: "[" TKN_IDENT "]" TKN_STRVAL "(" expr . ")"
+   51 expr: expr • "(" opt_exprs ")"
+   52     | expr • "[" expr "]"
+   59     | expr • "*" expr
+   60     | expr • "/" expr
+   61     | expr • "%" expr
+   62     | expr • "+" expr
+   63     | expr • "-" expr
+   64     | expr • "<" expr
+   65     | expr • "<=" expr
+   66     | expr • ">" expr
+   67     | expr • ">=" expr
+   68     | expr • "==" expr
+   69     | expr • "!=" expr
+   70     | expr • "&" expr
+   71     | expr • "^" expr
+   72     | expr • "|" expr
+   73     | expr • "<<" expr
+   74     | expr • ">>" expr
+   75     | expr • "&&" expr
+   76     | expr • "||" expr
+   77     | expr • "=" expr
+   78     | expr • "+=" expr
+   79     | expr • "-=" expr
+   80     | expr • "*=" expr
+   81     | expr • "/=" expr
+   82     | expr • "%=" expr
+   83     | expr • "&=" expr
+   84     | expr • "|=" expr
+   85     | expr • "^=" expr
+   86     | expr • "<<=" expr
+   87     | expr • ">>=" expr
+  105 asm_reg: "[" TKN_IDENT "]" TKN_STRVAL "(" expr • ")"
 
     "("    shift, and go to state 84
     ")"    shift, and go to state 198
@@ -4659,7 +4659,7 @@ State 195
 
 State 196
 
-   99 asm_strs: TKN_STRVAL "," . asm_strs
+   99 asm_strs: TKN_STRVAL "," • asm_strs
 
     TKN_STRVAL  shift, and go to state 192
 
@@ -4668,20 +4668,20 @@ State 196
 
 State 197
 
-   93 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")" .
+   93 asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")" •
 
     $default  reduce using rule 93 (asm_code)
 
 
 State 198
 
-  105 asm_reg: "[" TKN_IDENT "]" TKN_STRVAL "(" expr ")" .
+  105 asm_reg: "[" TKN_IDENT "]" TKN_STRVAL "(" expr ")" •
 
     $default  reduce using rule 105 (asm_reg)
 
 
 State 199
 
-   99 asm_strs: TKN_STRVAL "," asm_strs .
+   99 asm_strs: TKN_STRVAL "," asm_strs •
 
     $default  reduce using rule 99 (asm_strs)

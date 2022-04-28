@@ -93,6 +93,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 
 %type <simple_type> simple_type
 %type <idents> vardecls
+%type <pos> opt_int
 
 // Precedence: lowest.
 
@@ -119,6 +120,9 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 %precedence "then"
 %precedence "else"
 
+%left "int"
+%left "double"
+
 // Precedence: highest.
 
 %%
@@ -137,7 +141,7 @@ simple_type:	"char"										{$$=CTYPE_CHAR;}
 |				"unsigned" "char"							{$$=CTYPE_U_CHAR;}
 |				opt_signed "short" opt_int					{$$=CTYPE_S_SHORT;}
 |				opt_signed "int"							{$$=CTYPE_S_INT;}
-|				opt_signed "long" opt_int					{$$=CTYPE_S_LONG;}
+|				opt_signed "long" opt_int	%prec "int"		{$$=CTYPE_S_LONG;}
 |				opt_signed "long" "long" opt_int			{$$=CTYPE_S_LONGER;}
 |				"unsigned" "short" opt_int					{$$=CTYPE_U_SHORT;}
 |				"unsigned" "int"							{$$=CTYPE_U_INT;}
@@ -145,7 +149,7 @@ simple_type:	"char"										{$$=CTYPE_CHAR;}
 |				"unsigned" "long" "long" opt_int			{$$=CTYPE_U_LONGER;}
 |				"float"										{$$=CTYPE_FLOAT;}
 |				"double"									{$$=CTYPE_DOUBLE;}
-|				"long" "double"								{$$=CTYPE_LONG_DOUBLE;}
+|				"long" "double"				%prec "double"	{$$=CTYPE_LONG_DOUBLE;}
 |				"_Bool"										{$$=CTYPE_BOOL;}
 |				"void"										{$$=CTYPE_VOID;};
 

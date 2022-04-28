@@ -1,11 +1,7 @@
-# lilly-cc: GR8CPU TODO list
-
-## Generator
-- Fix more operations to work with different integer sizes.
-- Create something to deal with signed number comparison.
+# lilly-cc: PX16 TODO list
 
 ## Assembler
-- Import the verbose dialect?
+- Create the assembler
 
 ## Linker
-- Create a linker input and output for the GR8NIX object file.
+- Create a linker input and output for the PX16 object file.

@@ -32,7 +32,9 @@ struct gen_var {
 	// The type associated with the variable, if any.
 	var_type_t     *ctype;
 	// The associated owner variable, if any.
-	void           *owner;
+	char           *owner;
+	// The default location associated, if any.
+	gen_var_t      *default_loc;
 };
 
 // Definitions of types, pointer types and structs.

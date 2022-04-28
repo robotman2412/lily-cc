@@ -22,7 +22,7 @@
 #endif
 
 // Filling in of an external array.
-char *reg_names[NUM_REGS] = REG_NAMES;
+char *reg_names[] = REG_NAMES;
 
 // Filling in of another external array.
 size_t simple_type_size[] = arrCSIZE_BY_INDEX;
@@ -187,7 +187,7 @@ int main(int argc, char **argv) {
 	asm_ppc(&asm_ctx);
 	output_native(&asm_ctx);
 	close(tempfile);
-	system("hexdump -ve '16/1 \"%02X \" \"\n\"' /tmp/lilly-cc-dbg-bin");
+	system("hexdump -ve '8/2 \"%04X \" \"\n\"' /tmp/lilly-cc-dbg-bin");
 }
 
 // Show help on the command line.

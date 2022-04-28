@@ -6,15 +6,21 @@
 
 // Find and return the location of the variable with the given name.
 gen_var_t *gen_get_variable(asm_ctx_t *ctx, char *label) {
-	
+	asm_scope_t *scope = ctx->current_scope;
+	while (scope) {
+		gen_var_t *var = (gen_var_t *) map_get(&scope->vars, label);
+		if (var) return var;
+		scope = scope->parent;
+	}
+	return NULL;
 }
 
 // Define the variable with the given ident.
-bool gen_define_var(asm_ctx_t *ctx, char *label, char *ident) {
-	void *repl = map_set(&ctx->current_scope->vars, ident, label);
+bool gen_define_var(asm_ctx_t *ctx, gen_var_t *var, char *ident) {
+	void *repl = map_set(&ctx->current_scope->vars, ident, var);
 	if (repl) return false;
 	if (ctx->current_scope != &ctx->global_scope) {
-		// Don't want to deal with global varialbe numbers inside functions.
+		// Don't want to deal with global variable numbers inside functions.
 		ctx->current_scope->local_num ++;
 	}
 	ctx->current_scope->num ++;
@@ -45,6 +51,10 @@ void gen_unuse(asm_ctx_t *ctx, gen_var_t *var) {
 			}
 			return;
 		}
+	}
+	// Mark registers as free.
+	if (var->type == VAR_TYPE_REG) {
+		ctx->current_scope->reg_usage[var->reg] = NULL;
 	}
 }
 
@@ -80,6 +90,8 @@ void gen_push_scope(asm_ctx_t *ctx) {
 	scope->parent      = ctx->current_scope;
 	scope->num         = ctx->current_scope->num;
 	scope->local_num   = ctx->current_scope->local_num;
+	memcpy(scope->reg_usage, ctx->current_scope->reg_usage, sizeof(scope->reg_usage));
+	scope->stack_size = ctx->stack_size;
 	map_create(&scope->vars);
 	ctx->current_scope = scope;
 }
@@ -87,8 +99,13 @@ void gen_push_scope(asm_ctx_t *ctx) {
 // Close scope.
 void gen_pop_scope(asm_ctx_t *ctx) {
 	asm_scope_t *old = ctx->current_scope;
+	
+	// Delete the map.
 	map_delete_with_values(&old->vars);
+	
+	// Unlink it.
 	ctx->current_scope = old->parent;
+	ctx->stack_size = old->stack_size;
 	free(old);
 }
 

@@ -41,6 +41,10 @@ struct asm_scope {
     size_t       num;
     // The total number of variables excluding global variables.
     size_t       local_num;
+    // A list of usage for registers.
+    gen_var_t   *reg_usage[NUM_REGS];
+    // Relative size of the stack.
+    address_t   stack_size;
 };
 
 struct asm_ctx {

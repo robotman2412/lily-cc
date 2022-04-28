@@ -7,7 +7,7 @@
 // Find and return the location of the variable with the given name.
 gen_var_t *gen_get_variable(asm_ctx_t *ctx, char      *label);
 // Define the variable with the given ident.
-bool       gen_define_var  (asm_ctx_t *ctx, char      *label, char *ident);
+bool       gen_define_var  (asm_ctx_t *ctx, gen_var_t *var, char *ident);
 // Define a temp var label.
 bool       gen_define_temp (asm_ctx_t *ctx, char      *label);
 // Mark the label as not in use.

@@ -12,7 +12,7 @@
 static inline void gen_var_scope(asm_ctx_t *ctx, map_t *map) {
 	// Add the variables to the current scope.
 	for (size_t i = 0; i < map_size(map); i++) {
-		DEBUG_PRE("got var '%s': %s\n", map->strings[i], (char *) map->values[i]);
+		DEBUG_PRE("got var '%s'\n", map->strings[i]);
 		gen_define_var(ctx, map->values[i], map->strings[i]);
 	}
 }
@@ -155,7 +155,8 @@ bool gen_stmt(asm_ctx_t *ctx, void *ptr, bool is_stmts) {
 				// The expression.
 				gen_var_t *result = gen_expression(ctx, stmt->expr, NULL);
 				gen_unuse(ctx, result);
-				free(result);
+				if (!result->owner)
+					free(result);
 			} break;
 			case STMT_TYPE_IASM: {
 				// Inline assembly for the win!
@@ -590,7 +591,7 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 					.type  = VAR_TYPE_LABEL,
 					.label = expr->ident->strval
 				};
-				val = COPY(&dummy, gen_var_t)
+				val = COPY(&dummy, gen_var_t);
 				DEBUG_GEN("unknown \"%s\"\n", expr->ident->strval);
 			}
 			val->owner = expr->ident->strval;

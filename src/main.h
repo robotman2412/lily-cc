@@ -8,7 +8,7 @@ typedef struct options options_t;
 
 #include <config.h>
 
-extern char *reg_names[NUM_REGS];
+extern char *reg_names[];
 
 #include <stddef.h>
 #include <stdbool.h>

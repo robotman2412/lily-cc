@@ -5,16 +5,31 @@
 #include "malloc.h"
 #include "gen_preproc.h"
 #include <string.h>
+#include <stdlib.h>
 
 /* ================== Functions ================== */
 
 #if defined(FALLFALLBACK_gen_function) || defined(FALLBACK_gen_stmt)
 static inline void gen_var_scope(asm_ctx_t *ctx, map_t *map) {
+	address_t pre = ctx->stack_size;
+	
 	// Add the variables to the current scope.
 	for (size_t i = 0; i < map_size(map); i++) {
 		DEBUG_PRE("got var '%s'\n", map->strings[i]);
-		gen_define_var(ctx, map->values[i], map->strings[i]);
+		gen_var_t *var = map->values[i];
+		
+		if ((var->type == VAR_TYPE_STACKFRAME || var->type == VAR_TYPE_STACKOFFS) && var->offset == (address_t) -1) {
+			// Have it in the stack.
+			var->offset = ctx->stack_size;
+			DEBUG_GEN("// updating stack offset to %d\n", ctx->stack_size);
+			ctx->stack_size ++;
+		}
+		
+		gen_define_var(ctx, var, map->strings[i]);
 	}
+	
+	// Update the stack size.
+	gen_stack_space(ctx, ctx->stack_size - pre);
 }
 #endif
 
@@ -156,7 +171,7 @@ bool gen_stmt(asm_ctx_t *ctx, void *ptr, bool is_stmts) {
 				gen_var_t *result = gen_expression(ctx, stmt->expr, NULL);
 				gen_unuse(ctx, result);
 				if (!result->owner)
-					free(result);
+					free_gen_var(result);
 			} break;
 			case STMT_TYPE_IASM: {
 				// Inline assembly for the win!
@@ -386,6 +401,13 @@ static bool asm_is_ident(char c, bool allow_numeric) {
 static inline void nomore_whitespace(tokeniser_ctx_t *lex_ctx) {
 	while (1) {
 		char c = tokeniser_nextchar(lex_ctx);
+		if (c == '/' && tokeniser_nextchar_no(lex_ctx, 1) == '/') {
+			// We go to EOL.
+			do {
+				c = tokeniser_readchar(lex_ctx);
+			} while (c != '\r' && c != '\n');
+			continue;
+		}
 		if (!is_space(c)) return;
 		tokeniser_readchar(lex_ctx);
 	}
@@ -406,7 +428,8 @@ static size_t asm_expect_ident(tokeniser_ctx_t *lex_ctx) {
 	bool allow_numeric = false;
 	size_t offset = 0;
 	while (true) {
-		if (!asm_is_ident(tokeniser_nextchar_no(lex_ctx, offset), allow_numeric)) {
+		char next = tokeniser_nextchar_no(lex_ctx, offset);
+		if (!asm_is_ident(next, allow_numeric)) {
 			return offset;
 		}
 		allow_numeric = true;
@@ -426,6 +449,67 @@ static char *asm_expect_str(tokeniser_ctx_t *lex_ctx) {
 	}
 }
 
+// Expect an ival and if so, return it.
+static bool asm_expect_ival(tokeniser_ctx_t *lex_ctx, long long *out) {
+	bool negative = false;
+	retry:
+	nomore_spaces(lex_ctx);
+	char c = tokeniser_nextchar(lex_ctx);
+	char next = tokeniser_nextchar_no(lex_ctx, 1);
+	
+	// Negative?
+	if (c == '-') {
+		tokeniser_readchar(lex_ctx);
+		negative = !negative;
+		goto retry;
+	}
+	
+	// This could be hexadecimal.
+	if (c == '0' && (next == 'x' || next == 'X')) {
+		int offs = 2;
+		while (is_hexadecimal(tokeniser_nextchar_no(lex_ctx, offs))) offs++;
+		// Skip the 0x.
+		tokeniser_readchar(lex_ctx);
+		tokeniser_readchar(lex_ctx);
+		// Now, grab it.
+		offs --;
+		char *strval = (char *) malloc(sizeof(char) * offs);
+		strval[offs] = 0;
+		for (int i = 0; i < offs-1; i++) {
+			strval[i] = tokeniser_readchar(lex_ctx);
+		}
+		// Turn it into a number, hexadecimal.
+		*out = strtoull(strval, NULL, 16);
+		if (negative) *out = -*out;
+		free(strval);
+		return true;
+	}
+	
+	// This could be a number.
+	if (is_numeric(c)) {
+		// Check how many of these we get.
+		int offs = 1;
+		while (is_alphanumeric(tokeniser_nextchar_no(lex_ctx, offs))) offs++;
+		// Skip the first digit.
+		tokeniser_readchar(lex_ctx);
+		offs ++;
+		// Now, grab it.
+		char *strval = (char *) malloc(sizeof(char) * (offs + 1));
+		*strval = c;
+		strval[offs] = 0;
+		for (int i = 1; i < offs; i++) {
+			strval[i] = tokeniser_readchar(lex_ctx);
+		}
+		// Turn it into a number, respecting octal.
+		*out = strtoull(strval, NULL, c == '0' ? 8 : 10);
+		if (negative) *out = -*out;
+		free(strval);
+		return true;
+	}
+    
+	return false;
+}
+
 // Extracts len characters from lex_ctx in a c-string.
 static char *asm_extract(tokeniser_ctx_t *lex_ctx, size_t len) {
 	char *cstr = malloc(len + 1);
@@ -436,12 +520,47 @@ static char *asm_extract(tokeniser_ctx_t *lex_ctx, size_t len) {
 	return cstr;
 }
 
+// Handles the .db macro in assembly.
+static void gen_asm_db(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
+	gimme:
+	nomore_spaces(lex_ctx);
+	// Try strconst.
+	char *str = asm_expect_str(lex_ctx);
+	if (str) {
+		// It worked!
+		for (size_t i = 0; i < strlen(str); i++) {
+			asm_write_memword(ctx, str[i]);
+		}
+		goto next;
+	}
+	// Try ident.
+	size_t len = asm_expect_ident(lex_ctx);
+	if (len) {
+		// TODO: More fancy CRACK.
+		char *ident = asm_extract(lex_ctx, len);
+		asm_write_label_ref(ctx, ident, 0, ASM_LABEL_REF_ABS_PTR);
+		free(ident);
+		goto next;
+	}
+	// Try ival.
+	long long ival;
+	bool succ = asm_expect_ival(lex_ctx, &ival);
+	if (succ) {
+		// APPEND CRACK.
+		asm_write_memword(ctx, ival);
+		goto next;
+	}
+	// It didn't work.
+	printf("Error: Expected STRING, IDENT or IVAL after .db\n");
+	return;
+	
+	next:
+	if (tokeniser_nextchar(lex_ctx) == ',') goto gimme;
+}
+
 // Complete file of assembly. (only if inline assembly is supported)
 // Splits the assembly file into lines and nicely asks the backend to fix it.
 void gen_asm_file(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
-	
-	// TODO: Split into lines more properly.
-	char *line_ptr = lex_ctx->source;
 	
 	// While there is things to process.
 	while (tokeniser_nextchar(lex_ctx)) {
@@ -475,6 +594,9 @@ void gen_asm_file(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 				} else {
 					printf("Error: Expected STRING after '.section'\n");
 				}
+			} else if (!strcmp(directive, "db")) {
+				// Handle the D.B.
+				gen_asm_db(ctx, lex_ctx);
 			} else {
 				printf("Warning: Unknown directive '%s'\n", directive);
 			}

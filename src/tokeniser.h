@@ -20,10 +20,6 @@ struct pos {
 	size_t index0, index1;
 };
 
-pos_t pos_merge(pos_t one, pos_t two);
-pos_t pos_empty(tokeniser_ctx_t *ctx);
-void  print_pos(pos_t pos);
-
 // Contains info required to tokenise a source file.
 struct tokeniser_ctx {
 	// Filename.
@@ -40,6 +36,11 @@ struct tokeniser_ctx {
 };
 
 #include <parser-util.h>
+
+pos_t pos_merge(pos_t one, pos_t two);
+pos_t pos_empty(tokeniser_ctx_t *ctx);
+void  print_pos(tokeniser_ctx_t *ctx, pos_t pos);
+void  report_error(tokeniser_ctx_t *parser_ctx, char *type, pos_t pos, char *message);
 
 // Initialise a context, given c-string.
 void tokeniser_init_cstr(tokeniser_ctx_t *ctx, char *raw);
@@ -68,7 +69,5 @@ char *tokeniser_getstr(tokeniser_ctx_t *ctx, char term);
 
 // Grab next non-space token.
 int tokenise(tokeniser_ctx_t *ctx);
-
-void report_error(parser_ctx_t *parser_ctx, char *type, pos_t pos, char *message);
 
 #endif // TOKENISER_H

@@ -111,9 +111,11 @@ gen_var_t *gen_expr_math1    (asm_ctx_t *ctx, oper_t     oper,    gen_var_t *out
 
 /* ================== Variables ================== */
 
+// Make a certain amount of space in the stack.
+void       gen_stack_space   (asm_ctx_t *ctx, address_t num);
 // Variables: Move variable to another location.
 void       gen_mov           (asm_ctx_t *ctx, gen_var_t *dest,    gen_var_t *src);
-// Variables: Create a memory location for the varialbe at preprocessing time.
+// Variables: Create a memory location for the vaariable at preprocessing time.
 // Must allocate a new gen_var_t object.
 gen_var_t *gen_preproc_var   (asm_ctx_t *ctx, preproc_data_t *parent, ident_t *ident);
 

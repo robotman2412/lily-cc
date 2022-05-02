@@ -4,6 +4,13 @@
 #include "string.h"
 #include "malloc.h"
 
+// Free an instance of gen_var_t and it's underlying data.
+void free_gen_var(gen_var_t *ptr) {
+	if (ptr->type == VAR_TYPE_PTR) free_gen_var(ptr->ptr);
+	if (ptr->default_loc) free_gen_var(ptr->default_loc);
+	free(ptr);
+}
+
 // Find and return the location of the variable with the given name.
 gen_var_t *gen_get_variable(asm_ctx_t *ctx, char *label) {
 	asm_scope_t *scope = ctx->current_scope;
@@ -19,10 +26,12 @@ gen_var_t *gen_get_variable(asm_ctx_t *ctx, char *label) {
 bool gen_define_var(asm_ctx_t *ctx, gen_var_t *var, char *ident) {
 	void *repl = map_set(&ctx->current_scope->vars, ident, var);
 	if (repl) return false;
+	
 	if (ctx->current_scope != &ctx->global_scope) {
 		// Don't want to deal with global variable numbers inside functions.
 		ctx->current_scope->local_num ++;
 	}
+	
 	ctx->current_scope->num ++;
 	return true;
 }
@@ -38,6 +47,10 @@ bool gen_define_temp(asm_ctx_t *ctx, char *label) {
 
 // Mark the label as not in use.
 void gen_unuse(asm_ctx_t *ctx, gen_var_t *var) {
+	// Mark registers as free.
+	if (var->type == VAR_TYPE_REG) {
+		ctx->current_scope->reg_usage[var->reg] = NULL;
+	}
 	if (var->type != VAR_TYPE_LABEL) return;
 	char *label = var->label;
 	// Free up all the marked temp labels.
@@ -52,10 +65,6 @@ void gen_unuse(asm_ctx_t *ctx, gen_var_t *var) {
 			return;
 		}
 	}
-	// Mark registers as free.
-	if (var->type == VAR_TYPE_REG) {
-		ctx->current_scope->reg_usage[var->reg] = NULL;
-	}
 }
 
 
@@ -63,6 +72,8 @@ void gen_unuse(asm_ctx_t *ctx, gen_var_t *var) {
 // Compare gen_var_t against each other.
 bool gen_cmp(asm_ctx_t *ctx, gen_var_t *a, gen_var_t *b) {
 	if (a == b) return 1;
+	if (!a && b) return 0;
+	if (!b && a) return 0;
 	if (a->type != b->type) return 0;
 	switch (a->type) {
 		case VAR_TYPE_COND:

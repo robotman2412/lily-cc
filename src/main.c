@@ -38,15 +38,15 @@ int main(int argc, char **argv) {
 #endif
 	
 	options_t options = {
-		.abort = false,
-		.showHelp = false,
-		.showVersion = false,
+		.abort          = false,
+		.showHelp       = false,
+		.showVersion    = false,
 		.numSourceFiles = 0,
-		.sourceFiles = NULL,
+		.sourceFiles    = NULL,
 		.numIncludeDirs = 0,
-		.includeDirs = NULL,
-		.outputFile = NULL,
-		.outputType = NULL
+		.includeDirs    = NULL,
+		.outputFile     = NULL,
+		.outputType     = NULL
 	};
 	
 	// Read options.
@@ -160,33 +160,20 @@ int main(int argc, char **argv) {
 		return 0;
 	}
 	
-	fseek(file, 0, SEEK_END);
-	size_t len = ftell(file);
-	rewind(file);
-	char *source = malloc(len + 1);
-	size_t read = fread(source, 1, len, file);
-	source = realloc(source, read + 1);
-	source[read] = 0;
+	// Have it PROCESSED.
+	asm_ctx_t *asm_ctx = compile(filename, file);
+	if (!asm_ctx) {
+		return 1;
+	}
 	
-	// Initialise.
-	parser_ctx_t ctx;
-	tokeniser_ctx_t tokeniser_ctx;
-	asm_ctx_t asm_ctx;
-	//asm_ctx_t asm_ctx;
-	ctx.tokeniser_ctx = &tokeniser_ctx;
-	ctx.asm_ctx = &asm_ctx;
-	tokeniser_init_cstr(&tokeniser_ctx, source);
-	tokeniser_ctx.filename = filename;
-	asm_init(&asm_ctx);
-	
-	// Lol who compiles.
-	yyparse(&ctx);
 	// Output it.
-	int tempfile = open("/tmp/lilly-cc-dbg-bin", O_RDWR | O_CREAT | O_TRUNC, 0666);
-	asm_ctx.out_fd = tempfile;
-	asm_ppc(&asm_ctx);
-	output_native(&asm_ctx);
-	close(tempfile);
+	FILE *tempfile = fopen("/tmp/lilly-cc-dbg-bin", "w+");
+	// chmod("/tmp/lilly-cc-dbg-bin", 0666);
+	asm_ctx->out_fd = tempfile;
+	asm_ppc(asm_ctx);
+	output_native(asm_ctx);
+	fclose(tempfile);
+	free(asm_ctx);
 	system("hexdump -ve '8/2 \"%04X \" \"\n\"' /tmp/lilly-cc-dbg-bin");
 }
 
@@ -233,27 +220,62 @@ bool isdir(char *path) {
 	return S_ISDIR(statbuf.st_mode);
 }
 
+// Compile a file of unknown type.
+asm_ctx_t *compile(char *filename, FILE *file) {
+	char *dot = strrchr(filename, '.');
+	if (!dot) {
+		printf("%s: Filetype not recognised.\n", filename);
+		return NULL;
+	} else if (!strcmp(dot, ".c")) {
+		return compile_c(filename, file);
+	} else if (!strcmp(dot, ".s") || !strcmp(dot, ".asm")) {
+		return assemble_s(filename, file);
+	} else {
+		printf("%s: Filetype not recognised.\n", filename);
+		return NULL;
+	}
+}
+
+// Compile a C source file.
+asm_ctx_t *compile_c(char *filename, FILE *file) {
+	// Init some ctx.
+	parser_ctx_t    ctx;
+	tokeniser_ctx_t tokeniser_ctx;
+	asm_ctx_t       asm_ctx;
+	ctx.tokeniser_ctx = &tokeniser_ctx;
+	ctx.asm_ctx       = &asm_ctx;
+	tokeniser_init_file(&tokeniser_ctx, file);
+	tokeniser_ctx.filename = filename;
+	asm_init(&asm_ctx);
+	
+	// Compile some CRAP.
+	yyparse(&ctx);
+	
+	return COPY(&asm_ctx, asm_ctx_t);
+}
+
+// Assembles an assembly source file.
+asm_ctx_t *assemble_s(char *filename, FILE *file) {
+	// Init some ctx.
+	tokeniser_ctx_t tokeniser_ctx;
+	asm_ctx_t       asm_ctx;
+	tokeniser_init_file(&tokeniser_ctx, file);
+	tokeniser_ctx.filename = filename;
+	asm_init(&asm_ctx);
+	
+	// Compile some CRAP.
+	gen_asm_file(&asm_ctx, &tokeniser_ctx);
+	
+	return COPY(&asm_ctx, asm_ctx_t);
+}
+
 int yylex(parser_ctx_t *ctx) {
 	int tkn = tokenise(ctx->tokeniser_ctx);
 	return tkn;
 }
 
 void yyerror(parser_ctx_t *ctx, char *msg) {
-	//if (ctx->currentError) {
-	//	free(ctx->currentError);
-	//} else {
-	//	ctx->currentError = strdup(msg);
-	//}
-	fflush(stdout);
-	fputs(msg, stderr);
-	fputc('\n', stderr);
-	fprintf(
-		stderr, "Note: Near %s line %d col %d\n",
-		ctx->tokeniser_ctx->filename,
-		ctx->tokeniser_ctx->y,
-		ctx->tokeniser_ctx->x + 1
-	);
-	fflush(stderr);
+	report_error(ctx->tokeniser_ctx, "error", yylval.pos, msg);
 }
 
 // Process a function.

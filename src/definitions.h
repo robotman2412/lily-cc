@@ -13,37 +13,37 @@
 #ifdef ENABLE_DEBUG_LOGS
 #   define DEBUG(...) printf("[DEBUG] " __VA_ARGS__)
 #else
-#   define DEBUG(...)
+#   define DEBUG(...) do{}while(0)
 #endif
 
 #ifdef DEBUG_TOKENISER
 #   define DEBUG_TKN(...) DEBUG("[TKN] " __VA_ARGS__)
 #else
-#   define DEBUG_TKN(...)
+#   define DEBUG_TKN(...) do{}while(0)
 #endif
 
 #ifdef DEBUG_PARSER
 #   define DEBUG_PAR(...) DEBUG("[PAR] " __VA_ARGS__)
 #else
-#   define DEBUG_PAR(...)
+#   define DEBUG_PAR(...) do{}while(0)
 #endif
 
 #ifdef DEBUG_ASSEMBLER
 #   define DEBUG_ASM(...) DEBUG("[ASM] " __VA_ARGS__)
 #else
-#   define DEBUG_ASM(...)
+#   define DEBUG_ASM(...) do{}while(0)
 #endif
 
 #ifdef DEBUG_GENERATOR
 #   define DEBUG_GEN(...) DEBUG("[GEN] " __VA_ARGS__)
 #else
-#   define DEBUG_GEN(...)
+#   define DEBUG_GEN(...) do{}while(0)
 #endif
 
 #ifdef DEBUG_PREPROC
 #   define DEBUG_PRE(...) DEBUG("[PRE] " __VA_ARGS__)
 #else
-#   define DEBUG_PRE(...)
+#   define DEBUG_PRE(...) do{}while(0)
 #endif
 
 #define IS_CHAR_SIGNED   defined(CHAR_IS_SIGNED)
@@ -207,6 +207,8 @@ typedef enum oper {
 #define OP_IS_SHIFT(x) (x == OP_SHIFT_L   || x == OP_SHIFT_R)
 // Whether an oper_t is an instance of boolean math.
 #define OP_IS_LOGIC(x) (x >= OP_LOGIC_NOT && x <= OP_LOGIC_OR)
+// Whether an oper_t is an instance of comparison.
+#define OP_IS_COMP(x)  (x >= OP_GT        && x <= OP_NE)
 
 // Types of statement.
 typedef enum stmt_type {
@@ -220,7 +222,7 @@ typedef enum stmt_type {
 	STMT_TYPE_RET,
 	// variable declaration = statements;
 	STMT_TYPE_VAR,
-	// expression * statements
+	// expression && statements
 	STMT_TYPE_EXPR,
 	// asm ("inline assembly" : "=r" (statements));
 	STMT_TYPE_IASM
@@ -236,7 +238,7 @@ typedef enum expr_type {
 	EXPR_TYPE_CALL,
 	// Unary math (e.g. !a, -b or *c).
 	EXPR_TYPE_MATH1,
-	// Binary meth (e.g. a+b, c*d or e^f).
+	// Binary math (e.g. a+b, c*d or e^f).
 	EXPR_TYPE_MATH2
 } expr_type_t;
 
@@ -347,7 +349,7 @@ extern size_t simple_type_size[];
 	CSIZE_CHAR,   CSIZE_CHAR,\
 	CSIZE_SHORT,  CSIZE_SHORT,\
 	CSIZE_INT,    CSIZE_INT,\
-	CSIZE_LONG,    CSIZE_LONG,\
+	CSIZE_LONG,   CSIZE_LONG,\
 	CSIZE_LONGER, CSIZE_LONGER,\
 	CSIZE_FLOAT,\
 	CSIZE_DOUBLE,\

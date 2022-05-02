@@ -238,7 +238,7 @@ Nonterminals, with rules where they appear
     opt_int <pos> (73)
         on left: 5 6
         on right: 12 14 15 16 18 19
-    opt_signed (74)
+    opt_signed <pos> (74)
         on left: 7 8
         on right: 12 13 14 15
     simple_type <simple_type> (75)

@@ -41,10 +41,10 @@ pos_t pos_empty(tokeniser_ctx_t *ctx) {
 	};
 }
 
-void print_pos(pos_t pos) {
-	printf("%s:%d:%d -> %d:%d", pos.filename, pos.y0, pos.x0, pos.y1, pos.x1);
+void print_pos(tokeniser_ctx_t *ctx, pos_t pos) {
+	// Print just the pos.
+	printf("%s:%d:%d -> %d:%d\n", pos.filename, pos.y0, pos.x0, pos.y1, pos.x1);
 }
-
 
 // Initialise a context, given c-string.
 void tokeniser_init_cstr(tokeniser_ctx_t *ctx, char *raw) {
@@ -115,10 +115,8 @@ bool is_alphanumeric(char c) {
 char tokeniser_readchar(tokeniser_ctx_t *ctx) {
 	char c;
 	if (ctx->use_fd) {
-		if (feof(ctx->fd)) {
-			return 0;
-		}
-		fread(&c, 1, 1, ctx->fd);
+		size_t n = fread(&c, 1, 1, ctx->fd);
+		if (!n) return 0;
 	} else {
 		if (ctx->index >= ctx->source_len) {
 			return 0;
@@ -129,7 +127,7 @@ char tokeniser_readchar(tokeniser_ctx_t *ctx) {
 	ctx->x ++;
 	if (c == '\r') {
 		c = '\n';
-		if (tokeniser_nextchar(ctx)) tokeniser_nextchar(ctx);
+		if (tokeniser_nextchar(ctx) == '\n') tokeniser_readchar(ctx);
 	}
 	if (c == '\n') {
 		ctx->y ++;
@@ -146,15 +144,12 @@ char tokeniser_nextchar(tokeniser_ctx_t *ctx) {
 // Next character + offset.
 char tokeniser_nextchar_no(tokeniser_ctx_t *ctx, int no) {
 	if (ctx->use_fd) {
-		size_t pos = ftell(ctx->fd);
-		int success = fseek(ctx->fd, pos + no, SEEK_SET);
-		if (!success) {
-			fseek(ctx->fd, pos, SEEK_SET);
-			return 0;
-		}
+		long pos = ftell(ctx->fd);
+		fseek(ctx->fd, no, SEEK_CUR);
 		char c;
-		fread(&c, 1, 1, ctx->fd);
+		size_t n = fread(&c, 1, 1, ctx->fd);
 		fseek(ctx->fd, pos, SEEK_SET);
+		if (!n) return 0;
 		return c;
 	} else {
 		if (ctx->index + no >= ctx->source_len) {
@@ -323,20 +318,22 @@ static const keyw_map_t keyw_map[] = {
 };
 static const size_t keyw_map_len = sizeof(keyw_map) / sizeof(keyw_map_t);
 
-// Grab next non-space token.
-int tokenise(tokeniser_ctx_t *ctx) {
+// Grab next non-space token (internal method).
+static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 	// Get the first non-space character.
 	char c;
 	retry:
 	do {
 		c = tokeniser_readchar(ctx);
 	} while(is_space(c));
-	if (!c) return c;
+	if (!c) return 0;
+	*i0 = ctx->index;
+	*x0 = ctx->x;
+	*y0 = ctx->y;
     
 	char next = tokeniser_nextchar(ctx);
 	char next2 = tokeniser_nextchar_no(ctx, 1);
 	size_t index0 = ctx->index - 1;
-	int x0 = ctx->x, y0 = ctx->y;
     
 	// Do stuff based on the character.
 	enum yytokentype ret = 0;
@@ -645,50 +642,147 @@ int tokenise(tokeniser_ctx_t *ctx) {
 	return TKN_GARBAGE;
 }
 
-// static void print_src(tokeniser_ctx_t *ctx, int line) {
-// 	if (ctx->use_fd) {
-// 		printf("TODO\n");
-// 	} else {
-// 		char *index = ctx->source;
-// 		line --;
-// 		for (int i = 0; i < ctx->source_len && line; i++) {
-// 			char *ptr = &ctx->source[i];
-// 			if (*ptr == '\r') {
-// 				if (ptr[1] == '\n') index = ptr + 2;
-// 				else index = ptr + 1;
-// 				line --;
-// 			} else if (*ptr == '\n') {
-// 				index = ptr + 1;
-// 				line --;
-// 			}
-// 		}
-// 		char *a = strchr(index, '\r');
-// 		char *b = strchr(index, '\n');
-// 		if (b < a || !a && b) {
-// 			a = b;
-// 		} else if (!a) {
-// 			a = index + strlen(index);
-// 		}
-// 		fwrite(index, 1, a - index, stdout);
-// 		fputc('\n', stdout);
-// 	}
-// }
+// Grab next non-space token.
+int tokenise(tokeniser_ctx_t *ctx) {
+	// Pre.
+	int i0, x0, y0;
+	// Get.
+	int tkn_id = tokenise_int(ctx, &i0, &x0, &y0);
+	if (!tkn_id) return 0;
+	// Post.
+	int i1 = ctx->index;
+	int x1 = ctx->x;
+	int y1 = ctx->y;
+	// Pos.
+	if (1) {
+		yylval.pos = (pos_t) {
+			.filename = ctx->filename,
+			.index0   = i0,
+			.index1   = i1+1,
+			.x0       = x0,
+			.y0       = y0,
+			.x1       = x1+1,
+			.y1       = y1
+		};
+	}
+	// Ret.
+	return tkn_id;
+}
 
-// static void print_pos_range(int x0, int x1) {
-// 	for (int i = 1; i < x0; i++) {
-// 		fputc(' ', stdout);
-// 	}
-// 	fputc('^', stdout);
-// 	for (int i = x0 + 1; i < x1; i++) {
-// 		fputc('~', stdout);
-// 	}
-// 	fputc('\n', stdout);
-// }
+static void print_src(tokeniser_ctx_t *ctx, int line, int x0, int x1) {
+	if (ctx->use_fd) {
+		// File descriptor source.
+		// Save the stream position.
+		long pos = ftell(ctx->fd);
+		fseek(ctx->fd, 0, SEEK_SET);
+		
+		// Find the line.
+		line --;
+		while (line && !feof(ctx->fd)) {
+			char c = fgetc(ctx->fd);
+			if (c == '\r') {
+				char next = fgetc(ctx->fd);
+				if (next != '\n') fseek(ctx->fd, -1, SEEK_CUR);
+				line --;
+			} else if (c == '\n') {
+				line --;
+			}
+		}
+		
+		// Find the line's length.
+		long line_start = ftell(ctx->fd);
+		while (!feof(ctx->fd)) {
+			char c = fgetc(ctx->fd);
+			if (c == '\r' || c == '\n') {
+				fseek(ctx->fd, -1, SEEK_CUR);
+				break;
+			}
+		}
+		long line_end = ftell(ctx->fd);
+		long line_len = line_end - line_start;
+		
+		// Print the line.
+		fseek(ctx->fd, line_start, SEEK_SET);
+		for (long i = 0; i < line_len; i++) {
+			char c = fgetc(ctx->fd);
+			if (i == x0 - 1) {
+				fputs("\x1b[91m", stderr);
+			}
+			if (c < 0x20 || c >= 0x7f) {
+				fputc(' ', stderr);
+			} else {
+				fputc(c, stderr);
+			}
+			if (i == x1 - 2) {
+				fputs("\x1b[0m", stderr);
+			}
+		}
+		
+		// Reset the stream position.
+		fseek(ctx->fd, pos, SEEK_SET);
+	} else {
+		// C-string source.
+		// Find the line.
+		char *index = ctx->source;
+		line --;
+		for (size_t i = 0; i < ctx->source_len && line; i++) {
+			char *ptr = &ctx->source[i];
+			if (*ptr == '\r') {
+				if (ptr[1] == '\n') index = ptr + 2;
+				else index = ptr + 1;
+				line --;
+			} else if (*ptr == '\n') {
+				index = ptr + 1;
+				line --;
+			}
+		}
+		
+		// Find line's length.
+		char *a = strchr(index, '\r');
+		char *b = strchr(index, '\n');
+		if (b < a || !a && b) {
+			a = b;
+		} else if (!a) {
+			a = index + strlen(index);
+		}
+		
+		// Print the line.
+		for (size_t i = 0; i < a - index; i++) {
+			if (i == x0 - 1) {
+				fputs("\x1b[91m", stderr);
+			}
+			if (index[i] < 0x20 || index[i] >= 0x7f) {
+				fputc(' ', stderr);
+			} else {
+				fputc(index[i], stderr);
+			}
+			if (i == x1 - 1) {
+				fputs("\x1b[0m", stderr);
+			}
+		}
+	}
+	fputs("\x1b[0m\n", stderr);
+}
+
+static void print_pos_range(int x0, int x1) {
+	for (int i = 1; i < x0; i++) {
+		fputc(' ', stderr);
+	}
+	fputc('^', stderr);
+	for (int i = x0 + 1; i < x1; i++) {
+		fputc('~', stderr);
+	}
+	fputc('\n', stderr);
+}
  
-// void report_error(parser_ctx_t *parser_ctx, char *type, pos_t pos, char *message) {
-// 	printf("%s in %s:%d:%d -> %d:%d: %s\n", type, pos.filename, pos.y0, pos.x0, pos.y1, pos.x1, message);
-// 	printf("%5d | ", pos.y0);
-// 	print_src(parser_ctx->tokeniser_ctx, pos.y0);
-// 	printf("      | ");
-// 	print_pos_range(pos.x0, pos.x1);
-// }
+void report_error(tokeniser_ctx_t *tokeniser_ctx, char *type, pos_t pos, char *message) {
+	fflush(stdout);
+	fprintf(stderr, "%s in %s:%d:%d: %s\n", type, pos.filename, pos.y0, pos.x0, message);
+	fprintf(stderr, "%5d | ", pos.y0);
+	print_src(tokeniser_ctx, pos.y0, pos.x0, pos.x1);
+	fprintf(stderr, "      | ");
+	fputs("\x1b[91m", stderr);
+	print_pos_range(pos.x0, pos.x1);
+	fputs("\x1b[0m", stderr);
+	fflush(stderr);
+}

@@ -102,6 +102,7 @@ struct stmt {
 };
 
 struct iasm_qual {
+	pos_t           pos;
 	bool            is_volatile;
 	bool            is_inline;
 	bool            is_goto;
@@ -151,6 +152,7 @@ struct iasm_regs {
 };
 
 struct iasm {
+	pos_t           pos;
 	strval_t        text;
 	iasm_regs_t    *inputs;
 	iasm_regs_t    *outputs;
@@ -177,6 +179,7 @@ struct stmts {
 };
 
 struct funcdef {
+	pos_t           pos;
 	// Return type.
 	var_type_t     *returns;
 	// Function name.

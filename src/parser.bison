@@ -93,7 +93,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 
 %type <simple_type> simple_type
 %type <idents> vardecls
-%type <pos> opt_int
+%type <pos> opt_int opt_signed
 
 // Precedence: lowest.
 

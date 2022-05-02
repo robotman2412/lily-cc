@@ -69,6 +69,8 @@ struct asm_ctx {
     asm_scope_t  global_scope;
     // The current scope.
     asm_scope_t *current_scope;
+    // The last global label emitted, if any.
+    asm_label_t  last_global_label;
     // Extra bits of context on an architecture basis.
     ASM_CTX_EXTRAS
     
@@ -79,6 +81,7 @@ struct asm_ctx {
     bool        is_inline;
     // The labels for temporary variables.
     char      **temp_labels;
+    
     // The usage status of each temporary variable.
     bool       *temp_usage;
     // The number of temporary variables in existence.
@@ -92,7 +95,7 @@ struct asm_ctx {
     // The current PC.
     address_t   pc;
     // The output file descriptor to be used.
-    int         out_fd;
+    FILE       *out_fd;
 };
 
 struct asm_sect {

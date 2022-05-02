@@ -28,6 +28,7 @@ void asm_init(asm_ctx_t *ctx) {
 	map_create(&ctx->global_scope.vars);
 	ctx->current_scope = &ctx->global_scope;
 	// Labels.
+	ctx->last_global_label = NULL;
 	ctx->labels      = (map_t *)      malloc(sizeof(map_t));
 	map_create(ctx->labels);
 	// Sections.
@@ -233,7 +234,7 @@ static inline asm_label_def_t *get_or_create_label(asm_ctx_t *ctx, char *label) 
 }
 
 // Writes label definitions to the current chunk.
-void asm_write_label(asm_ctx_t *ctx, char *label) {
+static void asm_write_label0(asm_ctx_t *ctx, char *label) {
 	DEBUG_GEN("%s:\n", label);
 	asm_label_def_t *def = get_or_create_label(ctx, label);
 	def->is_defined = true;
@@ -246,8 +247,31 @@ void asm_write_label(asm_ctx_t *ctx, char *label) {
 	DEBUG_ASM("d  %s:\n", label);
 }
 
+// Writes label definitions to the current chunk.
+void asm_write_label(asm_ctx_t *ctx, char *label) {
+	if (*label != '.') {
+		// This is a global label.
+		if (ctx->last_global_label) free(ctx->last_global_label);
+		ctx->last_global_label = strdup(label);
+		// Next!
+		asm_write_label0(ctx, label);
+	} else if (ctx->last_global_label) {
+		// Do some strcat first.
+		char *buf = malloc(strlen(label) + strlen(ctx->last_global_label) + 1);
+		*buf = 0;
+		strcat(buf, ctx->last_global_label);
+		strcat(buf, label);
+		asm_write_label0(ctx, buf);
+		free(buf);
+	} else {
+		// Warning.
+		printf("Warning: No global label written before sublabel '%s'!\n", label);
+		asm_write_label0(ctx, label);
+	}
+}
+
 // Writes label references to the current chunk.
-void asm_write_label_ref(asm_ctx_t *ctx, char *label, address_t offset, asm_label_ref_t mode) {
+static void asm_write_label_ref0(asm_ctx_t *ctx, char *label, address_t offset, asm_label_ref_t mode) {
 	get_or_create_label(ctx, label);
 	// New label reference chunk.
 	asm_append_chunk(ctx, ASM_CHUNK_LABEL_REF);
@@ -269,6 +293,26 @@ void asm_write_label_ref(asm_ctx_t *ctx, char *label, address_t offset, asm_labe
 	else
 		DEBUG_ASM("r    %s\n", label);
 #endif
+}
+
+// Writes label references to the current chunk.
+void asm_write_label_ref(asm_ctx_t *ctx, char *label, address_t offset, asm_label_ref_t mode) {
+	if (*label != '.') {
+		// Global label.
+		asm_write_label_ref0(ctx, label, offset, mode);
+	} else if (ctx->last_global_label) {
+		// Do some strcat first.
+		char *buf = malloc(strlen(label) + strlen(ctx->last_global_label) + 1);
+		*buf = 0;
+		strcat(buf, ctx->last_global_label);
+		strcat(buf, label);
+		asm_write_label_ref0(ctx, buf, offset, mode);
+		free(buf);
+	} else {
+		// Warning.
+		printf("Warning: No global label written before sublabel '%s'!\n", label);
+		asm_write_label_ref0(ctx, label, offset, mode);
+	}
 }
 
 // Writes zeroes.

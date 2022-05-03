@@ -19,7 +19,7 @@ echo "Building lilly-cc $ARCH v$VER"
 
 # Convert our grammar file to actual C code.
 echo "BISON src/parser.bison"
-bison src/parser.bison -v -Wnone -Wconflicts-sr -Wconflicts-rr -o src/parser.c --defines=src/parser.h || exit 1
+bison src/parser.bison -v -Wnone -Wcounterexamples -Wconflicts-sr -Wconflicts-rr -o src/parser.c --defines=src/parser.h || exit 1
 
 # Files to link.
 FILES=""

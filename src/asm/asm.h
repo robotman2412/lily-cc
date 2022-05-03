@@ -63,33 +63,37 @@ struct asm_ctx {
     gen_var_t  **regs_stored;
     
     /* ====== Miscellaneous ====== */
+    // Used for error reporting.
+    tokeniser_ctx_t *tokeniser_ctx;
+    // All the functions defined in the global scope.
+    map_t         functions;
     // All the labels that are defined or referenced.
-    map_t       *labels;
+    map_t        *labels;
     // The global scope.
-    asm_scope_t  global_scope;
+    asm_scope_t   global_scope;
     // The current scope.
-    asm_scope_t *current_scope;
+    asm_scope_t  *current_scope;
     // The last global label emitted, if any.
-    asm_label_t  last_global_label;
+    asm_label_t   last_global_label;
     // Extra bits of context on an architecture basis.
     ASM_CTX_EXTRAS
     
     /* ======== Function ========= */
     // The current function.
-    funcdef_t  *current_func;
+    funcdef_t    *current_func;
     // Whether or not the current function is an inlining.
-    bool        is_inline;
+    bool          is_inline;
     // The labels for temporary variables.
-    char      **temp_labels;
+    char        **temp_labels;
     
     // The usage status of each temporary variable.
-    bool       *temp_usage;
+    bool         *temp_usage;
     // The number of temporary variables in existence.
-    address_t   temp_num;
+    address_t     temp_num;
     // Number of last label in function.
-    address_t   last_label_no;
+    address_t     last_label_no;
     // Relative size of the stack.
-    address_t   stack_size;
+    address_t     stack_size;
     
     /* ===== Post-processing ===== */
     // The current PC.

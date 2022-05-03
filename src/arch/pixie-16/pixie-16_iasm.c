@@ -213,8 +213,8 @@ px_token_t px_iasm_lex(tokeniser_ctx_t *ctx) {
 	};
 }
 
-#define PX_ERROR_L(lex_ctx, pos, error) report_error(lex_ctx, "error", pos_merge(pos, pos_empty(lex_ctx)), error)
-#define PX_ERROR_P(lex_ctx, pos, error) report_error(lex_ctx, "error", pos, error)
+#define PX_ERROR_L(lex_ctx, pos, error) report_error(lex_ctx, E_ERROR, pos_merge(pos, pos_empty(lex_ctx)), error)
+#define PX_ERROR_P(lex_ctx, pos, error) report_error(lex_ctx, E_ERROR, pos, error)
 #define PX_ERROR(lex_ctx, error) PX_ERROR_P(lex_ctx, pos_empty(lex_ctx), error)
 #define TKN_EXPECT(lex_ctx, ex_type, error) { if (px_iasm_lex(lex_ctx).type != ex_type) { PX_ERROR(lex_ctx, "Expected '%s'.\n", error); goto nope; } }
 #define TKN_EXPECT_EOL(lex_ctx) {\

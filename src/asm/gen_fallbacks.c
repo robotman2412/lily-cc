@@ -85,7 +85,7 @@ gen_var_t *gen_expr_inline(asm_ctx_t *ctx, funcdef_t *callee,  size_t n_args, ge
 // Expression: Inline function entry. (stub)
 void gen_inline_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {}
 
-// Return statement for non-inlined functions. (stub)
+// Return statement for inlined functions. (stub)
 // retval is null for void returns.
 void gen_inline_return(asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *retval) {}
 #endif
@@ -140,7 +140,7 @@ bool gen_stmt(asm_ctx_t *ctx, void *ptr, bool is_stmts) {
 					.type = VAR_TYPE_COND
 				};
 				gen_var_t *cond = gen_expression(ctx, stmt->expr, &cond_hint);
-				return gen_if(ctx, cond, stmt->code_true, stmt->code_false);
+				return cond && gen_if(ctx, cond, stmt->code_true, stmt->code_false);
 			} break;
 			case STMT_TYPE_WHILE: {
 				gen_while(ctx, stmt->cond, stmt->code_true, false);
@@ -169,9 +169,7 @@ bool gen_stmt(asm_ctx_t *ctx, void *ptr, bool is_stmts) {
 			case STMT_TYPE_EXPR: {
 				// The expression.
 				gen_var_t *result = gen_expression(ctx, stmt->expr, NULL);
-				gen_unuse(ctx, result);
-				if (!result->owner)
-					free_gen_var(result);
+				if (result) gen_unuse(ctx, result);
 			} break;
 			case STMT_TYPE_IASM: {
 				// Inline assembly for the win!
@@ -698,8 +696,8 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 			// Constants are very simple.
 			gen_var_t *val = (gen_var_t *) malloc(sizeof(gen_var_t));
 			*val = (gen_var_t) {
-				.type = VAR_TYPE_CONST,
-				.iconst = expr->iconst
+				.type   = VAR_TYPE_CONST,
+				.iconst = expr->iconst,
 			};
 			return val;
 		} break;
@@ -709,12 +707,8 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 			gen_var_t *val = gen_get_variable(ctx, expr->ident->strval);
 			if (!val) {
 				// TODO: Some fix or error report goes here.
-				gen_var_t dummy = {
-					.type  = VAR_TYPE_LABEL,
-					.label = expr->ident->strval
-				};
-				val = COPY(&dummy, gen_var_t);
-				DEBUG_GEN("unknown \"%s\"\n", expr->ident->strval);
+				report_errorf(ctx->tokeniser_ctx, E_ERROR, expr->pos, "Identifier '%s' is undefined", expr->ident->strval);
+				return NULL;
 			}
 			val->owner = expr->ident->strval;
 			return val;
@@ -722,7 +716,7 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 		
 		case EXPR_TYPE_CALL: {
 			// TODO: check for inlining possibilities.
-			//gen_expr_call(ctx, NULL, expr->func, expr->args->num, expr->args->arr);
+			return gen_expr_call(ctx, NULL, expr->func, expr->args->num, expr->args->arr);
 		} break;
 		
 		case EXPR_TYPE_MATH1: {
@@ -731,7 +725,7 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 			if (oper == OP_DEREF && out_hint && out_hint->type == VAR_TYPE_PTR) {
 				// This happens when writing to a pointer dereference.
 				out_hint->ptr = gen_expression(ctx, expr->par_a, NULL);
-				return out_hint;
+				return out_hint->ptr ? out_hint : NULL;
 				
 			} else if (oper == OP_LOGIC_NOT) {
 				// Apply the "condition" output hint to logic not.
@@ -740,12 +734,12 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 				}, gen_var_t);
 				// And do the rest as usual.
 				gen_var_t *a = gen_expression(ctx, expr->par_a, cond_hint);
-				return gen_expr_math1(ctx, expr->oper, out_hint, a);
+				return a ? gen_expr_math1(ctx, expr->oper, out_hint, a) : NULL;
 				
 			} else {
 				// Simple expression.
 				gen_var_t *a = gen_expression(ctx, expr->par_a, out_hint);
-				return gen_expr_math1(ctx, expr->oper, out_hint, a);
+				return a ? gen_expr_math1(ctx, expr->oper, out_hint, a) : NULL;
 			}
 		} break;
 		
@@ -755,7 +749,10 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 				if (expr->par_a->type == EXPR_TYPE_IDENT) {
 					// Assignment to an identity (explicit variable).
 					gen_var_t *a = gen_expression(ctx, expr->par_a, NULL);
+					if (!a) return NULL;
 					gen_var_t *b = gen_expression(ctx, expr->par_b, a);
+					if (!b && a) gen_unuse(ctx, a);
+					if (!b) return NULL;
 					// Have the move performed.
 					gen_mov(ctx, a, b);
 					// Free up variables if necessary.
@@ -769,18 +766,35 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 					}, gen_var_t);
 					// Generate with the pointer hint.
 					gen_var_t *a = gen_expression(ctx, expr->par_a, ptr_hint);
+					if (!a) return NULL;
+					// Enforce that A is writable.
+					if (a->type == VAR_TYPE_COND || a->type == VAR_TYPE_CONST) {
+						// These aren't writable.
+						report_error(ctx->tokeniser_ctx, E_ERROR, expr->par_a->pos, "Left hand of an assignment must be assignable.");
+						gen_unuse(ctx, a);
+						return NULL;
+					}
 					gen_var_t *b = gen_expression(ctx, expr->par_b, NULL);
+					if (!b && a) gen_unuse(ctx, a);
+					if (!b) return NULL;
 					// Have the move performed.
 					gen_mov(ctx, a, b);
 					// Free up variables if necessary.
 					if (!gen_cmp(ctx, a, b)) gen_unuse(ctx, a);
+					if (a != ptr_hint) free(ptr_hint);
 					return a;
 				}
 			} else {
 				// Simple binary math (things like a * b, c + d, e & f, etc.)
 				gen_var_t *a   = gen_expression(ctx, expr->par_a, out_hint);
+				if (!a) return NULL;
 				gen_var_t *b   = gen_expression(ctx, expr->par_b, NULL);
+				if (!b && a) gen_unuse(ctx, a);
+				if (!b) return NULL;
 				gen_var_t *out = gen_expr_math2(ctx, expr->oper, out_hint, a, b);
+				if (!out && a) gen_unuse(ctx, a);
+				if (!out && b) gen_unuse(ctx, b);
+				if (!out) return NULL;
 				// Free up variables if necessary.
 				if (!gen_cmp(ctx, a, out)) gen_unuse(ctx, a);
 				if (!gen_cmp(ctx, b, out)) gen_unuse(ctx, b);
@@ -789,6 +803,7 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 		} break;
 	}
 	printf("\n\nOH SHIT\n");
+	exit(23);
 }
 #endif
 

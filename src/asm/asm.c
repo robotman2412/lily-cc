@@ -22,6 +22,7 @@ void asm_init(asm_ctx_t *ctx) {
 		ctx->regs_stored[i] = NULL;
 	}
 	// Scopeth.
+	map_create(&ctx->functions);
 	ctx->global_scope.parent    = NULL;
 	ctx->global_scope.num       = 0;
 	ctx->global_scope.local_num = 0;

@@ -310,8 +310,6 @@ static const keyw_map_t keyw_map[] = {
 	(keyw_map_t) { .keyw=TKN_WHILE, .str="while" },
 	(keyw_map_t) { .keyw=TKN_RETURN, .str="return" },
 	(keyw_map_t) { .keyw=TKN_ASM, .str="asm" },
-	(keyw_map_t) { .keyw=TKN_AUTO, .str="auto" },
-	(keyw_map_t) { .keyw=TKN_FUNC, .str="func" },
 	(keyw_map_t) { .keyw=TKN_GOTO, .str="goto" },
 	(keyw_map_t) { .keyw=TKN_VOLATILE, .str="volatile" },
 	(keyw_map_t) { .keyw=TKN_INLINE, .str="inline" },
@@ -654,22 +652,20 @@ int tokenise(tokeniser_ctx_t *ctx) {
 	int x1 = ctx->x;
 	int y1 = ctx->y;
 	// Pos.
-	if (1) {
-		yylval.pos = (pos_t) {
-			.filename = ctx->filename,
-			.index0   = i0,
-			.index1   = i1+1,
-			.x0       = x0,
-			.y0       = y0,
-			.x1       = x1+1,
-			.y1       = y1
-		};
-	}
+	yylval.pos = (pos_t) {
+		.filename = ctx->filename,
+		.index0   = i0,
+		.index1   = i1+1,
+		.x0       = x0,
+		.y0       = y0,
+		.x1       = x1+1,
+		.y1       = y1
+	};
 	// Ret.
 	return tkn_id;
 }
 
-static void print_src(tokeniser_ctx_t *ctx, int line, int x0, int x1) {
+static void print_src(tokeniser_ctx_t *ctx, int line, int x0, int x1, char *col) {
 	if (ctx->use_fd) {
 		// File descriptor source.
 		// Save the stream position.
@@ -706,7 +702,7 @@ static void print_src(tokeniser_ctx_t *ctx, int line, int x0, int x1) {
 		for (long i = 0; i < line_len; i++) {
 			char c = fgetc(ctx->fd);
 			if (i == x0 - 1) {
-				fputs("\x1b[91m", stderr);
+				fputs(col, stderr);
 			}
 			if (c < 0x20 || c >= 0x7f) {
 				fputc(' ', stderr);
@@ -714,7 +710,7 @@ static void print_src(tokeniser_ctx_t *ctx, int line, int x0, int x1) {
 				fputc(c, stderr);
 			}
 			if (i == x1 - 2) {
-				fputs("\x1b[0m", stderr);
+				fputs("\033[0m", stderr);
 			}
 		}
 		
@@ -749,7 +745,7 @@ static void print_src(tokeniser_ctx_t *ctx, int line, int x0, int x1) {
 		// Print the line.
 		for (size_t i = 0; i < a - index; i++) {
 			if (i == x0 - 1) {
-				fputs("\x1b[91m", stderr);
+				fputs(col, stderr);
 			}
 			if (index[i] < 0x20 || index[i] >= 0x7f) {
 				fputc(' ', stderr);
@@ -757,11 +753,11 @@ static void print_src(tokeniser_ctx_t *ctx, int line, int x0, int x1) {
 				fputc(index[i], stderr);
 			}
 			if (i == x1 - 1) {
-				fputs("\x1b[0m", stderr);
+				fputs("\033[0m", stderr);
 			}
 		}
 	}
-	fputs("\x1b[0m\n", stderr);
+	fputs("\033[0m\n", stderr);
 }
 
 static void print_pos_range(int x0, int x1) {
@@ -775,14 +771,34 @@ static void print_pos_range(int x0, int x1) {
 	fputc('\n', stderr);
 }
  
-void report_error(tokeniser_ctx_t *tokeniser_ctx, char *type, pos_t pos, char *message) {
+void report_error(tokeniser_ctx_t *tokeniser_ctx, error_type_t e_type, pos_t pos, char *message) {
+	char *col  = "\033[91m";
+	char *type = "error";
+	
+	switch (e_type) {
+		case E_ERROR:
+		default:
+			break;
+		case E_SYNTAX:
+			type = "syntax error";
+			break;
+		case E_WARN:
+			type = "warning";
+			col  = "\033[93m";
+			break;
+		case E_NOTE:
+			type = "note";
+			col  = "\033[96m";
+			break;
+	}
+	
 	fflush(stdout);
-	fprintf(stderr, "%s in %s:%d:%d: %s\n", type, pos.filename, pos.y0, pos.x0, message);
+	fprintf(stderr, "in %s:%d:%d %s%s:\033[0m %s\n", pos.filename, pos.y0, pos.x0, col, type, message);
 	fprintf(stderr, "%5d | ", pos.y0);
-	print_src(tokeniser_ctx, pos.y0, pos.x0, pos.x1);
+	print_src(tokeniser_ctx, pos.y0, pos.x0, pos.x1, col);
 	fprintf(stderr, "      | ");
-	fputs("\x1b[91m", stderr);
+	fputs(col, stderr);
 	print_pos_range(pos.x0, pos.x1);
-	fputs("\x1b[0m", stderr);
+	fputs("\033[0m", stderr);
 	fflush(stderr);
 }

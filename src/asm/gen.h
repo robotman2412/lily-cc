@@ -103,9 +103,9 @@ char      *gen_iasm_var      (asm_ctx_t *ctx, gen_var_t *var,     iasm_reg_t *as
 gen_var_t *gen_expression    (asm_ctx_t *ctx, expr_t    *expr,    gen_var_t *out_hint);
 // Expression: Function call.
 // args may be null for zero arguments.
-gen_var_t *gen_expr_call     (asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *callee,   size_t     n_args, gen_var_t **args);
+gen_var_t *gen_expr_call     (asm_ctx_t *ctx, funcdef_t *funcdef, expr_t    *callee,   size_t     n_args, expr_t   *args);
 // Expression: Binary math operation.
-gen_var_t *gen_expr_math2    (asm_ctx_t *ctx, oper_t     oper,    gen_var_t *out_hint, gen_var_t *a,      gen_var_t  *b);
+gen_var_t *gen_expr_math2    (asm_ctx_t *ctx, oper_t     oper,    gen_var_t *out_hint, gen_var_t *a,      gen_var_t *b);
 // Expression: Unary math operation.
 gen_var_t *gen_expr_math1    (asm_ctx_t *ctx, oper_t     oper,    gen_var_t *out_hint, gen_var_t *a);
 

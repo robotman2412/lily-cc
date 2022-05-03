@@ -235,11 +235,18 @@ iasm_regs_t iasm_regs_one  (iasm_reg_t  *iasm_reg);
 // An empty list of identities.
 idents_t    idents_empty   ();
 // Concatenate to a list of identities.
-idents_t    idents_cat     (idents_t      *idents, simple_type_t *type, strval_t *ident);
+idents_t    idents_cat     (idents_t      *idents, int           *type, strval_t *ident);
 // A list of one identity.
-idents_t    idents_one     (simple_type_t *type,   strval_t      *ident);
+idents_t    idents_one     (int           *type,   strval_t      *ident);
 // Set the type of all identities contained.
-idents_t    idents_settype (idents_t      *idents, simple_type_t *type);
+idents_t    idents_settype (idents_t      *idents, simple_type_t  type);
+
+// An empty list of expressions.
+exprs_t     exprs_empty    ();
+// A list of one expression.
+exprs_t     exprs_one      (expr_t   *expr);
+// Concatenate to a list of expressions.
+exprs_t     exprs_cat      (exprs_t  *exprs, expr_t *expr);
 
 // Numeric constant expression.
 expr_t      expr_icnst     (ival_t   *val);

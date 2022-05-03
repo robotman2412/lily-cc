@@ -8,7 +8,15 @@ struct pos;
 typedef struct tokeniser_ctx tokeniser_ctx_t;
 typedef struct pos pos_t;
 
+typedef enum {
+	E_ERROR,
+	E_SYNTAX,
+	E_WARN,
+	E_NOTE,
+} error_type_t;
+
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
 
 // Contins position information for tokens.
@@ -39,8 +47,16 @@ struct tokeniser_ctx {
 
 pos_t pos_merge(pos_t one, pos_t two);
 pos_t pos_empty(tokeniser_ctx_t *ctx);
-void  print_pos(tokeniser_ctx_t *ctx, pos_t pos);
-void  report_error(tokeniser_ctx_t *parser_ctx, char *type, pos_t pos, char *message);
+// void  print_pos(tokeniser_ctx_t *ctx, pos_t pos);
+void  report_error(tokeniser_ctx_t *ctx, error_type_t type, pos_t pos, char *message);
+
+#define report_errorf(ctx, type, pos, ...) do{ \
+		size_t len = snprintf(NULL, 0, __VA_ARGS__); \
+		char  *buf = malloc(len); \
+		sprintf(buf, __VA_ARGS__); \
+		report_error(ctx, type, pos, buf); \
+		free(buf); \
+	} while(0)
 
 // Initialise a context, given c-string.
 void tokeniser_init_cstr(tokeniser_ctx_t *ctx, char *raw);

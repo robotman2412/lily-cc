@@ -370,7 +370,7 @@ void px_mov_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest) {
 // Creates MATH1 instructions.
 gen_var_t *px_math1(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_var_t *a) {
 	gen_var_t *output = out_hint;
-	address_t n_words = 1;
+	address_t n_words = 1; //a->ctype->size;
 	bool      do_copy = !gen_cmp(ctx, output, a) && opcode != PX_OP_CMP1;
 	if (!output || do_copy) {
 		output = px_get_tmp(ctx, n_words, true);
@@ -492,7 +492,7 @@ gen_var_t *px_math1(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 // Creates MATH2 instructions.
 gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_var_t *a, gen_var_t *b) {
 	gen_var_t *output = out_hint;
-	address_t n_words = 1;
+	address_t n_words = 1; //a->ctype->size;
 	bool      do_copy = !gen_cmp(ctx, output, a) && opcode != PX_OP_CMP;
 	if (!output || do_copy) {
 		output = px_get_tmp(ctx, n_words, true);
@@ -828,7 +828,7 @@ char *gen_iasm_var(asm_ctx_t *ctx, gen_var_t *var, iasm_reg_t *reg) {
 
 // Expression: Function call.
 // args may be null for zero arguments.
-gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *callee, size_t n_args, gen_var_t **args) {
+gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, size_t n_args, expr_t *args) {
 	// TODO.
 	gen_var_t dummy = {
 		.type   = VAR_TYPE_CONST,

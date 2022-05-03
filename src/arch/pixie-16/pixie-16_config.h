@@ -7,8 +7,8 @@
 #define ARCH_ID "Pixie 16"
 
 // Endianness.
-// Define BIG_ENDIAN instead if your machine is big endian.
-#define LITTLE_ENDIAN
+// Define TARGET_BIG_ENDIAN instead if your machine is big endian.
+#define TARGET_LITTLE_ENDIAN
 
 // Word sizes.
 #define WORD_BITS   16

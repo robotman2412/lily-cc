@@ -247,6 +247,7 @@ asm_ctx_t *compile_c(char *filename, FILE *file) {
 	tokeniser_init_file(&tokeniser_ctx, file);
 	tokeniser_ctx.filename = filename;
 	asm_init(&asm_ctx);
+	asm_ctx.tokeniser_ctx = &tokeniser_ctx;
 	
 	// Compile some CRAP.
 	yyparse(&ctx);
@@ -262,6 +263,7 @@ asm_ctx_t *assemble_s(char *filename, FILE *file) {
 	tokeniser_init_file(&tokeniser_ctx, file);
 	tokeniser_ctx.filename = filename;
 	asm_init(&asm_ctx);
+	asm_ctx.tokeniser_ctx = &tokeniser_ctx;
 	
 	// Compile some CRAP.
 	gen_asm_file(&asm_ctx, &tokeniser_ctx);
@@ -275,11 +277,40 @@ int yylex(parser_ctx_t *ctx) {
 }
 
 void yyerror(parser_ctx_t *ctx, char *msg) {
-	report_error(ctx->tokeniser_ctx, "error", yylval.pos, msg);
+	report_error(ctx->tokeniser_ctx, E_ERROR, yylval.pos, msg);
+}
+
+// Determines whether two separate definitions of a function are incompatible with each other.
+static bool func_incompatible(parser_ctx_t *ctx, funcdef_t *func, funcdef_t *old) {
+	// Two different implementations are always incompatible.
+	if (func->stmts && old->stmts) return true;
+	
+	// Otherwise, check for parameter equality.
+	if (func->args.num != old->args.num) return true;
+	for (size_t i = 0; i < func->args.num; i++) {
+		// TODO: Equality check.
+	}
+	
+	return false;
 }
 
 // Process a function.
-void function_added(parser_ctx_t *parser_ctx, funcdef_t *func) {
-	gen_function(parser_ctx->asm_ctx, func);
+void function_added(parser_ctx_t *ctx, funcdef_t *func) {
+	// Defined.
+	funcdef_t *repl = map_get(&ctx->asm_ctx->functions, func->ident.strval);
+	// Check for pre-existing definitions.
+	if (repl && func_incompatible(ctx, func, repl)) {
+		// Exclaim the error.
+		report_errorf(ctx->tokeniser_ctx, E_ERROR, func->ident.pos, "Conflicting definitions of '%s'.", func->ident.strval);
+		report_errorf(ctx->tokeniser_ctx, E_NOTE,  repl->ident.pos, "'%s' first defined here.", func->ident.strval);
+		// Abort code generation.
+		return;
+	} else {
+		// Put in MAP.
+		map_set(&ctx->asm_ctx->functions, func->ident.strval, func);
+	}
+	// Gen some CODE boi.
+	if (func->stmts)
+		gen_function(ctx->asm_ctx, func);
 }
 

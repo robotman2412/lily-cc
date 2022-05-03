@@ -3,7 +3,7 @@
 #include <malloc.h>
 
 // Incomplete function definition (without code).
-funcdef_t funcdef_def (strval_t *ident, idents_t *args) {
+funcdef_t funcdef_def(strval_t *ident, idents_t *args) {
 	return (funcdef_t) {
 		.ident = *ident,
 		.args  = *args,
@@ -164,7 +164,7 @@ idents_t idents_empty() {
 }
 
 // Concatenate to a list of identities.
-idents_t idents_cat(idents_t *idents, simple_type_t *s_type, strval_t *name) {
+idents_t idents_cat(idents_t *idents, int *s_type, strval_t *name) {
 	idents->num ++;
 	idents->arr = realloc(idents->arr, idents->num * sizeof(ident_t));
 	var_type_t type;
@@ -185,7 +185,7 @@ idents_t idents_cat(idents_t *idents, simple_type_t *s_type, strval_t *name) {
 }
 
 // A list of one identity.
-idents_t idents_one(simple_type_t *s_type, strval_t *name) {
+idents_t idents_one(int *s_type, strval_t *name) {
 	var_type_t type;
 	if (s_type) {
 		type = (var_type_t) {
@@ -207,16 +207,41 @@ idents_t idents_one(simple_type_t *s_type, strval_t *name) {
 }
 
 // Set the type of all identities contained.
-idents_t idents_settype(idents_t *idents, simple_type_t *s_type) {
+idents_t idents_settype(idents_t *idents, simple_type_t s_type) {
 	var_type_t type = {
 		.category    = TYPE_CAT_SIMPLE,
 		.is_complete = true,
-		.simple_type = *s_type,
-		.size        = CSIZE_SIMPLE(*s_type)
+		.simple_type = s_type,
+		.size        = CSIZE_SIMPLE(s_type)
 	};
 	for (size_t i = 0; i < idents->num; i++) {
 		idents->arr[i].type = COPY(&type, var_type_t);
 	}
+}
+
+
+// An empty list of expressions.
+exprs_t exprs_empty() {
+	return (exprs_t) {
+		.arr = NULL,
+		.num = 0
+	};
+}
+
+// A list of one expression.
+exprs_t exprs_one(expr_t *expr) {
+	return (exprs_t) {
+		.arr = COPY(expr, expr_t),
+		.num = 1
+	};
+}
+
+// Concatenate to a list of expressions.
+exprs_t exprs_cat(exprs_t *exprs, expr_t *expr) {
+	exprs->num ++;
+	exprs->arr = realloc(exprs->arr, exprs->num * sizeof(expr_t));
+	exprs->arr[exprs->num - 1] = *expr;
+	return *exprs;
 }
 
 

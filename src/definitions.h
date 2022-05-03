@@ -56,13 +56,13 @@
 #error "Please define either CHAR_IS_SIGNED or CHAR_IS_UNSIGNED in arch_config.h"
 #endif
 
-#define IS_LITTLE_ENDIAN defined(LITTLE_ENDIAN)
-#define IS_BIG_ENDIAN    defined(BIG_ENDIAN)
+#define IS_LITTLE_ENDIAN defined(TARGET_LITTLE_ENDIAN)
+#define IS_BIG_ENDIAN    defined(TARGET_BIG_ENDIAN)
 
-#if defined(LITTLE_ENDIAN) && defined(BIG_ENDIAN)
+#if defined(TARGET_LITTLE_ENDIAN) && defined(TARGET_BIG_ENDIAN)
 #error "Cannot be both LITTLE_ENDIAN and BIG_ENDIAN, change in arch_config.h"
 #endif
-#if !defined(LITTLE_ENDIAN) && !defined(BIG_ENDIAN)
+#if !defined(TARGET_LITTLE_ENDIAN) && !defined(TARGET_BIG_ENDIAN)
 #error "Please define either LITTLE_ENDIAN or BIG_ENDIAN in arch_config.h"
 #endif
 

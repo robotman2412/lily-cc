@@ -8,10 +8,10 @@
 #include <string.h>
 #include <stdlib.h>
 
-static void asm_ppc_pass1       (asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data);
-static void output_native_reduce(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data);
+static void asm_ppc_pass1       (asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args);
+static void output_native_reduce(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args);
 
-static inline void asm_ppc_iterate(asm_ctx_t *ctx, size_t n_sect, char **sect_ids, asm_sect_t **sects, asm_ppc_pass_t func, bool use_align) {
+void asm_ppc_iterate(asm_ctx_t *ctx, size_t n_sect, char **sect_ids, asm_sect_t **sects, asm_ppc_pass_t func, void *func_args, bool use_align) {
 	// Iterate over the sections.
 	for (size_t i = 0; i < n_sect; i++) {
 		asm_sect_t *sect = sects[i];
@@ -41,7 +41,7 @@ static inline void asm_ppc_iterate(asm_ctx_t *ctx, size_t n_sect, char **sect_id
 		size_t index = 0;
 		while (index < sect->chunks_len) {
 			size_t len = *(size_t *) (sect->chunks + index + 1);
-			(*func)(ctx, sect->chunks[index], len, sect->chunks + index + sizeof(size_t) + 1);
+			(*func)(ctx, sect->chunks[index], len, sect->chunks + index + sizeof(size_t) + 1, func_args);
 			index += len + sizeof(size_t) + 1;
 		}
 	}
@@ -55,11 +55,11 @@ void asm_ppc(asm_ctx_t *ctx) {
 	char **sect_ids    = ctx->sections->strings;
 	asm_sect_t **sects = (asm_sect_t **) ctx->sections->values;
 	// Pass 1: label resolution.
-	asm_ppc_iterate(ctx, n_sect, sect_ids, sects, &asm_ppc_pass1, false);
+	asm_ppc_iterate(ctx, n_sect, sect_ids, sects, &asm_ppc_pass1, NULL, false);
 }
 
 // Pass 1: label resolution.
-static void asm_ppc_pass1(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data) {
+static void asm_ppc_pass1(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
 	// printf("%02x\n", chunk_type);
 	if (chunk_type == ASM_CHUNK_ZERO) {
 		ctx->pc += asm_read_numb(chunk_data, sizeof(address_t));
@@ -111,7 +111,7 @@ void output_native(asm_ctx_t *ctx) {
 	char **sect_ids    = ctx->sections->strings;
 	asm_sect_t **sects = (asm_sect_t **) ctx->sections->values;
 	// Iterate to output.
-	asm_ppc_iterate(ctx, n_sect, sect_ids, sects, &output_native_reduce, true);
+	asm_ppc_iterate(ctx, n_sect, sect_ids, sects, &output_native_reduce, NULL, true);
 }
 
 static inline void output_native_padd(FILE *fd, address_t n) {
@@ -129,7 +129,7 @@ static inline void output_native_padd(FILE *fd, address_t n) {
 }
 
 // Reduce: write everything we know as a chunk of machine code.
-static void output_native_reduce(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data) {
+static void output_native_reduce(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
 	fseek(ctx->out_fd, 0, SEEK_END);
 	long pos = ftell(ctx->out_fd);
 	if (pos >= 0 && pos < ctx->pc) {

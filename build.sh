@@ -19,13 +19,13 @@ echo "Building lilly-cc $ARCH v$VER"
 
 # Convert our grammar file to actual C code.
 echo "BISON src/parser.bison"
-bison src/parser.bison -v -Wnone -Wcounterexamples -Wconflicts-sr -Wconflicts-rr -o src/parser.c --defines=src/parser.h || exit 1
+bison src/parser.bison -v -Wnone -Wconflicts-sr -Wconflicts-rr -o src/parser.c --defines=src/parser.h || exit 1
 
 # Files to link.
 FILES=""
 
 # Options passed to compiler
-CCOPTIONS="-Isrc -Isrc/debug -Isrc/arch/$ARCH -Isrc/asm -Ibuild"
+CCOPTIONS="-Isrc -Isrc/debug -Isrc/arch/$ARCH -Isrc/asm -Isrc/objects -Ibuild"
 
 for i in $*; do
 	case $i in
@@ -70,9 +70,12 @@ CC asm/gen_util.c
 CC asm/gen_fallbacks.c
 CC asm/gen_preproc.c
 
+CC objects/objects.c
+CC objects/elf.c
+
 # Compile all the architecture-specific files.
 for i in $(find src/arch/$ARCH/ -type f -name "*.c"); do
-	CC arch/$ARCH/${i##*/}
+	CC "arch/$ARCH/${i##*/}"
 done
 
 CC debug/pront.c

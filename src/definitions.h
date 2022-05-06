@@ -46,18 +46,12 @@
 #   define DEBUG_PRE(...) do{}while(0)
 #endif
 
-#define IS_CHAR_SIGNED   defined(CHAR_IS_SIGNED)
-#define IS_CHAR_UNSIGNED defined(CHAR_IS_UNSIGNED)
-
 #if defined(CHAR_IS_SIGNED) && defined(CHAR_IS_UNSIGNED)
 #error "Cannot be both CHAR_IS_SIGNED and CHAR_IS_UNSIGNED, change in arch_config.h"
 #endif
 #if !defined(CHAR_IS_SIGNED) && !defined(CHAR_IS_UNSIGNED)
 #error "Please define either CHAR_IS_SIGNED or CHAR_IS_UNSIGNED in arch_config.h"
 #endif
-
-#define IS_LITTLE_ENDIAN defined(TARGET_LITTLE_ENDIAN)
-#define IS_BIG_ENDIAN    defined(TARGET_BIG_ENDIAN)
 
 #if defined(TARGET_LITTLE_ENDIAN) && defined(TARGET_BIG_ENDIAN)
 #error "Cannot be both LITTLE_ENDIAN and BIG_ENDIAN, change in arch_config.h"
@@ -74,6 +68,21 @@
 #endif
 #ifndef ADDR_BITS
 #error "Please define ADDR_BITS in arch_config.h"
+#endif
+
+#ifdef CHAR_IS_SIGNED
+#define IS_CHAR_SIGNED 1
+#define IS_CHAR_UNSIGNED 0
+#else
+#define IS_CHAR_SIGNED 0
+#define IS_CHAR_UNSIGNED 1
+#endif
+#ifdef TARGET_LITTLE_ENDIAN
+#define IS_LITTLE_ENDIAN 1
+#define IS_BIG_ENDIAN 0
+#else
+#define IS_LITTLE_ENDIAN 0
+#define IS_BIG_ENDIAN 1
 #endif
 
 /* ==== Word sizes ==== */

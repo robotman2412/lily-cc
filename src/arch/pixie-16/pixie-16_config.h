@@ -6,6 +6,10 @@
 
 #define ARCH_ID "Pixie 16"
 
+// Specifies to the ELF writer that the machine type is 0.
+// Optional definition.
+#define ELF_MACHINE 0x00
+
 // Endianness.
 // Define TARGET_BIG_ENDIAN instead if your machine is big endian.
 #define TARGET_LITTLE_ENDIAN

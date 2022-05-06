@@ -8,7 +8,7 @@
 
 // Endianness.
 // Define BIG_ENDIAN instead if your machine is big endian.
-#define LITTLE_ENDIAN
+#define TARGET_LITTLE_ENDIAN
 
 // Word sizes.
 #define WORD_BITS    8

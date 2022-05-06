@@ -7,7 +7,7 @@
 #define ARCH_ID "template"
 
 // Endianness.
-#define LITTLE_ENDIAN
+#define TARGET_LITTLE_ENDIAN
 
 // Word sizes.
 #define WORD_BITS 16

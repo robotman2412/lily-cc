@@ -134,26 +134,26 @@ opt_signed:		"signed"									{$$=$1;}
 |				%empty										{$$=pos_empty(ctx->tokeniser_ctx);};
 
 // Used to disambiguate the presense of "long".
-simple_long:	opt_int										{$$.pos=$1; $$.ival=CTYPE_S_LONG;}
-|				"double"									{$$.pos=$1; $$.ival=CTYPE_LONG_DOUBLE;}
-|				"long" opt_int								{$$.pos=pos_merge($1, $2); $$.ival=CTYPE_S_LONGER;};
+simple_long:	opt_int										{$$.pos=$1; $$.ival=STYPE_S_LONG;}
+|				"double"									{$$.pos=$1; $$.ival=STYPE_LONG_DOUBLE;}
+|				"long" opt_int								{$$.pos=pos_merge($1, $2); $$.ival=STYPE_S_LONGER;};
 // Simple types: Non-pointer, non-array types.
-simple_type:	"char"										{$$.pos=$1; $$.ival=CTYPE_CHAR;}
-|				"signed" "char"								{$$.pos=pos_merge($1, $2); $$.ival=CTYPE_S_CHAR;}
-|				"unsigned" "char"							{$$.pos=pos_merge($1, $2); $$.ival=CTYPE_U_CHAR;}
-|				opt_signed "short" opt_int					{$$.pos=pos_merge($1, $3); $$.ival=CTYPE_S_SHORT;}
-|				opt_signed "int"							{$$.pos=pos_merge($1, $2); $$.ival=CTYPE_S_INT;}
-|				"signed" "long" opt_int						{$$.pos=pos_merge($1, $3); $$.ival=CTYPE_S_LONG;}
+simple_type:	"char"										{$$.pos=$1; $$.ival=STYPE_CHAR;}
+|				"signed" "char"								{$$.pos=pos_merge($1, $2); $$.ival=STYPE_S_CHAR;}
+|				"unsigned" "char"							{$$.pos=pos_merge($1, $2); $$.ival=STYPE_U_CHAR;}
+|				opt_signed "short" opt_int					{$$.pos=pos_merge($1, $3); $$.ival=STYPE_S_SHORT;}
+|				opt_signed "int"							{$$.pos=pos_merge($1, $2); $$.ival=STYPE_S_INT;}
+|				"signed" "long" opt_int						{$$.pos=pos_merge($1, $3); $$.ival=STYPE_S_LONG;}
 |				"long" simple_long							{$$=$2; $$.pos=pos_merge($1, $2.pos);}
-|				"signed" "long" "long" opt_int				{$$.pos=pos_merge($1, $4); $$.ival=CTYPE_S_LONGER;}
-|				"unsigned" "short" opt_int					{$$.pos=pos_merge($1, $3); $$.ival=CTYPE_U_SHORT;}
-|				"unsigned" "int"							{$$.pos=pos_merge($1, $2); $$.ival=CTYPE_U_INT;}
-|				"unsigned" "long" opt_int					{$$.pos=pos_merge($1, $3); $$.ival=CTYPE_U_LONG;}
-|				"unsigned" "long" "long" opt_int			{$$.pos=pos_merge($1, $4); $$.ival=CTYPE_U_LONGER;}
-|				"float"										{$$.pos=$1; $$.ival=CTYPE_FLOAT;}
-|				"double"									{$$.pos=$1; $$.ival=CTYPE_DOUBLE;}
-|				"_Bool"										{$$.pos=$1; $$.ival=CTYPE_BOOL;}
-|				"void"										{$$.pos=$1; $$.ival=CTYPE_VOID;};
+|				"signed" "long" "long" opt_int				{$$.pos=pos_merge($1, $4); $$.ival=STYPE_S_LONGER;}
+|				"unsigned" "short" opt_int					{$$.pos=pos_merge($1, $3); $$.ival=STYPE_U_SHORT;}
+|				"unsigned" "int"							{$$.pos=pos_merge($1, $2); $$.ival=STYPE_U_INT;}
+|				"unsigned" "long" opt_int					{$$.pos=pos_merge($1, $3); $$.ival=STYPE_U_LONG;}
+|				"unsigned" "long" "long" opt_int			{$$.pos=pos_merge($1, $4); $$.ival=STYPE_U_LONGER;}
+|				"float"										{$$.pos=$1; $$.ival=STYPE_FLOAT;}
+|				"double"									{$$.pos=$1; $$.ival=STYPE_DOUBLE;}
+|				"_Bool"										{$$.pos=$1; $$.ival=STYPE_BOOL;}
+|				"void"										{$$.pos=$1; $$.ival=STYPE_VOID;};
 
 // A function definition (with code).
 funcdef:		simple_type TKN_IDENT "(" opt_params ")"

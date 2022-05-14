@@ -1714,55 +1714,55 @@ yyreduce:
 
   case 10:
 #line 137 "src/parser.bison"
-                                                                                                {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=CTYPE_S_LONG;}
+                                                                                                {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=STYPE_S_LONG;}
 #line 1719 "src/parser.c"
     break;
 
   case 11:
 #line 138 "src/parser.bison"
-                                                                                                                {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=CTYPE_LONG_DOUBLE;}
+                                                                                                                {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=STYPE_LONG_DOUBLE;}
 #line 1725 "src/parser.c"
     break;
 
   case 12:
 #line 139 "src/parser.bison"
-                                                                                                        {(yyval.simple_type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=CTYPE_S_LONGER;}
+                                                                                                        {(yyval.simple_type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_S_LONGER;}
 #line 1731 "src/parser.c"
     break;
 
   case 13:
 #line 141 "src/parser.bison"
-                                                                                                {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=CTYPE_CHAR;}
+                                                                                                {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=STYPE_CHAR;}
 #line 1737 "src/parser.c"
     break;
 
   case 14:
 #line 142 "src/parser.bison"
-                                                                                                        {(yyval.simple_type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=CTYPE_S_CHAR;}
+                                                                                                        {(yyval.simple_type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_S_CHAR;}
 #line 1743 "src/parser.c"
     break;
 
   case 15:
 #line 143 "src/parser.bison"
-                                                                                                        {(yyval.simple_type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=CTYPE_U_CHAR;}
+                                                                                                        {(yyval.simple_type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_U_CHAR;}
 #line 1749 "src/parser.c"
     break;
 
   case 16:
 #line 144 "src/parser.bison"
-                                                                                                {(yyval.simple_type).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=CTYPE_S_SHORT;}
+                                                                                                {(yyval.simple_type).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_S_SHORT;}
 #line 1755 "src/parser.c"
     break;
 
   case 17:
 #line 145 "src/parser.bison"
-                                                                                                        {(yyval.simple_type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=CTYPE_S_INT;}
+                                                                                                        {(yyval.simple_type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_S_INT;}
 #line 1761 "src/parser.c"
     break;
 
   case 18:
 #line 146 "src/parser.bison"
-                                                                                                {(yyval.simple_type).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=CTYPE_S_LONG;}
+                                                                                                {(yyval.simple_type).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_S_LONG;}
 #line 1767 "src/parser.c"
     break;
 
@@ -1774,55 +1774,55 @@ yyreduce:
 
   case 20:
 #line 148 "src/parser.bison"
-                                                                                        {(yyval.simple_type).pos=pos_merge((yyvsp[-3].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=CTYPE_S_LONGER;}
+                                                                                        {(yyval.simple_type).pos=pos_merge((yyvsp[-3].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_S_LONGER;}
 #line 1779 "src/parser.c"
     break;
 
   case 21:
 #line 149 "src/parser.bison"
-                                                                                                {(yyval.simple_type).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=CTYPE_U_SHORT;}
+                                                                                                {(yyval.simple_type).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_U_SHORT;}
 #line 1785 "src/parser.c"
     break;
 
   case 22:
 #line 150 "src/parser.bison"
-                                                                                                        {(yyval.simple_type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=CTYPE_U_INT;}
+                                                                                                        {(yyval.simple_type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_U_INT;}
 #line 1791 "src/parser.c"
     break;
 
   case 23:
 #line 151 "src/parser.bison"
-                                                                                                {(yyval.simple_type).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=CTYPE_U_LONG;}
+                                                                                                {(yyval.simple_type).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_U_LONG;}
 #line 1797 "src/parser.c"
     break;
 
   case 24:
 #line 152 "src/parser.bison"
-                                                                                        {(yyval.simple_type).pos=pos_merge((yyvsp[-3].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=CTYPE_U_LONGER;}
+                                                                                        {(yyval.simple_type).pos=pos_merge((yyvsp[-3].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_U_LONGER;}
 #line 1803 "src/parser.c"
     break;
 
   case 25:
 #line 153 "src/parser.bison"
-                                                                                                                {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=CTYPE_FLOAT;}
+                                                                                                                {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=STYPE_FLOAT;}
 #line 1809 "src/parser.c"
     break;
 
   case 26:
 #line 154 "src/parser.bison"
-                                                                                                                {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=CTYPE_DOUBLE;}
+                                                                                                                {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=STYPE_DOUBLE;}
 #line 1815 "src/parser.c"
     break;
 
   case 27:
 #line 155 "src/parser.bison"
-                                                                                                                {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=CTYPE_BOOL;}
+                                                                                                                {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=STYPE_BOOL;}
 #line 1821 "src/parser.c"
     break;
 
   case 28:
 #line 156 "src/parser.bison"
-                                                                                                                {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=CTYPE_VOID;}
+                                                                                                                {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=STYPE_VOID;}
 #line 1827 "src/parser.c"
     break;
 

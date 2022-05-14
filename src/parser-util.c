@@ -173,7 +173,7 @@ idents_t idents_cat(idents_t *idents, int *s_type, strval_t *name) {
 			.category    = TYPE_CAT_SIMPLE,
 			.is_complete = true,
 			.simple_type = *s_type,
-			.size        = CSIZE_SIMPLE(*s_type)
+			.size        = SSIZE_SIMPLE(*s_type)
 		};
 	}
 	idents->arr[idents->num - 1] = (ident_t) {
@@ -192,7 +192,7 @@ idents_t idents_one(int *s_type, strval_t *name) {
 			.category    = TYPE_CAT_SIMPLE,
 			.is_complete = true,
 			.simple_type = *s_type,
-			.size        = CSIZE_SIMPLE(*s_type)
+			.size        = SSIZE_SIMPLE(*s_type)
 		};
 	}
 	ident_t ident = {
@@ -212,7 +212,7 @@ idents_t idents_settype(idents_t *idents, simple_type_t s_type) {
 		.category    = TYPE_CAT_SIMPLE,
 		.is_complete = true,
 		.simple_type = s_type,
-		.size        = CSIZE_SIMPLE(s_type)
+		.size        = SSIZE_SIMPLE(s_type)
 	};
 	for (size_t i = 0; i < idents->num; i++) {
 		idents->arr[i].type = COPY(&type, var_type_t);

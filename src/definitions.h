@@ -282,88 +282,88 @@ typedef enum simple_type {
 	/* ==== Integer types ==== */
 	
 	// unsigned char
-	CTYPE_U_CHAR,
+	STYPE_U_CHAR,
 	// signed char
-	CTYPE_S_CHAR,
+	STYPE_S_CHAR,
 	// unsigned short int
-	CTYPE_U_SHORT,
+	STYPE_U_SHORT,
 	// signed short int
-	CTYPE_S_SHORT,
+	STYPE_S_SHORT,
 	// unsigned int
-	CTYPE_U_INT,
+	STYPE_U_INT,
 	// signed int
-	CTYPE_S_INT,
+	STYPE_S_INT,
 	// unsigned long int
-	CTYPE_U_LONG,
+	STYPE_U_LONG,
 	// signed long int
-	CTYPE_S_LONG,
+	STYPE_S_LONG,
 	// unsigned long long int
-	CTYPE_U_LONGER,
+	STYPE_U_LONGER,
 	// signed long long int
-	CTYPE_S_LONGER,
+	STYPE_S_LONGER,
 	
 	/* ===== Float types ===== */
 	
 	// float
-	CTYPE_FLOAT,
+	STYPE_FLOAT,
 	// double
-	CTYPE_DOUBLE,
+	STYPE_DOUBLE,
 	// long double
-	CTYPE_LONG_DOUBLE,
+	STYPE_LONG_DOUBLE,
 	
 	/* ===== Other types ===== */
 	
 	// _Bool (bool)
-	CTYPE_BOOL,
+	STYPE_BOOL,
 	// void
-	CTYPE_VOID
+	STYPE_VOID
 	
 } simple_type_t;
 
 #ifdef CHAR_IS_SIGNED
 // 'char' type
 // The character's default signedness depends on the machine.
-#define CTYPE_CHAR CTYPE_S_CHAR
+#define STYPE_CHAR STYPE_S_CHAR
 #else
 // 'char' type
 // The character's default signedness depends on the machine.
-#define CTYPE_CHAR CTYPE_U_CHAR
+#define STYPE_CHAR STYPE_U_CHAR
 #endif
 
 // Size of 'char' types, in memory words.
-#define CSIZE_CHAR   ((CHAR_BITS   - 1) / MEM_BITS + 1)
+#define SSIZE_CHAR   ((CHAR_BITS   - 1) / MEM_BITS + 1)
 // Size of 'short' types, in memory words.
-#define CSIZE_SHORT  ((SHORT_BITS  - 1) / MEM_BITS + 1)
+#define SSIZE_SHORT  ((SHORT_BITS  - 1) / MEM_BITS + 1)
 // Size of 'int' types, in memory words.
-#define CSIZE_INT    ((INT_BITS    - 1) / MEM_BITS + 1)
+#define SSIZE_INT    ((INT_BITS    - 1) / MEM_BITS + 1)
 // Size of 'long' types, in memory words.
-#define CSIZE_LONG   ((LONG_BITS   - 1) / MEM_BITS + 1)
+#define SSIZE_LONG   ((LONG_BITS   - 1) / MEM_BITS + 1)
 // Size of 'long long' types, in memory words.
-#define CSIZE_LONGER ((LONGER_BITS - 1) / MEM_BITS + 1)
+#define SSIZE_LONGER ((LONGER_BITS - 1) / MEM_BITS + 1)
 
 // Size of 'float' types, in memory words.
-#define CSIZE_FLOAT       ((FLOAT_BITS   - 1) / MEM_BITS + 1)
+#define SSIZE_FLOAT       ((FLOAT_BITS   - 1) / MEM_BITS + 1)
 // Size of 'double' types, in memory words.
-#define CSIZE_DOUBLE      ((DOUBLE_BITS   - 1) / MEM_BITS + 1)
+#define SSIZE_DOUBLE      ((DOUBLE_BITS   - 1) / MEM_BITS + 1)
 // Size of 'long double' types, in memory words.
-#define CSIZE_LONG_DOUBLE ((LONG_DOUBLE_BITS   - 1) / MEM_BITS + 1)
+#define SSIZE_LONG_DOUBLE ((LONG_DOUBLE_BITS   - 1) / MEM_BITS + 1)
 
 // Size of 'bool' types, in memory words.
-#define CSIZE_BOOL 1
+#define SSIZE_BOOL 1
 
 // Sizes of the simple types, in memory words, by index.
 extern size_t simple_type_size[];
-#define CSIZE_SIMPLE(index) (simple_type_size[index])
-#define arrCSIZE_BY_INDEX {\
-	CSIZE_CHAR,   CSIZE_CHAR,\
-	CSIZE_SHORT,  CSIZE_SHORT,\
-	CSIZE_INT,    CSIZE_INT,\
-	CSIZE_LONG,   CSIZE_LONG,\
-	CSIZE_LONGER, CSIZE_LONGER,\
-	CSIZE_FLOAT,\
-	CSIZE_DOUBLE,\
-	CSIZE_LONG_DOUBLE,\
-	CSIZE_BOOL,\
+#define SSIZE_SIMPLE(index) (simple_type_size[index])
+#define arrSSIZE_BY_INDEX {\
+	SSIZE_CHAR,   SSIZE_CHAR,\
+	SSIZE_SHORT,  SSIZE_SHORT,\
+	SSIZE_INT,    SSIZE_INT,\
+	SSIZE_LONG,   SSIZE_LONG,\
+	SSIZE_LONGER, SSIZE_LONGER,\
+	SSIZE_FLOAT,\
+	SSIZE_DOUBLE,\
+	SSIZE_LONG_DOUBLE,\
+	SSIZE_BOOL,\
 	0,\
 }
 

@@ -19,6 +19,7 @@
 #ifdef DEBUG_COMPILER
 #include "pront.h"
 #include "gen_tests.h"
+#include "alloc_tests.h"
 #endif
 
 // Filling in of an external array.
@@ -127,6 +128,10 @@ int main(int argc, char **argv) {
 #if defined(FUNC_TEST) || defined(EXPR_TEST)
 	perform_gen_tests(argc, argv);
 	return 0;
+#endif
+	
+#if defined(ALLOC_TEST) || defined(ALLOC_CRASH1) || defined(ALLOC_CRASH2) || defined(ALLOC_CRASH3)
+	perform_alloc_tests(argc, argv);
 #endif
 	
 	if (options.showHelp) {

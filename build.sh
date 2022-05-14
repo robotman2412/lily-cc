@@ -8,6 +8,7 @@ fi
 
 ARCH=$(cat build/current_arch)
 VER=$(cat version)
+debug=0
 
 if [ "$ARCH" == "template" ]; then
 	echo "Error: Configured for 'template', this is not allowed."
@@ -25,12 +26,13 @@ bison src/parser.bison -v -Wnone -Wconflicts-sr -Wconflicts-rr -o src/parser.c -
 FILES=""
 
 # Options passed to compiler
-CCOPTIONS="-Isrc -Isrc/debug -Isrc/arch/$ARCH -Isrc/asm -Isrc/objects -Ibuild"
+CCOPTIONS="-Isrc -Isrc/debug -Isrc/util -Isrc/arch/$ARCH -Isrc/asm -Isrc/objects -Ibuild"
 
 for i in $*; do
 	case $i in
 		debug|--debug)
 			CCOPTIONS="$CCOPTIONS -DENABLE_DEBUG_LOGS -DDEBUG_COMPILER -ggdb"
+			debug=1
 			;;
 		--ccoptions=*)
 			CCOPTIONS="$CCOPTIONS ${i#*=}"
@@ -41,7 +43,6 @@ for i in $*; do
 	esac
 done
 
-echo "Building lilly-cc v0.1"
 echo "CCOPTIONS: $CCOPTIONS"
 
 errors=0
@@ -60,7 +61,6 @@ CC() {
 # Compile all the files.
 CC main.c
 CC parser.c
-CC strmap.c
 CC tokeniser.c
 CC parser-util.c
 
@@ -70,6 +70,9 @@ CC asm/gen_util.c
 CC asm/gen_fallbacks.c
 CC asm/gen_preproc.c
 
+CC util/strmap.c
+CC util/ctxalloc.c
+
 CC objects/objects.c
 CC objects/elf.c
 
@@ -78,8 +81,11 @@ for i in $(find src/arch/$ARCH/ -type f -name "*.c"); do
 	CC "arch/$ARCH/${i##*/}"
 done
 
-CC debug/pront.c
-CC debug/gen_tests.c
+if [ $debug -gt 0 ]; then
+	CC debug/pront.c
+	CC debug/gen_tests.c
+	CC debug/alloc_tests.c
+fi
 
 if [ $errors -gt 0 ]; then
 	exit $errors

@@ -13,13 +13,13 @@
 // All keywords that occur.
 char *px_iasm_keyw[] = {
 	// Math: two args.
-	"ADD", "SUB", "CMP",  "AND", "OR",  "XOR", "",    "",
+	"ADD",  "SUB",  "CMP",   "AND",  "OR",   "XOR",  "",     "",
 	// Mathc: two args.
-	"ADDC", "SUBC", "CMPC",  "ANDC", "ORC",  "XORC", "",    "",
+	"ADDC", "SUBC", "CMPC",  "ANDC", "ORC",  "XORC", "",     "",
 	// Math: one arg.
-	"INC", "DEC", "CMP1", "",    "",    "",    "SHL", "SHR",
+	"INC",  "DEC",  "CMP1",  "",     "",     "",     "SHL",  "SHR",
 	// Mathc: one arg.
-	"INCC", "DECC", "CMP1C", "",    "",    "",    "SHLC", "SHRC",
+	"INCC", "DECC", "CMP1C", "",     "",     "",     "SHLC", "SHRC",
 	// Move instructions.
 	"MOV.ULT", "MOV.UGT", "MOV.SLT", "MOV.SGT", "MOV.EQ",  "MOV.CS",  "MOV",     "MOV.BRK",
 	"MOV.UGE", "MOV.ULE", "MOV.SGE", "MOV.SLE", "MOV.NE",  "MOV.CC",  "MOV.JSR", "MOV.RTI",

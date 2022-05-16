@@ -4,14 +4,14 @@
 
 static inline void pre_stmt_push(asm_ctx_t *ctx, preproc_data_t **parent, stmt_t *stmt) {
 	// Make some new preprocessing data.
-	stmt->preproc             = malloc(sizeof(preproc_data_t));
+	stmt->preproc             = xalloc(ctx->allocator, sizeof(preproc_data_t));
 	stmt->preproc->n_children = 0;
 	stmt->preproc->children   = NULL;
-	stmt->preproc->vars       = malloc(sizeof(map_t));
+	stmt->preproc->vars       = xalloc(ctx->allocator, sizeof(map_t));
 	map_create(stmt->preproc->vars);
 	// Update the parent.
 	(*parent)->n_children ++;
-	(*parent)->children = realloc((*parent)->children, (*parent)->n_children * sizeof(preproc_data_t *));
+	(*parent)->children = xrealloc(ctx->allocator, (*parent)->children, (*parent)->n_children * sizeof(preproc_data_t *));
 	(*parent)->children[(*parent)->n_children - 1] = stmt->preproc;
 	// Swappening.
 	*parent = stmt->preproc;
@@ -21,10 +21,10 @@ static inline void pre_stmt_push(asm_ctx_t *ctx, preproc_data_t **parent, stmt_t
 // Determines recursive nature, number of variables per scope and number of intermidiaries.
 void gen_preproc_function(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	DEBUG_PRE("Preprocessing '%s'\n", funcdef->ident.strval);
-	funcdef->preproc             = malloc(sizeof(preproc_data_t));
+	funcdef->preproc             = xalloc(ctx->allocator, sizeof(preproc_data_t));
 	funcdef->preproc->n_children = 0;
 	funcdef->preproc->children   = NULL;
-	funcdef->preproc->vars       = malloc(sizeof(map_t));
+	funcdef->preproc->vars       = xalloc(ctx->allocator, sizeof(map_t));
 	map_create(funcdef->preproc->vars);
 	gen_preproc_stmt(ctx, funcdef->preproc, funcdef->stmts, true);
 	DEBUG_PRE("Preprocessing done\n");

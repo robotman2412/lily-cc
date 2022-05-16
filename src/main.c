@@ -13,6 +13,8 @@
 #include <gen.h>
 #include "asm_postproc.h"
 
+#include "ctxalloc.h"
+
 #include "stdlib.h"
 #include "errno.h"
 
@@ -34,6 +36,8 @@ typedef struct token {
 } token_t;
 
 int main(int argc, char **argv) {
+	alloc_init();
+	
 #if defined(ENABLE_DEBUG_LOGS) && YYDEBUG
 	yydebug = 1;
 #endif
@@ -68,7 +72,7 @@ int main(int argc, char **argv) {
 			char *dir = &(argv[argIndex])[2];
 			if (isdir(dir)) {
 				options.numIncludeDirs ++;
-				options.includeDirs = (char **) realloc(options.includeDirs, sizeof(char *) * options.numIncludeDirs);
+				options.includeDirs = (char **) xrealloc(global_alloc, options.includeDirs, sizeof(char *) * options.numIncludeDirs);
 				options.includeDirs[options.numIncludeDirs - 1] = dir;
 			} else if (access(dir, R_OK)) {
 				fflush(stdout);
@@ -107,7 +111,7 @@ int main(int argc, char **argv) {
 		} else if (!strncmp(argv[argIndex], "--include=", 10)) {
 			// Add include directory.
 			options.numIncludeDirs ++;
-			options.includeDirs = (char **) realloc(options.includeDirs, sizeof(char *) * options.numIncludeDirs);
+			options.includeDirs = (char **) xrealloc(global_alloc, options.includeDirs, sizeof(char *) * options.numIncludeDirs);
 			options.includeDirs[options.numIncludeDirs - 1] = &(argv[argIndex])[10];
 		} else if (!strncmp(argv[argIndex], "--outtype=", 10)) {
 			// Output type.
@@ -178,7 +182,7 @@ int main(int argc, char **argv) {
 	asm_ppc(asm_ctx);
 	output_native(asm_ctx);
 	fclose(tempfile);
-	free(asm_ctx);
+	xfree(global_alloc, asm_ctx);
 	system("hexdump -ve '8/2 \"%04X \" \"\n\"' /tmp/lilly-cc-dbg-bin");
 }
 
@@ -249,6 +253,7 @@ asm_ctx_t *compile_c(char *filename, FILE *file) {
 	asm_ctx_t       asm_ctx;
 	ctx.tokeniser_ctx = &tokeniser_ctx;
 	ctx.asm_ctx       = &asm_ctx;
+	ctx.allocator     = alloc_create(ALLOC_NO_PARENT);
 	tokeniser_init_file(&tokeniser_ctx, file);
 	tokeniser_ctx.filename = filename;
 	asm_init(&asm_ctx);
@@ -256,8 +261,9 @@ asm_ctx_t *compile_c(char *filename, FILE *file) {
 	
 	// Compile some CRAP.
 	yyparse(&ctx);
+	alloc_destroy(ctx.allocator);
 	
-	return COPY(&asm_ctx, asm_ctx_t);
+	return XCOPY(global_alloc, &asm_ctx, asm_ctx_t);
 }
 
 // Assembles an assembly source file.
@@ -273,7 +279,7 @@ asm_ctx_t *assemble_s(char *filename, FILE *file) {
 	// Compile some CRAP.
 	gen_asm_file(&asm_ctx, &tokeniser_ctx);
 	
-	return COPY(&asm_ctx, asm_ctx_t);
+	return XCOPY(global_alloc, &asm_ctx, asm_ctx_t);
 }
 
 int yylex(parser_ctx_t *ctx) {

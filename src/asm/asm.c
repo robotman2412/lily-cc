@@ -1,6 +1,6 @@
 
 #include "asm.h"
-#include <malloc.h>
+#include "ctxalloc_warn.h"
 #include <string.h>
 
 static inline asm_sect_t *asm_create_sect (asm_ctx_t  *ctx,  char *id,   address_t align);
@@ -12,11 +12,12 @@ static inline void        asm_append      (asm_ctx_t  *ctx,  char *data, size_t 
 // Initialises the context.
 void asm_init(asm_ctx_t *ctx) {
 	// Sections.
-	ctx->sections    = (map_t *)      malloc(sizeof(map_t));
+	ctx->allocator   = alloc_create(ALLOC_NO_PARENT);
+	ctx->sections    = (map_t *)      xalloc(ctx->allocator, sizeof(map_t));
 	map_create(ctx->sections);
 	// Registers.
-	ctx->regs_used   = (bool *)       malloc(sizeof(bool)      * NUM_REGS);
-	ctx->regs_stored = (gen_var_t **) malloc(sizeof(gen_var_t *) * NUM_REGS);
+	ctx->regs_used   = (bool *)       xalloc(ctx->allocator, sizeof(bool)      * NUM_REGS);
+	ctx->regs_stored = (gen_var_t **) xalloc(ctx->allocator, sizeof(gen_var_t *) * NUM_REGS);
 	for (int i = 0; i < NUM_REGS; i++) {
 		ctx->regs_used[i]   = false;
 		ctx->regs_stored[i] = NULL;
@@ -30,7 +31,7 @@ void asm_init(asm_ctx_t *ctx) {
 	ctx->current_scope = &ctx->global_scope;
 	// Labels.
 	ctx->last_global_label = NULL;
-	ctx->labels      = (map_t *)      malloc(sizeof(map_t));
+	ctx->labels      = (map_t *)      xalloc(ctx->allocator, sizeof(map_t));
 	map_create(ctx->labels);
 	// Sections.
 	// Compiled machine code
@@ -50,7 +51,7 @@ static inline void asm_append_raw(asm_ctx_t *ctx, char *data, size_t len) {
 		// Expand capacity.
 		sect->chunk_len = (size_t *) ((size_t) sect->chunk_len - (size_t) sect->chunks);
 		sect->chunks_capacity = sect->chunks_len + len + 128;
-		sect->chunks    = realloc(sect->chunks, sect->chunks_capacity);
+		sect->chunks    = xrealloc(ctx->allocator, sect->chunks, sect->chunks_capacity);
 		sect->chunk_len = (size_t *) ((size_t) sect->chunk_len + (size_t) sect->chunks);
 	}
 	// Append data.
@@ -90,8 +91,8 @@ static inline void asm_append_chunk(asm_ctx_t *ctx, char type) {
 // Creates the section, optionally aligned.
 // Any alignment, even outside of powers of two accepted.
 static inline asm_sect_t *asm_create_sect(asm_ctx_t *ctx, char *id, address_t align) {
-	asm_sect_t *sect      = (asm_sect_t *) malloc(sizeof(asm_sect_t));
-	sect->chunks          = (uint8_t *)    malloc(256);
+	asm_sect_t *sect      = (asm_sect_t *) xalloc(ctx->allocator, sizeof(asm_sect_t));
+	sect->chunks          = (uint8_t *)    xalloc(ctx->allocator, 256);
 	sect->chunks_capacity = 256;
 	sect->chunks_len      = sizeof(size_t) + 1;
 	sect->chunk_len       = (void *) sect->chunks + 1;
@@ -207,12 +208,12 @@ void asm_write_num(asm_ctx_t *ctx, size_t data, size_t bytes) {
 // Gets a new label based on asm_ctx::last_label_no.
 char *asm_get_label(asm_ctx_t *ctx) {
 	if (ctx->current_func) {
-		char *label = (char *) malloc(strlen(ctx->current_func->ident.strval) + 3 + ADDR_BITS / 4);
+		char *label = (char *) xalloc(ctx->allocator, strlen(ctx->current_func->ident.strval) + 3 + ADDR_BITS / 4);
 		sprintf(label, "%s.L%x", ctx->current_func->ident.strval, ctx->last_label_no);
 		ctx->last_label_no ++;
 		return label;
 	} else {
-		char *label = (char *) malloc(2 + ADDR_BITS / 4);
+		char *label = (char *) xalloc(ctx->allocator, 2 + ADDR_BITS / 4);
 		sprintf(label, "L%x", ctx->last_label_no);
 		ctx->last_label_no ++;
 		return label;
@@ -222,12 +223,12 @@ char *asm_get_label(asm_ctx_t *ctx) {
 static inline asm_label_def_t *get_or_create_label(asm_ctx_t *ctx, char *label) {
 	asm_label_def_t *val = map_get(ctx->labels, label);
 	if (!val) {
-		val = malloc(sizeof(asm_label_def_t));
+		val = xalloc(ctx->allocator, sizeof(asm_label_def_t));
 		*val = (asm_label_def_t) {
 			.address    = 0,
 			.is_defined = false,
-			.source     = strdup(label),
-			.value      = strdup(label)
+			.source     = xstrdup(ctx->allocator, label),
+			.value      = xstrdup(ctx->allocator, label)
 		};
 		map_set(ctx->labels, label, val);
 	}
@@ -252,18 +253,18 @@ static void asm_write_label0(asm_ctx_t *ctx, char *label) {
 void asm_write_label(asm_ctx_t *ctx, char *label) {
 	if (*label != '.') {
 		// This is a global label.
-		if (ctx->last_global_label) free(ctx->last_global_label);
-		ctx->last_global_label = strdup(label);
+		if (ctx->last_global_label) xfree(ctx->allocator, ctx->last_global_label);
+		ctx->last_global_label = xstrdup(ctx->allocator, label);
 		// Next!
 		asm_write_label0(ctx, label);
 	} else if (ctx->last_global_label) {
 		// Do some strcat first.
-		char *buf = malloc(strlen(label) + strlen(ctx->last_global_label) + 1);
+		char *buf = xalloc(ctx->allocator, strlen(label) + strlen(ctx->last_global_label) + 1);
 		*buf = 0;
 		strcat(buf, ctx->last_global_label);
 		strcat(buf, label);
 		asm_write_label0(ctx, buf);
-		free(buf);
+		xfree(ctx->allocator, buf);
 	} else {
 		// Warning.
 		printf("Warning: No global label written before sublabel '%s'!\n", label);
@@ -303,12 +304,12 @@ void asm_write_label_ref(asm_ctx_t *ctx, char *label, address_t offset, asm_labe
 		asm_write_label_ref0(ctx, label, offset, mode);
 	} else if (ctx->last_global_label) {
 		// Do some strcat first.
-		char *buf = malloc(strlen(label) + strlen(ctx->last_global_label) + 1);
+		char *buf = xalloc(ctx->allocator, strlen(label) + strlen(ctx->last_global_label) + 1);
 		*buf = 0;
 		strcat(buf, ctx->last_global_label);
 		strcat(buf, label);
 		asm_write_label_ref0(ctx, buf, offset, mode);
-		free(buf);
+		xfree(ctx->allocator, buf);
 	} else {
 		// Warning.
 		printf("Warning: No global label written before sublabel '%s'!\n", label);

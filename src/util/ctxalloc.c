@@ -10,7 +10,7 @@
 #define ALLOC_CTX_MAGIC1 0x9cc1c4fd0e25a9d8LLU
 #define ALLOC_CTX_MAGIC2 0x40ec817d60963a2dLLU
 
-alloc_ctx_t global_ctx = NULL;
+alloc_ctx_t global_alloc = NULL;
 
 // Checks the magic values for a alloc bit.
 static inline bool alloc_bit_magic_check(alloc_bit_t *bit) {
@@ -20,6 +20,15 @@ static inline bool alloc_bit_magic_check(alloc_bit_t *bit) {
 // Checks the magic values for a context.
 static inline bool alloc_ctx_magic_check(alloc_ctx_t ctx) {
 	return ctx->magic1 == ALLOC_CTX_MAGIC1 && ctx->magic2 == ALLOC_CTX_MAGIC2;
+}
+
+// Tests whether A is a child of B.
+static bool alloc_is_child(alloc_ctx_t parent, alloc_ctx_t child) {
+	while (child) {
+		if (child == parent) return true;
+		child = child->parent;
+	}
+	return false;
 }
 
 #define ALLOC_BIT_MAGIC_ASSERT(bit) do {\
@@ -44,10 +53,11 @@ static inline bool alloc_ctx_magic_check(alloc_ctx_t ctx) {
 		}\
 	} while(0)
 
+#if 0
 #define ALLOC_BIT_OWNER_ASSERT(bit, ctx) do {\
 		alloc_bit_t *p = (bit);\
 		alloc_ctx_t  q = (ctx);\
-		if (p->owner != q) {\
+		if (!alloc_is_child(p->owner, q)) {\
 			fflush(stdout);\
 			fprintf(stderr, "\033[1m%s:%d: \033[91mfatal error:\033[0m Allocated memory does not belong to given context (%p to %p)\n", __FILE__, __LINE__, p, q);\
 			fprintf(stderr, "\033[1;91mAborting!\n");\
@@ -55,11 +65,22 @@ static inline bool alloc_ctx_magic_check(alloc_ctx_t ctx) {
 			abort();\
 		}\
 	} while(0)
+#else
+#define ALLOC_BIT_OWNER_ASSERT(bit, ctx) do {\
+		alloc_bit_t *p = (bit);\
+		alloc_ctx_t  q = (ctx);\
+		if (!alloc_is_child(p->owner, q)) {\
+			fflush(stdout);\
+			fprintf(stderr, "\033[1m%s:%d: \033[33mwarning:\033[0m Allocated memory does not belong to given context (%p to %p)\n", __FILE__, __LINE__, p, q);\
+			fflush(stderr);\
+		}\
+	} while(0)
+#endif
 
 
 // Initialises the alloc system thingy.
 void alloc_init() {
-	global_ctx = alloc_create(ALLOC_NO_PARENT);
+	if (!global_alloc) global_alloc = alloc_create(ALLOC_NO_PARENT);
 }
 
 
@@ -67,6 +88,7 @@ void alloc_init() {
 alloc_ctx_t alloc_create(alloc_ctx_t parent) {
 	// Assert the parent is valid.
 	if (parent) ALLOC_CTX_MAGIC_ASSERT(parent);
+	else parent = global_alloc;
 	
 	// Create a new struct.
 	alloc_ctx_t ctx = malloc(sizeof(alloc_ctx_s));
@@ -172,11 +194,13 @@ void *realloc_on_ctx(alloc_ctx_t ctx, void *memory, size_t size) {
 		return NULL;
 	} else if (newmem == realmem) {
 		// No need to fix pointers.
-		return newmem;
+		void *ptr = (void *) ((size_t) newmem + sizeof(alloc_bit_t));
+		return ptr;
 	}
 	
 	// Fix next and prev pointers.
 	alloc_bit_t *bit = newmem;
+	ctx = bit->owner;
 	if (bit->prev) {
 		bit->prev->next = bit;
 	} else {
@@ -207,6 +231,7 @@ void free_on_ctx(alloc_ctx_t ctx, void *memory) {
 	alloc_bit_t *bit = realmem;
 	// Assert the bit is owned by the given context.
 	ALLOC_BIT_OWNER_ASSERT(bit, ctx);
+	ctx = bit->owner;
 	
 	// Unlink the bit.
 	if (bit->prev) {

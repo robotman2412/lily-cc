@@ -70,8 +70,8 @@ void gen_function(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	// Close the scope.
 	gen_pop_scope(ctx);
 	ctx->current_func = NULL;
-	if (ctx->temp_labels) free(ctx->temp_labels);
-	if (ctx->temp_usage)  free(ctx->temp_usage);
+	if (ctx->temp_labels) xfree(ctx->allocator, ctx->temp_labels);
+	if (ctx->temp_usage)  xfree(ctx->allocator, ctx->temp_usage);
 }
 #endif
 
@@ -285,12 +285,12 @@ static bool iasm_preproc_reg(asm_ctx_t *ctx, iasm_regs_t *regs, int index) {
 }
 
 // Helper for the string concatenation magic.
-static void va_strcat(char **dst, size_t *cap, size_t *len, char *src, size_t add_len) {
+static void va_strcat(alloc_ctx_t alloc, char **dst, size_t *cap, size_t *len, char *src, size_t add_len) {
 	// Ensure enough capacity.
 	if (add_len + *len > *cap - 1) {
 		// Expand the capacity.
 		*cap = add_len + *len + 32;
-		*dst = realloc(*dst, *cap);
+		*dst = xrealloc(alloc, *dst, *cap);
 	}
 	// And concatenate.
 	strncat(*dst, src, add_len);
@@ -303,7 +303,7 @@ static char *iasm_preproc(asm_ctx_t *ctx, iasm_t *iasm, size_t magic_number) {
 	// Allocate a small bit of buffer.
 	size_t cap    = strlen(iasm->text.strval) + 2 + 32 * (iasm->inputs->num + iasm->outputs->num);
 	size_t len    = 0;
-	char  *output = malloc(cap);
+	char  *output = xalloc(ctx->allocator, cap);
 	output[0]     = '\t';
 	output[1]     = 0;
 	char  *input  = iasm->text.strval;
@@ -314,11 +314,11 @@ static char *iasm_preproc(asm_ctx_t *ctx, iasm_t *iasm, size_t magic_number) {
 		char next = index ? index[1] : 0;
 		if (!index || !next) {
 			// There are no more things to substitute.
-			va_strcat(&output, &cap, &len, input, strlen(input));
+			va_strcat(ctx->allocator, &output, &cap, &len, input, strlen(input));
 			goto done;
 		} else {
 			// CONCATENATE excluding the %.
-			va_strcat(&output, &cap, &len, input, index - input);
+			va_strcat(ctx->allocator, &output, &cap, &len, input, index - input);
 			input = index + 2;
 		}
 		
@@ -331,7 +331,7 @@ static char *iasm_preproc(asm_ctx_t *ctx, iasm_t *iasm, size_t magic_number) {
 			case '|':
 			case '}':
 				// Just dump it out.
-				va_strcat(&output, &cap, &len, &next, 1);
+				va_strcat(ctx->allocator, &output, &cap, &len, &next, 1);
 				break;
 				
 			case '0' ... '9':
@@ -370,8 +370,8 @@ static char *iasm_preproc(asm_ctx_t *ctx, iasm_t *iasm, size_t magic_number) {
 				wegotmatch:
 				// Compute the funny input operand.
 				add = gen_iasm_var(ctx, match->expr_result, match);
-				va_strcat(&output, &cap, &len, add, strlen(add));
-				free(add);
+				va_strcat(ctx->allocator, &output, &cap, &len, add, strlen(add));
+				xfree(ctx->allocator, add);
 				break;
 		}
 	}
@@ -471,7 +471,7 @@ static bool asm_expect_ival(tokeniser_ctx_t *lex_ctx, long long *out) {
 		tokeniser_readchar(lex_ctx);
 		// Now, grab it.
 		offs --;
-		char *strval = (char *) malloc(sizeof(char) * offs);
+		char *strval = (char *) xalloc(lex_ctx->allocator, sizeof(char) * offs);
 		strval[offs] = 0;
 		for (int i = 0; i < offs-1; i++) {
 			strval[i] = tokeniser_readchar(lex_ctx);
@@ -479,7 +479,7 @@ static bool asm_expect_ival(tokeniser_ctx_t *lex_ctx, long long *out) {
 		// Turn it into a number, hexadecimal.
 		*out = strtoull(strval, NULL, 16);
 		if (negative) *out = -*out;
-		free(strval);
+		xfree(lex_ctx->allocator, strval);
 		return true;
 	}
 	
@@ -492,7 +492,7 @@ static bool asm_expect_ival(tokeniser_ctx_t *lex_ctx, long long *out) {
 		tokeniser_readchar(lex_ctx);
 		offs ++;
 		// Now, grab it.
-		char *strval = (char *) malloc(sizeof(char) * (offs + 1));
+		char *strval = (char *) xalloc(lex_ctx->allocator, sizeof(char) * (offs + 1));
 		*strval = c;
 		strval[offs] = 0;
 		for (int i = 1; i < offs; i++) {
@@ -501,7 +501,7 @@ static bool asm_expect_ival(tokeniser_ctx_t *lex_ctx, long long *out) {
 		// Turn it into a number, respecting octal.
 		*out = strtoull(strval, NULL, c == '0' ? 8 : 10);
 		if (negative) *out = -*out;
-		free(strval);
+		xfree(lex_ctx->allocator, strval);
 		return true;
 	}
     
@@ -510,7 +510,7 @@ static bool asm_expect_ival(tokeniser_ctx_t *lex_ctx, long long *out) {
 
 // Extracts len characters from lex_ctx in a c-string.
 static char *asm_extract(tokeniser_ctx_t *lex_ctx, size_t len) {
-	char *cstr = malloc(len + 1);
+	char *cstr = xalloc(lex_ctx->allocator, len + 1);
 	for (size_t i = 0; i < len; i++) {
 		cstr[i] = tokeniser_readchar(lex_ctx);
 	}
@@ -537,7 +537,7 @@ static void gen_asm_db(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 		// TODO: More fancy CRACK.
 		char *ident = asm_extract(lex_ctx, len);
 		asm_write_label_ref(ctx, ident, 0, ASM_LABEL_REF_ABS_PTR);
-		free(ident);
+		xfree(lex_ctx->allocator, ident);
 		goto next;
 	}
 	// Try ival.
@@ -571,7 +571,7 @@ void gen_asm_file(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 			// CONSUME label.
 			char *label = asm_extract(lex_ctx, len);
 			asm_write_label(ctx, label);
-			free(label);
+			xfree(lex_ctx->allocator, label);
 			tokeniser_readchar(lex_ctx);
 		}
 		
@@ -588,7 +588,7 @@ void gen_asm_file(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 				char *sect_id = asm_expect_str(lex_ctx);
 				if (sect_id) {
 					asm_use_sect(ctx, sect_id, ASM_NOT_ALIGNED);
-					free(sect_id);
+					xfree(lex_ctx->allocator, sect_id);
 				} else {
 					printf("Error: Expected STRING after '.section'\n");
 				}
@@ -598,7 +598,7 @@ void gen_asm_file(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 			} else {
 				printf("Warning: Unknown directive '%s'\n", directive);
 			}
-			free(directive);
+			xfree(lex_ctx->allocator, directive);
 			// TODO: Enforce end of line.
 		} else {
 			// Hand it off.
@@ -669,7 +669,7 @@ void gen_inline_asm(asm_ctx_t *ctx, iasm_t *iasm) {
 	tokeniser_init_cstr(&lex_ctx, text);
 	gen_asm_file(ctx, &lex_ctx);
 	// And finish up.
-	free(text);
+	xfree(ctx->allocator, text);
 }
 #else
 // Complete file of assembly.
@@ -694,7 +694,7 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 	switch (expr->type) {
 		case EXPR_TYPE_CONST: {
 			// Constants are very simple.
-			gen_var_t *val = (gen_var_t *) malloc(sizeof(gen_var_t));
+			gen_var_t *val = (gen_var_t *) xalloc(ctx->allocator, sizeof(gen_var_t));
 			*val = (gen_var_t) {
 				.type   = VAR_TYPE_CONST,
 				.iconst = expr->iconst,
@@ -729,7 +729,7 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 				
 			} else if (oper == OP_LOGIC_NOT) {
 				// Apply the "condition" output hint to logic not.
-				gen_var_t *cond_hint = COPY(&(gen_var_t) {
+				gen_var_t *cond_hint = XCOPY(ctx->allocator, &(gen_var_t) {
 					.type = VAR_TYPE_COND
 				}, gen_var_t);
 				// And do the rest as usual.
@@ -761,7 +761,7 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 					
 				} else {
 					// Assignment to a different type (usually pointer dereference).
-					gen_var_t *ptr_hint = COPY(&(gen_var_t) {
+					gen_var_t *ptr_hint = XCOPY(ctx->allocator, &(gen_var_t) {
 						.type = VAR_TYPE_PTR
 					}, gen_var_t);
 					// Generate with the pointer hint.
@@ -781,7 +781,7 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 					gen_mov(ctx, a, b);
 					// Free up variables if necessary.
 					if (!gen_cmp(ctx, a, b)) gen_unuse(ctx, a);
-					if (a != ptr_hint) free(ptr_hint);
+					if (a != ptr_hint) xfree(ctx->allocator, ptr_hint);
 					return a;
 				}
 			} else {

@@ -50,11 +50,11 @@ void PX_DESC_INSN(px_insn_t insn, char *imm0, char *imm1) {
 	char *tmp;
 	char *git;
 	if (insn.y) {
-		tmp  = malloc(strlen(imm1) + 6);
+		tmp  = xalloc(global_alloc, strlen(imm1) + 6);
 		git  = imm1;
 		imm1 = tmp;
 	} else {
-		tmp  = malloc(strlen(imm0) + 6);
+		tmp  = xalloc(global_alloc, strlen(imm0) + 6);
 		git  = imm0;
 		imm0 = tmp;
 	}
@@ -74,7 +74,7 @@ void PX_DESC_INSN(px_insn_t insn, char *imm0, char *imm1) {
 	} else {
 		DEBUG_GEN("  %s%s %s, %s\n", name, suffix, imm0, imm1);
 	}
-	free(tmp);
+	xfree(global_alloc, tmp);
 }
 #else
 #define PX_DESC_INSN(insn, a, b) do{}while(0)
@@ -254,10 +254,10 @@ void px_part_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest, address_t index)
 		insn.a = dest;
 		insn.o = PX_OP_MOV;
 		#ifdef ENABLE_DEBUG_LOGS
-		char *buf = malloc(strlen(val->label) + 6);
+		char *buf = xalloc(ctx->allocator, strlen(val->label) + 6);
 		sprintf(buf, "%s+%u", val->label, index);
 		PX_DESC_INSN(insn, NULL, buf);
-		free(buf);
+		xfree(ctx->allocator, buf);
 		#endif
 		asm_write_memword(ctx, px_pack_insn(insn));
 		asm_write_label_ref(ctx, val->label, 0, ref);
@@ -433,10 +433,10 @@ gen_var_t *px_math1(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 			asm_label_ref_t ref;
 			px_insn_t insn = px_insn_label(ctx, a->label, false, &ref);
 			#ifdef ENABLE_DEBUG_LOGS
-			char *buf = malloc(strlen(a->label)+6);
+			char *buf = xalloc(ctx->allocator, strlen(a->label)+6);
 			sprintf(buf, "%s+%u", a->label, i);
 			PX_DESC_INSN(insn, buf, NULL);
-			free(buf);
+			xfree(ctx->allocator, buf);
 			#endif
 			asm_write_memword(ctx, px_pack_insn(insn));
 			asm_write_label_ref(ctx, a->label, i, ref);
@@ -547,10 +547,10 @@ gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 				px_insn_t insn = px_insn_label(ctx, b->label, true, &ref);
 				insn.a = a->reg + i;
 				#ifdef ENABLE_DEBUG_LOGS
-				char *buf = malloc(strlen(b->label)+6);
+				char *buf = xalloc(ctx->allocator, strlen(b->label)+6);
 				sprintf(buf, "%s+%u", b->label, i);
 				PX_DESC_INSN(insn, NULL, buf);
-				free(buf);
+				xfree(ctx->allocator, buf);
 				#endif
 				asm_write_memword(ctx, px_pack_insn(insn));
 				asm_write_label_ref(ctx, b->label, i, ref);
@@ -604,10 +604,10 @@ gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 			px_insn_t insn = px_insn_label(ctx, a->label, false, &ref);
 			insn.b = reg_b;
 			#ifdef ENABLE_DEBUG_LOGS
-			char *buf = malloc(strlen(a->label)+6);
+			char *buf = xalloc(ctx->allocator, strlen(a->label)+6);
 			sprintf(buf, "%s+%u", a->label, i);
 			PX_DESC_INSN(insn, buf, NULL);
-			free(buf);
+			xfree(ctx->allocator, buf);
 			#endif
 			asm_write_memword(ctx, px_pack_insn(insn));
 			asm_write_label_ref(ctx, a->label, i, ref);
@@ -640,8 +640,8 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 		
 		// Define variables in registers.
 		for (size_t i = 0; i < funcdef->args.num; i++) {
-			gen_var_t *var = malloc(sizeof(gen_var_t));
-			gen_var_t *loc = malloc(sizeof(gen_var_t));
+			gen_var_t *var = xalloc(ctx->allocator, sizeof(gen_var_t));
+			gen_var_t *loc = xalloc(ctx->allocator, sizeof(gen_var_t));
 			
 			// Variable in register.
 			*var = (gen_var_t) {
@@ -676,7 +676,7 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 		// Define variables in stack, first parameter pushed last.
 		// First parameter has least offset.
 		for (size_t i = 0; i < funcdef->args.num; i++) {
-			gen_var_t *var = malloc(sizeof(gen_var_t));
+			gen_var_t *var = xalloc(ctx->allocator, sizeof(gen_var_t));
 			
 			// Variable in stack.
 			*var = (gen_var_t) {
@@ -686,7 +686,7 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 				.default_loc = NULL
 			};
 			// Which is also it's default location.
-			var->default_loc = COPY(var, gen_var_t);
+			var->default_loc = XCOPY(ctx->allocator, var, gen_var_t);
 			
 			gen_define_var(ctx, var, funcdef->args.arr[i].strval);
 		}
@@ -805,20 +805,20 @@ char *gen_iasm_var(asm_ctx_t *ctx, gen_var_t *var, iasm_reg_t *reg) {
 	// Convert the variable to assembly craps.
 	if (var->type == VAR_TYPE_CONST) {
 		// Constant.
-		char *buf = malloc(7);
+		char *buf = xalloc(ctx->allocator, 7);
 		sprintf(buf, "0x%04x", var->iconst);
 		return buf;
 	} else if (var->type == VAR_TYPE_REG) {
 		// Register.
-		return strdup(reg_names[var->reg]);
+		return xstrdup(ctx->allocator, reg_names[var->reg]);
 	} else if (var->type == VAR_TYPE_LABEL) {
 		// Label.
-		char *buf = malloc(strlen(var->label) + 3);
+		char *buf = xalloc(ctx->allocator, strlen(var->label) + 3);
 		sprintf(buf, "[%s]", var->label);
 		return buf;
 	} else if (var->type == VAR_TYPE_STACKOFFS) {
 		// In stack.
-		char *buf = malloc(12);
+		char *buf = xalloc(ctx->allocator, 12);
 		sprintf(buf, "[ST+%u]", ctx->stack_size - var->offset);
 		return buf;
 	}
@@ -834,7 +834,7 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, siz
 		.type   = VAR_TYPE_CONST,
 		.iconst = 0
 	};
-	return COPY(&dummy, gen_var_t);
+	return XCOPY(ctx->allocator, &dummy, gen_var_t);
 }
 
 // Expression: Binary math operation.
@@ -888,7 +888,7 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 		cmp1:
 		if (!output || output->type != VAR_TYPE_COND) {
 			// Make a new output.
-			output  = malloc(sizeof(gen_var_t));
+			output  = xalloc(ctx->allocator, sizeof(gen_var_t));
 			*output = (gen_var_t) {
 				.type        = VAR_TYPE_COND,
 				.owner       = NULL,
@@ -925,7 +925,7 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 		return px_math1(ctx, PX_OP_SHR, output, a);
 	} else if (oper == OP_DEREF) {
 		// Conversion, C w a Pointer?
-		gen_var_t *var = malloc(sizeof(gen_var_t));
+		gen_var_t *var = xalloc(ctx->allocator, sizeof(gen_var_t));
 		var->type        = VAR_TYPE_PTR;
 		var->ptr         = a;
 		var->owner       = NULL;
@@ -1089,7 +1089,7 @@ gen_var_t *px_get_tmp(asm_ctx_t *ctx, size_t size, bool allow_reg) {
 		for (reg_t i = 0; i < NUM_REGS; i++) {
 			if (!ctx->regs_used[i]) {
 				// We can use this register.
-				gen_var_t *var = malloc(sizeof(gen_var_t));
+				gen_var_t *var = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
 				*var = (gen_var_t) {
 					.type        = VAR_TYPE_REG,
 					.reg         = i,
@@ -1123,7 +1123,7 @@ gen_var_t *px_get_tmp(asm_ctx_t *ctx, size_t size, bool allow_reg) {
 			address_t end_offset = ctx->stack_size - ctx->temp_num;
 			address_t offset     = end_offset - i;
 			// Package it up.
-			gen_var_t *var = malloc(sizeof(gen_var_t));
+			gen_var_t *var = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
 			*var = (gen_var_t) {
 				.type        = VAR_TYPE_STACKOFFS,
 				.offset      = offset,
@@ -1139,13 +1139,13 @@ gen_var_t *px_get_tmp(asm_ctx_t *ctx, size_t size, bool allow_reg) {
 	char *label;
 	make_one:
 	func_label = ctx->current_func->ident.strval;
-	label = malloc(strlen(func_label) + 8);
+	label = xalloc(ctx->allocator, strlen(func_label) + 8);
 	sprintf(label, "%s.LT%04x", func_label, ctx->temp_num);
 	DEBUG_GEN("// Add temp label %s\n", label);
 	gen_define_temp(ctx, label);
 	
 	// Return the new stack bit.
-	gen_var_t *var = malloc(sizeof(gen_var_t));
+	gen_var_t *var = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
 	*var = (gen_var_t) {
 		.type        = VAR_TYPE_STACKOFFS,
 		.offset      = ctx->stack_size - size,
@@ -1160,7 +1160,7 @@ gen_var_t *px_get_tmp(asm_ctx_t *ctx, size_t size, bool allow_reg) {
 gen_var_t *gen_preproc_var(asm_ctx_t *ctx, preproc_data_t *parent, ident_t *ident) {
 	// Create a label.
 	char *fn_label = ctx->current_func->ident.strval;
-	char *label = malloc(strlen(fn_label) + 8);
+	char *label = xalloc(ctx->allocator, strlen(fn_label) + 8);
 	sprintf(label, "%s.LV%04lx", fn_label, ctx->current_scope->local_num);
 	
 	// Package it into a gen_var_t.
@@ -1171,5 +1171,5 @@ gen_var_t *gen_preproc_var(asm_ctx_t *ctx, preproc_data_t *parent, ident_t *iden
 	};
 	
 	// And return a copy.
-	return COPY(&loc, gen_var_t);
+	return XCOPY(ctx->allocator, &loc, gen_var_t);
 }

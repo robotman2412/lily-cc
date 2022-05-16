@@ -43,10 +43,12 @@ typedef struct funcdef		funcdef_t;
 #include "main.h"
 #include "asm.h"
 #include "gen_preproc.h"
+#include "ctxalloc_warn.h"
 
 struct parser_ctx {
 	tokeniser_ctx_t *tokeniser_ctx;
 	asm_ctx_t       *asm_ctx;
+	alloc_ctx_t      allocator;
 };
 
 struct ival {
@@ -194,74 +196,76 @@ struct funcdef {
 	FUNCDEF_EXTRAS
 };
 
-extern void *make_copy(void *mem, size_t size);
-#define COPY(thing, type) ( (type *) make_copy(thing, sizeof(type)) )
+//extern void *make_copy(void *mem, size_t size);
+//#define COPY(thing, type) ( (type *) make_copy(thing, sizeof(type)) )
+extern void *xmake_copy(alloc_ctx_t allocator, void *mem, size_t size);
+#define XCOPY(alloc, thing, type) ( (type *) xmake_copy(alloc, thing, sizeof(type)) )
 
 // Incomplete function definition (without code).
-funcdef_t funcdef_def    (strval_t *ident,  idents_t *args);
+funcdef_t   funcdef_def    (parser_ctx_t *ctx, strval_t *ident,  idents_t *args);
 // Complete function declaration (with code).
-funcdef_t funcdef_decl   (strval_t *ident,  idents_t *args, stmts_t *code);
+funcdef_t   funcdef_decl   (parser_ctx_t *ctx, strval_t *ident,  idents_t *args, stmts_t *code);
 
 // An empty list of statements.
-stmts_t     stmts_empty    ();
+stmts_t     stmts_empty    (parser_ctx_t *ctx);
 // Concatenate to a list of statements.
-stmts_t     stmts_cat      (stmts_t  *stmts, stmt_t  *stmt);
+stmts_t     stmts_cat      (parser_ctx_t *ctx, stmts_t  *stmts, stmt_t  *stmt);
 
 // Statements contained in curly brackets.
-stmt_t      stmt_multi     (stmts_t  *stmts);
+stmt_t      stmt_multi     (parser_ctx_t *ctx, stmts_t  *stmts);
 // If-else statements.
-stmt_t      stmt_if        (expr_t   *cond,  stmt_t *s_if, stmt_t *s_else);
+stmt_t      stmt_if        (parser_ctx_t *ctx, expr_t   *cond,  stmt_t *s_if, stmt_t *s_else);
 // While loops.
-stmt_t      stmt_while     (expr_t   *cond,  stmt_t *code);
+stmt_t      stmt_while     (parser_ctx_t *ctx, expr_t   *cond,  stmt_t *code);
 // Return statements.
-stmt_t      stmt_ret       (expr_t   *expr);
+stmt_t      stmt_ret       (parser_ctx_t *ctx, expr_t   *expr);
 // Variable declaration statements.
-stmt_t      stmt_var       (idents_t *decls);
+stmt_t      stmt_var       (parser_ctx_t *ctx, idents_t *decls);
 // Expression statements (most code).
-stmt_t      stmt_expr      (expr_t   *expr);
+stmt_t      stmt_expr      (parser_ctx_t *ctx, expr_t   *expr);
 // Assembly statements (archtitecture-specific assembly code).
-stmt_t      stmt_iasm      (strval_t *text,  iasm_regs_t *output, iasm_regs_t *input, void *clobbers);
+stmt_t      stmt_iasm      (parser_ctx_t *ctx, strval_t *text,  iasm_regs_t *output, iasm_regs_t *input, void *clobbers);
 
 // Assembly parameter definition.
-iasm_reg_t  stmt_iasm_reg  (strval_t *symbol, strval_t *mode, expr_t *expr);
+iasm_reg_t  stmt_iasm_reg  (parser_ctx_t *ctx, strval_t *symbol, strval_t *mode, expr_t *expr);
 // An empty list of iasm_reg.
-iasm_regs_t iasm_regs_empty();
+iasm_regs_t iasm_regs_empty(parser_ctx_t *ctx);
 // Concatenate to a list of iasm_reg.
-iasm_regs_t iasm_regs_cat  (iasm_regs_t *iasm_regs, iasm_reg_t *iasm_reg);
+iasm_regs_t iasm_regs_cat  (parser_ctx_t *ctx, iasm_regs_t *iasm_regs, iasm_reg_t *iasm_reg);
 // A list of one iasm_reg.
-iasm_regs_t iasm_regs_one  (iasm_reg_t  *iasm_reg);
+iasm_regs_t iasm_regs_one  (parser_ctx_t *ctx, iasm_reg_t  *iasm_reg);
 
 
 // An empty list of identities.
-idents_t    idents_empty   ();
+idents_t    idents_empty   (parser_ctx_t *ctx);
 // Concatenate to a list of identities.
-idents_t    idents_cat     (idents_t      *idents, int           *type, strval_t *ident);
+idents_t    idents_cat     (parser_ctx_t *ctx, idents_t      *idents, int           *type, strval_t *ident);
 // A list of one identity.
-idents_t    idents_one     (int           *type,   strval_t      *ident);
+idents_t    idents_one     (parser_ctx_t *ctx, int           *type,   strval_t      *ident);
 // Set the type of all identities contained.
-idents_t    idents_settype (idents_t      *idents, simple_type_t  type);
+idents_t    idents_settype (parser_ctx_t *ctx, idents_t      *idents, simple_type_t  type);
 
 // An empty list of expressions.
-exprs_t     exprs_empty    ();
+exprs_t     exprs_empty    (parser_ctx_t *ctx);
 // A list of one expression.
-exprs_t     exprs_one      (expr_t   *expr);
+exprs_t     exprs_one      (parser_ctx_t *ctx, expr_t   *expr);
 // Concatenate to a list of expressions.
-exprs_t     exprs_cat      (exprs_t  *exprs, expr_t *expr);
+exprs_t     exprs_cat      (parser_ctx_t *ctx, exprs_t  *exprs, expr_t *expr);
 
 // Numeric constant expression.
-expr_t      expr_icnst     (ival_t   *val);
+expr_t      expr_icnst     (parser_ctx_t *ctx, ival_t   *val);
 // String constant expression.
-expr_t      expr_scnst     (strval_t *val);
+expr_t      expr_scnst     (parser_ctx_t *ctx, strval_t *val);
 // Identity expression (things like variables and functions).
-expr_t      expr_ident     (strval_t *ident);
+expr_t      expr_ident     (parser_ctx_t *ctx, strval_t *ident);
 // Unary math expression (things like &a, b++ and !c).
-expr_t      expr_math1     (oper_t    type,   expr_t   *val);
+expr_t      expr_math1     (parser_ctx_t *ctx, oper_t    type,   expr_t   *val);
 // Function call expression.
-expr_t      expr_call      (expr_t   *func,   exprs_t  *args);
+expr_t      expr_call      (parser_ctx_t *ctx, expr_t   *func,   exprs_t  *args);
 // Binary math expression (things like a + b, c = d and e[f]).
-expr_t      expr_math2     (oper_t    type,   expr_t   *val1, expr_t *val2);
+expr_t      expr_math2     (parser_ctx_t *ctx, oper_t    type,   expr_t   *val1, expr_t *val2);
 // Assignment math expression (things like a += b, c *= d and e |= f).
 // Generalises to a combination of an assignment and expr_math2.
-expr_t      expr_matha     (oper_t    type,   expr_t   *val1, expr_t *val2);
+expr_t      expr_matha     (parser_ctx_t *ctx, oper_t    type,   expr_t   *val1, expr_t *val2);
 
 #endif // PARSER_UTIL_H

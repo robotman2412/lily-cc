@@ -45,6 +45,8 @@ struct asm_scope {
     gen_var_t   *reg_usage[NUM_REGS];
     // Relative size of the stack.
     address_t   stack_size;
+    // The memory allocator for this scope.
+    alloc_ctx_t allocator;
 };
 
 struct asm_ctx {
@@ -75,6 +77,8 @@ struct asm_ctx {
     asm_scope_t  *current_scope;
     // The last global label emitted, if any.
     asm_label_t   last_global_label;
+    // The memory allocator associated.
+    alloc_ctx_t   allocator;
     // Extra bits of context on an architecture basis.
     ASM_CTX_EXTRAS
     

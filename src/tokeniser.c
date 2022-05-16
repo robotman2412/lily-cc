@@ -3,7 +3,7 @@
 #include "parser.h"
 #include <stdlib.h>
 #include <stdint.h>
-//#include <config.h>
+#include "ctxalloc_warn.h"
 
 pos_t pos_merge(pos_t one, pos_t two) {
 	if (one.index0 > two.index0) {
@@ -50,14 +50,16 @@ void print_pos(tokeniser_ctx_t *ctx, pos_t pos) {
 void tokeniser_init_cstr(tokeniser_ctx_t *ctx, char *raw) {
 	*ctx = (tokeniser_ctx_t) {
 		.filename = "<anonymous>",
-		.source = raw,
 		.source_len = strlen(raw),
 		.fd = NULL,
 		.use_fd = false,
 		.index = 0,
 		.x = 0,
-		.y = 1
+		.y = 1,
+		.allocator = alloc_create(ALLOC_NO_PARENT),
 	};
+	ctx->source = xalloc(ctx->allocator, strlen(raw));
+	strcpy(ctx->source, raw);
 }
 
 // Initialise a context, given a file descriptor.
@@ -70,8 +72,14 @@ void tokeniser_init_file(tokeniser_ctx_t *ctx, FILE *file) {
 		.use_fd = true,
 		.index = 0,
 		.x = 0,
-		.y = 1
+		.y = 1,
+		.allocator = alloc_create(ALLOC_NO_PARENT),
 	};
+}
+
+// Clean up a tokeniser context.
+void tokeniser_destroy(tokeniser_ctx_t *ctx) {
+	alloc_destroy(ctx->allocator);
 }
 
 
@@ -174,7 +182,7 @@ char *tokeniser_getstr(tokeniser_ctx_t *ctx, char term) {
 	// Make the buf.
 	size_t buf_len   = 256;
 	size_t buf_index = 0;
-	char *buf = malloc(sizeof(char) * buf_len);
+	char *buf = xalloc(ctx->allocator, sizeof(char) * buf_len);
 	*buf = 0;
 	// Grab str.
 	while (1) {
@@ -273,8 +281,8 @@ char *tokeniser_getstr(tokeniser_ctx_t *ctx, char term) {
 		{
 			// Append the funy.
 			if (buf_index >= buf_len) {
-				buf_len += 64;
-				buf = realloc(buf, buf_len);
+				buf_len *= 2;
+				buf = xrealloc(ctx->allocator, buf, buf_len);
 			}
 			// TODO: Charset encode.
 			buf[buf_index] = toappend;
@@ -284,7 +292,7 @@ char *tokeniser_getstr(tokeniser_ctx_t *ctx, char term) {
 	}
 	// Shrik to fit.
 	buf_len = strlen(buf) + 1;
-	buf = realloc(buf, buf_len);
+	buf = xrealloc(ctx->allocator, buf, buf_len);
 	return buf;
 }
 
@@ -513,15 +521,6 @@ static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 			break;
 	}
 	if (ret) {
-		// yylval.pos = (pos_t) {
-		// 	.filename = ctx->filename,
-		// 	.x0 = x0,
-		// 	.y0 = y0,
-		// 	.x1 = ctx->x,
-		// 	.y1 = ctx->y,
-		// 	.index0 = index0,
-		// 	.index1 = ctx->index - 1
-		// };
 #ifdef DEBUG_TOKENISER
 		size_t num = ctx->index - index0;
 		if (num == 3) {
@@ -542,7 +541,7 @@ static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 		// Skip the x.
 		tokeniser_readchar(ctx);
 		// Now, grab it.
-		char *strval = (char *) malloc(sizeof(char) * offs);
+		char *strval = (char *) xalloc(ctx->allocator, sizeof(char) * offs);
 		strval[offs] = 0;
 		for (int i = 0; i < offs-1; i++) {
 			strval[i] = tokeniser_readchar(ctx);
@@ -550,7 +549,7 @@ static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 		// Turn it into a number, hexadecimal.
 		int ival = strtoull(strval, NULL, 16);
 		DEBUG_TKN("ival  %d (0x%s)\n", ival, strval);
-		free(strval);
+		xfree(ctx->allocator, strval);
 		yylval.ival.ival = ival;
 		return TKN_IVAL;
 	}
@@ -562,7 +561,7 @@ static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 		while (is_alphanumeric(tokeniser_nextchar_no(ctx, offs))) offs++;
 		offs ++;
 		// Now, grab it.
-		char *strval = (char *) malloc(sizeof(char) * (offs + 1));
+		char *strval = (char *) xalloc(ctx->allocator, sizeof(char) * (offs + 1));
 		*strval = c;
 		strval[offs] = 0;
 		for (int i = 1; i < offs; i++) {
@@ -571,7 +570,7 @@ static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 		// Turn it into a number, respecting octal.
 		int ival = strtoull(strval, NULL, c == '0' ? 8 : 10);
 		DEBUG_TKN("ival  %d (%s)\n", ival, strval);
-		free(strval);
+		xfree(ctx->allocator, strval);
 		yylval.ival.ival = ival;
 		return TKN_IVAL;
 	}
@@ -583,7 +582,7 @@ static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 		while (is_alphanumeric(tokeniser_nextchar_no(ctx, offs))) offs++;
 		offs ++;
 		// Now, grab it.
-		char *strval = (char *) malloc(sizeof(char) * (offs + 1));
+		char *strval = (char *) xalloc(ctx->allocator, sizeof(char) * (offs + 1));
 		*strval = c;
 		strval[offs] = 0;
 		for (int i = 1; i < offs; i++) {
@@ -600,7 +599,7 @@ static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 		// Return the appropriate alternative.
 		if (keyw) {
 			DEBUG_TKN("token '%s'\n", strval);
-			free(strval);
+			xfree(ctx->allocator, strval);
 			return keyw;
 		}
 		DEBUG_TKN("ident '%s'\n", strval);
@@ -633,7 +632,7 @@ static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 	
 	// Otherwise, this is garbage.
 	// TODO: Better solution.
-	char *garbagestr = malloc(2);
+	char *garbagestr = xalloc(ctx->allocator, 2);
 	garbagestr[0] = c;
 	garbagestr[1] = 0;
 	DEBUG_TKN("???   '%c'\n", c);

@@ -18,6 +18,7 @@ typedef enum {
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include "ctxalloc.h"
 
 // Contins position information for tokens.
 // Both 'filename' and 'y' can be changed by #line statements.
@@ -31,16 +32,18 @@ struct pos {
 // Contains info required to tokenise a source file.
 struct tokeniser_ctx {
 	// Filename.
-	char *filename;
+	char      *filename;
 	// For raw string inputs.
-	char *source;
-	size_t source_len;
+	char       *source;
+	size_t      source_len;
 	// For file descriptor inputs.
-	FILE *fd;
-	bool use_fd;
+	FILE       *fd;
+	bool        use_fd;
 	// Current position.
-	size_t index;
-	int x, y;
+	size_t      index;
+	int         x, y;
+	// Allocation context to use for e.g. strings.
+	alloc_ctx_t allocator;
 };
 
 #include <parser-util.h>
@@ -52,16 +55,18 @@ void  report_error(tokeniser_ctx_t *ctx, error_type_t type, pos_t pos, char *mes
 
 #define report_errorf(ctx, type, pos, ...) do{ \
 		size_t len = snprintf(NULL, 0, __VA_ARGS__); \
-		char  *buf = malloc(len); \
+		char  *buf = xalloc(global_alloc, len); \
 		sprintf(buf, __VA_ARGS__); \
 		report_error(ctx, type, pos, buf); \
-		free(buf); \
+		xfree(global_alloc, buf); \
 	} while(0)
 
 // Initialise a context, given c-string.
 void tokeniser_init_cstr(tokeniser_ctx_t *ctx, char *raw);
 // Initialise a context, given a file descriptor.
 void tokeniser_init_file(tokeniser_ctx_t *ctx, FILE *file);
+// Clean up a tokeniser context.
+void tokeniser_destroy(tokeniser_ctx_t *ctx);
 
 // Is c a space character?
 bool is_space(char c);

@@ -4,13 +4,6 @@
 #include "string.h"
 #include "malloc.h"
 
-// Free an instance of gen_var_t and it's underlying data.
-void free_gen_var(gen_var_t *ptr) {
-	if (ptr->type == VAR_TYPE_PTR) free_gen_var(ptr->ptr);
-	if (ptr->default_loc) free_gen_var(ptr->default_loc);
-	free(ptr);
-}
-
 // Find and return the location of the variable with the given name.
 gen_var_t *gen_get_variable(asm_ctx_t *ctx, char *label) {
 	asm_scope_t *scope = ctx->current_scope;
@@ -39,8 +32,8 @@ bool gen_define_var(asm_ctx_t *ctx, gen_var_t *var, char *ident) {
 // Define a temp var label.
 bool gen_define_temp(asm_ctx_t *ctx, char *label) {
 	ctx->temp_num ++;
-	ctx->temp_labels = realloc(ctx->temp_labels, sizeof(char *) * ctx->temp_num);
-	ctx->temp_usage  = realloc(ctx->temp_usage,  sizeof(bool)   * ctx->temp_num);
+	ctx->temp_labels = xrealloc(ctx->allocator, ctx->temp_labels, sizeof(char *) * ctx->temp_num);
+	ctx->temp_usage  = xrealloc(ctx->allocator, ctx->temp_usage,  sizeof(bool)   * ctx->temp_num);
 	ctx->temp_labels[ctx->temp_num - 1] = label;
 	ctx->temp_usage [ctx->temp_num - 1] = 0;
 }
@@ -97,7 +90,8 @@ bool gen_cmp(asm_ctx_t *ctx, gen_var_t *a, gen_var_t *b) {
 
 // New scope.
 void gen_push_scope(asm_ctx_t *ctx) {
-	asm_scope_t *scope = (asm_scope_t *) malloc(sizeof(asm_scope_t));
+	asm_scope_t *scope = (asm_scope_t *) xalloc(ctx->allocator, sizeof(asm_scope_t));
+	scope->allocator   = alloc_create(ctx->allocator);
 	scope->parent      = ctx->current_scope;
 	scope->num         = ctx->current_scope->num;
 	scope->local_num   = ctx->current_scope->local_num;
@@ -112,11 +106,12 @@ void gen_pop_scope(asm_ctx_t *ctx) {
 	asm_scope_t *old = ctx->current_scope;
 	
 	// Delete the map.
-	map_delete_with_values(&old->vars);
+	map_delete(&old->vars);
+	alloc_destroy(old->allocator);
 	
 	// Unlink it.
 	ctx->current_scope = old->parent;
 	ctx->stack_size = old->stack_size;
-	free(old);
+	xfree(ctx->allocator, old);
 }
 

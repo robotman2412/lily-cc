@@ -6,6 +6,7 @@
 #include <strings.h>
 #include <string.h>
 #include <stdlib.h>
+#include "ctxalloc_warn.h"
 
 #include <pixie-16_iasm.h>
 
@@ -130,7 +131,7 @@ px_token_t px_iasm_lex(tokeniser_ctx_t *ctx) {
 		// Skip the x.
 		tokeniser_readchar(ctx);
 		// Now, grab it.
-		char *strval = (char *) malloc(sizeof(char) * offs);
+		char *strval = (char *) xalloc(ctx->allocator, sizeof(char) * offs);
 		strval[offs] = 0;
 		for (int i = 0; i < offs-1; i++) {
 			strval[i] = tokeniser_readchar(ctx);
@@ -138,7 +139,7 @@ px_token_t px_iasm_lex(tokeniser_ctx_t *ctx) {
 		// Turn it into a number, hexadecimal.
 		unsigned long long ival = strtoull(strval, NULL, 16);
 		DEBUG_TKN("ival  %lld (0x%s)\n", ival, strval);
-		free(strval);
+		xfree(ctx->allocator, strval);
 		return (px_token_t) {
 			.type  = PX_TKN_IVAL,
 			.ival  = ival,
@@ -153,7 +154,7 @@ px_token_t px_iasm_lex(tokeniser_ctx_t *ctx) {
 		while (is_alphanumeric(tokeniser_nextchar_no(ctx, offs))) offs++;
 		offs ++;
 		// Now, grab it.
-		char *strval = (char *) malloc(sizeof(char) * (offs + 1));
+		char *strval = (char *) xalloc(ctx->allocator, sizeof(char) * (offs + 1));
 		*strval = c;
 		strval[offs] = 0;
 		for (int i = 1; i < offs; i++) {
@@ -162,7 +163,7 @@ px_token_t px_iasm_lex(tokeniser_ctx_t *ctx) {
 		// Turn it into a number, respecting octal.
 		unsigned long long ival = strtoull(strval, NULL, c == '0' ? 8 : 10);
 		DEBUG_TKN("ival  %lld (%s)\n", ival, strval);
-		free(strval);
+		xfree(ctx->allocator, strval);
 		return (px_token_t) {
 			.type  = PX_TKN_IVAL,
 			.ival  = ival,
@@ -177,7 +178,7 @@ px_token_t px_iasm_lex(tokeniser_ctx_t *ctx) {
 		while (px_is_label_char(tokeniser_nextchar_no(ctx, offs))) offs++;
 		offs ++;
 		// Now, grab it.
-		char *strval = (char *) malloc(sizeof(char) * (offs + 1));
+		char *strval = (char *) xalloc(ctx->allocator, sizeof(char) * (offs + 1));
 		*strval = c;
 		strval[offs] = 0;
 		for (int i = 1; i < offs; i++) {
@@ -187,7 +188,7 @@ px_token_t px_iasm_lex(tokeniser_ctx_t *ctx) {
 		for (size_t i = 0; i < PX_NUM_KEYW; i++) {
 			if (!strcasecmp(strval, px_iasm_keyw[i])) {
 				DEBUG_TKN("keyw  '%s'\n", strval);
-				free(strval);
+				xfree(ctx->allocator, strval);
 				return (px_token_t) {
 					.type  = (px_iasm_token_id_t) i,
 					.ident = NULL,
@@ -341,10 +342,10 @@ bool px_iasm_parse_addr(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx, px_token_t *ou
 		return true;
 	} else if (addressed.type < PX_NUM_KEYW) {
 		char *insert = px_iasm_keyw[(size_t) addressed.type];
-		char *buf = malloc(strlen(insert) + 25);
+		char *buf = xalloc(ctx->allocator, strlen(insert) + 25);
 		sprintf(buf, "Expected LABEL, IVAL or '[', got '%s'.", insert);
 		PX_ERROR(lex_ctx, buf);
-		free(buf);
+		xfree(ctx->allocator, buf);
 		return false;
 	} else {
 		PX_ERROR(lex_ctx, "Expected LABEL, IVAL or '['.");
@@ -362,7 +363,7 @@ size_t px_iasm_parse_addrs(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx, px_token_t 
 		bool got = px_iasm_parse_addr(ctx, lex_ctx, &next, &has_next);
 		if (got) {
 			len ++;
-			list = (px_token_t *) realloc(list, sizeof(px_token_t) * len);
+			list = (px_token_t *) xrealloc(ctx->allocator, list, sizeof(px_token_t) * len);
 			list[len - 1] = next;
 		}
 	} while (has_next);
@@ -378,11 +379,11 @@ void gen_asm(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 	px_token_t tkn = px_iasm_lex(lex_ctx);
 	if (tkn.type == PX_TKN_IDENT) {
 		// This is not an instruction.
-		char *buf = malloc(strlen(tkn.ident) + 31);
+		char *buf = xalloc(ctx->allocator, strlen(tkn.ident) + 31);
 		sprintf(buf, "No instruction with name '%s'.\n", tkn.ident);
 		PX_ERROR(lex_ctx, buf);
-		free(buf);
-		free(tkn.ident);
+		xfree(ctx->allocator, buf);
+		xfree(lex_ctx->allocator, tkn.ident);
 	} else if (tkn.type < PX_TKN_INSN_KEYWORDS) {
 		// This is an instruction keyword.
 		px_token_t *args;
@@ -449,15 +450,16 @@ void gen_asm(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 		// Clean up the args list.
 		for (size_t i = 0; i < n_args; i++) {
 			if (args[i].ident) {
-				free(args[i].ident);
+				xfree(lex_ctx->allocator, args[i].ident);
 			}
 		}
-		free(args);
+		xfree(ctx->allocator, args);
 	} else if (tkn.type < PX_NUM_KEYW) {
 		// This is a keyword, but not an instruction.
-		char *buf = malloc(strlen(px_iasm_keyw[(size_t) tkn.type]) + 31);
+		char *buf = xalloc(ctx->allocator, strlen(px_iasm_keyw[(size_t) tkn.type]) + 31);
 		sprintf(buf, "No instruction with name '%s'.\n", px_iasm_keyw[(size_t) tkn.type]);
 		PX_ERROR_L(lex_ctx, start_pos, buf);
+		xfree(ctx->allocator, buf);
 		
 	} else if (tkn.type == PX_TKN_END) {
 		// End of line.

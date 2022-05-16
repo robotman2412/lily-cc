@@ -4,9 +4,6 @@
 
 #include <asm.h>
 
-// Free an instance of gen_var_t and it's underlying data.
-void       free_gen_var    (gen_var_t *ptr);
-
 // Find and return the location of the variable with the given name.
 gen_var_t *gen_get_variable(asm_ctx_t *ctx, char      *label);
 // Define the variable with the given ident.

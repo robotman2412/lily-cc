@@ -21,7 +21,7 @@ print:
 	MOV PC, .check
 .loop:
 	MOV R1, [R0]
-	MOV [0xfffe], R1
+	MOV [0xfff6], R1
 	INC R0
 .check:
 	CMP1 [R0]

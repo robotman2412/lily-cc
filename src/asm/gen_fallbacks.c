@@ -553,7 +553,10 @@ static void gen_asm_db(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 	return;
 	
 	next:
-	if (tokeniser_nextchar(lex_ctx) == ',') goto gimme;
+	if (tokeniser_nextchar(lex_ctx) == ',') {
+		tokeniser_readchar(lex_ctx);
+		goto gimme;
+	}
 }
 
 // Complete file of assembly. (only if inline assembly is supported)

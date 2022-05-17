@@ -542,7 +542,7 @@ static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 		tokeniser_readchar(ctx);
 		// Now, grab it.
 		char *strval = (char *) xalloc(ctx->allocator, sizeof(char) * offs);
-		strval[offs] = 0;
+		strval[offs-1] = 0;
 		for (int i = 0; i < offs-1; i++) {
 			strval[i] = tokeniser_readchar(ctx);
 		}

@@ -11,7 +11,7 @@ entry:
 	MOV ST, 0xffff
 	
 	MOV R0, 420
-	MOV R1, 69
+	MOV R1, 68
 	MOV.JSR PC, div
 	
 	DEC PC
@@ -54,6 +54,7 @@ div:
 	// Check remainder >= divisor.
 	CMP R0, R1
 	MOV.ULT PC, .skipsub
+	INC R2
 	SUB R0, R1
 .skipsub:
 	SHR R1
@@ -63,7 +64,6 @@ div:
 	MOV.UGE PC, .divloop
 	// Div result in R1, mod result in R0.
 	MOV R1, R2
-	DEC PC
 	MOV PC, [ST]
 
 

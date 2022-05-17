@@ -9,6 +9,7 @@
 #include "ctxalloc_warn.h"
 
 #include <pixie-16_iasm.h>
+#include "pixie-16_internal.h"
 
 // All keywords that occur.
 char *px_iasm_keyw[] = {
@@ -132,7 +133,7 @@ px_token_t px_iasm_lex(tokeniser_ctx_t *ctx) {
 		tokeniser_readchar(ctx);
 		// Now, grab it.
 		char *strval = (char *) xalloc(ctx->allocator, sizeof(char) * offs);
-		strval[offs] = 0;
+		strval[offs-1] = 0;
 		for (int i = 0; i < offs-1; i++) {
 			strval[i] = tokeniser_readchar(ctx);
 		}
@@ -259,11 +260,11 @@ bool px_iasm_parse_addr(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx, px_token_t *ou
 				// PF is not an addressable register.
 				PX_ERROR(lex_ctx, "Register 'PF' is not allowed in memory parameter.\n");
 				return false;
-			} else if (has_reg && addressed.addr_mode != ADDR_MEM) {
+			} else if (has_addressed && addressed.addr_mode != ADDR_MEM) {
 				// Two registers plus imm is not possible.
 				PX_ERROR(lex_ctx, "Argument too complex, consider removing a regiser.\n");
 				return false;
-			} else if (has_reg) {
+			} else if (has_addressed) {
 				// Add the register.
 				addressed.addr_mode = tkn.type - PX_TKN_R0;
 			} else {
@@ -272,6 +273,7 @@ bool px_iasm_parse_addr(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx, px_token_t *ou
 				addressed.regno     = tkn.type - PX_TKN_R0;
 				addressed.addr_mode = ADDR_MEM;
 				has_reg             = true;
+				has_addressed       = true;
 			}
 		} else if (tkn.type == PX_TKN_IDENT) {
 			// Ident.
@@ -279,31 +281,44 @@ bool px_iasm_parse_addr(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx, px_token_t *ou
 				// Can't handle two idents at once.
 				PX_ERROR(lex_ctx, "Cannot handle more than one ident.");
 				return false;
-			} else if (has_reg && addressed.addr_mode != ADDR_MEM) {
+			} else if (has_addressed && !addressed.ival && addressed.addr_mode != ADDR_MEM) {
 				// Two registers plus imm is not possible.
 				PX_ERROR(lex_ctx, "Argument too complex, consider removing a regiser.");
+			} else if (has_addressed) {
+				// Add the ident.
+				if (has_reg && !addressed.ival) {
+					addressed.addr_mode = addressed.regno;
+					addressed.regno     = REG_IMM;
+				}
+				addressed.ident     = tkn.ident;
+				has_ident           = true;
 			} else {
 				// Set the ident.
 				addressed           = tkn;
 				addressed.regno     = REG_IMM;
 				addressed.addr_mode = ADDR_MEM;
 				has_ident           = true;
+				has_addressed       = true;
 			}
 		} else if (tkn.type == PX_TKN_IVAL) {
 			// Ival.
-			if (has_reg && addressed.addr_mode != ADDR_MEM) {
+			if (has_reg && !has_ident && addressed.addr_mode != ADDR_MEM) {
 				// Two registers plus imm is not possible.
 				PX_ERROR(lex_ctx, "Argument too complex, consider removing a regiser.");
 				return false;
 			} else if (has_addressed) {
 				// Add the FUNNY.
+				if (has_reg && !has_ident) {
+					addressed.addr_mode = addressed.regno;
+					addressed.regno     = REG_IMM;
+				}
 				addressed.ival += tkn.ival;
 			} else {
 				// Set the FUNNY.
 				addressed           = tkn;
 				addressed.regno     = REG_IMM;
 				addressed.addr_mode = ADDR_MEM;
-				has_ident           = true;
+				has_addressed       = true;
 			}
 		} else {
 			// Garbage.
@@ -410,13 +425,18 @@ void gen_asm(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 		} else {
 			// Package it up.
 			px_insn_t insn = {
-				.y = n_args == 2 && args[1].addr_mode == ADDR_MEM,
+				.y = n_args == 2 && args[1].addr_mode != ADDR_IMM,
 				.b = n_args == 2 ? args[1].regno : 0,
 				.a = args[0].regno,
 				.o = tkn.type
 			};
 			px_token_t tkn_x = insn.y ? args[1] : args[0];
 			insn.x = tkn_x.addr_mode;
+			
+			#ifdef DEBUG_GENERATOR
+			char *imm0 = NULL;
+			char *imm1 = NULL;
+			#endif
 			
 			// Write the thingy.
 			asm_write_memword(ctx, px_pack_insn(insn));
@@ -429,8 +449,19 @@ void gen_asm(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 						 ? ASM_LABEL_REF_OFFS_PTR
 						 : ASM_LABEL_REF_ABS_PTR
 					);
+					#ifdef DEBUG_GENERATOR
+					imm0 = xalloc(ctx->allocator, strlen(args[0].ident) + 7);
+					if (args[0].ival)
+						sprintf(imm0, "%s+0x%04x", args[0].ident, (uint16_t) args[0].ival);
+					else
+						strcpy(imm0, args[0].ident);
+					#endif
 				} else {
 					asm_write_memword(ctx, args[0].ival);
+					#ifdef DEBUG_GENERATOR
+					imm0 = xalloc(ctx->allocator, 7);
+					sprintf(imm0, "0x%04x", (uint16_t) args[0].ival);
+					#endif
 				}
 			}
 			if (insn.b == REG_IMM) {
@@ -441,10 +472,27 @@ void gen_asm(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 						 ? ASM_LABEL_REF_OFFS_PTR
 						 : ASM_LABEL_REF_ABS_PTR
 					);
+					#ifdef DEBUG_GENERATOR
+					imm1 = xalloc(ctx->allocator, strlen(args[1].ident) + 7);
+					if (args[1].ival)
+						sprintf(imm1, "%s+0x%04x", args[1].ident, (uint16_t) args[1].ival);
+					else
+						strcpy(imm1, args[1].ident);
+					#endif
 				} else {
 					asm_write_memword(ctx, args[1].ival);
+					#ifdef DEBUG_GENERATOR
+					imm1 = xalloc(ctx->allocator, 7);
+					sprintf(imm1, "0x%04x", (uint16_t) args[1].ival);
+					#endif
 				}
 			}
+			
+			#ifdef DEBUG_GENERATOR
+			PX_DESC_INSN(insn, imm0, imm1);
+			if (imm0) xfree(ctx->allocator, imm0);
+			if (imm1) xfree(ctx->allocator, imm1);
+			#endif
 		}
 		
 		// Clean up the args list.

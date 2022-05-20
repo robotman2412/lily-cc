@@ -1,5 +1,6 @@
 
 #include "parser-util.h"
+#include "gen_util.h"
 #include <malloc.h>
 
 // Incomplete function definition (without code).
@@ -168,38 +169,21 @@ idents_t idents_empty(parser_ctx_t *ctx) {
 idents_t idents_cat(parser_ctx_t *ctx, idents_t *idents, int *s_type, strval_t *name) {
 	idents->num ++;
 	idents->arr = xrealloc(ctx->allocator, idents->arr, idents->num * sizeof(ident_t));
-	var_type_t type;
-	if (s_type) {
-		type = (var_type_t) {
-			.category    = TYPE_CAT_SIMPLE,
-			.is_complete = true,
-			.simple_type = *s_type,
-			.size        = SSIZE_SIMPLE(*s_type)
-		};
-	}
 	idents->arr[idents->num - 1] = (ident_t) {
 		.pos    = name->pos,
 		.strval = name->strval,
-		.type   = s_type ? XCOPY(ctx->allocator, &type, var_type_t) : NULL
+		.type   = s_type ? ctype_simple(ctx->asm_ctx, *s_type) : NULL
 	};
 	return *idents;
 }
 
 // A list of one identity.
 idents_t idents_one(parser_ctx_t *ctx, int *s_type, strval_t *name) {
-	var_type_t type;
-	if (s_type) {
-		type = (var_type_t) {
-			.category    = TYPE_CAT_SIMPLE,
-			.is_complete = true,
-			.simple_type = *s_type,
-			.size        = SSIZE_SIMPLE(*s_type)
-		};
-	}
+	
 	ident_t ident = {
 		.pos    = name->pos,
 		.strval = name->strval,
-		.type   = s_type ? XCOPY(ctx->allocator, &type, var_type_t) : NULL
+		.type   = s_type ? ctype_simple(ctx->asm_ctx, *s_type) : NULL
 	};
 	return (idents_t) {
 		.arr = XCOPY(ctx->allocator, &ident, ident_t),
@@ -209,14 +193,8 @@ idents_t idents_one(parser_ctx_t *ctx, int *s_type, strval_t *name) {
 
 // Set the type of all identities contained.
 idents_t idents_settype(parser_ctx_t *ctx, idents_t *idents, simple_type_t s_type) {
-	var_type_t type = {
-		.category    = TYPE_CAT_SIMPLE,
-		.is_complete = true,
-		.simple_type = s_type,
-		.size        = SSIZE_SIMPLE(s_type)
-	};
 	for (size_t i = 0; i < idents->num; i++) {
-		idents->arr[i].type = XCOPY(ctx->allocator, &type, var_type_t);
+		idents->arr[i].type = ctype_simple(ctx->asm_ctx, s_type);
 	}
 }
 

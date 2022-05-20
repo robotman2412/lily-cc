@@ -342,14 +342,32 @@ typedef enum simple_type {
 #define SSIZE_LONGER ((LONGER_BITS - 1) / MEM_BITS + 1)
 
 // Size of 'float' types, in memory words.
-#define SSIZE_FLOAT       ((FLOAT_BITS   - 1) / MEM_BITS + 1)
+#define SSIZE_FLOAT       ((FLOAT_BITS       - 1) / MEM_BITS + 1)
 // Size of 'double' types, in memory words.
-#define SSIZE_DOUBLE      ((DOUBLE_BITS   - 1) / MEM_BITS + 1)
+#define SSIZE_DOUBLE      ((DOUBLE_BITS      - 1) / MEM_BITS + 1)
 // Size of 'long double' types, in memory words.
-#define SSIZE_LONG_DOUBLE ((LONG_DOUBLE_BITS   - 1) / MEM_BITS + 1)
+#define SSIZE_LONG_DOUBLE ((LONG_DOUBLE_BITS - 1) / MEM_BITS + 1)
 
 // Size of 'bool' types, in memory words.
 #define SSIZE_BOOL 1
+
+// Determine the best type that fits a pointer.
+#if SSIZE_INT == ADDRESS_TO_MEMWORDS
+#define STYPE_POINTER STYPE_U_INT
+#define SSIZE_POINTER SSIZE_INT
+#elif SSIZE_SHORT == ADDRESS_TO_MEMWORDS
+#define STYPE_POINTER STYPE_U_SHORT
+#define SSIZE_POINTER SSIZE_SHORT
+#elif SSIZE_CHAR == ADDRESS_TO_MEMWORDS
+#define STYPE_POINTER STYPE_U_CHAR
+#define SSIZE_POINTER SSIZE_CHAR
+#elif SSIZE_LONG == ADDRESS_TO_MEMWORDS
+#define STYPE_POINTER STYPE_U_LONG
+#define SSIZE_POINTER SSIZE_LONG
+#elif SSIZE_LONGER == ADDRESS_TO_MEMWORDS
+#define STYPE_POINTER STYPE_U_LONGER
+#define SSIZE_POINTER SSIZE_LONGER
+#endif
 
 // Sizes of the simple types, in memory words, by index.
 extern size_t simple_type_size[];

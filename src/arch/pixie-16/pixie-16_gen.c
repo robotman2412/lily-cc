@@ -1095,7 +1095,8 @@ gen_var_t *gen_preproc_var(asm_ctx_t *ctx, preproc_data_t *parent, ident_t *iden
 	gen_var_t loc = {
 		.type   = VAR_TYPE_STACKOFFS,
 		.offset = -1,
-		.owner  = ident->strval
+		.owner  = ident->strval,
+		.ctype  = ident->type,
 	};
 	
 	// And return a copy.

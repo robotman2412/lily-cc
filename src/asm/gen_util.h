@@ -4,6 +4,14 @@
 
 #include <asm.h>
 
+// Get or create a simple type in the current scope.
+var_type_t *ctype_simple(asm_ctx_t *ctx, simple_type_t of);
+// Get or create an array type of a simple type in the current scope.
+// Define len as 0 if unknown.
+var_type_t *ctype_arr_simple(asm_ctx_t *ctx, simple_type_t of, size_t len);
+// Get or create a pointer type of a simple type in the current scope.
+var_type_t *ctype_ptr_simple(asm_ctx_t *ctx, simple_type_t of);
+
 // Find and return the location of the variable with the given name.
 gen_var_t *gen_get_variable(asm_ctx_t *ctx, char      *label);
 // Define the variable with the given ident.

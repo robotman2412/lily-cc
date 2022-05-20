@@ -92,7 +92,7 @@ if [ $errors -gt 0 ]; then
 fi
 
 # Link the compiled files.
-echo "LN$FILES"
+echo "LD$FILES"
 gcc $FILES -o comp || errors=1
 
 exit $errors

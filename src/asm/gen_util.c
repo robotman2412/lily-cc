@@ -4,6 +4,52 @@
 #include "string.h"
 #include "malloc.h"
 
+// Get or create a simple type in the current scope.
+var_type_t *ctype_simple(asm_ctx_t *ctx, simple_type_t of) {
+	static bool did_i_init = false;
+	static var_type_t list[STYPE_VOID+1];
+	if (!did_i_init) {
+		for (size_t i = 0; i < STYPE_VOID + 1; i++) {
+			simple_type_t stype = (simple_type_t) i;
+			list[i] = (var_type_t) {
+				.size        = simple_type_size[stype],
+				.simple_type = stype,
+				.is_complete = true,
+				.category    = TYPE_CAT_SIMPLE,
+			};
+		}
+		did_i_init = true;
+	}
+	return &list[of];
+}
+
+// Get or create an array type of a simple type in the current scope.
+// Define len as 0 if unknown.
+var_type_t *ctype_arr_simple(asm_ctx_t *ctx, simple_type_t of, size_t len) {
+	var_type_t *ctype = xalloc(ctx->current_scope->allocator, sizeof(var_type_t));
+	*ctype = (var_type_t) {
+		.size        = simple_type_size[of] * len,
+		.simple_type = STYPE_VOID,
+		.is_complete = !!len,
+		.category    = TYPE_CAT_ARRAY,
+		.underlying  = ctype_simple(ctx, of),
+	};
+}
+
+// Get or create a pointer type of a simple type in the current scope.
+var_type_t *ctype_ptr_simple(asm_ctx_t *ctx, simple_type_t of) {
+	var_type_t *ctype = xalloc(ctx->current_scope->allocator, sizeof(var_type_t));
+	*ctype = (var_type_t) {
+		.size        = SSIZE_POINTER,
+		.simple_type = STYPE_POINTER,
+		.is_complete = true,
+		.category    = TYPE_CAT_POINTER,
+		.underlying  = ctype_simple(ctx, of),
+	};
+}
+
+
+
 // Find and return the location of the variable with the given name.
 gen_var_t *gen_get_variable(asm_ctx_t *ctx, char *label) {
 	asm_scope_t *scope = ctx->current_scope;

@@ -196,8 +196,6 @@ struct funcdef {
 	FUNCDEF_EXTRAS
 };
 
-//extern void *make_copy(void *mem, size_t size);
-//#define COPY(thing, type) ( (type *) make_copy(thing, sizeof(type)) )
 extern void *xmake_copy(alloc_ctx_t allocator, void *mem, size_t size);
 #define XCOPY(alloc, thing, type) ( (type *) xmake_copy(alloc, thing, sizeof(type)) )
 

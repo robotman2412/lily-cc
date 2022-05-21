@@ -51,7 +51,6 @@ int main(int argc, char **argv) {
 		.numIncludeDirs = 0,
 		.includeDirs    = NULL,
 		.outputFile     = NULL,
-		.outputType     = NULL
 	};
 	
 	// Read options.
@@ -113,10 +112,6 @@ int main(int argc, char **argv) {
 			options.numIncludeDirs ++;
 			options.includeDirs = (char **) xrealloc(global_alloc, options.includeDirs, sizeof(char *) * options.numIncludeDirs);
 			options.includeDirs[options.numIncludeDirs - 1] = &(argv[argIndex])[10];
-		} else if (!strncmp(argv[argIndex], "--outtype=", 10)) {
-			// Output type.
-			if (options.outputType) printf("Note: Output type already specified.\n");
-			options.outputType = &(argv[argIndex])[6];
 		} else if (*argv[argIndex] == '-') {
 			// Unknown option.
 			fflush(stdout);
@@ -198,27 +193,12 @@ void show_help(int argc, char **argv) {
 	printf("                Specify the output file path.\n");
 	printf("  -I<dir>  --include=<dir>\n");
 	printf("                Add a directory to the include directories.\n");
-	printf("  --outtype=<type>\n");
-	printf("                Specify the output type:\n");
-	printf("                shared, raw, executable\n");
 }
 
 // Apply default options for options not already set.
 void apply_defaults(options_t *options) {
 	if (!options->outputFile) {
 		options->outputFile = "a.out";
-		options->outputType = "executable";
-	} else if (!options->outputType) {
-		size_t len = strlen(options->outputFile);
-		if (!strcmp(&options->outputFile[len - 3], ".so")) {
-			options->outputType = "shared";
-		} else if (!strcmp(&options->outputFile[len - 3], ".o")) {
-			options->outputType = "shared";
-		} else if (!strcmp(&options->outputFile[len - 4], ".bin")) {
-			options->outputType = "raw";
-		} else {
-			options->outputType = "executable";
-		}
 	}
 }
 

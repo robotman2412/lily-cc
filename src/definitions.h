@@ -320,6 +320,12 @@ typedef enum simple_type {
 	
 } simple_type_t;
 
+// Whether a type is signed.
+// Only applies to integer types.
+static inline bool STYPE_IS_SIGNED(simple_type_t type) {
+	return type <= STYPE_S_LONGER && (type & 1);
+}
+
 #ifdef CHAR_IS_SIGNED
 // 'char' type
 // The character's default signedness depends on the machine.

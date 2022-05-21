@@ -1,8 +1,8 @@
-/* A Bison parser, made by GNU Bison 3.7.6.  */
+/* A Bison parser, made by GNU Bison 3.5.1.  */
 
 /* Bison interface for Yacc-like parsers in C
 
-   Copyright (C) 1984, 1989-1990, 2000-2015, 2018-2021 Free Software Foundation,
+   Copyright (C) 1984, 1989-1990, 2000-2015, 2018-2020 Free Software Foundation,
    Inc.
 
    This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 /* As a special exception, you may create a larger work that contains
    part or all of the Bison parser skeleton and distribute that work
@@ -31,9 +31,8 @@
    This special exception was added by the Free Software Foundation in
    version 2.2 of Bison.  */
 
-/* DO NOT RELY ON FEATURES THAT ARE NOT DOCUMENTED in the manual,
-   especially those whose name start with YY_ or yy_.  They are
-   private implementation details that can be changed or removed.  */
+/* Undocumented macros, especially those whose name start with YY_,
+   are private implementation details.  Do not rely on them.  */
 
 #ifndef YY_YY_SRC_PARSER_H_INCLUDED
 # define YY_YY_SRC_PARSER_H_INCLUDED
@@ -57,84 +56,79 @@ extern int  yylex  (parser_ctx_t *ctx);
 extern void yyerror(parser_ctx_t *ctx, char *msg);
 
 
-#line 61 "src/parser.h"
+#line 60 "src/parser.h"
 
-/* Token kinds.  */
+/* Token type.  */
 #ifndef YYTOKENTYPE
 # define YYTOKENTYPE
   enum yytokentype
   {
-    YYEMPTY = -2,
-    YYEOF = 0,                     /* "end of file"  */
-    YYerror = 256,                 /* error  */
-    YYUNDEF = 257,                 /* "invalid token"  */
-    TKN_UNSIGNED = 258,            /* "unsigned"  */
-    TKN_SIGNED = 259,              /* "signed"  */
-    TKN_FLOAT = 260,               /* "float"  */
-    TKN_DOUBLE = 261,              /* "double"  */
-    TKN_BOOL = 262,                /* "_Bool"  */
-    TKN_CHAR = 263,                /* "char"  */
-    TKN_SHORT = 264,               /* "short"  */
-    TKN_INT = 265,                 /* "int"  */
-    TKN_LONG = 266,                /* "long"  */
-    TKN_VOID = 267,                /* "void"  */
-    TKN_VOLATILE = 268,            /* "volatile"  */
-    TKN_INLINE = 269,              /* "inline"  */
-    TKN_GOTO = 270,                /* "goto"  */
-    TKN_IF = 271,                  /* "if"  */
-    TKN_ELSE = 272,                /* "else"  */
-    TKN_WHILE = 273,               /* "while"  */
-    TKN_RETURN = 274,              /* "return"  */
-    TKN_ASM = 275,                 /* "asm"  */
-    TKN_THEN = 276,                /* "then"  */
-    TKN_LPAR = 277,                /* "("  */
-    TKN_RPAR = 278,                /* ")"  */
-    TKN_LBRAC = 279,               /* "{"  */
-    TKN_RBRAC = 280,               /* "}"  */
-    TKN_LSBRAC = 281,              /* "["  */
-    TKN_RSBRAC = 282,              /* "]"  */
-    TKN_SEMI = 283,                /* ";"  */
-    TKN_COLON = 284,               /* ":"  */
-    TKN_COMMA = 285,               /* ","  */
-    TKN_IVAL = 286,                /* TKN_IVAL  */
-    TKN_STRVAL = 287,              /* TKN_STRVAL  */
-    TKN_IDENT = 288,               /* TKN_IDENT  */
-    TKN_GARBAGE = 289,             /* TKN_GARBAGE  */
-    TKN_ASSIGN_ADD = 290,          /* "+="  */
-    TKN_ASSIGN_SUB = 291,          /* "-="  */
-    TKN_ASSIGN_SHL = 292,          /* "<<="  */
-    TKN_ASSIGN_SHR = 293,          /* ">>="  */
-    TKN_ASSIGN_MUL = 294,          /* "*="  */
-    TKN_ASSIGN_DIV = 295,          /* "/="  */
-    TKN_ASSIGN_REM = 296,          /* "%="  */
-    TKN_ASSIGN_AND = 297,          /* "&="  */
-    TKN_ASSIGN_OR = 298,           /* "|="  */
-    TKN_ASSIGN_XOR = 299,          /* "^="  */
-    TKN_INC = 300,                 /* "++"  */
-    TKN_DEC = 301,                 /* "--"  */
-    TKN_LOGIC_AND = 302,           /* "&&"  */
-    TKN_LOGIC_OR = 303,            /* "||"  */
-    TKN_ADD = 304,                 /* "+"  */
-    TKN_SUB = 305,                 /* "-"  */
-    TKN_ASSIGN = 306,              /* "="  */
-    TKN_AMP = 307,                 /* "&"  */
-    TKN_MUL = 308,                 /* "*"  */
-    TKN_DIV = 309,                 /* "/"  */
-    TKN_REM = 310,                 /* "%"  */
-    TKN_NOT = 311,                 /* "!"  */
-    TKN_INV = 312,                 /* "~"  */
-    TKN_XOR = 313,                 /* "^"  */
-    TKN_OR = 314,                  /* "|"  */
-    TKN_SHL = 315,                 /* "<<"  */
-    TKN_SHR = 316,                 /* ">>"  */
-    TKN_LT = 317,                  /* "<"  */
-    TKN_LE = 318,                  /* "<="  */
-    TKN_GT = 319,                  /* ">"  */
-    TKN_GE = 320,                  /* ">="  */
-    TKN_EQ = 321,                  /* "=="  */
-    TKN_NE = 322                   /* "!="  */
+    TKN_UNSIGNED = 258,
+    TKN_SIGNED = 259,
+    TKN_FLOAT = 260,
+    TKN_DOUBLE = 261,
+    TKN_BOOL = 262,
+    TKN_CHAR = 263,
+    TKN_SHORT = 264,
+    TKN_INT = 265,
+    TKN_LONG = 266,
+    TKN_VOID = 267,
+    TKN_VOLATILE = 268,
+    TKN_INLINE = 269,
+    TKN_GOTO = 270,
+    TKN_IF = 271,
+    TKN_ELSE = 272,
+    TKN_WHILE = 273,
+    TKN_RETURN = 274,
+    TKN_ASM = 275,
+    TKN_THEN = 276,
+    TKN_LPAR = 277,
+    TKN_RPAR = 278,
+    TKN_LBRAC = 279,
+    TKN_RBRAC = 280,
+    TKN_LSBRAC = 281,
+    TKN_RSBRAC = 282,
+    TKN_SEMI = 283,
+    TKN_COLON = 284,
+    TKN_COMMA = 285,
+    TKN_IVAL = 286,
+    TKN_STRVAL = 287,
+    TKN_IDENT = 288,
+    TKN_GARBAGE = 289,
+    TKN_ASSIGN_ADD = 290,
+    TKN_ASSIGN_SUB = 291,
+    TKN_ASSIGN_SHL = 292,
+    TKN_ASSIGN_SHR = 293,
+    TKN_ASSIGN_MUL = 294,
+    TKN_ASSIGN_DIV = 295,
+    TKN_ASSIGN_REM = 296,
+    TKN_ASSIGN_AND = 297,
+    TKN_ASSIGN_OR = 298,
+    TKN_ASSIGN_XOR = 299,
+    TKN_INC = 300,
+    TKN_DEC = 301,
+    TKN_LOGIC_AND = 302,
+    TKN_LOGIC_OR = 303,
+    TKN_ADD = 304,
+    TKN_SUB = 305,
+    TKN_ASSIGN = 306,
+    TKN_AMP = 307,
+    TKN_MUL = 308,
+    TKN_DIV = 309,
+    TKN_REM = 310,
+    TKN_NOT = 311,
+    TKN_INV = 312,
+    TKN_XOR = 313,
+    TKN_OR = 314,
+    TKN_SHL = 315,
+    TKN_SHR = 316,
+    TKN_LT = 317,
+    TKN_LE = 318,
+    TKN_GT = 319,
+    TKN_GE = 320,
+    TKN_EQ = 321,
+    TKN_NE = 322
   };
-  typedef enum yytokentype yytoken_kind_t;
 #endif
 
 /* Value type.  */
@@ -167,7 +161,7 @@ union YYSTYPE
 	
 	strval_t		garbage;
 
-#line 171 "src/parser.h"
+#line 165 "src/parser.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

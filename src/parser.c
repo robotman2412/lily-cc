@@ -1,8 +1,8 @@
-/* A Bison parser, made by GNU Bison 3.7.6.  */
+/* A Bison parser, made by GNU Bison 3.5.1.  */
 
 /* Bison implementation for Yacc-like parsers in C
 
-   Copyright (C) 1984, 1989-1990, 2000-2015, 2018-2021 Free Software Foundation,
+   Copyright (C) 1984, 1989-1990, 2000-2015, 2018-2020 Free Software Foundation,
    Inc.
 
    This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 /* As a special exception, you may create a larger work that contains
    part or all of the Bison parser skeleton and distribute that work
@@ -34,10 +34,6 @@
 /* C LALR(1) parser skeleton written by Richard Stallman, by
    simplifying the original so-called "semantic" parser.  */
 
-/* DO NOT RELY ON FEATURES THAT ARE NOT DOCUMENTED in the manual,
-   especially those whose name start with YY_ or yy_.  They are
-   private implementation details that can be changed or removed.  */
-
 /* All symbols defined below should begin with yy or YY, to avoid
    infringing on user name space.  This should be done even for local
    variables, as they might otherwise be expanded by user macros.
@@ -45,11 +41,14 @@
    define necessary library symbols; they are noted "INFRINGES ON
    USER NAME SPACE" below.  */
 
-/* Identify Bison output, and Bison version.  */
-#define YYBISON 30706
+/* Undocumented macros, especially those whose name start with YY_,
+   are private implementation details.  Do not rely on them.  */
 
-/* Bison version string.  */
-#define YYBISON_VERSION "3.7.6"
+/* Identify Bison output.  */
+#define YYBISON 1
+
+/* Bison version.  */
+#define YYBISON_VERSION "3.5.1"
 
 /* Skeleton name.  */
 #define YYSKELETON_NAME "yacc.c"
@@ -71,7 +70,7 @@
 
 #define YYDEBUG 1
 
-#line 75 "src/parser.c"
+#line 74 "src/parser.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -94,107 +93,157 @@
 #  endif
 # endif
 
-#include "parser.h"
-/* Symbol kind.  */
-enum yysymbol_kind_t
-{
-  YYSYMBOL_YYEMPTY = -2,
-  YYSYMBOL_YYEOF = 0,                      /* "end of file"  */
-  YYSYMBOL_YYerror = 1,                    /* error  */
-  YYSYMBOL_YYUNDEF = 2,                    /* "invalid token"  */
-  YYSYMBOL_TKN_UNSIGNED = 3,               /* "unsigned"  */
-  YYSYMBOL_TKN_SIGNED = 4,                 /* "signed"  */
-  YYSYMBOL_TKN_FLOAT = 5,                  /* "float"  */
-  YYSYMBOL_TKN_DOUBLE = 6,                 /* "double"  */
-  YYSYMBOL_TKN_BOOL = 7,                   /* "_Bool"  */
-  YYSYMBOL_TKN_CHAR = 8,                   /* "char"  */
-  YYSYMBOL_TKN_SHORT = 9,                  /* "short"  */
-  YYSYMBOL_TKN_INT = 10,                   /* "int"  */
-  YYSYMBOL_TKN_LONG = 11,                  /* "long"  */
-  YYSYMBOL_TKN_VOID = 12,                  /* "void"  */
-  YYSYMBOL_TKN_VOLATILE = 13,              /* "volatile"  */
-  YYSYMBOL_TKN_INLINE = 14,                /* "inline"  */
-  YYSYMBOL_TKN_GOTO = 15,                  /* "goto"  */
-  YYSYMBOL_TKN_IF = 16,                    /* "if"  */
-  YYSYMBOL_TKN_ELSE = 17,                  /* "else"  */
-  YYSYMBOL_TKN_WHILE = 18,                 /* "while"  */
-  YYSYMBOL_TKN_RETURN = 19,                /* "return"  */
-  YYSYMBOL_TKN_ASM = 20,                   /* "asm"  */
-  YYSYMBOL_TKN_THEN = 21,                  /* "then"  */
-  YYSYMBOL_TKN_LPAR = 22,                  /* "("  */
-  YYSYMBOL_TKN_RPAR = 23,                  /* ")"  */
-  YYSYMBOL_TKN_LBRAC = 24,                 /* "{"  */
-  YYSYMBOL_TKN_RBRAC = 25,                 /* "}"  */
-  YYSYMBOL_TKN_LSBRAC = 26,                /* "["  */
-  YYSYMBOL_TKN_RSBRAC = 27,                /* "]"  */
-  YYSYMBOL_TKN_SEMI = 28,                  /* ";"  */
-  YYSYMBOL_TKN_COLON = 29,                 /* ":"  */
-  YYSYMBOL_TKN_COMMA = 30,                 /* ","  */
-  YYSYMBOL_TKN_IVAL = 31,                  /* TKN_IVAL  */
-  YYSYMBOL_TKN_STRVAL = 32,                /* TKN_STRVAL  */
-  YYSYMBOL_TKN_IDENT = 33,                 /* TKN_IDENT  */
-  YYSYMBOL_TKN_GARBAGE = 34,               /* TKN_GARBAGE  */
-  YYSYMBOL_TKN_ASSIGN_ADD = 35,            /* "+="  */
-  YYSYMBOL_TKN_ASSIGN_SUB = 36,            /* "-="  */
-  YYSYMBOL_TKN_ASSIGN_SHL = 37,            /* "<<="  */
-  YYSYMBOL_TKN_ASSIGN_SHR = 38,            /* ">>="  */
-  YYSYMBOL_TKN_ASSIGN_MUL = 39,            /* "*="  */
-  YYSYMBOL_TKN_ASSIGN_DIV = 40,            /* "/="  */
-  YYSYMBOL_TKN_ASSIGN_REM = 41,            /* "%="  */
-  YYSYMBOL_TKN_ASSIGN_AND = 42,            /* "&="  */
-  YYSYMBOL_TKN_ASSIGN_OR = 43,             /* "|="  */
-  YYSYMBOL_TKN_ASSIGN_XOR = 44,            /* "^="  */
-  YYSYMBOL_TKN_INC = 45,                   /* "++"  */
-  YYSYMBOL_TKN_DEC = 46,                   /* "--"  */
-  YYSYMBOL_TKN_LOGIC_AND = 47,             /* "&&"  */
-  YYSYMBOL_TKN_LOGIC_OR = 48,              /* "||"  */
-  YYSYMBOL_TKN_ADD = 49,                   /* "+"  */
-  YYSYMBOL_TKN_SUB = 50,                   /* "-"  */
-  YYSYMBOL_TKN_ASSIGN = 51,                /* "="  */
-  YYSYMBOL_TKN_AMP = 52,                   /* "&"  */
-  YYSYMBOL_TKN_MUL = 53,                   /* "*"  */
-  YYSYMBOL_TKN_DIV = 54,                   /* "/"  */
-  YYSYMBOL_TKN_REM = 55,                   /* "%"  */
-  YYSYMBOL_TKN_NOT = 56,                   /* "!"  */
-  YYSYMBOL_TKN_INV = 57,                   /* "~"  */
-  YYSYMBOL_TKN_XOR = 58,                   /* "^"  */
-  YYSYMBOL_TKN_OR = 59,                    /* "|"  */
-  YYSYMBOL_TKN_SHL = 60,                   /* "<<"  */
-  YYSYMBOL_TKN_SHR = 61,                   /* ">>"  */
-  YYSYMBOL_TKN_LT = 62,                    /* "<"  */
-  YYSYMBOL_TKN_LE = 63,                    /* "<="  */
-  YYSYMBOL_TKN_GT = 64,                    /* ">"  */
-  YYSYMBOL_TKN_GE = 65,                    /* ">="  */
-  YYSYMBOL_TKN_EQ = 66,                    /* "=="  */
-  YYSYMBOL_TKN_NE = 67,                    /* "!="  */
-  YYSYMBOL_YYACCEPT = 68,                  /* $accept  */
-  YYSYMBOL_library = 69,                   /* library  */
-  YYSYMBOL_global = 70,                    /* global  */
-  YYSYMBOL_opt_int = 71,                   /* opt_int  */
-  YYSYMBOL_opt_signed = 72,                /* opt_signed  */
-  YYSYMBOL_simple_long = 73,               /* simple_long  */
-  YYSYMBOL_simple_type = 74,               /* simple_type  */
-  YYSYMBOL_funcdef = 75,                   /* funcdef  */
-  YYSYMBOL_vardecls = 76,                  /* vardecls  */
-  YYSYMBOL_opt_params = 77,                /* opt_params  */
-  YYSYMBOL_params = 78,                    /* params  */
-  YYSYMBOL_idents = 79,                    /* idents  */
-  YYSYMBOL_stmts = 80,                     /* stmts  */
-  YYSYMBOL_stmt = 81,                      /* stmt  */
-  YYSYMBOL_opt_exprs = 82,                 /* opt_exprs  */
-  YYSYMBOL_exprs = 83,                     /* exprs  */
-  YYSYMBOL_expr = 84,                      /* expr  */
-  YYSYMBOL_inline_asm = 85,                /* inline_asm  */
-  YYSYMBOL_asm_qual = 86,                  /* asm_qual  */
-  YYSYMBOL_asm_code = 87,                  /* asm_code  */
-  YYSYMBOL_opt_asm_strs = 88,              /* opt_asm_strs  */
-  YYSYMBOL_asm_strs = 89,                  /* asm_strs  */
-  YYSYMBOL_opt_asm_regs = 90,              /* opt_asm_regs  */
-  YYSYMBOL_asm_regs = 91,                  /* asm_regs  */
-  YYSYMBOL_asm_reg = 92                    /* asm_reg  */
-};
-typedef enum yysymbol_kind_t yysymbol_kind_t;
+/* Enabling verbose error messages.  */
+#ifdef YYERROR_VERBOSE
+# undef YYERROR_VERBOSE
+# define YYERROR_VERBOSE 1
+#else
+# define YYERROR_VERBOSE 0
+#endif
 
+/* Use api.header.include to #include this header
+   instead of duplicating it here.  */
+#ifndef YY_YY_SRC_PARSER_H_INCLUDED
+# define YY_YY_SRC_PARSER_H_INCLUDED
+/* Debug traces.  */
+#ifndef YYDEBUG
+# define YYDEBUG 0
+#endif
+#if YYDEBUG
+extern int yydebug;
+#endif
+/* "%code requires" blocks.  */
+#line 8 "src/parser.bison"
+
+
+#include "parser-util.h"
+#include "debug/pront.h"
+#include <malloc.h>
+#include <string.h>
+
+extern int  yylex  (parser_ctx_t *ctx);
+extern void yyerror(parser_ctx_t *ctx, char *msg);
+
+
+#line 129 "src/parser.c"
+
+/* Token type.  */
+#ifndef YYTOKENTYPE
+# define YYTOKENTYPE
+  enum yytokentype
+  {
+    TKN_UNSIGNED = 258,
+    TKN_SIGNED = 259,
+    TKN_FLOAT = 260,
+    TKN_DOUBLE = 261,
+    TKN_BOOL = 262,
+    TKN_CHAR = 263,
+    TKN_SHORT = 264,
+    TKN_INT = 265,
+    TKN_LONG = 266,
+    TKN_VOID = 267,
+    TKN_VOLATILE = 268,
+    TKN_INLINE = 269,
+    TKN_GOTO = 270,
+    TKN_IF = 271,
+    TKN_ELSE = 272,
+    TKN_WHILE = 273,
+    TKN_RETURN = 274,
+    TKN_ASM = 275,
+    TKN_THEN = 276,
+    TKN_LPAR = 277,
+    TKN_RPAR = 278,
+    TKN_LBRAC = 279,
+    TKN_RBRAC = 280,
+    TKN_LSBRAC = 281,
+    TKN_RSBRAC = 282,
+    TKN_SEMI = 283,
+    TKN_COLON = 284,
+    TKN_COMMA = 285,
+    TKN_IVAL = 286,
+    TKN_STRVAL = 287,
+    TKN_IDENT = 288,
+    TKN_GARBAGE = 289,
+    TKN_ASSIGN_ADD = 290,
+    TKN_ASSIGN_SUB = 291,
+    TKN_ASSIGN_SHL = 292,
+    TKN_ASSIGN_SHR = 293,
+    TKN_ASSIGN_MUL = 294,
+    TKN_ASSIGN_DIV = 295,
+    TKN_ASSIGN_REM = 296,
+    TKN_ASSIGN_AND = 297,
+    TKN_ASSIGN_OR = 298,
+    TKN_ASSIGN_XOR = 299,
+    TKN_INC = 300,
+    TKN_DEC = 301,
+    TKN_LOGIC_AND = 302,
+    TKN_LOGIC_OR = 303,
+    TKN_ADD = 304,
+    TKN_SUB = 305,
+    TKN_ASSIGN = 306,
+    TKN_AMP = 307,
+    TKN_MUL = 308,
+    TKN_DIV = 309,
+    TKN_REM = 310,
+    TKN_NOT = 311,
+    TKN_INV = 312,
+    TKN_XOR = 313,
+    TKN_OR = 314,
+    TKN_SHL = 315,
+    TKN_SHR = 316,
+    TKN_LT = 317,
+    TKN_LE = 318,
+    TKN_GT = 319,
+    TKN_GE = 320,
+    TKN_EQ = 321,
+    TKN_NE = 322
+  };
+#endif
+
+/* Value type.  */
+#if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
+union YYSTYPE
+{
+#line 22 "src/parser.bison"
+
+	pos_t			pos;
+	
+	ival_t			ival;
+	strval_t		strval;
+	
+	ident_t			ident;
+	idents_t		idents;
+	
+	funcdef_t		func;
+	
+	expr_t			expr;
+	exprs_t			exprs;
+	
+	stmt_t			stmt;
+	stmts_t			stmts;
+	
+	iasm_qual_t		asm_qual;
+	iasm_regs_t		asm_regs;
+	iasm_reg_t		asm_reg;
+	
+	ival_t			simple_type;
+	
+	strval_t		garbage;
+
+#line 234 "src/parser.c"
+
+};
+typedef union YYSTYPE YYSTYPE;
+# define YYSTYPE_IS_TRIVIAL 1
+# define YYSTYPE_IS_DECLARED 1
+#endif
+
+
+extern YYSTYPE yylval;
+
+int yyparse (parser_ctx_t *ctx);
+
+#endif /* !YY_YY_SRC_PARSER_H_INCLUDED  */
 
 
 
@@ -233,18 +282,6 @@ typedef __INT_LEAST16_TYPE__ yytype_int16;
 typedef int_least16_t yytype_int16;
 #else
 typedef short yytype_int16;
-#endif
-
-/* Work around bug in HP-UX 11.23, which defines these macros
-   incorrectly for preprocessor constants.  This workaround can likely
-   be removed in 2023, as HPE has promised support for HP-UX 11.23
-   (aka HP-UX 11i v2) only through the end of 2022; see Table 2 of
-   <https://h20195.www2.hpe.com/V2/getpdf.aspx/4AA4-7673ENW.pdf>.  */
-#ifdef __hpux
-# undef UINT_LEAST8_MAX
-# undef UINT_LEAST16_MAX
-# define UINT_LEAST8_MAX 255
-# define UINT_LEAST16_MAX 65535
 #endif
 
 #if defined __UINT_LEAST8_MAX__ && __UINT_LEAST8_MAX__ <= __INT_MAX__
@@ -306,7 +343,6 @@ typedef int yytype_uint16;
 
 #define YYSIZEOF(X) YY_CAST (YYPTRDIFF_T, sizeof (X))
 
-
 /* Stored state numbers (used for stacks). */
 typedef yytype_uint8 yy_state_t;
 
@@ -324,7 +360,6 @@ typedef int yy_state_fast_t;
 #  define YY_(Msgid) Msgid
 # endif
 #endif
-
 
 #ifndef YY_ATTRIBUTE_PURE
 # if defined __GNUC__ && 2 < __GNUC__ + (96 <= __GNUC_MINOR__)
@@ -344,9 +379,9 @@ typedef int yy_state_fast_t;
 
 /* Suppress unused-variable warnings by "using" E.  */
 #if ! defined lint || defined __GNUC__
-# define YY_USE(E) ((void) (E))
+# define YYUSE(E) ((void) (E))
 #else
-# define YY_USE(E) /* empty */
+# define YYUSE(E) /* empty */
 #endif
 
 #if defined __GNUC__ && ! defined __ICC && 407 <= __GNUC__ * 100 + __GNUC_MINOR__
@@ -383,7 +418,7 @@ typedef int yy_state_fast_t;
 
 #define YY_ASSERT(E) ((void) (0 && (E)))
 
-#if !defined yyoverflow
+#if ! defined yyoverflow || YYERROR_VERBOSE
 
 /* The parser invokes alloca or malloc; define the necessary symbols.  */
 
@@ -448,7 +483,8 @@ void free (void *); /* INFRINGES ON USER NAME SPACE */
 #   endif
 #  endif
 # endif
-#endif /* !defined yyoverflow */
+#endif /* ! defined yyoverflow || YYERROR_VERBOSE */
+
 
 #if (! defined yyoverflow \
      && (! defined __cplusplus \
@@ -524,16 +560,14 @@ union yyalloc
 /* YYNSTATES -- Number of states.  */
 #define YYNSTATES  205
 
-/* YYMAXUTOK -- Last valid token kind.  */
+#define YYUNDEFTOK  2
 #define YYMAXUTOK   322
 
 
 /* YYTRANSLATE(TOKEN-NUM) -- Symbol number corresponding to TOKEN-NUM
    as returned by yylex, with out-of-bounds checking.  */
-#define YYTRANSLATE(YYX)                                \
-  (0 <= (YYX) && (YYX) <= YYMAXUTOK                     \
-   ? YY_CAST (yysymbol_kind_t, yytranslate[YYX])        \
-   : YYSYMBOL_YYUNDEF)
+#define YYTRANSLATE(YYX)                                                \
+  (0 <= (YYX) && (YYX) <= YYMAXUTOK ? yytranslate[YYX] : YYUNDEFTOK)
 
 /* YYTRANSLATE[TOKEN-NUM] -- Symbol number corresponding to TOKEN-NUM
    as returned by yylex.  */
@@ -593,44 +627,30 @@ static const yytype_int16 yyrline[] =
 };
 #endif
 
-/** Accessing symbol of state STATE.  */
-#define YY_ACCESSING_SYMBOL(State) YY_CAST (yysymbol_kind_t, yystos[State])
-
-#if YYDEBUG || 0
-/* The user-facing name of the symbol whose (internal) number is
-   YYSYMBOL.  No bounds checking.  */
-static const char *yysymbol_name (yysymbol_kind_t yysymbol) YY_ATTRIBUTE_UNUSED;
-
+#if YYDEBUG || YYERROR_VERBOSE || 0
 /* YYTNAME[SYMBOL-NUM] -- String name of the symbol SYMBOL-NUM.
    First, the terminals, then, starting at YYNTOKENS, nonterminals.  */
 static const char *const yytname[] =
 {
-  "\"end of file\"", "error", "\"invalid token\"", "\"unsigned\"",
-  "\"signed\"", "\"float\"", "\"double\"", "\"_Bool\"", "\"char\"",
-  "\"short\"", "\"int\"", "\"long\"", "\"void\"", "\"volatile\"",
-  "\"inline\"", "\"goto\"", "\"if\"", "\"else\"", "\"while\"",
-  "\"return\"", "\"asm\"", "\"then\"", "\"(\"", "\")\"", "\"{\"", "\"}\"",
-  "\"[\"", "\"]\"", "\";\"", "\":\"", "\",\"", "TKN_IVAL", "TKN_STRVAL",
-  "TKN_IDENT", "TKN_GARBAGE", "\"+=\"", "\"-=\"", "\"<<=\"", "\">>=\"",
-  "\"*=\"", "\"/=\"", "\"%=\"", "\"&=\"", "\"|=\"", "\"^=\"", "\"++\"",
-  "\"--\"", "\"&&\"", "\"||\"", "\"+\"", "\"-\"", "\"=\"", "\"&\"",
-  "\"*\"", "\"/\"", "\"%\"", "\"!\"", "\"~\"", "\"^\"", "\"|\"", "\"<<\"",
-  "\">>\"", "\"<\"", "\"<=\"", "\">\"", "\">=\"", "\"==\"", "\"!=\"",
-  "$accept", "library", "global", "opt_int", "opt_signed", "simple_long",
-  "simple_type", "funcdef", "vardecls", "opt_params", "params", "idents",
-  "stmts", "stmt", "opt_exprs", "exprs", "expr", "inline_asm", "asm_qual",
-  "asm_code", "opt_asm_strs", "asm_strs", "opt_asm_regs", "asm_regs",
-  "asm_reg", YY_NULLPTR
+  "$end", "error", "$undefined", "\"unsigned\"", "\"signed\"",
+  "\"float\"", "\"double\"", "\"_Bool\"", "\"char\"", "\"short\"",
+  "\"int\"", "\"long\"", "\"void\"", "\"volatile\"", "\"inline\"",
+  "\"goto\"", "\"if\"", "\"else\"", "\"while\"", "\"return\"", "\"asm\"",
+  "\"then\"", "\"(\"", "\")\"", "\"{\"", "\"}\"", "\"[\"", "\"]\"",
+  "\";\"", "\":\"", "\",\"", "TKN_IVAL", "TKN_STRVAL", "TKN_IDENT",
+  "TKN_GARBAGE", "\"+=\"", "\"-=\"", "\"<<=\"", "\">>=\"", "\"*=\"",
+  "\"/=\"", "\"%=\"", "\"&=\"", "\"|=\"", "\"^=\"", "\"++\"", "\"--\"",
+  "\"&&\"", "\"||\"", "\"+\"", "\"-\"", "\"=\"", "\"&\"", "\"*\"", "\"/\"",
+  "\"%\"", "\"!\"", "\"~\"", "\"^\"", "\"|\"", "\"<<\"", "\">>\"", "\"<\"",
+  "\"<=\"", "\">\"", "\">=\"", "\"==\"", "\"!=\"", "$accept", "library",
+  "global", "opt_int", "opt_signed", "simple_long", "simple_type",
+  "funcdef", "vardecls", "opt_params", "params", "idents", "stmts", "stmt",
+  "opt_exprs", "exprs", "expr", "inline_asm", "asm_qual", "asm_code",
+  "opt_asm_strs", "asm_strs", "opt_asm_regs", "asm_regs", "asm_reg", YY_NULLPTR
 };
-
-static const char *
-yysymbol_name (yysymbol_kind_t yysymbol)
-{
-  return yytname[yysymbol];
-}
 #endif
 
-#ifdef YYPRINT
+# ifdef YYPRINT
 /* YYTOKNUM[NUM] -- (External) token number corresponding to the
    (internal) symbol number NUM (which must be that of a token).  */
 static const yytype_int16 yytoknum[] =
@@ -643,7 +663,7 @@ static const yytype_int16 yytoknum[] =
      305,   306,   307,   308,   309,   310,   311,   312,   313,   314,
      315,   316,   317,   318,   319,   320,   321,   322
 };
-#endif
+# endif
 
 #define YYPACT_NINF (-163)
 
@@ -719,9 +739,9 @@ static const yytype_int16 yypgoto[] =
 };
 
   /* YYDEFGOTO[NTERM-NUM].  */
-static const yytype_uint8 yydefgoto[] =
+static const yytype_int16 yydefgoto[] =
 {
-       0,     9,    10,    24,    11,    25,    71,    13,    72,    45,
+      -1,     9,    10,    24,    11,    25,    71,    13,    72,    45,
       46,    31,    54,    73,   132,   133,    74,    75,    80,   129,
      198,   199,   179,   180,   181
 };
@@ -969,10 +989,10 @@ static const yytype_int8 yyr2[] =
 };
 
 
-enum { YYENOMEM = -2 };
-
 #define yyerrok         (yyerrstatus = 0)
 #define yyclearin       (yychar = YYEMPTY)
+#define YYEMPTY         (-2)
+#define YYEOF           0
 
 #define YYACCEPT        goto yyacceptlab
 #define YYABORT         goto yyabortlab
@@ -998,9 +1018,10 @@ enum { YYENOMEM = -2 };
       }                                                           \
   while (0)
 
-/* Backward compatibility with an undocumented macro.
-   Use YYerror or YYUNDEF. */
-#define YYERRCODE YYUNDEF
+/* Error token number */
+#define YYTERROR        1
+#define YYERRCODE       256
+
 
 
 /* Enable debugging if requested.  */
@@ -1018,18 +1039,18 @@ do {                                            \
 } while (0)
 
 /* This macro is provided for backward compatibility. */
-# ifndef YY_LOCATION_PRINT
-#  define YY_LOCATION_PRINT(File, Loc) ((void) 0)
-# endif
+#ifndef YY_LOCATION_PRINT
+# define YY_LOCATION_PRINT(File, Loc) ((void) 0)
+#endif
 
 
-# define YY_SYMBOL_PRINT(Title, Kind, Value, Location)                    \
+# define YY_SYMBOL_PRINT(Title, Type, Value, Location)                    \
 do {                                                                      \
   if (yydebug)                                                            \
     {                                                                     \
       YYFPRINTF (stderr, "%s ", Title);                                   \
       yy_symbol_print (stderr,                                            \
-                  Kind, Value, ctx); \
+                  Type, Value, ctx); \
       YYFPRINTF (stderr, "\n");                                           \
     }                                                                     \
 } while (0)
@@ -1040,20 +1061,19 @@ do {                                                                      \
 `-----------------------------------*/
 
 static void
-yy_symbol_value_print (FILE *yyo,
-                       yysymbol_kind_t yykind, YYSTYPE const * const yyvaluep, parser_ctx_t *ctx)
+yy_symbol_value_print (FILE *yyo, int yytype, YYSTYPE const * const yyvaluep, parser_ctx_t *ctx)
 {
   FILE *yyoutput = yyo;
-  YY_USE (yyoutput);
-  YY_USE (ctx);
+  YYUSE (yyoutput);
+  YYUSE (ctx);
   if (!yyvaluep)
     return;
 # ifdef YYPRINT
-  if (yykind < YYNTOKENS)
-    YYPRINT (yyo, yytoknum[yykind], *yyvaluep);
+  if (yytype < YYNTOKENS)
+    YYPRINT (yyo, yytoknum[yytype], *yyvaluep);
 # endif
   YY_IGNORE_MAYBE_UNINITIALIZED_BEGIN
-  YY_USE (yykind);
+  YYUSE (yytype);
   YY_IGNORE_MAYBE_UNINITIALIZED_END
 }
 
@@ -1063,13 +1083,12 @@ yy_symbol_value_print (FILE *yyo,
 `---------------------------*/
 
 static void
-yy_symbol_print (FILE *yyo,
-                 yysymbol_kind_t yykind, YYSTYPE const * const yyvaluep, parser_ctx_t *ctx)
+yy_symbol_print (FILE *yyo, int yytype, YYSTYPE const * const yyvaluep, parser_ctx_t *ctx)
 {
   YYFPRINTF (yyo, "%s %s (",
-             yykind < YYNTOKENS ? "token" : "nterm", yysymbol_name (yykind));
+             yytype < YYNTOKENS ? "token" : "nterm", yytname[yytype]);
 
-  yy_symbol_value_print (yyo, yykind, yyvaluep, ctx);
+  yy_symbol_value_print (yyo, yytype, yyvaluep, ctx);
   YYFPRINTF (yyo, ")");
 }
 
@@ -1102,8 +1121,7 @@ do {                                                            \
 `------------------------------------------------*/
 
 static void
-yy_reduce_print (yy_state_t *yyssp, YYSTYPE *yyvsp,
-                 int yyrule, parser_ctx_t *ctx)
+yy_reduce_print (yy_state_t *yyssp, YYSTYPE *yyvsp, int yyrule, parser_ctx_t *ctx)
 {
   int yylno = yyrline[yyrule];
   int yynrhs = yyr2[yyrule];
@@ -1115,8 +1133,9 @@ yy_reduce_print (yy_state_t *yyssp, YYSTYPE *yyvsp,
     {
       YYFPRINTF (stderr, "   $%d = ", yyi + 1);
       yy_symbol_print (stderr,
-                       YY_ACCESSING_SYMBOL (+yyssp[yyi + 1 - yynrhs]),
-                       &yyvsp[(yyi + 1) - (yynrhs)], ctx);
+                       yystos[+yyssp[yyi + 1 - yynrhs]],
+                       &yyvsp[(yyi + 1) - (yynrhs)]
+                                              , ctx);
       YYFPRINTF (stderr, "\n");
     }
 }
@@ -1131,8 +1150,8 @@ do {                                    \
    multiple parsers can coexist.  */
 int yydebug;
 #else /* !YYDEBUG */
-# define YYDPRINTF(Args) ((void) 0)
-# define YY_SYMBOL_PRINT(Title, Kind, Value, Location)
+# define YYDPRINTF(Args)
+# define YY_SYMBOL_PRINT(Title, Type, Value, Location)
 # define YY_STACK_PRINT(Bottom, Top)
 # define YY_REDUCE_PRINT(Rule)
 #endif /* !YYDEBUG */
@@ -1155,39 +1174,266 @@ int yydebug;
 #endif
 
 
+#if YYERROR_VERBOSE
 
+# ifndef yystrlen
+#  if defined __GLIBC__ && defined _STRING_H
+#   define yystrlen(S) (YY_CAST (YYPTRDIFF_T, strlen (S)))
+#  else
+/* Return the length of YYSTR.  */
+static YYPTRDIFF_T
+yystrlen (const char *yystr)
+{
+  YYPTRDIFF_T yylen;
+  for (yylen = 0; yystr[yylen]; yylen++)
+    continue;
+  return yylen;
+}
+#  endif
+# endif
 
+# ifndef yystpcpy
+#  if defined __GLIBC__ && defined _STRING_H && defined _GNU_SOURCE
+#   define yystpcpy stpcpy
+#  else
+/* Copy YYSRC to YYDEST, returning the address of the terminating '\0' in
+   YYDEST.  */
+static char *
+yystpcpy (char *yydest, const char *yysrc)
+{
+  char *yyd = yydest;
+  const char *yys = yysrc;
 
+  while ((*yyd++ = *yys++) != '\0')
+    continue;
+
+  return yyd - 1;
+}
+#  endif
+# endif
+
+# ifndef yytnamerr
+/* Copy to YYRES the contents of YYSTR after stripping away unnecessary
+   quotes and backslashes, so that it's suitable for yyerror.  The
+   heuristic is that double-quoting is unnecessary unless the string
+   contains an apostrophe, a comma, or backslash (other than
+   backslash-backslash).  YYSTR is taken from yytname.  If YYRES is
+   null, do not copy; instead, return the length of what the result
+   would have been.  */
+static YYPTRDIFF_T
+yytnamerr (char *yyres, const char *yystr)
+{
+  if (*yystr == '"')
+    {
+      YYPTRDIFF_T yyn = 0;
+      char const *yyp = yystr;
+
+      for (;;)
+        switch (*++yyp)
+          {
+          case '\'':
+          case ',':
+            goto do_not_strip_quotes;
+
+          case '\\':
+            if (*++yyp != '\\')
+              goto do_not_strip_quotes;
+            else
+              goto append;
+
+          append:
+          default:
+            if (yyres)
+              yyres[yyn] = *yyp;
+            yyn++;
+            break;
+
+          case '"':
+            if (yyres)
+              yyres[yyn] = '\0';
+            return yyn;
+          }
+    do_not_strip_quotes: ;
+    }
+
+  if (yyres)
+    return yystpcpy (yyres, yystr) - yyres;
+  else
+    return yystrlen (yystr);
+}
+# endif
+
+/* Copy into *YYMSG, which is of size *YYMSG_ALLOC, an error message
+   about the unexpected token YYTOKEN for the state stack whose top is
+   YYSSP.
+
+   Return 0 if *YYMSG was successfully written.  Return 1 if *YYMSG is
+   not large enough to hold the message.  In that case, also set
+   *YYMSG_ALLOC to the required number of bytes.  Return 2 if the
+   required number of bytes is too large to store.  */
+static int
+yysyntax_error (YYPTRDIFF_T *yymsg_alloc, char **yymsg,
+                yy_state_t *yyssp, int yytoken)
+{
+  enum { YYERROR_VERBOSE_ARGS_MAXIMUM = 5 };
+  /* Internationalized format string. */
+  const char *yyformat = YY_NULLPTR;
+  /* Arguments of yyformat: reported tokens (one for the "unexpected",
+     one per "expected"). */
+  char const *yyarg[YYERROR_VERBOSE_ARGS_MAXIMUM];
+  /* Actual size of YYARG. */
+  int yycount = 0;
+  /* Cumulated lengths of YYARG.  */
+  YYPTRDIFF_T yysize = 0;
+
+  /* There are many possibilities here to consider:
+     - If this state is a consistent state with a default action, then
+       the only way this function was invoked is if the default action
+       is an error action.  In that case, don't check for expected
+       tokens because there are none.
+     - The only way there can be no lookahead present (in yychar) is if
+       this state is a consistent state with a default action.  Thus,
+       detecting the absence of a lookahead is sufficient to determine
+       that there is no unexpected or expected token to report.  In that
+       case, just report a simple "syntax error".
+     - Don't assume there isn't a lookahead just because this state is a
+       consistent state with a default action.  There might have been a
+       previous inconsistent state, consistent state with a non-default
+       action, or user semantic action that manipulated yychar.
+     - Of course, the expected token list depends on states to have
+       correct lookahead information, and it depends on the parser not
+       to perform extra reductions after fetching a lookahead from the
+       scanner and before detecting a syntax error.  Thus, state merging
+       (from LALR or IELR) and default reductions corrupt the expected
+       token list.  However, the list is correct for canonical LR with
+       one exception: it will still contain any token that will not be
+       accepted due to an error action in a later state.
+  */
+  if (yytoken != YYEMPTY)
+    {
+      int yyn = yypact[+*yyssp];
+      YYPTRDIFF_T yysize0 = yytnamerr (YY_NULLPTR, yytname[yytoken]);
+      yysize = yysize0;
+      yyarg[yycount++] = yytname[yytoken];
+      if (!yypact_value_is_default (yyn))
+        {
+          /* Start YYX at -YYN if negative to avoid negative indexes in
+             YYCHECK.  In other words, skip the first -YYN actions for
+             this state because they are default actions.  */
+          int yyxbegin = yyn < 0 ? -yyn : 0;
+          /* Stay within bounds of both yycheck and yytname.  */
+          int yychecklim = YYLAST - yyn + 1;
+          int yyxend = yychecklim < YYNTOKENS ? yychecklim : YYNTOKENS;
+          int yyx;
+
+          for (yyx = yyxbegin; yyx < yyxend; ++yyx)
+            if (yycheck[yyx + yyn] == yyx && yyx != YYTERROR
+                && !yytable_value_is_error (yytable[yyx + yyn]))
+              {
+                if (yycount == YYERROR_VERBOSE_ARGS_MAXIMUM)
+                  {
+                    yycount = 1;
+                    yysize = yysize0;
+                    break;
+                  }
+                yyarg[yycount++] = yytname[yyx];
+                {
+                  YYPTRDIFF_T yysize1
+                    = yysize + yytnamerr (YY_NULLPTR, yytname[yyx]);
+                  if (yysize <= yysize1 && yysize1 <= YYSTACK_ALLOC_MAXIMUM)
+                    yysize = yysize1;
+                  else
+                    return 2;
+                }
+              }
+        }
+    }
+
+  switch (yycount)
+    {
+# define YYCASE_(N, S)                      \
+      case N:                               \
+        yyformat = S;                       \
+      break
+    default: /* Avoid compiler warnings. */
+      YYCASE_(0, YY_("syntax error"));
+      YYCASE_(1, YY_("syntax error, unexpected %s"));
+      YYCASE_(2, YY_("syntax error, unexpected %s, expecting %s"));
+      YYCASE_(3, YY_("syntax error, unexpected %s, expecting %s or %s"));
+      YYCASE_(4, YY_("syntax error, unexpected %s, expecting %s or %s or %s"));
+      YYCASE_(5, YY_("syntax error, unexpected %s, expecting %s or %s or %s or %s"));
+# undef YYCASE_
+    }
+
+  {
+    /* Don't count the "%s"s in the final size, but reserve room for
+       the terminator.  */
+    YYPTRDIFF_T yysize1 = yysize + (yystrlen (yyformat) - 2 * yycount) + 1;
+    if (yysize <= yysize1 && yysize1 <= YYSTACK_ALLOC_MAXIMUM)
+      yysize = yysize1;
+    else
+      return 2;
+  }
+
+  if (*yymsg_alloc < yysize)
+    {
+      *yymsg_alloc = 2 * yysize;
+      if (! (yysize <= *yymsg_alloc
+             && *yymsg_alloc <= YYSTACK_ALLOC_MAXIMUM))
+        *yymsg_alloc = YYSTACK_ALLOC_MAXIMUM;
+      return 1;
+    }
+
+  /* Avoid sprintf, as that infringes on the user's name space.
+     Don't have undefined behavior even if the translation
+     produced a string with the wrong number of "%s"s.  */
+  {
+    char *yyp = *yymsg;
+    int yyi = 0;
+    while ((*yyp = *yyformat) != '\0')
+      if (*yyp == '%' && yyformat[1] == 's' && yyi < yycount)
+        {
+          yyp += yytnamerr (yyp, yyarg[yyi++]);
+          yyformat += 2;
+        }
+      else
+        {
+          ++yyp;
+          ++yyformat;
+        }
+  }
+  return 0;
+}
+#endif /* YYERROR_VERBOSE */
 
 /*-----------------------------------------------.
 | Release the memory associated to this symbol.  |
 `-----------------------------------------------*/
 
 static void
-yydestruct (const char *yymsg,
-            yysymbol_kind_t yykind, YYSTYPE *yyvaluep, parser_ctx_t *ctx)
+yydestruct (const char *yymsg, int yytype, YYSTYPE *yyvaluep, parser_ctx_t *ctx)
 {
-  YY_USE (yyvaluep);
-  YY_USE (ctx);
+  YYUSE (yyvaluep);
+  YYUSE (ctx);
   if (!yymsg)
     yymsg = "Deleting";
-  YY_SYMBOL_PRINT (yymsg, yykind, yyvaluep, yylocationp);
+  YY_SYMBOL_PRINT (yymsg, yytype, yyvaluep, yylocationp);
 
   YY_IGNORE_MAYBE_UNINITIALIZED_BEGIN
-  YY_USE (yykind);
+  YYUSE (yytype);
   YY_IGNORE_MAYBE_UNINITIALIZED_END
 }
 
 
-/* Lookahead token kind.  */
+
+
+/* The lookahead symbol.  */
 int yychar;
 
 /* The semantic value of the lookahead symbol.  */
 YYSTYPE yylval;
 /* Number of syntax errors so far.  */
 int yynerrs;
-
-
 
 
 /*----------.
@@ -1197,36 +1443,43 @@ int yynerrs;
 int
 yyparse (parser_ctx_t *ctx)
 {
-    yy_state_fast_t yystate = 0;
+    yy_state_fast_t yystate;
     /* Number of tokens to shift before error messages enabled.  */
-    int yyerrstatus = 0;
+    int yyerrstatus;
 
-    /* Refer to the stacks through separate pointers, to allow yyoverflow
+    /* The stacks and their tools:
+       'yyss': related to states.
+       'yyvs': related to semantic values.
+
+       Refer to the stacks through separate pointers, to allow yyoverflow
        to reallocate them elsewhere.  */
 
-    /* Their size.  */
-    YYPTRDIFF_T yystacksize = YYINITDEPTH;
-
-    /* The state stack: array, bottom, top.  */
+    /* The state stack.  */
     yy_state_t yyssa[YYINITDEPTH];
-    yy_state_t *yyss = yyssa;
-    yy_state_t *yyssp = yyss;
+    yy_state_t *yyss;
+    yy_state_t *yyssp;
 
-    /* The semantic value stack: array, bottom, top.  */
+    /* The semantic value stack.  */
     YYSTYPE yyvsa[YYINITDEPTH];
-    YYSTYPE *yyvs = yyvsa;
-    YYSTYPE *yyvsp = yyvs;
+    YYSTYPE *yyvs;
+    YYSTYPE *yyvsp;
+
+    YYPTRDIFF_T yystacksize;
 
   int yyn;
-  /* The return value of yyparse.  */
   int yyresult;
-  /* Lookahead symbol kind.  */
-  yysymbol_kind_t yytoken = YYSYMBOL_YYEMPTY;
+  /* Lookahead token as an internal (translated) token number.  */
+  int yytoken = 0;
   /* The variables used to return semantic value and location from the
      action routines.  */
   YYSTYPE yyval;
 
-
+#if YYERROR_VERBOSE
+  /* Buffer for error messages, and its allocated size.  */
+  char yymsgbuf[128];
+  char *yymsg = yymsgbuf;
+  YYPTRDIFF_T yymsg_alloc = sizeof yymsgbuf;
+#endif
 
 #define YYPOPSTACK(N)   (yyvsp -= (N), yyssp -= (N))
 
@@ -1234,8 +1487,15 @@ yyparse (parser_ctx_t *ctx)
      Keep to zero when no symbol should be popped.  */
   int yylen = 0;
 
+  yyssp = yyss = yyssa;
+  yyvsp = yyvs = yyvsa;
+  yystacksize = YYINITDEPTH;
+
   YYDPRINTF ((stderr, "Starting parse\n"));
 
+  yystate = 0;
+  yyerrstatus = 0;
+  yynerrs = 0;
   yychar = YYEMPTY; /* Cause a token to be read.  */
   goto yysetstate;
 
@@ -1258,7 +1518,6 @@ yysetstate:
   YY_IGNORE_USELESS_CAST_BEGIN
   *yyssp = YY_CAST (yy_state_t, yystate);
   YY_IGNORE_USELESS_CAST_END
-  YY_STACK_PRINT (yyss, yyssp);
 
   if (yyss + yystacksize - 1 <= yyssp)
 #if !defined yyoverflow && !defined YYSTACK_RELOCATE
@@ -1304,7 +1563,7 @@ yysetstate:
           goto yyexhaustedlab;
         YYSTACK_RELOCATE (yyss_alloc, yyss);
         YYSTACK_RELOCATE (yyvs_alloc, yyvs);
-#  undef YYSTACK_RELOCATE
+# undef YYSTACK_RELOCATE
         if (yyss1 != yyssa)
           YYSTACK_FREE (yyss1);
       }
@@ -1343,28 +1602,17 @@ yybackup:
 
   /* Not known => get a lookahead token if don't already have one.  */
 
-  /* YYCHAR is either empty, or end-of-input, or a valid lookahead.  */
+  /* YYCHAR is either YYEMPTY or YYEOF or a valid lookahead symbol.  */
   if (yychar == YYEMPTY)
     {
-      YYDPRINTF ((stderr, "Reading a token\n"));
+      YYDPRINTF ((stderr, "Reading a token: "));
       yychar = yylex (ctx);
     }
 
   if (yychar <= YYEOF)
     {
-      yychar = YYEOF;
-      yytoken = YYSYMBOL_YYEOF;
+      yychar = yytoken = YYEOF;
       YYDPRINTF ((stderr, "Now at end of input.\n"));
-    }
-  else if (yychar == YYerror)
-    {
-      /* The scanner already issued an error message, process directly
-         to error recovery.  But do not keep the error token as
-         lookahead, it is too special and may lead us to an endless
-         loop in error recovery. */
-      yychar = YYUNDEF;
-      yytoken = YYSYMBOL_YYerror;
-      goto yyerrlab1;
     }
   else
     {
@@ -1434,626 +1682,626 @@ yyreduce:
   YY_REDUCE_PRINT (yyn);
   switch (yyn)
     {
-  case 4: /* global: funcdef  */
+  case 4:
 #line 128 "src/parser.bison"
                                 {function_added(ctx, &(yyvsp[0].func));}
-#line 1441 "src/parser.c"
+#line 1689 "src/parser.c"
     break;
 
-  case 6: /* opt_int: "int"  */
+  case 6:
 #line 131 "src/parser.bison"
                                                                                                         {(yyval.pos)=(yyvsp[0].pos);}
-#line 1447 "src/parser.c"
+#line 1695 "src/parser.c"
     break;
 
-  case 7: /* opt_int: %empty  */
+  case 7:
 #line 132 "src/parser.bison"
                                                                                                                 {(yyval.pos)=pos_empty(ctx->tokeniser_ctx);}
-#line 1453 "src/parser.c"
+#line 1701 "src/parser.c"
     break;
 
-  case 8: /* opt_signed: "signed"  */
+  case 8:
 #line 133 "src/parser.bison"
                                                                                                         {(yyval.pos)=(yyvsp[0].pos);}
-#line 1459 "src/parser.c"
+#line 1707 "src/parser.c"
     break;
 
-  case 9: /* opt_signed: %empty  */
+  case 9:
 #line 134 "src/parser.bison"
                                                                                                                 {(yyval.pos)=pos_empty(ctx->tokeniser_ctx);}
-#line 1465 "src/parser.c"
+#line 1713 "src/parser.c"
     break;
 
-  case 10: /* simple_long: opt_int  */
+  case 10:
 #line 137 "src/parser.bison"
                                                                                                 {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=STYPE_S_LONG;}
-#line 1471 "src/parser.c"
+#line 1719 "src/parser.c"
     break;
 
-  case 11: /* simple_long: "double"  */
+  case 11:
 #line 138 "src/parser.bison"
                                                                                                                 {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=STYPE_LONG_DOUBLE;}
-#line 1477 "src/parser.c"
+#line 1725 "src/parser.c"
     break;
 
-  case 12: /* simple_long: "long" opt_int  */
+  case 12:
 #line 139 "src/parser.bison"
                                                                                                         {(yyval.simple_type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_S_LONGER;}
-#line 1483 "src/parser.c"
+#line 1731 "src/parser.c"
     break;
 
-  case 13: /* simple_type: "char"  */
+  case 13:
 #line 141 "src/parser.bison"
                                                                                                 {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=STYPE_CHAR;}
-#line 1489 "src/parser.c"
+#line 1737 "src/parser.c"
     break;
 
-  case 14: /* simple_type: "signed" "char"  */
+  case 14:
 #line 142 "src/parser.bison"
                                                                                                         {(yyval.simple_type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_S_CHAR;}
-#line 1495 "src/parser.c"
+#line 1743 "src/parser.c"
     break;
 
-  case 15: /* simple_type: "unsigned" "char"  */
+  case 15:
 #line 143 "src/parser.bison"
                                                                                                         {(yyval.simple_type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_U_CHAR;}
-#line 1501 "src/parser.c"
+#line 1749 "src/parser.c"
     break;
 
-  case 16: /* simple_type: opt_signed "short" opt_int  */
+  case 16:
 #line 144 "src/parser.bison"
                                                                                                 {(yyval.simple_type).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_S_SHORT;}
-#line 1507 "src/parser.c"
+#line 1755 "src/parser.c"
     break;
 
-  case 17: /* simple_type: opt_signed "int"  */
+  case 17:
 #line 145 "src/parser.bison"
                                                                                                         {(yyval.simple_type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_S_INT;}
-#line 1513 "src/parser.c"
+#line 1761 "src/parser.c"
     break;
 
-  case 18: /* simple_type: "signed" "long" opt_int  */
+  case 18:
 #line 146 "src/parser.bison"
                                                                                                 {(yyval.simple_type).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_S_LONG;}
-#line 1519 "src/parser.c"
+#line 1767 "src/parser.c"
     break;
 
-  case 19: /* simple_type: "long" simple_long  */
+  case 19:
 #line 147 "src/parser.bison"
                                                                                                         {(yyval.simple_type)=(yyvsp[0].simple_type); (yyval.simple_type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].simple_type).pos);}
-#line 1525 "src/parser.c"
+#line 1773 "src/parser.c"
     break;
 
-  case 20: /* simple_type: "signed" "long" "long" opt_int  */
+  case 20:
 #line 148 "src/parser.bison"
                                                                                         {(yyval.simple_type).pos=pos_merge((yyvsp[-3].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_S_LONGER;}
-#line 1531 "src/parser.c"
+#line 1779 "src/parser.c"
     break;
 
-  case 21: /* simple_type: "unsigned" "short" opt_int  */
+  case 21:
 #line 149 "src/parser.bison"
                                                                                                 {(yyval.simple_type).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_U_SHORT;}
-#line 1537 "src/parser.c"
+#line 1785 "src/parser.c"
     break;
 
-  case 22: /* simple_type: "unsigned" "int"  */
+  case 22:
 #line 150 "src/parser.bison"
                                                                                                         {(yyval.simple_type).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_U_INT;}
-#line 1543 "src/parser.c"
+#line 1791 "src/parser.c"
     break;
 
-  case 23: /* simple_type: "unsigned" "long" opt_int  */
+  case 23:
 #line 151 "src/parser.bison"
                                                                                                 {(yyval.simple_type).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_U_LONG;}
-#line 1549 "src/parser.c"
+#line 1797 "src/parser.c"
     break;
 
-  case 24: /* simple_type: "unsigned" "long" "long" opt_int  */
+  case 24:
 #line 152 "src/parser.bison"
                                                                                         {(yyval.simple_type).pos=pos_merge((yyvsp[-3].pos), (yyvsp[0].pos)); (yyval.simple_type).ival=STYPE_U_LONGER;}
-#line 1555 "src/parser.c"
+#line 1803 "src/parser.c"
     break;
 
-  case 25: /* simple_type: "float"  */
+  case 25:
 #line 153 "src/parser.bison"
                                                                                                                 {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=STYPE_FLOAT;}
-#line 1561 "src/parser.c"
+#line 1809 "src/parser.c"
     break;
 
-  case 26: /* simple_type: "double"  */
+  case 26:
 #line 154 "src/parser.bison"
                                                                                                                 {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=STYPE_DOUBLE;}
-#line 1567 "src/parser.c"
+#line 1815 "src/parser.c"
     break;
 
-  case 27: /* simple_type: "_Bool"  */
+  case 27:
 #line 155 "src/parser.bison"
                                                                                                                 {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=STYPE_BOOL;}
-#line 1573 "src/parser.c"
+#line 1821 "src/parser.c"
     break;
 
-  case 28: /* simple_type: "void"  */
+  case 28:
 #line 156 "src/parser.bison"
                                                                                                                 {(yyval.simple_type).pos=(yyvsp[0].pos); (yyval.simple_type).ival=STYPE_VOID;}
-#line 1579 "src/parser.c"
+#line 1827 "src/parser.c"
     break;
 
-  case 29: /* funcdef: simple_type TKN_IDENT "(" opt_params ")" "{" stmts "}"  */
+  case 29:
 #line 160 "src/parser.bison"
                                                                                                         {(yyval.func)=funcdef_decl(ctx, &(yyvsp[-6].strval), &(yyvsp[-4].idents), &(yyvsp[-1].stmts)); (yyval.func).pos=pos_merge((yyvsp[-7].simple_type).pos, (yyvsp[0].pos));}
-#line 1585 "src/parser.c"
+#line 1833 "src/parser.c"
     break;
 
-  case 30: /* funcdef: simple_type TKN_IDENT "(" opt_params ")" ";"  */
+  case 30:
 #line 163 "src/parser.bison"
                                                                                                                         {(yyval.func)=funcdef_def(ctx, &(yyvsp[-4].strval), &(yyvsp[-2].idents)); (yyval.func).pos=pos_merge((yyvsp[-5].simple_type).pos, (yyvsp[0].pos));}
-#line 1591 "src/parser.c"
+#line 1839 "src/parser.c"
     break;
 
-  case 31: /* vardecls: simple_type idents ";"  */
+  case 31:
 #line 165 "src/parser.bison"
                                                                                         {(yyval.idents)=(yyvsp[-1].idents); idents_settype(ctx, &(yyval.idents), (yyvsp[-2].simple_type).ival); (yyval.idents).pos=pos_merge((yyvsp[-2].simple_type).pos, (yyvsp[0].pos));}
-#line 1597 "src/parser.c"
+#line 1845 "src/parser.c"
     break;
 
-  case 32: /* opt_params: params  */
+  case 32:
 #line 168 "src/parser.bison"
                                                                                                         {(yyval.idents)=(yyvsp[0].idents);}
-#line 1603 "src/parser.c"
+#line 1851 "src/parser.c"
     break;
 
-  case 33: /* opt_params: %empty  */
+  case 33:
 #line 169 "src/parser.bison"
                                                                                                                 {(yyval.idents)=idents_empty(ctx); (yyval.idents).pos=pos_empty(ctx->tokeniser_ctx);}
-#line 1609 "src/parser.c"
+#line 1857 "src/parser.c"
     break;
 
-  case 34: /* params: params "," simple_type TKN_IDENT  */
+  case 34:
 #line 170 "src/parser.bison"
                                                                                 {(yyval.idents)=idents_cat  (ctx, &(yyvsp[-3].idents),  &(yyvsp[-1].simple_type).ival, &(yyvsp[0].strval)); (yyval.idents).pos=pos_merge((yyvsp[-3].idents).pos, (yyvsp[0].strval).pos);}
-#line 1615 "src/parser.c"
+#line 1863 "src/parser.c"
     break;
 
-  case 35: /* params: simple_type TKN_IDENT  */
+  case 35:
 #line 171 "src/parser.bison"
                                                                                                 {(yyval.idents)=idents_one  (ctx, &(yyvsp[-1].simple_type).ival, &(yyvsp[0].strval)); (yyval.idents).pos=pos_merge((yyvsp[-1].simple_type).pos, (yyvsp[0].strval).pos);}
-#line 1621 "src/parser.c"
+#line 1869 "src/parser.c"
     break;
 
-  case 36: /* idents: idents "," TKN_IDENT  */
+  case 36:
 #line 172 "src/parser.bison"
                                                                                         {(yyval.idents)=idents_cat  (ctx, &(yyvsp[-2].idents),  NULL, &(yyvsp[0].strval)); (yyval.idents).pos=pos_merge((yyvsp[-2].idents).pos, (yyvsp[0].strval).pos);}
-#line 1627 "src/parser.c"
+#line 1875 "src/parser.c"
     break;
 
-  case 37: /* idents: TKN_IDENT  */
+  case 37:
 #line 173 "src/parser.bison"
                                                                                                                 {(yyval.idents)=idents_one  (ctx, NULL, &(yyvsp[0].strval)); (yyval.idents).pos=(yyvsp[0].strval).pos;}
-#line 1633 "src/parser.c"
+#line 1881 "src/parser.c"
     break;
 
-  case 38: /* stmts: stmts stmt  */
+  case 38:
 #line 176 "src/parser.bison"
                                                                                                         {(yyval.stmts)=stmts_cat   (ctx, &(yyvsp[-1].stmts), &(yyvsp[0].stmt)); (yyval.stmts).pos=pos_merge((yyvsp[-1].stmts).pos, (yyvsp[0].stmt).pos);}
-#line 1639 "src/parser.c"
+#line 1887 "src/parser.c"
     break;
 
-  case 39: /* stmts: %empty  */
+  case 39:
 #line 177 "src/parser.bison"
                                                                                                                 {(yyval.stmts)=stmts_empty (ctx); (yyval.stmts).pos=pos_empty(ctx->tokeniser_ctx);}
-#line 1645 "src/parser.c"
+#line 1893 "src/parser.c"
     break;
 
-  case 40: /* stmt: "{" stmts "}"  */
+  case 40:
 #line 178 "src/parser.bison"
                                                                                                 {(yyval.stmt)=stmt_multi  (ctx, &(yyvsp[-1].stmts)); (yyval.stmt).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos));}
-#line 1651 "src/parser.c"
+#line 1899 "src/parser.c"
     break;
 
-  case 41: /* stmt: "if" "(" expr ")" stmt  */
+  case 41:
 #line 179 "src/parser.bison"
                                                                                 {(yyval.stmt)=stmt_if     (ctx, &(yyvsp[-2].expr), &(yyvsp[0].stmt), NULL); (yyval.stmt).pos=pos_merge((yyvsp[-4].pos), (yyvsp[0].stmt).pos);}
-#line 1657 "src/parser.c"
+#line 1905 "src/parser.c"
     break;
 
-  case 42: /* stmt: "if" "(" expr ")" stmt "else" stmt  */
+  case 42:
 #line 181 "src/parser.bison"
                                                                                                                 {(yyval.stmt)=stmt_if     (ctx, &(yyvsp[-4].expr), &(yyvsp[-2].stmt), &(yyvsp[0].stmt)); (yyval.stmt).pos=pos_merge((yyvsp[-6].pos), (yyvsp[0].stmt).pos);}
-#line 1663 "src/parser.c"
+#line 1911 "src/parser.c"
     break;
 
-  case 43: /* stmt: "while" "(" expr ")" stmt  */
+  case 43:
 #line 182 "src/parser.bison"
                                                                                                 {(yyval.stmt)=stmt_while  (ctx, &(yyvsp[-2].expr), &(yyvsp[0].stmt)); (yyval.stmt).pos=pos_merge((yyvsp[-4].pos), (yyvsp[0].stmt).pos);}
-#line 1669 "src/parser.c"
+#line 1917 "src/parser.c"
     break;
 
-  case 44: /* stmt: "return" ";"  */
+  case 44:
 #line 183 "src/parser.bison"
                                                                                                         {(yyval.stmt)=stmt_ret    (ctx, NULL); (yyval.stmt).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].pos));}
-#line 1675 "src/parser.c"
+#line 1923 "src/parser.c"
     break;
 
-  case 45: /* stmt: "return" expr ";"  */
+  case 45:
 #line 184 "src/parser.bison"
                                                                                                         {(yyval.stmt)=stmt_ret    (ctx, &(yyvsp[-1].expr)); (yyval.stmt).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos));}
-#line 1681 "src/parser.c"
+#line 1929 "src/parser.c"
     break;
 
-  case 46: /* stmt: vardecls  */
+  case 46:
 #line 185 "src/parser.bison"
                                                                                                                 {(yyval.stmt)=stmt_var    (ctx, &(yyvsp[0].idents)); (yyval.stmt).pos=(yyvsp[0].idents).pos;}
-#line 1687 "src/parser.c"
+#line 1935 "src/parser.c"
     break;
 
-  case 47: /* stmt: expr ";"  */
+  case 47:
 #line 186 "src/parser.bison"
                                                                                                                 {(yyval.stmt)=stmt_expr   (ctx, &(yyvsp[-1].expr));  (yyval.stmt).pos=pos_merge((yyvsp[-1].expr).pos, (yyvsp[0].pos));}
-#line 1693 "src/parser.c"
+#line 1941 "src/parser.c"
     break;
 
-  case 48: /* stmt: inline_asm ";"  */
+  case 48:
 #line 187 "src/parser.bison"
                                                                                                         {(yyval.stmt)=(yyvsp[-1].stmt); (yyval.stmt).pos=pos_merge((yyvsp[-1].stmt).pos, (yyvsp[0].pos));}
-#line 1699 "src/parser.c"
+#line 1947 "src/parser.c"
     break;
 
-  case 49: /* opt_exprs: exprs  */
+  case 49:
 #line 190 "src/parser.bison"
                                                                                                         {(yyval.exprs)=(yyvsp[0].exprs);}
-#line 1705 "src/parser.c"
+#line 1953 "src/parser.c"
     break;
 
-  case 50: /* opt_exprs: %empty  */
+  case 50:
 #line 191 "src/parser.bison"
                                                                                                                 {(yyval.exprs)=exprs_empty(ctx);}
-#line 1711 "src/parser.c"
+#line 1959 "src/parser.c"
     break;
 
-  case 51: /* exprs: exprs "," expr  */
+  case 51:
 #line 192 "src/parser.bison"
                                                                                                 {(yyval.exprs)=exprs_cat(ctx, &(yyvsp[-2].exprs), &(yyvsp[0].expr)); (yyval.exprs).pos=pos_merge((yyvsp[-2].exprs).pos, (yyvsp[0].expr).pos);}
-#line 1717 "src/parser.c"
+#line 1965 "src/parser.c"
     break;
 
-  case 52: /* exprs: expr  */
+  case 52:
 #line 193 "src/parser.bison"
                                                                                                                 {(yyval.exprs)=exprs_one(ctx, &(yyvsp[0].expr)); (yyval.exprs).pos=(yyvsp[0].expr).pos;}
-#line 1723 "src/parser.c"
+#line 1971 "src/parser.c"
     break;
 
-  case 53: /* expr: TKN_IVAL  */
+  case 53:
 #line 194 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_icnst(ctx, &(yyvsp[0].ival)); (yyval.expr).pos=(yyvsp[0].ival).pos;}
-#line 1729 "src/parser.c"
+#line 1977 "src/parser.c"
     break;
 
-  case 54: /* expr: TKN_STRVAL  */
+  case 54:
 #line 195 "src/parser.bison"
                                                                                                                 {(yyval.expr)=expr_scnst(ctx, &(yyvsp[0].strval)); (yyval.expr).pos=(yyvsp[0].strval).pos;}
-#line 1735 "src/parser.c"
+#line 1983 "src/parser.c"
     break;
 
-  case 55: /* expr: TKN_IDENT  */
+  case 55:
 #line 196 "src/parser.bison"
                                                                                                                 {(yyval.expr)=expr_ident(ctx, &(yyvsp[0].strval)); (yyval.expr).pos=(yyvsp[0].strval).pos;}
-#line 1741 "src/parser.c"
+#line 1989 "src/parser.c"
     break;
 
-  case 56: /* expr: expr "(" opt_exprs ")"  */
+  case 56:
 #line 197 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_call (ctx, &(yyvsp[-3].expr), &(yyvsp[-1].exprs)); (yyval.expr).pos=pos_merge((yyvsp[-3].expr).pos, (yyvsp[0].pos));}
-#line 1747 "src/parser.c"
+#line 1995 "src/parser.c"
     break;
 
-  case 57: /* expr: expr "[" expr "]"  */
+  case 57:
 #line 198 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(ctx, OP_INDEX,     &(yyvsp[-3].expr), &(yyvsp[-1].expr)); (yyval.expr).pos=pos_merge((yyvsp[-3].expr).pos, (yyvsp[0].pos));}
-#line 1753 "src/parser.c"
+#line 2001 "src/parser.c"
     break;
 
-  case 58: /* expr: "(" expr ")"  */
+  case 58:
 #line 199 "src/parser.bison"
                                                                                                         {(yyval.expr)=(yyvsp[-1].expr); (yyval.expr).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos));}
-#line 1759 "src/parser.c"
+#line 2007 "src/parser.c"
     break;
 
-  case 59: /* expr: "-" expr  */
+  case 59:
 #line 201 "src/parser.bison"
                                                                                                                 {(yyval.expr)=expr_math1(ctx, OP_0_MINUS,   &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].expr).pos);}
-#line 1765 "src/parser.c"
+#line 2013 "src/parser.c"
     break;
 
-  case 60: /* expr: "!" expr  */
+  case 60:
 #line 202 "src/parser.bison"
                                                                                                                 {(yyval.expr)=expr_math1(ctx, OP_LOGIC_NOT, &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].expr).pos);}
-#line 1771 "src/parser.c"
+#line 2019 "src/parser.c"
     break;
 
-  case 61: /* expr: "~" expr  */
+  case 61:
 #line 203 "src/parser.bison"
                                                                                                                 {(yyval.expr)=expr_math1(ctx, OP_BIT_NOT,   &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].expr).pos);}
-#line 1777 "src/parser.c"
+#line 2025 "src/parser.c"
     break;
 
-  case 62: /* expr: "&" expr  */
+  case 62:
 #line 204 "src/parser.bison"
                                                                                                                 {(yyval.expr)=expr_math1(ctx, OP_ADROF,     &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].expr).pos);}
-#line 1783 "src/parser.c"
+#line 2031 "src/parser.c"
     break;
 
-  case 63: /* expr: "*" expr  */
+  case 63:
 #line 205 "src/parser.bison"
                                                                                                                 {(yyval.expr)=expr_math1(ctx, OP_DEREF,     &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-1].pos), (yyvsp[0].expr).pos);}
-#line 1789 "src/parser.c"
+#line 2037 "src/parser.c"
     break;
 
-  case 64: /* expr: expr "*" expr  */
+  case 64:
 #line 207 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(ctx, OP_MUL,       &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1795 "src/parser.c"
+#line 2043 "src/parser.c"
     break;
 
-  case 65: /* expr: expr "/" expr  */
+  case 65:
 #line 208 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_math2(ctx, OP_DIV,       &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1801 "src/parser.c"
+#line 2049 "src/parser.c"
     break;
 
-  case 66: /* expr: expr "%" expr  */
+  case 66:
 #line 209 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_math2(ctx, OP_MOD,       &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1807 "src/parser.c"
+#line 2055 "src/parser.c"
     break;
 
-  case 67: /* expr: expr "+" expr  */
+  case 67:
 #line 211 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(ctx, OP_ADD,       &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1813 "src/parser.c"
+#line 2061 "src/parser.c"
     break;
 
-  case 68: /* expr: expr "-" expr  */
+  case 68:
 #line 212 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_math2(ctx, OP_SUB,       &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1819 "src/parser.c"
+#line 2067 "src/parser.c"
     break;
 
-  case 69: /* expr: expr "<" expr  */
+  case 69:
 #line 214 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(ctx, OP_LT,        &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1825 "src/parser.c"
+#line 2073 "src/parser.c"
     break;
 
-  case 70: /* expr: expr "<=" expr  */
+  case 70:
 #line 215 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_math2(ctx, OP_LE,        &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1831 "src/parser.c"
+#line 2079 "src/parser.c"
     break;
 
-  case 71: /* expr: expr ">" expr  */
+  case 71:
 #line 216 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_math2(ctx, OP_GT,        &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1837 "src/parser.c"
+#line 2085 "src/parser.c"
     break;
 
-  case 72: /* expr: expr ">=" expr  */
+  case 72:
 #line 217 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_math2(ctx, OP_GE,        &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1843 "src/parser.c"
+#line 2091 "src/parser.c"
     break;
 
-  case 73: /* expr: expr "==" expr  */
+  case 73:
 #line 219 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(ctx, OP_NE,        &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1849 "src/parser.c"
+#line 2097 "src/parser.c"
     break;
 
-  case 74: /* expr: expr "!=" expr  */
+  case 74:
 #line 220 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_math2(ctx, OP_EQ,        &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1855 "src/parser.c"
+#line 2103 "src/parser.c"
     break;
 
-  case 75: /* expr: expr "&" expr  */
+  case 75:
 #line 222 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(ctx, OP_BIT_AND,   &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1861 "src/parser.c"
+#line 2109 "src/parser.c"
     break;
 
-  case 76: /* expr: expr "^" expr  */
+  case 76:
 #line 223 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(ctx, OP_BIT_XOR,   &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1867 "src/parser.c"
+#line 2115 "src/parser.c"
     break;
 
-  case 77: /* expr: expr "|" expr  */
+  case 77:
 #line 224 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(ctx, OP_BIT_OR,    &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1873 "src/parser.c"
+#line 2121 "src/parser.c"
     break;
 
-  case 78: /* expr: expr "<<" expr  */
+  case 78:
 #line 225 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(ctx, OP_SHIFT_L,   &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1879 "src/parser.c"
+#line 2127 "src/parser.c"
     break;
 
-  case 79: /* expr: expr ">>" expr  */
+  case 79:
 #line 226 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_math2(ctx, OP_SHIFT_R,   &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1885 "src/parser.c"
+#line 2133 "src/parser.c"
     break;
 
-  case 80: /* expr: expr "&&" expr  */
+  case 80:
 #line 228 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(ctx, OP_LOGIC_AND, &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1891 "src/parser.c"
+#line 2139 "src/parser.c"
     break;
 
-  case 81: /* expr: expr "||" expr  */
+  case 81:
 #line 229 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(ctx, OP_LOGIC_OR,  &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1897 "src/parser.c"
+#line 2145 "src/parser.c"
     break;
 
-  case 82: /* expr: expr "=" expr  */
+  case 82:
 #line 231 "src/parser.bison"
                                                                                                         {(yyval.expr)=expr_math2(ctx, OP_ASSIGN,    &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1903 "src/parser.c"
+#line 2151 "src/parser.c"
     break;
 
-  case 83: /* expr: expr "+=" expr  */
+  case 83:
 #line 232 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(ctx, OP_ADD,       &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1909 "src/parser.c"
+#line 2157 "src/parser.c"
     break;
 
-  case 84: /* expr: expr "-=" expr  */
+  case 84:
 #line 233 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(ctx, OP_SUB,       &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1915 "src/parser.c"
+#line 2163 "src/parser.c"
     break;
 
-  case 85: /* expr: expr "*=" expr  */
+  case 85:
 #line 234 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(ctx, OP_MUL,       &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1921 "src/parser.c"
+#line 2169 "src/parser.c"
     break;
 
-  case 86: /* expr: expr "/=" expr  */
+  case 86:
 #line 235 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(ctx, OP_DIV,       &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1927 "src/parser.c"
+#line 2175 "src/parser.c"
     break;
 
-  case 87: /* expr: expr "%=" expr  */
+  case 87:
 #line 236 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(ctx, OP_MOD,       &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1933 "src/parser.c"
+#line 2181 "src/parser.c"
     break;
 
-  case 88: /* expr: expr "&=" expr  */
+  case 88:
 #line 237 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(ctx, OP_BIT_AND,   &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1939 "src/parser.c"
+#line 2187 "src/parser.c"
     break;
 
-  case 89: /* expr: expr "|=" expr  */
+  case 89:
 #line 238 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(ctx, OP_BIT_OR,    &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1945 "src/parser.c"
+#line 2193 "src/parser.c"
     break;
 
-  case 90: /* expr: expr "^=" expr  */
+  case 90:
 #line 239 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(ctx, OP_BIT_XOR,   &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1951 "src/parser.c"
+#line 2199 "src/parser.c"
     break;
 
-  case 91: /* expr: expr "<<=" expr  */
+  case 91:
 #line 240 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(ctx, OP_SHIFT_L,   &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1957 "src/parser.c"
+#line 2205 "src/parser.c"
     break;
 
-  case 92: /* expr: expr ">>=" expr  */
+  case 92:
 #line 241 "src/parser.bison"
                                                                                                 {(yyval.expr)=expr_matha(ctx, OP_SHIFT_R,   &(yyvsp[-2].expr), &(yyvsp[0].expr)); (yyval.expr).pos=pos_merge((yyvsp[-2].expr).pos, (yyvsp[0].expr).pos);}
-#line 1963 "src/parser.c"
+#line 2211 "src/parser.c"
     break;
 
-  case 93: /* inline_asm: "asm" asm_qual asm_code  */
+  case 93:
 #line 244 "src/parser.bison"
                                                                                         {(yyval.stmt)=(yyvsp[0].stmt); (yyval.stmt).iasm->qualifiers=(yyvsp[-1].asm_qual); (yyval.stmt).iasm->qualifiers.is_volatile |= !(yyval.stmt).iasm->outputs; }
-#line 1969 "src/parser.c"
+#line 2217 "src/parser.c"
     break;
 
-  case 94: /* asm_qual: %empty  */
+  case 94:
 #line 246 "src/parser.bison"
                                                                                                         {(yyval.asm_qual)=(iasm_qual_t) {.is_volatile=0, .is_inline=0, .is_goto=0}; (yyval.asm_qual).pos=pos_empty(ctx->tokeniser_ctx);}
-#line 1975 "src/parser.c"
+#line 2223 "src/parser.c"
     break;
 
-  case 95: /* asm_qual: asm_qual "volatile"  */
+  case 95:
 #line 247 "src/parser.bison"
                                                                                                         {(yyval.asm_qual)=(yyvsp[-1].asm_qual); (yyval.asm_qual).is_volatile=1; (yyval.asm_qual).pos=pos_merge((yyvsp[-1].asm_qual).pos, (yyvsp[0].pos));}
-#line 1981 "src/parser.c"
+#line 2229 "src/parser.c"
     break;
 
-  case 96: /* asm_qual: asm_qual "inline"  */
+  case 96:
 #line 248 "src/parser.bison"
                                                                                                         {(yyval.asm_qual)=(yyvsp[-1].asm_qual); (yyval.asm_qual).is_inline=1;   (yyval.asm_qual).pos=pos_merge((yyvsp[-1].asm_qual).pos, (yyvsp[0].pos));}
-#line 1987 "src/parser.c"
+#line 2235 "src/parser.c"
     break;
 
-  case 97: /* asm_qual: asm_qual "goto"  */
+  case 97:
 #line 249 "src/parser.bison"
                                                                                                         {(yyval.asm_qual)=(yyvsp[-1].asm_qual); (yyval.asm_qual).is_goto=1;     (yyval.asm_qual).pos=pos_merge((yyvsp[-1].asm_qual).pos, (yyvsp[0].pos));}
-#line 1993 "src/parser.c"
+#line 2241 "src/parser.c"
     break;
 
-  case 98: /* asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ":" opt_asm_strs ")"  */
+  case 98:
 #line 254 "src/parser.bison"
                                                                                                 {(yyval.stmt)=stmt_iasm(ctx, &(yyvsp[-7].strval), &(yyvsp[-5].asm_regs),  &(yyvsp[-3].asm_regs),  NULL); (yyval.stmt).pos=pos_merge((yyvsp[-8].pos), (yyvsp[0].pos));}
-#line 1999 "src/parser.c"
+#line 2247 "src/parser.c"
     break;
 
-  case 99: /* asm_code: "(" TKN_STRVAL ":" opt_asm_regs ":" opt_asm_regs ")"  */
+  case 99:
 #line 257 "src/parser.bison"
                                                                                                 {(yyval.stmt)=stmt_iasm(ctx, &(yyvsp[-5].strval), &(yyvsp[-3].asm_regs),  &(yyvsp[-1].asm_regs),  NULL); (yyval.stmt).pos=pos_merge((yyvsp[-6].pos), (yyvsp[0].pos));}
-#line 2005 "src/parser.c"
+#line 2253 "src/parser.c"
     break;
 
-  case 100: /* asm_code: "(" TKN_STRVAL ":" opt_asm_regs ")"  */
+  case 100:
 #line 259 "src/parser.bison"
                                                                                                 {(yyval.stmt)=stmt_iasm(ctx, &(yyvsp[-3].strval), &(yyvsp[-1].asm_regs),  NULL, NULL); (yyval.stmt).pos=pos_merge((yyvsp[-4].pos), (yyvsp[0].pos));}
-#line 2011 "src/parser.c"
+#line 2259 "src/parser.c"
     break;
 
-  case 101: /* asm_code: "(" TKN_STRVAL ")"  */
+  case 101:
 #line 260 "src/parser.bison"
                                                                                                         {(yyval.stmt)=stmt_iasm(ctx, &(yyvsp[-1].strval), NULL, NULL, NULL); (yyval.stmt).pos=pos_merge((yyvsp[-2].pos), (yyvsp[0].pos));}
-#line 2017 "src/parser.c"
+#line 2265 "src/parser.c"
     break;
 
-  case 106: /* opt_asm_regs: asm_regs  */
+  case 106:
 #line 266 "src/parser.bison"
                                                                                                 {(yyval.asm_regs)=(yyvsp[0].asm_regs);}
-#line 2023 "src/parser.c"
+#line 2271 "src/parser.c"
     break;
 
-  case 107: /* opt_asm_regs: %empty  */
+  case 107:
 #line 267 "src/parser.bison"
                                                                                                                 {(yyval.asm_regs)=iasm_regs_empty(ctx);             (yyval.asm_regs).pos=pos_empty(ctx->tokeniser_ctx);}
-#line 2029 "src/parser.c"
+#line 2277 "src/parser.c"
     break;
 
-  case 108: /* asm_regs: asm_reg "," asm_regs  */
+  case 108:
 #line 268 "src/parser.bison"
                                                                                         {(yyval.asm_regs)=iasm_regs_cat(ctx, &(yyvsp[0].asm_regs), &(yyvsp[-2].asm_reg));       (yyval.asm_regs).pos=pos_merge((yyvsp[-2].asm_reg).pos, (yyvsp[0].asm_regs).pos);}
-#line 2035 "src/parser.c"
+#line 2283 "src/parser.c"
     break;
 
-  case 109: /* asm_regs: asm_reg  */
+  case 109:
 #line 269 "src/parser.bison"
                                                                                                                 {(yyval.asm_regs)=iasm_regs_one(ctx, &(yyvsp[0].asm_reg));            (yyval.asm_regs).pos=(yyvsp[0].asm_reg).pos;}
-#line 2041 "src/parser.c"
+#line 2289 "src/parser.c"
     break;
 
-  case 110: /* asm_reg: "[" TKN_IDENT "]" TKN_STRVAL "(" expr ")"  */
+  case 110:
 #line 270 "src/parser.bison"
                                                                         {(yyval.asm_reg)=stmt_iasm_reg(ctx, &(yyvsp[-5].strval),  &(yyvsp[-3].strval), &(yyvsp[-1].expr)); (yyval.asm_reg).pos=pos_merge((yyvsp[-6].pos), (yyvsp[0].pos));}
-#line 2047 "src/parser.c"
+#line 2295 "src/parser.c"
     break;
 
-  case 111: /* asm_reg: TKN_STRVAL "(" expr ")"  */
+  case 111:
 #line 271 "src/parser.bison"
                                                                                                 {(yyval.asm_reg)=stmt_iasm_reg(ctx, NULL, &(yyvsp[-3].strval), &(yyvsp[-1].expr)); (yyval.asm_reg).pos=pos_merge((yyvsp[-3].strval).pos, (yyvsp[0].pos));}
-#line 2053 "src/parser.c"
+#line 2301 "src/parser.c"
     break;
 
 
-#line 2057 "src/parser.c"
+#line 2305 "src/parser.c"
 
       default: break;
     }
@@ -2068,10 +2316,11 @@ yyreduce:
      case of YYERROR or YYBACKUP, subsequent parser actions might lead
      to an incorrect destructor call or verbose syntax error message
      before the lookahead is translated.  */
-  YY_SYMBOL_PRINT ("-> $$ =", YY_CAST (yysymbol_kind_t, yyr1[yyn]), &yyval, &yyloc);
+  YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
 
   YYPOPSTACK (yylen);
   yylen = 0;
+  YY_STACK_PRINT (yyss, yyssp);
 
   *++yyvsp = yyval;
 
@@ -2095,13 +2344,49 @@ yyreduce:
 yyerrlab:
   /* Make sure we have latest lookahead translation.  See comments at
      user semantic actions for why this is necessary.  */
-  yytoken = yychar == YYEMPTY ? YYSYMBOL_YYEMPTY : YYTRANSLATE (yychar);
+  yytoken = yychar == YYEMPTY ? YYEMPTY : YYTRANSLATE (yychar);
+
   /* If not already recovering from an error, report this error.  */
   if (!yyerrstatus)
     {
       ++yynerrs;
+#if ! YYERROR_VERBOSE
       yyerror (ctx, YY_("syntax error"));
+#else
+# define YYSYNTAX_ERROR yysyntax_error (&yymsg_alloc, &yymsg, \
+                                        yyssp, yytoken)
+      {
+        char const *yymsgp = YY_("syntax error");
+        int yysyntax_error_status;
+        yysyntax_error_status = YYSYNTAX_ERROR;
+        if (yysyntax_error_status == 0)
+          yymsgp = yymsg;
+        else if (yysyntax_error_status == 1)
+          {
+            if (yymsg != yymsgbuf)
+              YYSTACK_FREE (yymsg);
+            yymsg = YY_CAST (char *, YYSTACK_ALLOC (YY_CAST (YYSIZE_T, yymsg_alloc)));
+            if (!yymsg)
+              {
+                yymsg = yymsgbuf;
+                yymsg_alloc = sizeof yymsgbuf;
+                yysyntax_error_status = 2;
+              }
+            else
+              {
+                yysyntax_error_status = YYSYNTAX_ERROR;
+                yymsgp = yymsg;
+              }
+          }
+        yyerror (ctx, yymsgp);
+        if (yysyntax_error_status == 2)
+          goto yyexhaustedlab;
+      }
+# undef YYSYNTAX_ERROR
+#endif
     }
+
+
 
   if (yyerrstatus == 3)
     {
@@ -2151,14 +2436,13 @@ yyerrorlab:
 yyerrlab1:
   yyerrstatus = 3;      /* Each real token shifted decrements this.  */
 
-  /* Pop stack until we find a state that shifts the error token.  */
   for (;;)
     {
       yyn = yypact[yystate];
       if (!yypact_value_is_default (yyn))
         {
-          yyn += YYSYMBOL_YYerror;
-          if (0 <= yyn && yyn <= YYLAST && yycheck[yyn] == YYSYMBOL_YYerror)
+          yyn += YYTERROR;
+          if (0 <= yyn && yyn <= YYLAST && yycheck[yyn] == YYTERROR)
             {
               yyn = yytable[yyn];
               if (0 < yyn)
@@ -2172,7 +2456,7 @@ yyerrlab1:
 
 
       yydestruct ("Error: popping",
-                  YY_ACCESSING_SYMBOL (yystate), yyvsp, ctx);
+                  yystos[yystate], yyvsp, ctx);
       YYPOPSTACK (1);
       yystate = *yyssp;
       YY_STACK_PRINT (yyss, yyssp);
@@ -2184,7 +2468,7 @@ yyerrlab1:
 
 
   /* Shift the error token.  */
-  YY_SYMBOL_PRINT ("Shifting", YY_ACCESSING_SYMBOL (yyn), yyvsp, yylsp);
+  YY_SYMBOL_PRINT ("Shifting", yystos[yyn], yyvsp, yylsp);
 
   yystate = yyn;
   goto yynewstate;
@@ -2206,20 +2490,20 @@ yyabortlab:
   goto yyreturn;
 
 
-#if !defined yyoverflow
+#if !defined yyoverflow || YYERROR_VERBOSE
 /*-------------------------------------------------.
 | yyexhaustedlab -- memory exhaustion comes here.  |
 `-------------------------------------------------*/
 yyexhaustedlab:
   yyerror (ctx, YY_("memory exhausted"));
   yyresult = 2;
-  goto yyreturn;
+  /* Fall through.  */
 #endif
 
 
-/*-------------------------------------------------------.
-| yyreturn -- parsing is finished, clean up and return.  |
-`-------------------------------------------------------*/
+/*-----------------------------------------------------.
+| yyreturn -- parsing is finished, return the result.  |
+`-----------------------------------------------------*/
 yyreturn:
   if (yychar != YYEMPTY)
     {
@@ -2236,17 +2520,19 @@ yyreturn:
   while (yyssp != yyss)
     {
       yydestruct ("Cleanup: popping",
-                  YY_ACCESSING_SYMBOL (+*yyssp), yyvsp, ctx);
+                  yystos[+*yyssp], yyvsp, ctx);
       YYPOPSTACK (1);
     }
 #ifndef yyoverflow
   if (yyss != yyssa)
     YYSTACK_FREE (yyss);
 #endif
-
+#if YYERROR_VERBOSE
+  if (yymsg != yymsgbuf)
+    YYSTACK_FREE (yymsg);
+#endif
   return yyresult;
 }
-
 #line 272 "src/parser.bison"
 
 

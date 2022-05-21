@@ -14,21 +14,22 @@
 // 	return out;
 // }
 
-// int strlen(short ptr) {
-// 	if (!ptr) return 0;
+int strlen(short ptr) {
+	if (!ptr) return 0;
 	
-// 	short offs;
-// 	offs = ptr;
+	short offs;
+	offs = ptr;
 	
-// 	while (*ptr) ptr += 1;
+	while (*ptr) ptr += 1;
 	
-// 	return ptr - offs;
-// }
+	return ptr - offs;
+}
 
 void test() {
 	long local;
 	local = 3;
 	local += 9;
+	local += 1;
 }
 
 // int tester() {

@@ -108,6 +108,8 @@ gen_var_t *gen_expr_call     (asm_ctx_t *ctx, funcdef_t *funcdef, expr_t    *cal
 gen_var_t *gen_expr_math2    (asm_ctx_t *ctx, oper_t     oper,    gen_var_t *out_hint, gen_var_t *a,      gen_var_t *b);
 // Expression: Unary math operation.
 gen_var_t *gen_expr_math1    (asm_ctx_t *ctx, oper_t     oper,    gen_var_t *out_hint, gen_var_t *a);
+// Expression: Type cast.
+gen_var_t *gen_cast          (asm_ctx_t *ctx, gen_var_t *a,       var_type_t *ctype);
 
 /* ================== Variables ================== */
 

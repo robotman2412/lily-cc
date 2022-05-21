@@ -8,11 +8,11 @@
 
 // Representation of an instruction.
 typedef struct {
-	bool     y;
-	uint8_t  x;
-	uint8_t  b;
-	uint8_t  a;
-	uint8_t  o;
+	bool      y;
+	reg_t     x;
+	reg_t     b;
+	reg_t     a;
+	reg_t     o;
 } px_insn_t;
 
 // Macro for determining PIE.
@@ -29,6 +29,9 @@ px_insn_t px_unpack_insn(memword_t packed) __attribute__((pure));
 // Gets or adds a temp var.
 // Each temp label represents one word, so some variables will use multiple.
 gen_var_t *px_get_tmp(asm_ctx_t *ctx, size_t size, bool allow_reg);
+
+// Grab an addressing mode for a parameter.
+reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, reg_t *addrmode, asm_label_t *label, address_t *offs, reg_t dest);
 
 // Determine the calling conventions to use.
 void px_update_cc(asm_ctx_t *ctx, funcdef_t *funcdef);
@@ -50,6 +53,8 @@ void px_mov_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest);
 gen_var_t *px_math1(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_var_t *a);
 // Creates MATH2 instructions.
 gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_var_t *a, gen_var_t *b);
+// Variables: Move variable to another location.
+void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words);
 
 /* ========= Common instruction patterns ========= */
 

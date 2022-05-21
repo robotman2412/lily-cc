@@ -38,6 +38,132 @@ px_insn_t px_unpack_insn(memword_t packed) {
 	};
 }
 
+// Write an instruction with some context.
+void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1) {
+	#ifdef ENABLE_DEBUG_LOGS
+	char *imm0 = NULL;
+	char *imm1 = NULL;
+	#endif
+	asm_write_memword(ctx, px_pack_insn(insn));
+	if (insn.a == REG_IMM) {
+		if (label0) {
+			// Put label.
+			asm_write_label_ref(
+				ctx, label0, offs0,
+				insn.x == ADDR_PC ? ASM_LABEL_REF_OFFS_PTR : ASM_LABEL_REF_ABS_PTR
+			);
+			#ifdef ENABLE_DEBUG_LOGS
+			imm0 = xalloc(ctx->allocator, strlen(label0) + 10);
+			if (offs0) {
+				sprintf(imm0, "%s+0x%04x", label0, offs0);
+			} else {
+				strcpy(imm0, label0);
+			}
+			#endif
+		} else {
+			// Put const.
+			asm_write_memword(ctx, offs1);
+			#ifdef ENABLE_DEBUG_LOGS
+			imm0 = xalloc(ctx->allocator, 10);
+			sprintf(imm0, "0x%04x", offs0);
+			#endif
+		}
+	}
+	if (insn.b == REG_IMM) {
+		if (label1) {
+			// Put label.
+			asm_write_label_ref(
+				ctx, label0, offs0,
+				insn.x == ADDR_PC ? ASM_LABEL_REF_OFFS_PTR : ASM_LABEL_REF_ABS_PTR
+			);
+			#ifdef ENABLE_DEBUG_LOGS
+			imm1 = xalloc(ctx->allocator, strlen(label1) + 10);
+			if (offs1) {
+				sprintf(imm1, "%s+0x%04x", label1, offs1);
+			} else {
+				strcpy(imm1, label1);
+			}
+			#endif
+		} else {
+			// Put const.
+			asm_write_memword(ctx, offs1);
+			#ifdef ENABLE_DEBUG_LOGS
+			imm1 = xalloc(ctx->allocator, 10);
+			sprintf(imm1, "0x%04x", offs1);
+			#endif
+		}
+	}
+	#ifdef ENABLE_DEBUG_LOGS
+	PX_DESC_INSN(insn, imm0, imm1);
+	if (imm0) xfree(ctx->allocator, imm0);
+	if (imm1) xfree(ctx->allocator, imm1);
+	#endif
+}
+
+// Grab an addressing mode for a parameter.
+reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, reg_t *addrmode, asm_label_t *label, address_t *offs, reg_t dest) {
+	static reg_t addrmode_dummy;
+	if (!addrmode) {
+		if (var->type != VAR_TYPE_CONST && var->type != VAR_TYPE_REG) {
+			// We must move this to register.
+			px_part_to_reg(ctx, var, dest, part);
+			return dest;
+		}
+		
+		addrmode = &addrmode_dummy;
+	}
+	
+	switch (var->type) {
+		case VAR_TYPE_CONST:
+			// Constant thingy.
+			*addrmode = ADDR_IMM;
+			*offs = var->iconst >> (MEM_BITS * part);
+			return REG_IMM;
+			
+		case VAR_TYPE_LABEL:
+			// At label.
+			*addrmode = ADDR_MEM;
+			*label = var->label;
+			*offs = part;
+			return REG_IMM;
+			
+		case VAR_TYPE_STACKOFFS:
+			// In stack.
+			*addrmode = ADDR_ST;
+			*offs = px_get_depth(ctx, var, part);
+			return REG_IMM;
+			
+		case VAR_TYPE_REG:
+			// In register.
+			*addrmode = ADDR_IMM;
+			return var->reg + part;
+			
+		case VAR_TYPE_RETVAL:
+			// TODO
+			break;
+			
+		case VAR_TYPE_PTR: {
+			#ifdef ENABLE_DEBUG_LOGS
+			char *imm1 = NULL;
+			#endif
+			// Im poimtre.
+			px_insn_t insn = {
+				.y = 1,
+				.a = dest,
+				.o = PX_OP_MOV,
+			};
+			asm_label_t label1 = NULL;
+			address_t   offs1  = 0;
+			// Do some recursive funnies.
+			insn.b = px_addr_var(ctx, var->ptr, 0, &insn.x, &label1, &offs1, dest);
+			px_write_insn(ctx, insn, NULL, 0, label1, offs1);
+			// Return the registrex.
+			return dest;
+		} break;
+	}
+	return 0;
+}
+
 // Determine the calling conventions to use.
 void px_update_cc(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	if (funcdef->args.num > 4) {
@@ -168,148 +294,43 @@ reg_t px_pick_reg(asm_ctx_t *ctx, bool do_vacate) {
 }
 
 // Move part of a value to a register.
-void px_part_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest, address_t index) {
-	if (val->type == VAR_TYPE_REG) {
-		if (val->reg == dest) return;
-		// Register to register move.
-		DEBUG_GEN("  MOV %s, %s\n", reg_names[dest], reg_names[val->reg]);
-		px_insn_t insn = {
-			.y = 0,
-			.x = ADDR_IMM,
-			.a = dest,
-			.b = val->reg + index,
-			.o = PX_OP_MOV,
-		};
-		asm_write_memword(ctx, px_pack_insn(insn));
-	} else if (val->type == VAR_TYPE_LABEL) {
-		// Memory to register move.
-		asm_label_ref_t ref;
-		px_insn_t insn = px_insn_label(ctx, val->label, true, &ref);
-		insn.a = dest;
-		insn.o = PX_OP_MOV;
-		#ifdef ENABLE_DEBUG_LOGS
-		char *buf = xalloc(ctx->allocator, strlen(val->label) + 6);
-		sprintf(buf, "%s+%u", val->label, index);
-		PX_DESC_INSN(insn, NULL, buf);
-		xfree(ctx->allocator, buf);
-		#endif
-		asm_write_memword(ctx, px_pack_insn(insn));
-		asm_write_label_ref(ctx, val->label, 0, ref);
-	} else if (val->type == VAR_TYPE_CONST) {
-		word_t val_part = val->iconst >> (MEM_BITS * index);
-		if (!val_part) {
-			// XOR reg, reg optimisation.
-			DEBUG_GEN("  XOR %s, %s\n", reg_names[dest], reg_names[dest]);
+void px_part_to_reg(asm_ctx_t *ctx, gen_var_t *var, reg_t dest, address_t index) {
+	if (var->type == VAR_TYPE_CONST) {
+		word_t iconst = var->iconst >> (MEM_BITS * index);
+		if (!iconst) {
+			// XOR dest, dest optimisation.
 			px_insn_t insn = {
 				.y = 0,
 				.x = ADDR_IMM,
-				.a = dest,
 				.b = dest,
+				.a = dest,
 				.o = PX_OP_XOR,
 			};
 			asm_write_memword(ctx, px_pack_insn(insn));
-		} else {
-			// Copy constant to register.
-			DEBUG_GEN("  MOV %s, 0x%04x\n", reg_names[dest], val_part);
-			px_insn_t insn = {
-				.y = 0,
-				.x = ADDR_IMM,
-				.a = dest,
-				.b = REG_IMM,
-				.o = PX_OP_MOV,
-			};
-			asm_write_memword(ctx, px_pack_insn(insn));
-			asm_write_memword(ctx, val->iconst);
-		}
-	} else if (val->type == VAR_TYPE_COND) {
-		// Condition to boolean.
-		// Set to 0 by default.
-		DEBUG_GEN("  MOV %s, 0\n", reg_names[dest]);
-		px_insn_t insn = {
-			.y = 0,
-			.x = ADDR_IMM,
-			.a = dest,
-			.b = REG_IMM,
-			.o = PX_OP_MOV,
-		};
-		asm_write_memword(ctx, px_pack_insn(insn));
-		asm_write_memword(ctx, 0);
-		// Then set to 1 if condition matches.
-		DEBUG_GEN("  MOV%s %s, 1\n", b_insn_names[val->cond & 017], reg_names[dest]);
-		insn.o = 040 | val->cond;
-		asm_write_memword(ctx, px_pack_insn(insn));
-		asm_write_memword(ctx, 1);
-	} else if (val->type == VAR_TYPE_STACKOFFS) {
-		// Stack offset to register.
-		DEBUG_GEN("  MOV %s, [ST+%d]\n", reg_names[dest], ctx->stack_size - val->offset + index);
-		px_insn_t insn = {
-			.y = 1,
-			.x = ADDR_ST,
-			.a = dest,
-			.b = REG_ST,
-			.o = PX_OP_MOV,
-		};
-		asm_write_memword(ctx, px_pack_insn(insn));
-		asm_write_memword(ctx, ctx->stack_size - val->offset + index);
-	} else if (val->type == VAR_TYPE_PTR) {
-		// Some stuff... ?
-		if (val->ptr->type == VAR_TYPE_CONST) {
-			// Pointer constant AKA normal memory reference.
-			DEBUG_GEN("  MOV %s, [0x%04x]\n", reg_names[dest], val->ptr->iconst + index);
-			px_insn_t insn = {
-				.y = true,
-				.x = ADDR_MEM,
-				.a = dest,
-				.b = REG_IMM,
-				.o = PX_OP_MOV,
-			};
-			asm_write_memword(ctx, px_pack_insn(insn));
-			asm_write_memword(ctx, val->ptr->iconst + index);
-		} else {
-			// Have the pointer become a register.
-			reg_t regno;
-			if (val->ptr->type == VAR_TYPE_REG) {
-				// Take register from the thing.
-				regno = val->ptr->reg;
-			} else {
-				// Make a new register thing.
-				regno = px_pick_reg(ctx, true);
-				px_mov_to_reg(ctx, val->ptr, regno);
-				val->ptr->type = VAR_TYPE_REG;
-				val->ptr->reg  = regno;
-			}
-			// Then, pointer dereference from the variable.
-			if (index) {
-				// With offset.
-				DEBUG_GEN("  MOV %s, [%s+%d]\n", reg_names[dest], reg_names[regno], index);
-				px_insn_t insn = {
-					.y = true,
-					.x = ADDR_REG(regno),
-					.a = dest,
-					.b = REG_IMM,
-					.o = PX_OP_MOV,
-				};
-				asm_write_memword(ctx, px_pack_insn(insn));
-				asm_write_memword(ctx, index);
-			} else {
-				// Without offset.
-				DEBUG_GEN("  MOV %s, [%s]\n", reg_names[dest], reg_names[regno]);
-				px_insn_t insn = {
-					.y = true,
-					.x = ADDR_MEM,
-					.a = dest,
-					.b = regno,
-					.o = PX_OP_MOV,
-				};
-				asm_write_memword(ctx, px_pack_insn(insn));
-			}
+			PX_DESC_INSN(insn, NULL, NULL);
+			return;
 		}
 	}
+	
+	#ifdef ENABLE_DEBUG_LOGS
+	char *imm1 = NULL;
+	#endif
+	// Yep.
+	px_insn_t insn = {
+		.y = 1,
+		.a = dest,
+		.o = PX_OP_MOV,
+	};
+	asm_label_t label1 = NULL;
+	address_t   offs1  = 0;
+	// Request the value.
+	insn.b = px_addr_var(ctx, var, index, &insn.x, &label1, &offs1, dest);
+	px_write_insn(ctx, insn, NULL, 0, label1, offs1);
 }
 
 // Move a value to a register.
 void px_mov_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest) {
-	address_t n_words = 1;
+	address_t n_words = val->ctype->size;
 	for (address_t i = 0; i < n_words; i++) {
 		px_part_to_reg(ctx, val, dest + i, i);
 	}
@@ -318,7 +339,7 @@ void px_mov_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest) {
 // Creates MATH1 instructions.
 gen_var_t *px_math1(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_var_t *a) {
 	gen_var_t *output = out_hint;
-	address_t n_words = 1; //a->ctype->size;
+	address_t n_words = a->ctype->size;
 	bool      do_copy = !gen_cmp(ctx, output, a) && opcode != PX_OP_CMP1;
 	if (!output || do_copy) {
 		output = px_get_tmp(ctx, n_words, true);
@@ -348,87 +369,20 @@ gen_var_t *px_math1(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 	
 	// A fancy for loop.
 	for (; i != limit; i += delta) {
-		// Pick the right addressing mode.
-		if (a->type == VAR_TYPE_REG) {
-			// In register.
-			px_insn_t insn = {
-				.y = false,
-				.x = ADDR_IMM,
-				.b = 0,
-				.a = a->reg + i,
-				.o = opcode,
-			};
-			PX_DESC_INSN(insn, NULL, NULL);
-			asm_write_memword(ctx, px_pack_insn(insn));
-		} else if (a->type == VAR_TYPE_STACKOFFS) {
-			// In stack.
-			px_insn_t insn = {
-				.y = false,
-				.x = ADDR_ST,
-				.b = 0,
-				.a = REG_IMM,
-				.o = opcode,
-			};
-			#ifdef ENABLE_DEBUG_LOGS
-			char buf[7];
-			sprintf(buf, "0x%04x", px_get_depth(ctx, a, 0));
-			PX_DESC_INSN(insn, buf, NULL);
-			#endif
-			asm_write_memword(ctx, px_pack_insn(insn));
-			asm_write_memword(ctx, px_get_depth(ctx, a, 0));
-		} else if (a->type == VAR_TYPE_LABEL) {
-			// In memory.
-			asm_label_ref_t ref;
-			px_insn_t insn = px_insn_label(ctx, a->label, false, &ref);
-			#ifdef ENABLE_DEBUG_LOGS
-			char *buf = xalloc(ctx->allocator, strlen(a->label)+6);
-			sprintf(buf, "%s+%u", a->label, i);
-			PX_DESC_INSN(insn, buf, NULL);
-			xfree(ctx->allocator, buf);
-			#endif
-			asm_write_memword(ctx, px_pack_insn(insn));
-			asm_write_label_ref(ctx, a->label, i, ref);
-		} else if (a->type == VAR_TYPE_PTR) {
-			if (a->ptr->type == VAR_TYPE_CONST) {
-				// Do const ptr.
-				asm_label_ref_t ref;
-				px_insn_t insn = px_insn_label(ctx, a->label, false, &ref);
-				#ifdef ENABLE_DEBUG_LOGS
-				char buf[7];
-				sprintf(buf, "0x%04x", a->ptr->iconst + i);
-				PX_DESC_INSN(insn, buf, NULL);
-				#endif
-				asm_write_memword(ctx, px_pack_insn(insn));
-				asm_write_memword(ctx, a->ptr->iconst + i);
-			} else if (i) {
-				// Ptr is in reg with offset.
-				px_insn_t insn = {
-					.y = false,
-					.x = ADDR_REG(a->ptr->reg),
-					.b = 0,
-					.a = REG_IMM,
-					.o = opcode,
-				};
-				#ifdef ENABLE_DEBUG_LOGS
-				char buf[6];
-				sprintf(buf, "%u", i);
-				PX_DESC_INSN(insn, buf, NULL);
-				#endif
-				asm_write_memword(ctx, px_pack_insn(insn));
-				asm_write_memword(ctx, i);
-			} else {
-				// Ptr is in reg.
-				px_insn_t insn = {
-					.y = false,
-					.x = ADDR_MEM,
-					.b = 0,
-					.a = a->ptr->reg,
-					.o = opcode,
-				};
-				PX_DESC_INSN(insn, NULL, NULL);
-				asm_write_memword(ctx, px_pack_insn(insn));
-			}
-		}
+		
+		px_insn_t insn = {
+			.y = 0,
+			.b = 0,
+			.o = opcode,
+		};
+		asm_label_t label0 = NULL;
+		address_t   offs0  = 0;
+		asm_label_t label1 = NULL;
+		address_t   offs1  = 0;
+		// Collect addressing modes.
+		insn.a = px_addr_var(ctx, a, i, &insn.x, &label0, &offs0, 0);
+		// Write the resulting instruction.
+		px_write_insn(ctx, insn, label0, offs0, label1, offs1);
 		
 		// Make the rest the carry continue alternative.
 		opcode |= PX_OFFS_CC;
@@ -473,106 +427,41 @@ gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 	// A fancy for loop.
 	for (address_t i = 0; i < n_words; i++) {
 		// Copy B to a register if required.
-		word_t val_part;
-		if (conv_b) {
-			px_part_to_reg(ctx, b, reg_b, i);
-		} else if (b->type == VAR_TYPE_CONST) {
-			val_part = b->iconst >> (MEM_BITS * i);
+		bool do_inc = false;
+		if (b->type == VAR_TYPE_CONST) {
+			// Check for INC, DEC and CMP1 optimisations.
+			word_t val_part = b->iconst >> (MEM_BITS * i);
+			do_inc = (i == 0 && val_part == 1) || (i && val_part == 0);
+			do_inc &= (opcode & !PX_OFFS_CC) <= PX_OP_CMP;
 		}
 		
-		// Pick the right addressing mode.
-		if (a->type == VAR_TYPE_REG) {
-			if (b->type == VAR_TYPE_STACKOFFS) {
-				// Register and stack.
-				px_insn_t insn = {
-					.y = true,
-					.x = ADDR_ST,
-					.b = REG_IMM,
-					.a = a->reg + i,
-					.o = opcode,
-				};
-				#ifdef ENABLE_DEBUG_LOGS
-				char buf[7];
-				sprintf(buf, "%u", px_get_depth(ctx, b, i));
-				PX_DESC_INSN(insn, NULL, buf);
-				#endif
-				asm_write_memword(ctx, px_pack_insn(insn));
-				asm_write_memword(ctx, px_get_depth(ctx, b, i));
-				
-			} else if (b->type == VAR_TYPE_LABEL) {
-				// Register and label.
-				asm_label_ref_t ref;
-				px_insn_t insn = px_insn_label(ctx, b->label, true, &ref);
-				insn.a = a->reg + i;
-				#ifdef ENABLE_DEBUG_LOGS
-				char *buf = xalloc(ctx->allocator, strlen(b->label)+6);
-				sprintf(buf, "%s+%u", b->label, i);
-				PX_DESC_INSN(insn, NULL, buf);
-				xfree(ctx->allocator, buf);
-				#endif
-				asm_write_memword(ctx, px_pack_insn(insn));
-				asm_write_label_ref(ctx, b->label, i, ref);
-				
-			} else if (b->type == VAR_TYPE_CONST) {
-				// Register and const.
-				px_insn_t insn = {
-					.y = false,
-					.x = ADDR_IMM,
-					.b = REG_IMM,
-					.a = a->reg + i,
-					.o = opcode,
-				};
-				#ifdef ENABLE_DEBUG_LOGS
-				char buf[7];
-				sprintf(buf, "0x%04x", b->iconst >> (MEM_BITS * i));
-				PX_DESC_INSN(insn, NULL, buf);
-				#endif
-				asm_write_memword(ctx, px_pack_insn(insn));
-				asm_write_memword(ctx, b->iconst >> (MEM_BITS * i));
-				
-			} else {
-				// Register and register.
-				px_insn_t insn = {
-					.y = false,
-					.x = ADDR_IMM,
-					.b = conv_b ? reg_b : reg_b + i,
-					.a = a->reg + i,
-					.o = opcode,
-				};
-				PX_DESC_INSN(insn, NULL, NULL);
-				asm_write_memword(ctx, px_pack_insn(insn));
-			}
-		} else if (a->type == VAR_TYPE_STACKOFFS) {
-			// In stack.
-			px_insn_t insn = {
-				.y = false,
-				.x = ADDR_ST,
-				.b = reg_b,
-				.a = REG_IMM,
-				.o = opcode,
-			};
-			#ifdef ENABLE_DEBUG_LOGS
-			char buf[7];
-			sprintf(buf, "%u", px_get_depth(ctx, a, i));
-			PX_DESC_INSN(insn, buf, NULL);
-			#endif
-			asm_write_memword(ctx, px_pack_insn(insn));
-			asm_write_memword(ctx, px_get_depth(ctx, a, i));
-			
-		} else if (a->type == VAR_TYPE_LABEL) {
-			// In memory.
-			asm_label_ref_t ref;
-			px_insn_t insn = px_insn_label(ctx, a->label, false, &ref);
+		px_insn_t insn = {
+			.y = 0,
+			.o = do_inc ? opcode | PX_OP_INC : opcode,
+		};
+		asm_label_t label0 = NULL;
+		address_t   offs0  = 0;
+		asm_label_t label1 = NULL;
+		address_t   offs1  = 0;
+		// Collect addressing modes.
+		insn.a = px_addr_var(ctx, a, i, &insn.x, &label0, &offs0, 0);
+		if (do_inc) {
+			// INC optimisation.
+			insn.b = 0;
+		} if (conv_b) {
+			// Move B to a temp register.
+			px_part_to_reg(ctx, b, reg_b, i);
 			insn.b = reg_b;
-			#ifdef ENABLE_DEBUG_LOGS
-			char *buf = xalloc(ctx->allocator, strlen(a->label)+6);
-			sprintf(buf, "%s+%u", a->label, i);
-			PX_DESC_INSN(insn, buf, NULL);
-			xfree(ctx->allocator, buf);
-			#endif
-			asm_write_memword(ctx, px_pack_insn(insn));
-			asm_write_label_ref(ctx, a->label, i, ref);
+		} else if (insn.x == ADDR_IMM) {
+			// Address using B.
+			insn.y = 1;
+			insn.b = px_addr_var(ctx, b, i, &insn.x, &label1, &offs1, reg_b);
+		} else {
+			// Use B as a reg or const.
+			insn.b = px_addr_var(ctx, b, i, NULL, &label1, &offs1, reg_b);
 		}
+		// Write the resulting instruction.
+		px_write_insn(ctx, insn, label0, offs0, label1, offs1);
 		
 		// Make the rest carry continue.
 		opcode |= PX_OFFS_CC;
@@ -770,20 +659,20 @@ char *gen_iasm_var(asm_ctx_t *ctx, gen_var_t *var, iasm_reg_t *reg) {
 	// Convert the variable to assembly craps.
 	if (var->type == VAR_TYPE_CONST) {
 		// Constant.
-		char *buf = xalloc(ctx->allocator, 7);
+		char *buf = xalloc(ctx->current_scope->allocator, 7);
 		sprintf(buf, "0x%04x", var->iconst);
 		return buf;
 	} else if (var->type == VAR_TYPE_REG) {
 		// Register.
-		return xstrdup(ctx->allocator, reg_names[var->reg]);
+		return xstrdup(ctx->current_scope->allocator, reg_names[var->reg]);
 	} else if (var->type == VAR_TYPE_LABEL) {
 		// Label.
-		char *buf = xalloc(ctx->allocator, strlen(var->label) + 3);
+		char *buf = xalloc(ctx->current_scope->allocator, strlen(var->label) + 3);
 		sprintf(buf, "[%s]", var->label);
 		return buf;
 	} else if (var->type == VAR_TYPE_STACKOFFS) {
 		// In stack.
-		char *buf = xalloc(ctx->allocator, 12);
+		char *buf = xalloc(ctx->current_scope->allocator, 12);
 		sprintf(buf, "[ST+%u]", ctx->stack_size - var->offset);
 		return buf;
 	}
@@ -845,10 +734,12 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 			if (!output) output = a;
 			a->cond = INV_BR(a->cond);
 		} else {
+			// Use the CMP1 optimisation.
 			// Go to CMP1 (ULT).
 			oper = OP_LT;
 			goto cmp1;
 		}
+		
 	} else if (OP_IS_COMP(oper)) {
 		cmp1:
 		if (!output || output->type != VAR_TYPE_COND) {
@@ -861,6 +752,7 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 			};
 		}
 		px_math1(ctx, PX_OP_CMP1, output, a);
+		// Translate comparison operators.
 		switch (oper) {
 			case OP_LT:
 				output->cond = isSigned ? COND_SLT : COND_ULT;
@@ -882,6 +774,7 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 				break;
 		}
 		return output;
+		
 	} else if (oper == OP_SHIFT_L) {
 		// Shift left.
 		return px_math1(ctx, PX_OP_SHL, output, a);
@@ -958,6 +851,116 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 	}
 }
 
+// Helper for reinterpretation casts.
+static gen_var_t *px_reinterpret(asm_ctx_t *ctx, gen_var_t *a, var_type_t *ctype) {
+	a = xmake_copy(ctx->current_scope->allocator, a, sizeof(gen_var_t));
+	a->ctype = ctype;
+	return a;
+}
+
+// Expression: Type cast.
+gen_var_t *gen_cast(asm_ctx_t *ctx, gen_var_t *a, var_type_t *ctype) {
+	// Determine whether the source is a float.
+	bool is_src_float = a->ctype->category == TYPE_CAT_SIMPLE && a->ctype->simple_type >= STYPE_FLOAT && a->ctype->simple_type <= STYPE_LONG_DOUBLE;
+	// Determine whether the target is a float.
+	bool is_dst_float = ctype->category == TYPE_CAT_SIMPLE && ctype->simple_type >= STYPE_FLOAT && ctype->simple_type <= STYPE_LONG_DOUBLE;
+	
+	if (a->type == VAR_TYPE_CONST) {
+		if (is_src_float || is_dst_float) {
+			// Float type constants need to be converted.
+			// But we don't have float yet ¯\_(ツ)_/¯
+			return a;
+		} else {
+			// Any other constants can be reinterpreted.
+			return px_reinterpret(ctx, a, ctype);
+		}
+	} else if (a->ctype->category == TYPE_CAT_SIMPLE) {
+		if (is_src_float || is_src_float) {
+			// Again, float types need to be converted.
+			// But we don't have float yet ¯\_(ツ)_/¯
+			return a;
+		} else if (a->ctype->size == ctype->size) {
+			// Some simple types can be reinterpreted.
+			return px_reinterpret(ctx, a, ctype);
+		} else {
+			// Other simple types need to be explicitly casted.
+			gen_var_t *b = px_get_tmp(ctx, ctype->size, true);
+			b->ctype = ctype;
+			px_insn_t insn;
+			
+			if (ctype->size < a->ctype->size) {
+				// Just do a copy.
+				px_mov_n(ctx, b, a, ctype->size);
+				
+			} else {
+				// Start with a copy.
+				px_mov_n(ctx, b, a, a->ctype->size);
+				// We need to make carry extension code.
+				reg_t regno = px_pick_reg(ctx, true);
+				// Move the highest word into our temp reg.
+				px_part_to_reg(ctx, a, regno, a->ctype->size);
+				
+				// Shift left to test the highest bit.
+				insn = (px_insn_t) {
+					.y = 0,
+					.x = ADDR_IMM,
+					.b = 0,
+					.a = regno,
+					.o = PX_OP_SHL,
+				};
+				asm_write_memword(ctx, px_pack_insn(insn));
+				DEBUG_GEN("  SHL %s\n", reg_names[regno]);
+				
+				// Move the default extension into the register.
+				insn = (px_insn_t) {
+					.y = 0,
+					.x = ADDR_IMM,
+					.b = REG_IMM,
+					.a = regno,
+					.o = PX_OP_MOV,
+				};
+				asm_write_memword(ctx, px_pack_insn(insn));
+				asm_write_memword(ctx, 0x0000);
+				DEBUG_GEN("  MOV %s, 0x0000\n", reg_names[regno]);
+				
+				// Conditionally move the other extension into the register.
+				insn = (px_insn_t) {
+					.y = 0,
+					.x = ADDR_IMM,
+					.b = REG_IMM,
+					.a = regno,
+					.o = 040 | COND_CS,
+				};
+				asm_write_memword(ctx, px_pack_insn(insn));
+				asm_write_memword(ctx, 0xffff);
+				DEBUG_GEN("  MOV.CS %s, 0xffff\n", reg_names[regno]);
+				
+				// Now, extend using this value.
+				for (address_t i = ctype->size; i < a->ctype->size; i++) {
+					insn = (px_insn_t) {
+						.y = 0,
+						.b = regno,
+						.o = PX_OP_MOV,
+					};
+					asm_label_t label0;
+					address_t   offs0;
+					insn.a = px_addr_var(ctx, a, i, &insn.x, &label0, &offs0, regno);
+					px_write_insn(ctx, insn, label0, offs0, NULL, 0);
+				}
+			}
+		}
+	} else if (ctype->category == TYPE_CAT_POINTER) {
+		if (a->ctype->category == TYPE_CAT_ARRAY) {
+			// Creating pointer from array.
+			// TODO
+		} else {
+			// Pointer reinterpretation.
+			return px_reinterpret(ctx, a, ctype);
+		}
+	}
+}
+
+/* ================== Variables ================== */
 
 // Make a certain amount of space in the stack.
 void gen_stack_space(asm_ctx_t *ctx, address_t num) {
@@ -976,11 +979,13 @@ void gen_stack_clear(asm_ctx_t *ctx, address_t num) {
 }
 
 // Variables: Move variable to another location.
-void gen_mov(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src) {
+void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words) {
 	if (gen_cmp(ctx, dst, src)) return;
 	if (dst->type == VAR_TYPE_REG) {
 		// To register move.
-		px_mov_to_reg(ctx, src, dst->reg);
+		for (address_t i = 0; i < n_words; i++) {
+			px_part_to_reg(ctx, src, dst->reg + i, i);
+		}
 	} else if (dst->type == VAR_TYPE_COND) {
 		// Convert to condition.
 		dst->cond = px_var_to_cond(ctx, src);
@@ -1000,59 +1005,38 @@ void gen_mov(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src) {
 			mov_to_reg = true;
 		}
 		
-		for (address_t i = 0; i < dst->ctype->size; i++) {
+		for (address_t i = 0; i < n_words; i++) {
+			px_insn_t insn = {
+				.y = 0,
+				.o = PX_OP_MOV,
+			};
+			asm_label_t label0 = NULL;
+			address_t   offs0  = 0;
+			asm_label_t label1 = NULL;
+			address_t   offs1  = 0;
+			// Collect addressing modes.
+			insn.a = px_addr_var(ctx, dst, i, &insn.x, &label0, &offs0, 0);
 			if (mov_to_reg) {
-				// This is a variant where we either load other memory or similar.
+				// Move B to a temp register.
 				px_part_to_reg(ctx, src, regno, i);
-			}
-			
-			if (dst->type == VAR_TYPE_STACKOFFS) {
-				// Place in stack by offset.
-				#ifdef ENABLE_DEBUG_LOGS
-				if (src->type == VAR_TYPE_CONST) {
-					word_t val_part = src->iconst >> (MEM_BITS * i);
-					DEBUG_GEN("  MOV [ST+%d], 0x%04x\n", px_get_depth(ctx, dst, 0), val_part);
-				} else {
-					DEBUG_GEN("  MOV [ST+%d], %s\n", px_get_depth(ctx, dst, 0), reg_names[regno]);
-				}
-				#endif
-				px_insn_t insn = {
-					.y = 1,
-					.x = ADDR_ST,
-					.b = regno,
-					.a = REG_ST,
-					.o = PX_OP_MOV,
-				};
-				asm_write_memword(ctx, px_pack_insn(insn));
-				asm_write_memword(ctx, px_get_depth(ctx, dst, 0));
-			} else if (dst->type == VAR_TYPE_LABEL) {
-				// Place in memory.
-				asm_label_ref_t ref;
-				px_insn_t insn = px_insn_label(ctx, dst->label, false, &ref);
 				insn.b = regno;
-				insn.o = PX_OP_MOV;
-				#ifdef ENABLE_DEBUG_LOGS
-				if (src->type == VAR_TYPE_CONST) {
-					char tmp[7];
-					sprintf(tmp, "0x%04x", src->iconst);
-					PX_DESC_INSN(insn, dst->label, tmp);
-				} else {
-					PX_DESC_INSN(insn, dst->label, NULL);
-				}
-				#endif
-				asm_write_memword(ctx, px_pack_insn(insn));
-				asm_write_label_ref(ctx, dst->label, -(src->type == VAR_TYPE_CONST), ref);
-			} else if (dst->type == VAR_TYPE_PTR) {
-				// TODO: Store to pointer.
+			} else if (insn.x == ADDR_IMM) {
+				// Address using B.
+				insn.y = 1;
+				insn.b = px_addr_var(ctx, src, i, &insn.x, &label1, &offs1, regno);
+			} else {
+				// Use B as a reg or const.
+				insn.b = px_addr_var(ctx, src, i, NULL, &label1, &offs1, regno);
 			}
-			
-			if (src->type == VAR_TYPE_CONST) {
-				// Add the missing constant.
-				word_t val_part = src->iconst >> (MEM_BITS * i);
-				asm_write_memword(ctx, val_part);
-			}
+			// Write the resulting instruction.
+			px_write_insn(ctx, insn, label0, offs0, label1, offs1);
 		}
 	}
+}
+
+// Variables: Move variable to another location.
+void gen_mov(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src) {
+	px_mov_n(ctx, dst, src, src->ctype->size);
 }
 
 // Gets or adds a temp var.

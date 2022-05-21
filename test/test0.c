@@ -25,11 +25,17 @@
 // 	return ptr - offs;
 // }
 
-int tester() {
-	asm volatile (
-		"MOV [0xccdd], 0xfeca"
-	);
+void test() {
+	long local;
+	local = 3;
+	local += 9;
 }
+
+// int tester() {
+// 	asm volatile (
+// 		"MOV [0xccdd], 0xfeca"
+// 	);
+// }
 
 // int iasm() {
 // 	asm volatile (

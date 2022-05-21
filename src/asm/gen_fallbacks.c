@@ -701,6 +701,7 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 			*val = (gen_var_t) {
 				.type   = VAR_TYPE_CONST,
 				.iconst = expr->iconst,
+				.ctype  = ctype_simple(ctx, STYPE_S_INT),
 			};
 			return val;
 		} break;
@@ -732,9 +733,11 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 				
 			} else if (oper == OP_LOGIC_NOT) {
 				// Apply the "condition" output hint to logic not.
-				gen_var_t *cond_hint = XCOPY(ctx->allocator, &(gen_var_t) {
-					.type = VAR_TYPE_COND
-				}, gen_var_t);
+				gen_var_t *cond_hint = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
+				*cond_hint = (gen_var_t) {
+					.type = VAR_TYPE_COND,
+					.ctype = ctype_simple(ctx, STYPE_BOOL),
+				};
 				// And do the rest as usual.
 				gen_var_t *a = gen_expression(ctx, expr->par_a, cond_hint);
 				return a ? gen_expr_math1(ctx, expr->oper, out_hint, a) : NULL;
@@ -764,9 +767,11 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 					
 				} else {
 					// Assignment to a different type (usually pointer dereference).
-					gen_var_t *ptr_hint = XCOPY(ctx->allocator, &(gen_var_t) {
-						.type = VAR_TYPE_PTR
-					}, gen_var_t);
+					gen_var_t *ptr_hint = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
+					*ptr_hint = (gen_var_t) {
+						.type = VAR_TYPE_PTR,
+						.ctype = ctype_simple(ctx, STYPE_BOOL),
+					};
 					// Generate with the pointer hint.
 					gen_var_t *a = gen_expression(ctx, expr->par_a, ptr_hint);
 					if (!a) return NULL;
@@ -784,7 +789,6 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 					gen_mov(ctx, a, b);
 					// Free up variables if necessary.
 					if (!gen_cmp(ctx, a, b)) gen_unuse(ctx, a);
-					if (a != ptr_hint) xfree(ctx->allocator, ptr_hint);
 					return a;
 				}
 			} else {

@@ -157,10 +157,10 @@ simple_type:	"char"										{$$.pos=$1;                                  $$.iva
 
 // A function definition (with code).
 funcdef:		simple_type TKN_IDENT "(" opt_params ")"
-				"{" stmts "}"								{$$=funcdef_decl(ctx, &$2, &$4, &$7);        $$.pos=pos_merge($1.pos, $8);}
+				"{" stmts "}"								{$$=funcdef_decl(ctx, &$1, &$2, &$4, &$7);   $$.pos=pos_merge($1.pos, $8);}
 // A function definition (without code).
 |				simple_type TKN_IDENT "(" opt_params ")"
-				";"											{$$=funcdef_def(ctx, &$2, &$4);              $$.pos=pos_merge($1.pos, $6);};
+				";"											{$$=funcdef_def(ctx, &$1, &$2, &$4);         $$.pos=pos_merge($1.pos, $6);};
 // One or more variable declarations.
 vardecls:		simple_type idents ";"						{$$=$2; idents_settype(ctx, &$$, $1.ival);   $$.pos=pos_merge($1.pos, $3);};
 
@@ -241,7 +241,7 @@ expr:			TKN_IVAL									{$$=expr_icnst(ctx, &$1);                    $$.pos=$1.
 |				expr ">>=" expr				%prec "="		{$$=expr_matha(ctx, OP_SHIFT_R,   &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);};
 
 // Inline assembly snippets.
-inline_asm:		"asm" asm_qual asm_code						{$$=$3; $$.iasm->qualifiers=$2; $$.iasm->qualifiers.is_volatile |= !$$.iasm->outputs; };
+inline_asm:		"asm" asm_qual asm_code						{$$=$3; $$.iasm->qualifiers=$2; $$.iasm->qualifiers.is_volatile |= !$$.iasm->outputs;};
 
 asm_qual:		%empty										{$$=(iasm_qual_t) {0, 0, 0};                 $$.pos=pos_empty(ctx->tokeniser_ctx);}
 |				asm_qual "volatile"							{$$=$1; $$.is_volatile=1;                    $$.pos=pos_merge($1.pos, $2);}

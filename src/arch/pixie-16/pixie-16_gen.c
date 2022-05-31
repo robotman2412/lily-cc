@@ -285,6 +285,7 @@ reg_t px_pick_reg(asm_ctx_t *ctx, bool do_vacate) {
 		} else {
 			// Give it a temp location.
 			gen_var_t *tmp = px_get_tmp(ctx, 1, true);
+			tmp->ctype = var->ctype;
 			gen_mov(ctx, tmp, var);
 			*var = *tmp;
 		}
@@ -343,6 +344,7 @@ gen_var_t *px_math1(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 	bool      do_copy = !gen_cmp(ctx, output, a) && opcode != PX_OP_CMP1;
 	if (!output || do_copy) {
 		output = px_get_tmp(ctx, n_words, true);
+		output->ctype = a->ctype;
 	}
 	if (do_copy) {
 		// Perform the copy.
@@ -402,6 +404,7 @@ gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 	bool      do_copy = !gen_cmp(ctx, output, a) && opcode != PX_OP_CMP;
 	if (!output || do_copy) {
 		output = px_get_tmp(ctx, n_words, true);
+		output->ctype = a->ctype;
 	}
 	if (do_copy) {
 		// Perform the copy.
@@ -501,13 +504,15 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 			*var = (gen_var_t) {
 				.type  = VAR_TYPE_REG,
 				.reg   = i,
-				.owner = funcdef->args.arr[i].strval
+				.owner = funcdef->args.arr[i].strval,
+				.ctype = funcdef->args.arr[i].type,
 			};
 			// It's default location is in the stack.
 			*loc = (gen_var_t) {
 				.type        = VAR_TYPE_STACKOFFS,
 				.offset      = i,
 				.owner       = funcdef->args.arr[i].strval,
+				.ctype       = funcdef->args.arr[i].type,
 				.default_loc = NULL
 			};
 			var->default_loc = loc;
@@ -537,6 +542,7 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 				.type        = VAR_TYPE_STACKOFFS,
 				.offset      = i,
 				.owner       = funcdef->args.arr[i].strval,
+				.ctype       = funcdef->args.arr[i].type,
 				.default_loc = NULL
 			};
 			// Which is also it's default location.
@@ -785,9 +791,11 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 		// Conversion, C w a Pointer?
 		gen_var_t *var = xalloc(ctx->allocator, sizeof(gen_var_t));
 		var->type        = VAR_TYPE_PTR;
+		var->ctype       = a->ctype->underlying;
 		var->ptr         = a;
 		var->owner       = NULL;
 		var->default_loc = NULL;
+		if (!var->ctype) var->ctype = ctype_simple(ctx, STYPE_S_INT);
 		return var;
 	} else if (oper == OP_ADROF) {
 		if (a->type == VAR_TYPE_LABEL) {
@@ -839,6 +847,7 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 			// Move it to a stack temp.
 			// This starts clobbering things up.
 			gen_var_t *tmp = px_get_tmp(ctx, 1, false);
+			tmp->ctype = a->ctype;
 			gen_mov(ctx, tmp, a);
 			return gen_expr_math1(ctx, oper, output, tmp);
 		}

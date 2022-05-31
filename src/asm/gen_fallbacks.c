@@ -149,7 +149,8 @@ bool gen_stmt(asm_ctx_t *ctx, void *ptr, bool is_stmts) {
 			case STMT_TYPE_RET: {
 				// A return statement.
 				gen_var_t return_hint = {
-					.type = VAR_TYPE_RETVAL
+					.type  = VAR_TYPE_RETVAL,
+					.ctype = ctx->current_func->returns,
 				};
 				gen_var_t *retval = stmt->expr ? gen_expression(ctx, stmt->expr, &return_hint) : 0;
 				// Apply the appropriate return code.

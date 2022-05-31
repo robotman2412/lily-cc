@@ -18,9 +18,9 @@ int strlen(short ptr) {
 	if (!ptr) return 0;
 	
 	short offs;
-	offs = ptr;
+	// offs = ptr;
 	
-	while (*ptr) ptr += 1;
+	// while (*ptr) ptr += 1;
 	
 	return ptr - offs;
 }

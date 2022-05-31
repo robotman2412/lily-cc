@@ -4,25 +4,25 @@
 #include <malloc.h>
 
 // Incomplete function definition (without code).
-funcdef_t funcdef_def(parser_ctx_t *ctx, strval_t *ident, idents_t *args) {
+funcdef_t funcdef_def(parser_ctx_t *ctx, ival_t *type, strval_t *ident, idents_t *args) {
 	return (funcdef_t) {
-		.ident = *ident,
-		.args  = *args,
-		.stmts = NULL
+		.ident   = *ident,
+		.args    = *args,
+		.stmts   = NULL,
+		.returns = ctype_simple(ctx->asm_ctx, type->ival),
 	};
 }
 
 // Complete function declaration (with code).
-funcdef_t funcdef_decl(parser_ctx_t *ctx, strval_t *ident, idents_t *args, stmts_t *code) {
+funcdef_t funcdef_decl(parser_ctx_t *ctx, ival_t *type, strval_t *ident, idents_t *args, stmts_t *code) {
 	return (funcdef_t) {
-		.ident = *ident,
-		.args  = *args,
-		.stmts = code
+		.ident   = *ident,
+		.args    = *args,
+		.stmts   = code,
+		.returns = ctype_simple(ctx->asm_ctx, type->ival),
 	};
 }
 
-
-// 
 
 // An empty list of statements.
 stmts_t stmts_empty(parser_ctx_t *ctx) {

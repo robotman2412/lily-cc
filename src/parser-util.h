@@ -200,9 +200,9 @@ extern void *xmake_copy(alloc_ctx_t allocator, void *mem, size_t size);
 #define XCOPY(alloc, thing, type) ( (type *) xmake_copy(alloc, thing, sizeof(type)) )
 
 // Incomplete function definition (without code).
-funcdef_t   funcdef_def    (parser_ctx_t *ctx, strval_t *ident,  idents_t *args);
+funcdef_t   funcdef_def    (parser_ctx_t *ctx, ival_t *type, strval_t *ident,  idents_t *args);
 // Complete function declaration (with code).
-funcdef_t   funcdef_decl   (parser_ctx_t *ctx, strval_t *ident,  idents_t *args, stmts_t *code);
+funcdef_t   funcdef_decl   (parser_ctx_t *ctx, ival_t *type, strval_t *ident,  idents_t *args, stmts_t *code);
 
 // An empty list of statements.
 stmts_t     stmts_empty    (parser_ctx_t *ctx);

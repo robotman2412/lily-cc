@@ -21,7 +21,6 @@ static inline void gen_var_scope(asm_ctx_t *ctx, map_t *map) {
 		if ((var->type == VAR_TYPE_STACKFRAME || var->type == VAR_TYPE_STACKOFFS) && var->offset == (address_t) -1) {
 			// Have it in the stack.
 			var->offset = ctx->stack_size;
-			DEBUG_GEN("// updating stack offset to %d\n", ctx->stack_size);
 			ctx->stack_size ++;
 		}
 		
@@ -29,6 +28,7 @@ static inline void gen_var_scope(asm_ctx_t *ctx, map_t *map) {
 	}
 	
 	// Update the stack size.
+	DEBUG_GEN("// updating stack offset to %d\n", ctx->stack_size);
 	gen_stack_space(ctx, ctx->stack_size - pre);
 }
 #endif
@@ -44,7 +44,7 @@ void gen_function(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	ctx->temp_usage    = NULL;
 	ctx->last_label_no = 0;
 	ctx->temp_num      = 0;
-	ctx->stack_size  = 0;
+	ctx->stack_size    = 0;
 	gen_preproc_function(ctx, funcdef);
 	
 	// New function, new scope.

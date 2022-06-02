@@ -399,8 +399,22 @@ gen_var_t *px_math1(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 
 // Creates MATH2 instructions.
 gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_var_t *a, gen_var_t *b) {
+	// Determine whether size matching is required.
+	if (a->ctype->size != b->ctype->size && (STYPE_IS_SIGNED(a->ctype->simple_type) || STYPE_IS_SIGNED(b->ctype->simple_type))) {
+		// Size matching is required.
+		if (a->ctype->size > b->ctype->size) {
+			b = gen_cast(ctx, b, a->ctype);
+		} else {
+			a = gen_cast(ctx, a, b->ctype);
+		}
+	}
+	
+	// Determine the amount of bytes to operate on.
+	bool      a_big   = a->ctype->size > b->ctype->size;
+	address_t n_words = a_big ? b->ctype->size : a->ctype->size;
+	address_t n_ext   = (a_big ? a->ctype->size : b->ctype->size) - n_words;
+	
 	gen_var_t *output = out_hint;
-	address_t n_words = a->ctype->size;
 	bool      do_copy = !gen_cmp(ctx, output, a) && opcode != PX_OP_CMP;
 	if (!output || do_copy) {
 		output = px_get_tmp(ctx, n_words, true);
@@ -957,11 +971,14 @@ gen_var_t *gen_cast(asm_ctx_t *ctx, gen_var_t *a, var_type_t *ctype) {
 					px_write_insn(ctx, insn, label0, offs0, NULL, 0);
 				}
 			}
+			
+			return b;
 		}
 	} else if (ctype->category == TYPE_CAT_POINTER) {
 		if (a->ctype->category == TYPE_CAT_ARRAY) {
 			// Creating pointer from array.
 			// TODO
+			return a;
 		} else {
 			// Pointer reinterpretation.
 			return px_reinterpret(ctx, a, ctype);

@@ -959,15 +959,15 @@ gen_var_t *gen_cast(asm_ctx_t *ctx, gen_var_t *a, var_type_t *ctype) {
 				DEBUG_GEN("  MOV.CS %s, 0xffff\n", reg_names[regno]);
 				
 				// Now, extend using this value.
-				for (address_t i = ctype->size; i < a->ctype->size; i++) {
+				for (address_t i = a->ctype->size; i < ctype->size; i++) {
 					insn = (px_insn_t) {
 						.y = 0,
 						.b = regno,
 						.o = PX_OP_MOV,
 					};
-					asm_label_t label0;
-					address_t   offs0;
-					insn.a = px_addr_var(ctx, a, i, &insn.x, &label0, &offs0, regno);
+					asm_label_t label0 = NULL;
+					address_t   offs0  = 0;
+					insn.a = px_addr_var(ctx, b, i, &insn.x, &label0, &offs0, regno);
 					px_write_insn(ctx, insn, label0, offs0, NULL, 0);
 				}
 			}
@@ -1129,6 +1129,8 @@ gen_var_t *px_get_tmp(asm_ctx_t *ctx, size_t size, bool allow_reg) {
 	gen_define_temp(ctx, label);
 	
 	// Return the new stack bit.
+	ctx->stack_size += size;
+	gen_stack_space(ctx, size);
 	gen_var_t *var = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
 	*var = (gen_var_t) {
 		.type        = VAR_TYPE_STACKOFFS,

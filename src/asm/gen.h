@@ -16,7 +16,7 @@ struct gen_var {
 	gen_var_type_t  type;
 	union {
 		// Numeric constants.
-		address_t   iconst;
+		uint64_t    iconst;
 		// Stored in the stack by offset or by stack frame.
 		address_t   offset;
 		// Stored in memory by label.

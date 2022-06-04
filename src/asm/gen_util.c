@@ -48,6 +48,18 @@ var_type_t *ctype_ptr_simple(asm_ctx_t *ctx, simple_type_t of) {
 	};
 }
 
+// Get or create a pointer type of a given type in the current scope.
+var_type_t *ctype_ptr(asm_ctx_t *ctx, var_type_t *of) {
+	var_type_t *ctype = xalloc(ctx->current_scope->allocator, sizeof(var_type_t));
+	*ctype = (var_type_t) {
+		.size        = SSIZE_POINTER,
+		.simple_type = STYPE_POINTER,
+		.is_complete = true,
+		.category    = TYPE_CAT_POINTER,
+		.underlying  = of,
+	};
+}
+
 
 
 // Find and return the location of the variable with the given name.

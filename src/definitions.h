@@ -273,7 +273,11 @@ typedef enum gen_var_type {
 	// Conditions.
 	VAR_TYPE_COND,
 	// Hint to use for adrof and storing to pointers.
-	VAR_TYPE_PTR
+	VAR_TYPE_PTR,
+	
+	// As of yet unassigned variables.
+	// Only applies to variables which can under no circumstance be assigned at this point.
+	VAR_TYPE_UNASSIGNED,
 } gen_var_type_t;
 
 // Things like numeric types and alike.

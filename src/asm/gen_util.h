@@ -11,6 +11,8 @@ var_type_t *ctype_simple(asm_ctx_t *ctx, simple_type_t of);
 var_type_t *ctype_arr_simple(asm_ctx_t *ctx, simple_type_t of, size_t len);
 // Get or create a pointer type of a simple type in the current scope.
 var_type_t *ctype_ptr_simple(asm_ctx_t *ctx, simple_type_t of);
+// Get or create a pointer type of a given type in the current scope.
+var_type_t *ctype_ptr(asm_ctx_t *ctx, var_type_t *of);
 
 // Find and return the location of the variable with the given name.
 gen_var_t *gen_get_variable(asm_ctx_t *ctx, char      *label);

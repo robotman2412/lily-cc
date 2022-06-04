@@ -164,7 +164,7 @@ bool gen_stmt(asm_ctx_t *ctx, void *ptr, bool is_stmts) {
 			case STMT_TYPE_VAR: {
 				// TODO: Vardecls structure to change later.
 				for (size_t i = 0; i < stmt->vars->num; i++) {
-					// TODO: Make assignments.
+					// TODO: Make variables initially unassigned.
 				}
 			} break;
 			case STMT_TYPE_EXPR: {

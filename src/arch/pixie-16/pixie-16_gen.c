@@ -365,6 +365,7 @@ gen_var_t *px_math1(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 		// Make the pointer into a register.
 		reg_t regno  = px_pick_reg(ctx, true);
 		px_mov_to_reg(ctx, a->ptr, regno);
+		ctx->current_scope->reg_usage[regno] = a;
 		a->ptr->type = VAR_TYPE_REG;
 		a->ptr->reg  = regno;
 	}
@@ -427,12 +428,7 @@ gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 	}
 	
 	// Whether a temp register is required.
-	bool do_tmp = a->type != VAR_TYPE_REG && b->type != VAR_TYPE_REG && b->type != VAR_TYPE_CONST;
-	reg_t regno;
-	if (do_tmp) {
-		regno = px_pick_reg(ctx, true);
-	}
-	bool conv_b = do_tmp;
+	bool conv_b = a->type != VAR_TYPE_REG && b->type != VAR_TYPE_REG && b->type != VAR_TYPE_CONST;
 	bool y      = b->type != VAR_TYPE_REG;
 	reg_t reg_b = y ? 0 : b->reg;
 	if (conv_b) {
@@ -671,7 +667,9 @@ char *gen_iasm_var(asm_ctx_t *ctx, gen_var_t *var, iasm_reg_t *reg) {
 	
 	if (!needs_change) goto conversion;
 	if (reg->mode_register) {
-		px_mov_to_reg(ctx, var, px_pick_reg(ctx, true));
+		reg_t regno = px_pick_reg(ctx, true);
+		px_mov_to_reg(ctx, var, regno);
+		ctx->current_scope->reg_usage[regno] = var;
 	}
 	
 	conversion:
@@ -679,7 +677,7 @@ char *gen_iasm_var(asm_ctx_t *ctx, gen_var_t *var, iasm_reg_t *reg) {
 	if (var->type == VAR_TYPE_CONST) {
 		// Constant.
 		char *buf = xalloc(ctx->current_scope->allocator, 7);
-		sprintf(buf, "0x%04x", var->iconst);
+		sprintf(buf, "0x%04x", (uint16_t) var->iconst);
 		return buf;
 	} else if (var->type == VAR_TYPE_REG) {
 		// Register.
@@ -801,7 +799,7 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 		// Shift right.
 		return px_math1(ctx, PX_OP_SHR, output, a);
 	} else if (oper == OP_DEREF) {
-		// Conversion, C w a Pointer?
+		// Look at where the pointer goes to.
 		gen_var_t *var = xalloc(ctx->allocator, sizeof(gen_var_t));
 		var->type        = VAR_TYPE_PTR;
 		var->ctype       = a->ctype->underlying;
@@ -811,10 +809,15 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 		if (!var->ctype) var->ctype = ctype_simple(ctx, STYPE_S_INT);
 		return var;
 	} else if (oper == OP_ADROF) {
-		if (a->type == VAR_TYPE_LABEL) {
+		if (a->default_loc) {
+			// LEA of default location.
+			// This starts clobbering things up.
+			return gen_expr_math1(ctx, oper, output, a->default_loc);
+		} else if (a->type == VAR_TYPE_LABEL) {
+			bool use_hint = output && output->type == VAR_TYPE_REG;
+			reg_t regno = use_hint ? output->reg : px_pick_reg(ctx, true);
 			if (DET_PIE(ctx)) {
 				// LEA (pie).
-				reg_t regno = px_pick_reg(ctx, true);
 				DEBUG_GEN("  LEA %s, [PC~%s]\n", reg_names[regno], a->label);
 				px_insn_t insn = {
 					.y = true,
@@ -827,7 +830,6 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 				asm_write_label_ref(ctx, a->label, 0, ASM_LABEL_REF_OFFS_PTR);
 			} else {
 				// LEA (non-pie).
-				reg_t regno = px_pick_reg(ctx, true);
 				DEBUG_GEN("  LEA %s, [%s]\n", reg_names[regno], a->label);
 				px_insn_t insn = {
 					.y = true,
@@ -839,9 +841,24 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 				asm_write_memword(ctx, px_pack_insn(insn));
 				asm_write_label_ref(ctx, a->label, 0, ASM_LABEL_REF_ABS_PTR);
 			}
+			// Create a nice var.
+			gen_var_t *var;
+			if (use_hint) {
+				var = output;
+			} else {
+				var = xalloc(ctx->allocator, sizeof(gen_var_t));
+				var->owner       = NULL;
+				var->default_loc = NULL;
+				var->reg         = regno;
+				var->type        = VAR_TYPE_REG;
+				var->ctype       = ctype_ptr(ctx, a->ctype);
+				ctx->current_scope->reg_usage[regno] = var;
+			}
+			return var;
 		} else if (a->type == VAR_TYPE_STACKOFFS) {
+			bool use_hint = output && output->type == VAR_TYPE_REG;
 			// LEA (stack).
-			reg_t regno = px_pick_reg(ctx, true);
+			reg_t regno = use_hint ? output->reg : px_pick_reg(ctx, true);
 			DEBUG_GEN("  LEA %s, [ST+%d]\n", reg_names[regno], px_get_depth(ctx, a, 0));
 			px_insn_t insn = {
 				.y = true,
@@ -852,10 +869,20 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 			};
 			asm_write_memword(ctx, px_pack_insn(insn));
 			asm_write_memword(ctx, px_get_depth(ctx, a, 0));
-		} else if (a->default_loc) {
-			// LEA of default location.
-			// This starts clobbering things up.
-			return gen_expr_math1(ctx, oper, output, a->default_loc);
+			// Create a nice var.
+			gen_var_t *var;
+			if (use_hint) {
+				var = output;
+			} else {
+				var = xalloc(ctx->allocator, sizeof(gen_var_t));
+				var->owner       = NULL;
+				var->default_loc = NULL;
+				var->reg         = regno;
+				var->type        = VAR_TYPE_REG;
+				var->ctype       = ctype_ptr(ctx, a->ctype);
+				ctx->current_scope->reg_usage[regno] = var;
+			}
+			return var;
 		} else {
 			// Move it to a stack temp.
 			// This starts clobbering things up.
@@ -1061,7 +1088,25 @@ void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words)
 
 // Variables: Move variable to another location.
 void gen_mov(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src) {
-	px_mov_n(ctx, dst, src, src->ctype->size);
+	address_t n_words;
+	if (dst->type == VAR_TYPE_UNASSIGNED && src->type == VAR_TYPE_REG && 0 /* no copy is ok? */) {
+		// Unassigned variable optimisation.
+		// Make default location.
+		src->default_loc = dst;
+		// Swap src and dst.
+		gen_var_t tmp = *dst;
+		*dst = *src;
+		*src = tmp;
+		return;
+	}
+	// Normal copy.
+	if (src->type == VAR_TYPE_CONST) {
+		n_words = dst->ctype->size;
+	} else {
+		n_words = src->ctype->size < dst->ctype->size
+				? src->ctype->size : dst->ctype->size;
+	}
+	px_mov_n(ctx, dst, src, n_words);
 }
 
 // Gets or adds a temp var.

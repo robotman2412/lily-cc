@@ -25,10 +25,20 @@
 // 	return ptr - offs;
 // }
 
-void test(int param) {
-	long local;
-	local = 3;
-	local += param;
+// void test(int param) {
+// 	long long local;
+// 	local = 3;
+// 	local += param;
+// }
+
+void pointers(short param) {
+	// long quantum;
+	// quantum = *param;
+	
+	// int  thing;
+	// thing = &thing;
+	
+	param = &param;
 }
 
 // int tester() {

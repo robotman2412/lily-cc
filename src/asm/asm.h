@@ -58,12 +58,6 @@ struct asm_ctx {
     // The active sections.
     asm_sect_t  *current_section;
     
-    /* ======== Registers ======== */
-    // Whether the registers are used.
-    bool        *regs_used;
-    // What is stored in the registers.
-    gen_var_t  **regs_stored;
-    
     /* ====== Miscellaneous ====== */
     // Used for error reporting.
     tokeniser_ctx_t *tokeniser_ctx;

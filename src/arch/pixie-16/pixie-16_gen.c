@@ -532,8 +532,7 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 			var->default_loc = loc;
 			
 			// Mark the register as used.
-			ctx->regs_used[i]   = true;
-			ctx->regs_stored[i] = var;
+			ctx->current_scope->reg_usage[i] = var;
 			
 			gen_define_var(ctx, var, funcdef->args.arr[i].strval);
 		}
@@ -1071,7 +1070,7 @@ gen_var_t *px_get_tmp(asm_ctx_t *ctx, size_t size, bool allow_reg) {
 	// Try to pick an empty register.
 	if (size == 1 && allow_reg) {
 		for (reg_t i = 0; i < NUM_REGS; i++) {
-			if (!ctx->regs_used[i]) {
+			if (!ctx->current_scope->reg_usage[i]) {
 				// We can use this register.
 				gen_var_t *var = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
 				*var = (gen_var_t) {
@@ -1081,8 +1080,7 @@ gen_var_t *px_get_tmp(asm_ctx_t *ctx, size_t size, bool allow_reg) {
 					.default_loc = NULL
 				};
 				
-				ctx->regs_stored[i] = var;
-				ctx->regs_used[i] = true;
+				ctx->current_scope->reg_usage[i] = var;
 				return var;
 			}
 		}

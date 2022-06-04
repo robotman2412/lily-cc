@@ -15,13 +15,6 @@ void asm_init(asm_ctx_t *ctx) {
 	ctx->allocator   = alloc_create(ALLOC_NO_PARENT);
 	ctx->sections    = (map_t *)      xalloc(ctx->allocator, sizeof(map_t));
 	map_create(ctx->sections);
-	// Registers.
-	ctx->regs_used   = (bool *)       xalloc(ctx->allocator, sizeof(bool)      * NUM_REGS);
-	ctx->regs_stored = (gen_var_t **) xalloc(ctx->allocator, sizeof(gen_var_t *) * NUM_REGS);
-	for (int i = 0; i < NUM_REGS; i++) {
-		ctx->regs_used[i]   = false;
-		ctx->regs_stored[i] = NULL;
-	}
 	// Scopeth.
 	map_create(&ctx->functions);
 	ctx->global_scope.parent    = NULL;
@@ -29,6 +22,9 @@ void asm_init(asm_ctx_t *ctx) {
 	ctx->global_scope.local_num = 0;
 	map_create(&ctx->global_scope.vars);
 	ctx->current_scope = &ctx->global_scope;
+	for (reg_t i = 0; i < NUM_REGS; i++) {
+		ctx->current_scope->reg_usage[i] = NULL;
+	}
 	// Labels.
 	ctx->last_global_label = NULL;
 	ctx->labels      = (map_t *)      xalloc(ctx->allocator, sizeof(map_t));

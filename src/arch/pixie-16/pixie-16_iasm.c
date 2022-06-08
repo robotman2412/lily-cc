@@ -22,11 +22,11 @@ char *px_iasm_keyw[] = {
 	// Mathc: one arg.
 	"INCC", "DECC", "CMP1C", "",     "",     "",     "SHLC", "SHRC",
 	// Move instructions.
-	"MOV.ULT", "MOV.UGT", "MOV.SLT", "MOV.SGT", "MOV.EQ",  "MOV.CS",  "MOV",     "MOV.BRK",
-	"MOV.UGE", "MOV.ULE", "MOV.SGE", "MOV.SLE", "MOV.NE",  "MOV.CC",  "MOV.JSR", "MOV.RTI",
+	"MOV.ULT", "MOV.UGT", "MOV.SLT", "MOV.SGT", "MOV.EQ",  "MOV.CS",  "MOV",     "",
+	"MOV.UGE", "MOV.ULE", "MOV.SGE", "MOV.SLE", "MOV.NE",  "MOV.CC",  "MOV.JSR", "MOV.CX",
 	// Load effective address instructions.
-	"LEA.ULT", "LEA.UGT", "LEA.SLT", "LEA.SGT", "LEA.EQ",  "LEA.CS",  "LEA",     "LEA.BRK",
-	"LEA.UGE", "LEA.ULE", "LEA.SGE", "LEA.SLE", "LEA.NE",  "LEA.CC",  "LEA.JSR", "LEA.RTI",
+	"LEA.ULT", "LEA.UGT", "LEA.SLT", "LEA.SGT", "LEA.EQ",  "LEA.CS",  "LEA",     "",
+	"LEA.UGE", "LEA.ULE", "LEA.SGE", "LEA.SLE", "LEA.NE",  "LEA.CC",  "LEA.JSR", "",
 	// Registers.
 	"R0", "R1", "R2", "R3",
 	"ST", "PF", "PC", "IMM",

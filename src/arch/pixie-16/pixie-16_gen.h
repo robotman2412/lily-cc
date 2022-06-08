@@ -72,8 +72,6 @@ void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words)
 #define COND_CS   005
 // Always true.
 #define COND_TRUE 006
-// Reserved for BRK instruction.
-#define COND_BRK  007
 // Unsigned greater than or equal.
 #define COND_UGE  010
 // Unsigned less than or equal.
@@ -88,8 +86,8 @@ void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words)
 #define COND_CC   015
 // Reserved for JSR instruction.
 #define COND_JSR  016
-// Reserved for RTI instruction.
-#define COND_RTI  017
+// Reserved for carry extend instruction.
+#define COND_CX   017
 
 // Address by memory.
 #define ADDR_MEM 5

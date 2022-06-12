@@ -41,8 +41,6 @@ cond_t px_var_to_cond(asm_ctx_t *ctx, gen_var_t *var);
 void px_branch(asm_ctx_t *ctx, gen_var_t *cond_var, char *l_true, char *l_false);
 // Generate a jump to a label.
 void px_jump(asm_ctx_t *ctx, char *label);
-// Pick an addressing mode for a label.
-px_insn_t px_insn_label(asm_ctx_t *ctx, asm_label_t label, bool y, asm_label_ref_t *ref);
 // Pick a register to use.
 reg_t px_pick_reg(asm_ctx_t *ctx, bool do_vacate);
 // Move part of a value to a register.
@@ -53,6 +51,8 @@ void px_mov_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest);
 gen_var_t *px_math1(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_var_t *a);
 // Creates MATH2 instructions.
 gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_var_t *a, gen_var_t *b);
+// Called before a memory clobbering instruction is to be written.
+void px_memclobber(asm_ctx_t *ctx, bool clobbers_stack);
 // Variables: Move variable to another location.
 void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words);
 

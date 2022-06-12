@@ -47,6 +47,8 @@ struct asm_scope {
     address_t   stack_size;
     // The memory allocator for this scope.
     alloc_ctx_t allocator;
+    // Extra bits of context on an architecture basis.
+    ASM_SCOPE_EXTRAS
 };
 
 struct asm_ctx {
@@ -91,7 +93,7 @@ struct asm_ctx {
     // Number of last label in function.
     address_t     last_label_no;
     // Relative size of the stack.
-    address_t     stack_size;
+    // address_t     stack_size;
     
     /* ===== Post-processing ===== */
     // The current PC.

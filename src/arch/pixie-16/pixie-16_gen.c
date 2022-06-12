@@ -13,7 +13,7 @@
 // Gets the constant required for a stack indexing memory access.
  __attribute__((pure))
 static inline address_t px_get_depth(asm_ctx_t *ctx, gen_var_t *var, address_t var_offs) {
-	return ctx->stack_size - var->offset + var_offs - 1;
+	return ctx->current_scope->stack_size - var->offset + var_offs - 1;
 }
 
 // Function for packing an instruction.
@@ -44,6 +44,9 @@ void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t
 	char *imm0 = NULL;
 	char *imm1 = NULL;
 	#endif
+	if (insn.a == REG_ST || insn.b == REG_ST) {
+		px_memclobber(ctx, true);
+	}
 	asm_write_memword(ctx, px_pack_insn(insn));
 	if (insn.a == REG_IMM) {
 		if (label0) {
@@ -240,29 +243,6 @@ void px_jump(asm_ctx_t *ctx, char *label) {
 	}
 }
 
-// Pick an addressing mode for a label.
-px_insn_t px_insn_label(asm_ctx_t *ctx, asm_label_t label, bool y, asm_label_ref_t *ref) {
-	if (DET_PIE(ctx)) {
-		// [PC~label]
-		if (ref) *ref = ASM_LABEL_REF_OFFS_PTR;
-		return (px_insn_t) {
-			.y = y,
-			.x = 6,
-			.a = 7,
-			.b = 7,
-		};
-	} else {
-		// [label]
-		if (ref) *ref = ASM_LABEL_REF_ABS_PTR;
-		return (px_insn_t) {
-			.y = y,
-			.x = 5,
-			.a = 7,
-			.b = 7,
-		};
-	}
-}
-
 // Pick a register to use.
 reg_t px_pick_reg(asm_ctx_t *ctx, bool do_vacate) {
 	// Check for a free register.
@@ -275,7 +255,7 @@ reg_t px_pick_reg(asm_ctx_t *ctx, bool do_vacate) {
 	// Otherwise, free up a pseudorandom one.
 	// Eenie meenie minie moe...
 	// TODO: Detect least used?
-	reg_t pick = (((*ctx->current_func->ident.strval + ctx->stack_size) * 27483676) >> 21) % 4;
+	reg_t pick = (((*ctx->current_func->ident.strval + ctx->current_scope->stack_size) * 27483676) >> 21) % 4;
 	
 	if (do_vacate) {
 		gen_var_t *var = ctx->current_scope->reg_usage[pick];
@@ -331,6 +311,7 @@ void px_part_to_reg(asm_ctx_t *ctx, gen_var_t *var, reg_t dest, address_t index)
 
 // Move a value to a register.
 void px_mov_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest) {
+	if (val->type == VAR_TYPE_REG && val->reg == dest) return;
 	address_t n_words = val->ctype->size;
 	for (address_t i = 0; i < n_words; i++) {
 		px_part_to_reg(ctx, val, dest + i, i);
@@ -500,12 +481,17 @@ gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	// Update the calling conventions.
 	px_update_cc(ctx, funcdef);
+	// Write the label that everyone will refer to.
+	asm_write_label(ctx, funcdef->ident.strval);
+	// Initialise the real stack size to 0.
+	ctx->current_scope->real_stack_size = 0;
 	
 	if (funcdef->call_conv == PX_CC_REGS) {
 		// Registers.
 		DEBUG_GEN("// calling convention: registers\n");
 		
 		// Define variables in registers.
+		address_t arg_size = 0;
 		for (size_t i = 0; i < funcdef->args.num; i++) {
 			gen_var_t *var = xalloc(ctx->allocator, sizeof(gen_var_t));
 			gen_var_t *loc = xalloc(ctx->allocator, sizeof(gen_var_t));
@@ -531,18 +517,17 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 			ctx->current_scope->reg_usage[i] = var;
 			
 			gen_define_var(ctx, var, funcdef->args.arr[i].strval);
+			arg_size += var->ctype->size;
 		}
 		// Update stack size.
-		ctx->stack_size += funcdef->args.num;
-		DEBUG_GEN("  SUB ST, %zd\n", (size_t) funcdef->args.num);
-		asm_write_memword(ctx, INSN_SUB_ST);
-		asm_write_memword(ctx, funcdef->args.num);
+		ctx->current_scope->stack_size += arg_size;
 	} else if (funcdef->call_conv == PX_CC_STACK) {
 		// Stack.
 		DEBUG_GEN("// calling convention: stack\n");
 		
 		// Define variables in stack, first parameter pushed last.
 		// First parameter has least offset.
+		address_t arg_size = 0;
 		for (size_t i = 0; i < funcdef->args.num; i++) {
 			gen_var_t *var = xalloc(ctx->allocator, sizeof(gen_var_t));
 			
@@ -558,9 +543,11 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 			var->default_loc = XCOPY(ctx->allocator, var, gen_var_t);
 			
 			gen_define_var(ctx, var, funcdef->args.arr[i].strval);
+			arg_size += var->ctype->size;
 		}
 		// Update stack size.
-		ctx->stack_size += funcdef->args.num;
+		ctx->current_scope->stack_size += arg_size;
+		ctx->current_scope->real_stack_size = arg_size;
 	} else {
 		// None.
 		DEBUG_GEN("// calling convention: no parameters\n");
@@ -570,16 +557,19 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 // Return statement for non-inlined functions.
 // retval is null for void returns.
 void gen_return(asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *retval) {
+	px_memclobber(ctx, false);
 	if (retval) {
 		// Enforce retval is in R0.
+		if (retval->ctype->size != funcdef->returns->size) {
+			retval = gen_cast(ctx, retval, funcdef->returns);
+		}
 		px_mov_to_reg(ctx, retval, REG_R0);
 	}
 	// Pop some stuff off the stack.
-	if (ctx->stack_size) {
-		DEBUG_GEN("  ADD ST, %zd\n", (size_t) ctx->stack_size);
-		asm_write_memword(ctx, INSN_ADD_ST);
-		asm_write_memword(ctx, ctx->stack_size);
-	}
+	address_t sub = ctx->current_scope->stack_size;
+	ctx->current_scope->stack_size = 0;
+	gen_stack_clear(ctx, sub);
+	px_memclobber(ctx, true);
 	// Append the return.
 	DEBUG_GEN("  MOV PC, [ST]\n");
 	asm_write_memword(ctx, INSN_RET);
@@ -690,7 +680,7 @@ char *gen_iasm_var(asm_ctx_t *ctx, gen_var_t *var, iasm_reg_t *reg) {
 	} else if (var->type == VAR_TYPE_STACKOFFS) {
 		// In stack.
 		char *buf = xalloc(ctx->current_scope->allocator, 12);
-		sprintf(buf, "[ST+%u]", ctx->stack_size - var->offset);
+		sprintf(buf, "[ST+%u]", ctx->current_scope->stack_size - var->offset);
 		return buf;
 	}
 }
@@ -933,68 +923,60 @@ gen_var_t *gen_cast(asm_ctx_t *ctx, gen_var_t *a, var_type_t *ctype) {
 			return px_reinterpret(ctx, a, ctype);
 		} else {
 			// Other simple types need to be explicitly casted.
+			// Get a little new variable.
 			gen_var_t *b = px_get_tmp(ctx, ctype->size, true);
 			b->ctype = ctype;
 			px_insn_t insn;
+			
+			// We shall now ACCESS the MEMORY.
+			px_memclobber(ctx, a->type == VAR_TYPE_STACKOFFS || b->type == VAR_TYPE_STACKOFFS);
 			
 			if (ctype->size < a->ctype->size) {
 				// Just do a copy.
 				px_mov_n(ctx, b, a, ctype->size);
 				
-			} else {
-				// Start with a copy.
+			} else if (b->type != VAR_TYPE_REG || (b->ctype->size - a->ctype->size) > 1) {
+				// Carry extension code with temp reg.
 				px_mov_n(ctx, b, a, a->ctype->size);
 				// We need to make carry extension code.
-				reg_t regno = px_pick_reg(ctx, true);
-				// Move the highest word into our temp reg.
-				px_part_to_reg(ctx, a, regno, a->ctype->size);
+				reg_t regno;
+				if (a->type == VAR_TYPE_REG) {
+					// Use the part reg.
+					regno = a->reg + a->ctype->size - 1;
+				} else {
+					// Pick a temp reg.
+					regno = px_pick_reg(ctx, true);
+					// Move the highest word into our temp reg.
+					px_part_to_reg(ctx, a, regno, a->ctype->size - 1);
+				}
 				
-				// Shift left to test the highest bit.
-				insn = (px_insn_t) {
-					.y = 0,
-					.x = ADDR_IMM,
-					.b = 0,
-					.a = regno,
-					.o = PX_OP_SHL,
-				};
-				asm_write_memword(ctx, px_pack_insn(insn));
-				DEBUG_GEN("  SHL %s\n", reg_names[regno]);
-				
-				// Move the default extension into the register.
-				insn = (px_insn_t) {
-					.y = 0,
-					.x = ADDR_IMM,
-					.b = REG_IMM,
-					.a = regno,
-					.o = PX_OP_MOV,
-				};
-				asm_write_memword(ctx, px_pack_insn(insn));
-				asm_write_memword(ctx, 0x0000);
-				DEBUG_GEN("  MOV %s, 0x0000\n", reg_names[regno]);
-				
-				// Conditionally move the other extension into the register.
-				insn = (px_insn_t) {
-					.y = 0,
-					.x = ADDR_IMM,
-					.b = REG_IMM,
-					.a = regno,
-					.o = 040 | COND_CS,
-				};
-				asm_write_memword(ctx, px_pack_insn(insn));
-				asm_write_memword(ctx, 0xffff);
-				DEBUG_GEN("  MOV.CS %s, 0xffff\n", reg_names[regno]);
-				
-				// Now, extend using this value.
+				// Now, extend using this value's sign bit.
 				for (address_t i = a->ctype->size; i < ctype->size; i++) {
 					insn = (px_insn_t) {
 						.y = 0,
 						.b = regno,
-						.o = PX_OP_MOV,
+						.o = PX_OP_MOV | COND_CX,
 					};
 					asm_label_t label0 = NULL;
 					address_t   offs0  = 0;
 					insn.a = px_addr_var(ctx, b, i, &insn.x, &label0, &offs0, regno);
 					px_write_insn(ctx, insn, label0, offs0, NULL, 0);
+				}
+			} else {
+				// Carry extension code without temp reg.
+				px_mov_n(ctx, b, a, a->ctype->size);
+				
+				// Now, extend using this value's sign bit.
+				for (address_t i = a->ctype->size; i < ctype->size; i++) {
+					insn = (px_insn_t) {
+						.y = 1,
+						.a = b->reg + i,
+						.o = PX_OP_MOV | COND_CX,
+					};
+					asm_label_t label1 = NULL;
+					address_t   offs1  = 0;
+					px_addr_var(ctx, a, a->ctype->size - 1, &insn.x, &label1, &offs1, insn.a);
+					px_write_insn(ctx, insn, NULL, 0, label1, offs1);
 				}
 			}
 			
@@ -1016,18 +998,55 @@ gen_var_t *gen_cast(asm_ctx_t *ctx, gen_var_t *a, var_type_t *ctype) {
 
 // Make a certain amount of space in the stack.
 void gen_stack_space(asm_ctx_t *ctx, address_t num) {
-	if (!num) return;
-	DEBUG_GEN("  SUB ST, %zd\n", (size_t) num);
-	asm_write_memword(ctx, INSN_SUB_ST);
-	asm_write_memword(ctx, num);
+	// if (!num) return;
+	// ctx->current_scope->real_stack_size += num;
 }
 
 // Scale the stack back down.
 void gen_stack_clear(asm_ctx_t *ctx, address_t num) {
-	if (!num) return;
-	DEBUG_GEN("  ADD ST, %zd\n", (size_t) num);
-	asm_write_memword(ctx, INSN_ADD_ST);
-	asm_write_memword(ctx, num);
+	// if (!num) return;
+	// ctx->current_scope->real_stack_size -= num;
+}
+
+// Called before a memory clobbering instruction is to be written.
+void px_memclobber(asm_ctx_t *ctx, bool clobbers_stack) {
+	// Check whether the stack size differs at all.
+	addrdiff_t diff = ctx->current_scope->real_stack_size - ctx->current_scope->stack_size;
+	// Prevent infinite recursion.
+	ctx->current_scope->real_stack_size = ctx->current_scope->stack_size;
+	
+	// Fix stack size.
+	if (diff == 1 || diff == -1) {
+		// Increment or decrement ST.
+		px_insn_t insn = {
+			.y = 0,
+			.x = ADDR_IMM,
+			.b = 0,
+			.a = REG_ST,
+			.o = diff == 1 ? PX_OP_INC : PX_OP_DEC,
+		};
+		px_write_insn(ctx, insn, NULL, 0, NULL, 0);
+	} else if (diff > 1) {
+		// Add to ST.
+		px_insn_t insn = {
+			.y = 0,
+			.x = ADDR_IMM,
+			.b = REG_IMM,
+			.a = REG_ST,
+			.o = PX_OP_ADD,
+		};
+		px_write_insn(ctx, insn, NULL, 0, NULL, diff);
+	} else if (diff < -1) {
+		// Sub from ST for clarity.
+		px_insn_t insn = {
+			.y = 0,
+			.x = ADDR_IMM,
+			.b = REG_IMM,
+			.a = REG_ST,
+			.o = PX_OP_SUB,
+		};
+		px_write_insn(ctx, insn, NULL, 0, NULL, -diff);
+	}
 }
 
 // Variables: Move variable to another location.
@@ -1147,7 +1166,7 @@ gen_var_t *px_get_tmp(asm_ctx_t *ctx, size_t size, bool allow_reg) {
 				ctx->temp_usage[x] = true;
 			}
 			// Return the found stack offset.
-			address_t end_offset = ctx->stack_size - ctx->temp_num;
+			address_t end_offset = ctx->current_scope->stack_size - ctx->temp_num;
 			address_t offset     = end_offset - i;
 			// Package it up.
 			gen_var_t *var = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
@@ -1172,12 +1191,12 @@ gen_var_t *px_get_tmp(asm_ctx_t *ctx, size_t size, bool allow_reg) {
 	gen_define_temp(ctx, label);
 	
 	// Return the new stack bit.
-	ctx->stack_size += size;
+	ctx->current_scope->stack_size += size;
 	gen_stack_space(ctx, size);
 	gen_var_t *var = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
 	*var = (gen_var_t) {
 		.type        = VAR_TYPE_STACKOFFS,
-		.offset      = ctx->stack_size - size,
+		.offset      = ctx->current_scope->stack_size - size,
 		.owner       = NULL,
 		.default_loc = NULL
 	};

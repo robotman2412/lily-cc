@@ -70,6 +70,9 @@ typedef enum {
 } px_call_conv_t;
 #define FUNCDEF_EXTRAS px_call_conv_t call_conv;
 
+// Extra data added to asm_scope_t.
+#define ASM_SCOPE_EXTRAS address_t real_stack_size;
+
 // State that inline assembly is supported
 #define INLINE_ASM_SUPPORTED
 

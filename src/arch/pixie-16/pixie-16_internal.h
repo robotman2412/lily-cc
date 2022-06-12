@@ -22,8 +22,8 @@ static char *addr_names[] = {
 	"ST+", "",    "PC~", "",
 };
 static char *b_insn_names[] = {
-	".ULT", ".UGT", ".SLT", ".SGT", ".EQ", ".CS", "",     ".BRK",
-	".UGE", ".ULE", ".SGE", ".SLE", ".NE", ".CC", ".JSR", ".RTI",
+	".ULT", ".UGT", ".SLT", ".SGT", ".EQ", ".CS", "",     "",
+	".UGE", ".ULE", ".SGE", ".SLE", ".NE", ".CC", ".JSR", ".CX",
 };
 static void PX_DESC_INSN(px_insn_t insn, char *imm0, char *imm1) {
 	if (!imm0) imm0 = "???";

@@ -149,12 +149,9 @@ bool gen_cmp(asm_ctx_t *ctx, gen_var_t *a, gen_var_t *b) {
 // New scope.
 void gen_push_scope(asm_ctx_t *ctx) {
 	asm_scope_t *scope = (asm_scope_t *) xalloc(ctx->allocator, sizeof(asm_scope_t));
+	*scope = *ctx->current_scope;
 	scope->allocator   = alloc_create(ctx->allocator);
 	scope->parent      = ctx->current_scope;
-	scope->num         = ctx->current_scope->num;
-	scope->local_num   = ctx->current_scope->local_num;
-	memcpy(scope->reg_usage, ctx->current_scope->reg_usage, sizeof(scope->reg_usage));
-	scope->stack_size = ctx->stack_size;
 	map_create(&scope->vars);
 	ctx->current_scope = scope;
 }
@@ -169,7 +166,6 @@ void gen_pop_scope(asm_ctx_t *ctx) {
 	
 	// Unlink it.
 	ctx->current_scope = old->parent;
-	ctx->stack_size = old->stack_size;
 	xfree(ctx->allocator, old);
 }
 

@@ -115,6 +115,8 @@ gen_var_t *gen_cast          (asm_ctx_t *ctx, gen_var_t *a,       var_type_t *ct
 
 // Make a certain amount of space in the stack.
 void       gen_stack_space   (asm_ctx_t *ctx, address_t num);
+// Scale the stack back down.
+void       gen_stack_clear   (asm_ctx_t *ctx, address_t num);
 // Variables: Move variable to another location.
 void       gen_mov           (asm_ctx_t *ctx, gen_var_t *dest,    gen_var_t *src);
 // Variables: Create a memory location for the vaariable at preprocessing time.

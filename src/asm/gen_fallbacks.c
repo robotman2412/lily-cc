@@ -11,7 +11,7 @@
 
 #if defined(FALLFALLBACK_gen_function) || defined(FALLBACK_gen_stmt)
 static inline void gen_var_scope(asm_ctx_t *ctx, map_t *map) {
-	address_t pre = ctx->stack_size;
+	address_t pre = ctx->current_scope->stack_size;
 	
 	// Add the variables to the current scope.
 	for (size_t i = 0; i < map_size(map); i++) {
@@ -20,16 +20,16 @@ static inline void gen_var_scope(asm_ctx_t *ctx, map_t *map) {
 		
 		if ((var->type == VAR_TYPE_STACKFRAME || var->type == VAR_TYPE_STACKOFFS) && var->offset == (address_t) -1) {
 			// Have it in the stack.
-			var->offset = ctx->stack_size;
-			ctx->stack_size ++;
+			var->offset = ctx->current_scope->stack_size;
+			ctx->current_scope->stack_size ++;
 		}
 		
 		gen_define_var(ctx, var, map->strings[i]);
 	}
 	
 	// Update the stack size.
-	DEBUG_GEN("// updating stack offset to %d\n", ctx->stack_size);
-	gen_stack_space(ctx, ctx->stack_size - pre);
+	DEBUG_GEN("// updating stack offset to %d\n", ctx->current_scope->stack_size);
+	gen_stack_space(ctx, ctx->current_scope->stack_size - pre);
 }
 #endif
 
@@ -44,7 +44,7 @@ void gen_function(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	ctx->temp_usage    = NULL;
 	ctx->last_label_no = 0;
 	ctx->temp_num      = 0;
-	ctx->stack_size    = 0;
+	ctx->current_scope->stack_size    = 0;
 	gen_preproc_function(ctx, funcdef);
 	
 	// New function, new scope.

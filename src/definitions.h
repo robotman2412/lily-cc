@@ -108,13 +108,17 @@ typedef uint_least64_t memword_t;
 #endif
 
 #if ADDR_BITS <= 8
-typedef uint_least8_t address_t;
+typedef uint_least8_t  address_t;
+typedef int_least8_t   addrdiff_t;
 #elif ADDR_BITS <= 16
 typedef uint_least16_t address_t;
+typedef int_least16_t  addrdiff_t;
 #elif ADDR_BITS <= 32
 typedef uint_least32_t address_t;
+typedef int_least32_t  addrdiff_t;
 #elif ADDR_BITS <= 64
 typedef uint_least64_t address_t;
+typedef int_least64_t  addrdiff_t;
 #endif
 
 /* ==== Word ratios ==== */
@@ -419,6 +423,11 @@ typedef enum type_cat {
 // Extras added to 'struct asm_ctx'.
 #ifndef ASM_CTX_EXTRAS
 #define ASM_CTX_EXTRAS
+#endif
+
+// Extras added to 'struct asm_scope'.
+#ifndef ASM_SCOPE_EXTRAS
+#define ASM_SCOPE_EXTRAS
 #endif
 
 // Extras added to 'struct funcdef'.

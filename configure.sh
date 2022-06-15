@@ -3,6 +3,8 @@
 show_help() {
 	echo "Usage: $1 [options]"
 	echo "Options:"
+	echo "  --check"
+	echo "                Check whether or not build is configured yet."
 	echo "  --help"
 	echo "                Show this help."
 	echo "  --arch=<arch>  -a=<arch>"
@@ -33,14 +35,18 @@ ver=$(cat version)
 opt_arch=""
 opt_list=0
 opt_help=0
+opt_check=0
 
 if [ "$*" = "" ]; then
 	show_help $0
 	list_archs
-	exit
+	exit 1
 fi
 for i in $*; do
 	case "$i" in
+		--check)
+			opt_check=1
+			;;
 		--arch=*|-a=*)
 			opt_arch="${i#*=}"
 			;;
@@ -61,6 +67,12 @@ for i in $*; do
 	esac
 done
 
+if [ "$opt_check" = 1 ]; then
+	[ -d build ] && [ -f build/config.h ] && [ -f build/current_arch ] && [ -f build/version_number.h ] && exit 0
+	echo -e "\033[31mNot configured!"
+	echo -e "Use $0 --help for more information.\033[0m"
+	exit 1
+fi
 if [ "$opt_help" = 1 ]; then
 	show_help $0
 fi
@@ -68,7 +80,8 @@ if [ "$opt_list" = 1 ]; then
 	list_archs
 fi
 if [ "$opt_arch" = "" ]; then
-	exit
+	echo "Error: no architecture specified"
+	exit 1
 fi
 
 # Double-check selection.
@@ -85,9 +98,8 @@ fi
 echo "Configuring lilly-cc v$ver for $opt_arch."
 
 # Apply to files.
-if [ ! -d build ]; then
-	mkdir build
-fi
+rm -rf build
+mkdir build
 warn="\
 // This is a generated file, do not edit it!
 // lilly-cc v$ver ($(date -u))

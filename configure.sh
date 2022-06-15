@@ -97,11 +97,6 @@ warn="\
 echo -n "$warn"                        >  build/config.h
 echo "#include <${opt_arch}_config.h>" >> build/config.h
 
-# gen.c
-echo -n "$warn"                        >  build/gen.c
-echo "#include <${opt_arch}_gen.c>"    >> build/gen.c
-echo "#include <gen_fallbacks.c>"      >> build/gen.c
-
 # version_number.h
 echo -n "$warn"                        >  build/version_number.h
 echo "#define COMPILER_VER \"v$ver\""  >> build/version_number.h

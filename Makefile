@@ -12,8 +12,10 @@ HEADERS=./build/config.h ./build/parser.h ./build/version_number.h\
 		$(shell find ./src ! -path './src/debug/*' ! -path './src/arch/*' -name '*.h')\
 		$(shell find ./src/arch/$(TARGET) -name '*.h')
 OBJECTS=$(shell echo $(SOURCES) | sed -e 's/src/build/g;s/\.c/.c.o/g')
+INCLUDES=-Isrc -Isrc/arch/$(TARGET) -Isrc/asm -Isrc/objects -Isrc/util -Isrc/debug\
+		-Ibuild
 
-CCFLAGS=-ggdb -DENABLE_DEBUG_LOGS -DDEBUG_GENERATOR
+CCFLAGS=-ggdb -DENABLE_DEBUG_LOGS -DDEBUG_GENERATOR $(INCLUDES)
 LDFLAGS=
 YACCFLAGS=-v -Wnone -Wconflicts-sr -Wconflicts-rr
 
@@ -28,10 +30,10 @@ all: ./comp
 	$(YACC) $< $(YACCFLAGS) -o build/parser.c --defines=build/parser.h
 
 ./build/parser.c.o: ./build/parser.c $(HEADERS)
-	$(CC) $< $(CCFLAGS) -o $@
+	$(CC) -c $< $(CCFLAGS) -o $@
 
 ./build/%.o: ./src/% $(HEADERS)
-	$(CC) $< $(CCFLAGS) -o $@
+	$(CC) -c $< $(CCFLAGS) -o $@
 
 clean:
-	rm -f $(OBJECTS) ./comp ./build/parser.c
+	rm -f $(OBJECTS) ./comp ./build/parser.*

@@ -46,7 +46,7 @@ $(CFGFILES):
 	./configure.sh --check
 
 debugsettings:
-	$(eval CCFLAGS = $(CCFLAGS) -ggdb -DDEBUG_COMPILER -DDEBUG_GENERATOR)
+	$(eval CCFLAGS = $(CCFLAGS) -ggdb -DENABLE_DEBUG_LOGS -DDEBUG_COMPILER -DDEBUG_GENERATOR)
 
 # Compilation
 ./comp: $(OBJECTS)

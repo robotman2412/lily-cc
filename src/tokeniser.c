@@ -655,6 +655,9 @@ static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 	garbagestr[0] = c;
 	garbagestr[1] = 0;
 	DEBUG_TKN("???   '%c'\n", c);
+	tkn_int_err_msg     = "Unrecognised token.";
+	tkn_int_err_type    = E_ERROR;
+	tkn_int_err_do_free = false;
 	return TKN_GARBAGE;
 }
 

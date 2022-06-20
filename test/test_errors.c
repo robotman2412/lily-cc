@@ -35,3 +35,6 @@ void arg_error(int q, int p) {
 	// Empty char constant.
 	c = '';
 }
+
+// Unrecognised token.
+`

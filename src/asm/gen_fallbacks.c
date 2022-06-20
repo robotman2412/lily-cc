@@ -372,7 +372,7 @@ static char *iasm_preproc(asm_ctx_t *ctx, iasm_t *iasm, size_t magic_number) {
 				// Compute the funny input operand.
 				add = gen_iasm_var(ctx, match->expr_result, match);
 				va_strcat(ctx->allocator, &output, &cap, &len, add, strlen(add));
-				xfree(ctx->allocator, add);
+				xfree(ctx->current_scope->allocator, add);
 				break;
 		}
 	}

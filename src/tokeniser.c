@@ -618,11 +618,11 @@ static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 	// Or a character value.
 	if (c == '\'') {
 		char *strval = tokeniser_getstr(ctx, '\'');
-		int ival;
+		int ival = 0;
 		// Turn into an int.
 		// TODO: Add warning for length.
 		while (*strval) {
-			ival = (ival << 8) | *strval;
+			ival = (ival << 8) | (unsigned char) *strval;
 			strval ++;
 		}
 		yylval.ival.ival = ival;

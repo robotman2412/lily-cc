@@ -36,7 +36,7 @@
 // Character default signedness.
 // This is a property of the machine and not the language.
 // Only applies to 'char' without 'signed' nor 'unsigned'.
-#define CHAR_IS_SIGNED
+#define CHAR_IS_UNSIGNED
 
 // Register names.
 #define NUM_REGS  4

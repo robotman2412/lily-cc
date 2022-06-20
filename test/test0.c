@@ -15,18 +15,18 @@
 
 // Dummy function to create my raw data.
 void dummy() {
-	// asm volatile(".db 0");
-	// asm volatile(".db 0");
-	// asm volatile(".db entry");
-	asm volatile(".db -0, 0, 0");
+	asm(".db 0, 0, entry");
 }
 
 void entry() {
-	asm volatile (
-		"MOV [0xfefc], %[reg]"
+	int str = "Hello, World!";
+	asm(
+		"MOV [0xfff6], %[reg]"
 		: // Outputs.
-		: [reg] "r" ('H') // Inputs.
+		: [reg] "ri" ('H') // Inputs.
 	);
+	// Halt.
+	asm("DEC PC");
 }
 
 // void test(int param) {

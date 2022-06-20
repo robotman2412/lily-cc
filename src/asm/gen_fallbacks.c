@@ -491,7 +491,6 @@ static bool asm_expect_ival(tokeniser_ctx_t *lex_ctx, long long *out) {
 		while (is_alphanumeric(tokeniser_nextchar_no(lex_ctx, offs))) offs++;
 		// Skip the first digit.
 		tokeniser_readchar(lex_ctx);
-		offs ++;
 		// Now, grab it.
 		char *strval = (char *) xalloc(lex_ctx->allocator, sizeof(char) * (offs + 1));
 		*strval = c;

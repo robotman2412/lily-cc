@@ -15,9 +15,10 @@
 
 // Dummy function to create my raw data.
 void dummy() {
-	asm volatile(".db 0");
-	asm volatile(".db 0");
-	asm volatile(".db entry");
+	// asm volatile(".db 0");
+	// asm volatile(".db 0");
+	// asm volatile(".db entry");
+	asm volatile(".db 0, 0, 0");
 }
 
 void entry() {

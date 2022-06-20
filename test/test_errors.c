@@ -29,5 +29,9 @@ void call();
 void arg_error(int q);
 void arg_error();
 void arg_error(int q, int p) {
-	
+	char c;
+	// Long char constant.
+	c = 'qqq';
+	// Empty char constant.
+	c = '';
 }

@@ -324,6 +324,13 @@ static const keyw_map_t keyw_map[] = {
 };
 static const size_t keyw_map_len = sizeof(keyw_map) / sizeof(keyw_map_t);
 
+// The error type returned by tokenise_int, if any.
+static error_type_t tkn_int_err_type;
+// The error message returned by tokenise_int, if any.
+static char        *tkn_int_err_msg;
+// Whether or not to free tkn_int_err_msg.
+static bool         tkn_int_err_do_free;
+
 // Grab next non-space token (internal method).
 static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 	// Get the first non-space character.
@@ -619,8 +626,20 @@ static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 	if (c == '\'') {
 		char *strval = tokeniser_getstr(ctx, '\'');
 		int ival = 0;
+		
+		if (strlen(strval) > 1) {
+			// Warn if the constant is too long.
+			tkn_int_err_msg     = "Multi-character character constant.";
+			tkn_int_err_type    = E_WARN;
+			tkn_int_err_do_free = false;
+		} else if (!*strval) {
+			// Error if the constant is empty.
+			tkn_int_err_msg     = "Empty character constant.";
+			tkn_int_err_type    = E_ERROR;
+			tkn_int_err_do_free = false;
+		}
+		
 		// Turn into an int.
-		// TODO: Add warning for length.
 		while (*strval) {
 			ival = (ival << 8) | (unsigned char) *strval;
 			strval ++;
@@ -641,16 +660,20 @@ static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 
 // Grab next non-space token.
 int tokenise(tokeniser_ctx_t *ctx) {
-	// Pre.
+	// Clear error.
+	tkn_int_err_msg = NULL;
+	
+	// Pre-token position.
 	int i0, x0, y0;
-	// Get.
+	// Get token data.
 	int tkn_id = tokenise_int(ctx, &i0, &x0, &y0);
 	if (!tkn_id) return 0;
-	// Post.
+	// Post-token position.
 	int i1 = ctx->index;
 	int x1 = ctx->x;
 	int y1 = ctx->y;
-	// Pos.
+	
+	// Return token after setting pos.
 	yylval.pos = (pos_t) {
 		.filename = ctx->filename,
 		.index0   = i0,
@@ -660,7 +683,12 @@ int tokenise(tokeniser_ctx_t *ctx) {
 		.x1       = x1+1,
 		.y1       = y1
 	};
-	// Ret.
+	if (tkn_int_err_msg) {
+		// Report error messages.
+		report_error(ctx, tkn_int_err_type, yylval.pos, tkn_int_err_msg);
+		// Free memory if required.
+		if (tkn_int_err_do_free) free(tkn_int_err_msg);
+	}
 	return tkn_id;
 }
 

@@ -19,12 +19,19 @@ void dummy() {
 }
 
 void entry() {
-	int str = "Hello, World!";
-	asm(
-		"MOV [0xfff6], %[reg]"
-		: // Outputs.
-		: [reg] "ri" ('H') // Inputs.
-	);
+	asm("MOV ST, 0xfeff");
+	short str;
+	str = "Hello, World!";
+	// while (*str) {
+		// Put char.
+		asm(
+			"MOV [0xfff6], %[reg]"
+			: // Outputs.
+			: [reg] "ri" (*str) // Inputs.
+		);
+		// Inc pointer.
+	// 	str += 1;
+	// }
 	// Halt.
 	asm("DEC PC");
 }

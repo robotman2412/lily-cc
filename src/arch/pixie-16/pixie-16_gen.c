@@ -5,6 +5,7 @@
 #include "asm.h"
 #include "malloc.h"
 #include "string.h"
+#include "signal.h"
 
 #include "pixie-16_internal.h"
 
@@ -145,24 +146,29 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, reg_t *addrmod
 			// TODO
 			break;
 			
-		case VAR_TYPE_PTR: {
-			#ifdef ENABLE_DEBUG_LOGS
-			char *imm1 = NULL;
-			#endif
-			// Im poimtre.
-			px_insn_t insn = {
-				.y = 1,
-				.a = dest,
-				.o = PX_OP_MOV,
-			};
-			asm_label_t label1 = NULL;
-			address_t   offs1  = 0;
-			// Do some recursive funnies.
-			insn.b = px_addr_var(ctx, var->ptr, 0, &insn.x, &label1, &offs1, dest);
-			px_write_insn(ctx, insn, NULL, 0, label1, offs1);
-			// Return the registrex.
-			return dest;
-		} break;
+		case VAR_TYPE_PTR:
+			if (var->ptr->type == VAR_TYPE_REG) {
+				// This is a bit simpler.
+				*addrmode = ADDR_MEM;
+				return var->ptr->reg;
+			} else {
+				char *imm1 = NULL;
+				// Im poimtre.
+				px_insn_t insn = {
+					.y = 1,
+					.a = dest,
+					.o = PX_OP_MOV,
+				};
+				asm_label_t label1 = NULL;
+				address_t   offs1  = 0;
+				// Do some recursive funnies.
+				insn.b = px_addr_var(ctx, var->ptr, 0, &insn.x, &label1, &offs1, dest);
+				px_write_insn(ctx, insn, NULL, 0, label1, offs1);
+				*addrmode = ADDR_MEM;
+				// Return the registrex.
+				return dest;
+			}
+		break;
 	}
 	return 0;
 }
@@ -653,12 +659,20 @@ char *gen_iasm_var(asm_ctx_t *ctx, gen_var_t *var, iasm_reg_t *reg) {
 		needs_change = true;
 	} else if (var->type == VAR_TYPE_LABEL && !reg->mode_memory) {
 		needs_change = true;
+	} else if (var->type == VAR_TYPE_STACKOFFS && !reg->mode_memory) {
+		needs_change = true;
+	} else if (var->type == VAR_TYPE_PTR) {
+		needs_change = true;
 	}
 	
 	if (!needs_change) goto conversion;
 	if (reg->mode_register) {
 		reg_t regno = px_pick_reg(ctx, true);
 		px_mov_to_reg(ctx, var, regno);
+		gen_var_t *default_loc = XCOPY(ctx->allocator, var, gen_var_t);
+		var->type        = VAR_TYPE_REG;
+		var->reg         = regno;
+		var->default_loc = default_loc;
 		ctx->current_scope->reg_usage[regno] = var;
 	}
 	
@@ -682,6 +696,8 @@ char *gen_iasm_var(asm_ctx_t *ctx, gen_var_t *var, iasm_reg_t *reg) {
 		char *buf = xalloc(ctx->current_scope->allocator, 12);
 		sprintf(buf, "[ST+%u]", ctx->current_scope->stack_size - var->offset);
 		return buf;
+	} else {
+		raise(SIGSEGV);
 	}
 }
 

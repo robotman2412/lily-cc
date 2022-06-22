@@ -46,8 +46,13 @@ typedef struct funcdef		funcdef_t;
 #include "ctxalloc_warn.h"
 
 struct parser_ctx {
+	// Context for tokeniser functions.
 	tokeniser_ctx_t *tokeniser_ctx;
+	// Context for asm_ and gen_ functions.
 	asm_ctx_t       *asm_ctx;
+	// The number of c-strings written to .rodata so far.
+	size_t           n_cstr;
+	// Memory allocator to use.
 	alloc_ctx_t      allocator;
 };
 
@@ -75,7 +80,7 @@ struct expr {
 	oper_t      oper;
 	union {
 		long      iconst;
-		char     *strconst;
+		char     *label;
 		strval_t *ident;
 		expr_t   *func;
 		expr_t   *par_a;

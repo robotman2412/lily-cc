@@ -624,14 +624,14 @@ void gen_inline_asm(asm_ctx_t *ctx, iasm_t *iasm) {
 		
 		// Output operands must be marked as written to (even if they aren't).
 		if (!reg->mode_write) {
-			printf("Error: output operand constraint '%s' lacks '='\n", reg->mode);
+			printf("// Error: output operand constraint '%s' lacks '='\n", reg->mode);
 			return;
 		}
 		
 		if (iasm->outputs->arr[i].symbol) {
-			DEBUG_GEN("Output '%s' mode '%s'\n", reg->symbol, reg->mode);
+			DEBUG_GEN("// Output '%s' mode '%s'\n", reg->symbol, reg->mode);
 		} else {
-			DEBUG_GEN("Output anonymous mode '%s'\n", reg->mode);
+			DEBUG_GEN("// Output anonymous mode '%s'\n", reg->mode);
 		}
 	}
 	// Process inputs.
@@ -642,14 +642,14 @@ void gen_inline_asm(asm_ctx_t *ctx, iasm_t *iasm) {
 		
 		// Input operands may not be written to.
 		if (reg->mode_write) {
-			printf("Error: input operand constraint '%s' contains '%c'\n", reg->mode, reg->mode_read ? '+' : '=');
+			printf("// Error: input operand constraint '%s' contains '%c'\n", reg->mode, reg->mode_read ? '+' : '=');
 			return;
 		}
 		
 		if (reg->symbol) {
-			DEBUG_GEN("Input '%s' mode '%s'\n", reg->symbol, reg->mode);
+			DEBUG_GEN("// Input '%s' mode '%s'\n", reg->symbol, reg->mode);
 		} else {
-			DEBUG_GEN("Input anonymous mode '%s'\n", reg->mode);
+			DEBUG_GEN("// Input anonymous mode '%s'\n", reg->mode);
 		}
 	}
 	
@@ -666,7 +666,6 @@ void gen_inline_asm(asm_ctx_t *ctx, iasm_t *iasm) {
 	
 	// Process clobbers, inputs and outputs.
 	char *text = iasm_preproc(ctx, iasm, 0);
-	DEBUG_GEN("Final assembly:\n\t%s\n", text);
 	// Now treat this like a normal assembly file.
 	tokeniser_ctx_t lex_ctx;
 	tokeniser_init_cstr(&lex_ctx, text);
@@ -704,6 +703,17 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 				.ctype  = ctype_simple(ctx, STYPE_S_INT),
 			};
 			return val;
+		} break;
+		
+		case EXPR_TYPE_CSTR: {
+			// C-strings are label references.
+			gen_var_t *val = (gen_var_t *) xalloc(ctx->allocator, sizeof(gen_var_t));
+			*val = (gen_var_t) {
+				.type   = VAR_TYPE_LABEL,
+				.label  = expr->label,
+				.ctype  = ctype_ptr_simple(ctx, STYPE_CHAR),
+			};
+			return gen_expr_math1(ctx, OP_ADROF, NULL, val);
 		} break;
 		
 		case EXPR_TYPE_IDENT: {

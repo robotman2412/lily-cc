@@ -31,4 +31,7 @@ void       gen_push_scope  (asm_ctx_t *ctx);
 // Close scope.
 void       gen_pop_scope   (asm_ctx_t *ctx);
 
+// Creates an escaped representation of a given C-string.
+char      *esc_cstr        (alloc_ctx_t allocator, const char *cstr, size_t len);
+
 #endif //GEN_UTIL_H

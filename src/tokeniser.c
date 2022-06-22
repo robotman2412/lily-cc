@@ -194,7 +194,7 @@ char *tokeniser_getstr(tokeniser_ctx_t *ctx, char term) {
 			uint32_t unhex;
 			switch (next) {
 				// Some variables in this scope.
-				int nhex;
+				int nhex, i;
 				char next1, next2;
 				
 				// Escape the carriage return.
@@ -248,7 +248,7 @@ char *tokeniser_getstr(tokeniser_ctx_t *ctx, char term) {
 					nhex = 8;
 					unhexing:
 					unhex = 0;
-					for (int i = 1; nhex--; i++) {
+					for (i = 1; nhex--; i++) {
 						next = tokeniser_nextchar_no(ctx, i);
 						int8_t bit = unhex_char(next);
 						if (bit == -1) {
@@ -258,6 +258,8 @@ char *tokeniser_getstr(tokeniser_ctx_t *ctx, char term) {
 						}
 						unhex = (unhex << 4) | bit;
 					}
+					// Consume hex chars.
+					while (i--) tokeniser_readchar(ctx);
 					// TODO: Map code to characterset.
 					seq = -10;
 					break;

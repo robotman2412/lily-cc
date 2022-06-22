@@ -234,9 +234,30 @@ expr_t expr_icnst(parser_ctx_t *ctx, ival_t *val) {
 
 // String constant expression.
 expr_t expr_scnst(parser_ctx_t *ctx, strval_t *val) {
+	// Get a label for this string.
+	asm_label_t label = xalloc(ctx->tokeniser_ctx->allocator, 64);
+	sprintf(label, "_lilly_cstr_%zu", ctx->n_cstr++);
+	
+	// Write the string into .rodata.
+	char *old_id = xstrdup(ctx->allocator, ctx->asm_ctx->current_section_id);
+	asm_use_sect(ctx->asm_ctx, ".rodata", ASM_NOT_ALIGNED);
+	asm_write_label(ctx->asm_ctx, label);
+	for (char *str = val->strval; *str; str++) {
+		asm_write_memword(ctx->asm_ctx, *str);
+	}
+	asm_write_memword(ctx->asm_ctx, 0);
+	char *temp = esc_cstr(ctx->allocator, val->strval, strlen(val->strval));
+	DEBUG_GEN("  .db \"%s\", 0\n", temp);
+	xfree(ctx->allocator, temp);
+	
+	// Switch back to old section.
+	asm_use_sect(ctx->asm_ctx, old_id, ASM_NOT_ALIGNED);
+	xfree(ctx->allocator, old_id);
+	
+	// Package the assembly reference back up.
 	return (expr_t) {
-		.type     = EXPR_TYPE_CONST,
-		.strconst = val->strval
+		.type  = EXPR_TYPE_CSTR,
+		.label = label,
 	};
 }
 

@@ -243,8 +243,10 @@ typedef enum stmt_type {
 
 // Types of expression.
 typedef enum expr_type {
-	// Constant value (e.g. number constant, string constant or predefined pointer).
+	// Numeric constant value (e.g. number constantor predefined pointer).
 	EXPR_TYPE_CONST,
+	// C-string by label reference.
+	EXPR_TYPE_CSTR,
 	// Identity (e.g. variable references).
 	EXPR_TYPE_IDENT,
 	// Method calls.

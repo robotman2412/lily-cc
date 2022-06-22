@@ -169,3 +169,90 @@ void gen_pop_scope(asm_ctx_t *ctx) {
 	xfree(ctx->allocator, old);
 }
 
+
+
+// Creates an escaped representation of a given C-string.
+char *esc_cstr(alloc_ctx_t allocator, const char *cstr, size_t len) {
+	if (!cstr) return NULL;
+	
+	// Pass 1: count output size.
+	size_t cap = 0;
+	for (size_t i = 0; i < len; i++) {
+		if (!cstr[i] || cstr[i] == '\a' || cstr[i] == '\b'
+			 || cstr[i] == '\f' || cstr[i] == '\n' || cstr[i] == '\r'
+			 || cstr[i] == '\t' || cstr[i] == '\v' || cstr[i] == '\\'
+			 || cstr[i] == '\'' || cstr[i] == '\"') {
+			cap += 2;
+		} else if (cstr[i] < 0x20 || cstr[i] > 0x7e) {
+			cap += 4;
+		} else {
+			cap ++;
+		}
+	}
+	// Pass 2: generate string repr.
+	char *buffer = xalloc(allocator, cap + 1);
+	char *write  = buffer;
+	for (size_t i = 0; i < len; i++) {
+		switch (cstr[i]) {
+			case 0:
+				*(write++) = '\\';
+				*(write++) = '0';
+				break;
+			case '\a':
+				*(write++) = '\\';
+				*(write++) = 'a';
+				break;
+			case '\b':
+				*(write++) = '\\';
+				*(write++) = 'b';
+				break;
+			case '\f':
+				*(write++) = '\\';
+				*(write++) = 'f';
+				break;
+			case '\n':
+				*(write++) = '\\';
+				*(write++) = 'n';
+				break;
+			case '\r':
+				*(write++) = '\\';
+				*(write++) = 'r';
+				break;
+			case '\t':
+				*(write++) = '\\';
+				*(write++) = 't';
+				break;
+			case '\v':
+				*(write++) = '\\';
+				*(write++) = 'v';
+				break;
+			case '\\':
+				*(write++) = '\\';
+				*(write++) = '\\';
+				break;
+			case '\'':
+				*(write++) = '\\';
+				*(write++) = '\'';
+				break;
+			case '\"':
+				*(write++) = '\\';
+				*(write++) = '\"';
+				break;
+			default:
+				if (cstr[i] < 0x20 || cstr[i] > 0x7e) {
+					// HEXHEXHEXHEX.
+					char temp[3];
+					sprintf(temp, "%02hhx", (uint8_t) cstr[i]);
+					*(write++) = '\\';
+					*(write++) = 'x';
+					*(write++) = temp[0];
+					*(write++) = temp[1];
+				} else {
+					// Default.
+					*(write ++) = cstr[i];
+				}
+		}
+	}
+	*(write++) = 0;
+	return buffer;
+}

@@ -42,6 +42,8 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 	
 	ival_t			simple_type;
 	
+	attribute_t     attr;
+	
 	strval_t		garbage;
 }
 
@@ -70,6 +72,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 %token <pos> TKN_NOT "!" TKN_INV "~" TKN_XOR "^" TKN_OR "|"
 %token <pos> TKN_SHL "<<" TKN_SHR ">>"
 %token <pos> TKN_LT "<" TKN_LE "<=" TKN_GT ">" TKN_GE ">=" TKN_EQ "==" TKN_NE "!="
+%token <attr> TKN_ATTR "__attribute__"
 
 %type <idents> opt_params
 %type <idents> params

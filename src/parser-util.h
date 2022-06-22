@@ -18,6 +18,7 @@ struct idents;
 struct exprs;
 struct stmts;
 
+typedef void *attribute_t;
 typedef struct parser_ctx	parser_ctx_t;
 
 typedef struct ival			ival_t;

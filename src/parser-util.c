@@ -236,7 +236,7 @@ expr_t expr_icnst(parser_ctx_t *ctx, ival_t *val) {
 expr_t expr_scnst(parser_ctx_t *ctx, strval_t *val) {
 	// Get a label for this string.
 	asm_label_t label = xalloc(ctx->tokeniser_ctx->allocator, 64);
-	sprintf(label, "_lilly_cstr_%zu", ctx->n_cstr++);
+	sprintf(label, "_lily_cstr_%zu", ctx->n_cstr++);
 	
 	// Write the string into .rodata.
 	char *old_id = xstrdup(ctx->allocator, ctx->asm_ctx->current_section_id);

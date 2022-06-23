@@ -1,4 +1,4 @@
-# lilly-cc TODO
+# lily-cc TODO
 
 ## The C language
 - When that is complete: Add support for arrays, unions and structs.

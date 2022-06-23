@@ -134,12 +134,12 @@ int main(int argc, char **argv) {
 #endif
 	
 	if (options.showHelp) {
-		printf("lilly-cc " ARCH_ID " " COMPILER_VER "\n");
+		printf("lily-cc " ARCH_ID " " COMPILER_VER "\n");
 		show_help(argc, argv);
 		return 0;
 	}
 	if (options.showVersion) {
-		printf("lilly-cc " ARCH_ID " " COMPILER_VER "\n");
+		printf("lily-cc " ARCH_ID " " COMPILER_VER "\n");
 		if (argIndex >= argc) return 0;
 	}
 	if (options.abort) {
@@ -171,14 +171,14 @@ int main(int argc, char **argv) {
 	}
 	
 	// Output it.
-	FILE *tempfile = fopen("/tmp/lilly-cc-dbg-bin", "w+");
-	// chmod("/tmp/lilly-cc-dbg-bin", 0666);
+	FILE *tempfile = fopen("/tmp/lily-cc-dbg-bin", "w+");
+	// chmod("/tmp/lily-cc-dbg-bin", 0666);
 	asm_ctx->out_fd = tempfile;
 	asm_ppc(asm_ctx);
 	output_native(asm_ctx);
 	fclose(tempfile);
 	xfree(global_alloc, asm_ctx);
-	system("hexdump -ve '8/2 \"%04X \" \"\n\"' /tmp/lilly-cc-dbg-bin");
+	system("hexdump -ve '8/2 \"%04X \" \"\n\"' /tmp/lily-cc-dbg-bin");
 }
 
 // Show help on the command line.

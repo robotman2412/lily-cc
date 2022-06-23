@@ -1,4 +1,4 @@
-# lilly-cc: GR8CPU TODO list
+# lily-cc: GR8CPU TODO list
 
 ## Generator
 - Fix more operations to work with different integer sizes.

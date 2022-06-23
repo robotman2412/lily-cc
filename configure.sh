@@ -95,14 +95,14 @@ if [ "$opt_arch" = "template" -o "$acceptable" = 0 ]; then
 	echo "Error: no such architecture '$opt_arch'"
 	exit
 fi
-echo "Configuring lilly-cc v$ver for $opt_arch."
+echo "Configuring lily-cc v$ver for $opt_arch."
 
 # Apply to files.
 rm -rf build
 mkdir build
 warn="\
 // This is a generated file, do not edit it!
-// lilly-cc v$ver ($(date -u))
+// lily-cc v$ver ($(date -u))
 "
 
 # config.h

@@ -22,10 +22,10 @@ There are two options at this point:
 ### Create a new architecture:
 1. Think of an appropriate architecture ID, for example: `8086`
 2. Create a directory with the desired architecture ID: `src/arch/8086`
-3. Create a `decription.txt` there, for example: `Intel 8086 desktop CPU` <sup>(1)</sup>
-4. Write `8086_config.h`, `8086_gen.c` and `8086_gen.h` accordingly. <sup>(2)</sup>
+3. Create a `decription.txt` there, for example: `Intel 8086 desktop CPU` <sup>(2)</sup>
+4. Write `8086_config.h`, `8086_gen.c` and `8086_gen.h` accordingly. <sup>(3)</sup>
 5. Configure for your newly made architecture: `./configure.sh --arch=8086`
 
-Note 1: Description files should have exactly one trailing newline.
+Note 2: Description files should have exactly one trailing newline.
 
-Note 2: Look to arch `pixie-16` for examples.
+Note 3: Look to arch `pixie-16` for examples.

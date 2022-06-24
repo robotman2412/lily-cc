@@ -17,7 +17,7 @@ There are two options at this point:
 
 ### Configure for an existing architecture:
 1. To list help and architectures: `./configure.sh --help`
-2. Pick an architecture and configure: `./configure.sh --arch=gr8cpu-r3`
+2. Pick an architecture and configure: `./configure.sh --arch=pixie-16`
 
 ### Create a new architecture:
 1. Think of an appropriate architecture ID, for example: `8086`

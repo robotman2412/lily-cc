@@ -1,4 +1,6 @@
 # lily-cc
+![Icon image](icon.png)
+
 A work-in-progress C compiler for small CPUs.
 
 ## Developing for lily-c

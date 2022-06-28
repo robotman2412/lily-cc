@@ -21,7 +21,7 @@ YACCFLAGS=-v -Wnone -Wconflicts-sr -Wconflicts-rr
 
 CFGFILES=build build/config.h build/current_arch build/
 
-.PHONY: all config debug debugsettings clean config
+.PHONY: all config debug debugsettings clean config install
 
 # Commands for the user.
 all: ./build/notdebug config ./comp
@@ -68,3 +68,7 @@ debugsettings:
 clean:
 	rm -f $(OBJECTS) ./comp ./build/parser.*
 	rm -rf $(shell find build/* -type d)
+
+# Install the thing
+install: config ./comp
+	./install.sh

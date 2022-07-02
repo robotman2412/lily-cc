@@ -51,8 +51,8 @@ struct parser_ctx {
 	tokeniser_ctx_t *tokeniser_ctx;
 	// Context for asm_ and gen_ functions.
 	asm_ctx_t       *asm_ctx;
-	// The number of c-strings written to .rodata so far.
-	size_t           n_cstr;
+	// The number of constants written to .rodata so far.
+	size_t           n_const;
 	// Memory allocator to use.
 	alloc_ctx_t      allocator;
 };

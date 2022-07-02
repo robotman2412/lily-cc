@@ -234,6 +234,7 @@ asm_ctx_t *compile_c(char *filename, FILE *file) {
 	ctx.tokeniser_ctx = &tokeniser_ctx;
 	ctx.asm_ctx       = &asm_ctx;
 	ctx.allocator     = alloc_create(ALLOC_NO_PARENT);
+	ctx.n_const       = 0;
 	tokeniser_init_file(&tokeniser_ctx, file);
 	tokeniser_ctx.filename = filename;
 	asm_init(&asm_ctx);

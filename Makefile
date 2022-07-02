@@ -71,4 +71,4 @@ clean:
 
 # Install the thing
 install: config ./comp
-	./install.sh
+	sudo ./install.sh

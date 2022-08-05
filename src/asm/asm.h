@@ -136,35 +136,35 @@ void asm_init           (asm_ctx_t *ctx);
 
 // Uses or creates the section.
 // Applies the alignment to the section.
-void asm_use_sect       (asm_ctx_t *ctx, char      *id,   address_t  align);
+void asm_use_sect       (asm_ctx_t *ctx, const char      *id,   address_t  align);
 // Updates the alignment of the given section, or all if null.
 // Any alignment, even outside of powers of two accepted.
 // Does not implicitly create sections.
-void asm_set_align      (asm_ctx_t *ctx, char      *id,   address_t  align);
+void asm_set_align      (asm_ctx_t *ctx, const char      *id,   address_t  align);
 // Writes memory words to the current chunk.
-void asm_write_memwords (asm_ctx_t *ctx, memword_t *data, size_t     len);
+void asm_write_memwords (asm_ctx_t *ctx, const memword_t *data, size_t     len);
 // Writes memory words to the current chunk.
-void asm_write_memword  (asm_ctx_t *ctx, memword_t  data);
+void asm_write_memword  (asm_ctx_t *ctx, memword_t   data);
 // Writes words to the current chunk.
-void asm_write_word     (asm_ctx_t *ctx, word_t     data);
+void asm_write_word     (asm_ctx_t *ctx, word_t      data);
 // Writes addresses to the current chunk.
-void asm_write_address  (asm_ctx_t *ctx, address_t  data);
+void asm_write_address  (asm_ctx_t *ctx, address_t   data);
 // Writes a number of arbitrary size to the current chunk.
-void asm_write_num      (asm_ctx_t *ctx, size_t     data, size_t     bytes);
+void asm_write_num      (asm_ctx_t *ctx, size_t      data, size_t     bytes);
 
 // Gets a new label based on asm_ctx::last_label_no.
 char *asm_get_label     (asm_ctx_t *ctx);
 // Writes label definitions to the current chunk.
-void asm_write_label    (asm_ctx_t *ctx, char      *label);
+void asm_write_label    (asm_ctx_t *ctx, const char *label);
 // Writes label references to the current chunk.
-void asm_write_label_ref(asm_ctx_t *ctx, char      *label, address_t offset, asm_label_ref_t mode);
+void asm_write_label_ref(asm_ctx_t *ctx, const char *label, address_t offset, asm_label_ref_t mode);
 
 // Writes zeroes.
-void asm_write_zero     (asm_ctx_t *ctx, address_t  count);
+void asm_write_zero     (asm_ctx_t *ctx, address_t   count);
 
 // Reads a number of arbitrary size from the given buffer.
-size_t asm_read_numb    (uint8_t   *buf, size_t     bytes);
+size_t asm_read_numb    (uint8_t   *buf, size_t      bytes);
 // Writes a number of arbitrary size to the given buffer.
-void asm_write_numb     (uint8_t   *buf, size_t     data,  size_t    bytes);
+void asm_write_numb     (uint8_t   *buf, size_t      data,  size_t    bytes);
 
 #endif //ASM_H

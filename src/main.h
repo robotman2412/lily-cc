@@ -33,8 +33,15 @@ bool       isdir         (char *path);
 void       show_help     (int argc, char **argv);
 // Apply default options for options not already set.
 void       apply_defaults(options_t *options);
-// Process a function.
+// Compile a function after parsing.
 void       function_added(parser_ctx_t *ctx, funcdef_t *func);
+
+// Parse -m arguments, the '-m' removed.
+// Returns true on success.
+bool       machine_argparse(const char *arg);
+// Parse -f arguments, the '-f' removed.
+// Returns true on success.
+bool       flag_argparse (const char *arg);
 
 // Compile a file of unknown type.
 asm_ctx_t *compile       (char *filename, FILE *file);

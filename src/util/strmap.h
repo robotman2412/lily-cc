@@ -9,7 +9,7 @@ typedef struct map {
 	size_t numEntries;
 	size_t capacity;
 	char **strings;
-	void **values;
+	const void **values;
 } map_t;
 
 #define MAP_DEFAULT_CAPACITY 4
@@ -26,17 +26,17 @@ void map_delete_with_values(map_t *map);
 
 // Gets key from map.
 // Returns null if no such key.
-void *map_get(map_t *map, char *key);
+void *map_get(map_t *map, const char *key);
 
 // Puts val in map at key.
 // Providing null for val removes the item.
 // Returns null or replaced item.
 // Does not copy the provided item.
-void *map_set(map_t *map, char *key, void *val);
+void *map_set(map_t *map, const char *key, const void *val);
 
 // Removes key from map.
 // Returns null or removed item.
-void *map_remove(map_t *map, char *key);
+void *map_remove(map_t *map, const char *key);
 
 // Dumps the map for debug purposes.
 void map_dump(map_t *map);

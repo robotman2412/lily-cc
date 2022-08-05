@@ -6,6 +6,22 @@
 
 #define ARCH_ID "Pixie 16"
 
+// Specifies to main.c that there is an additional argument parser function.
+// This is always called machine_argparse, and is used for -m... options.
+#define HAS_MACHINE_ARGPARSE
+
+// Specifies that Position-Independant Executables are supported.
+// For PX16, PIE executables are the default unless '-mentrypoint=...' is specified.
+// This option implies the program is run under an OS.
+#define HAS_PIE_EXEC
+// Specifies that Position-Independant Code objects are supported.
+// For PX16, all '-shared' binaries are PIC by default.
+// This option implies the program is run under an OS.
+#define HAS_PIE_OBJ
+// PX16 also supports Global Offset Table usage, which is used to dynamically link against libraries at runtime.
+// This option implies the program is run under an OS.
+#define HAS_GOT
+
 // Specifies to the ELF writer that the machine type is 0.
 // Optional definition.
 #define ELF_MACHINE 0x00
@@ -38,8 +54,9 @@
 // Only applies to 'char' without 'signed' nor 'unsigned'.
 #define CHAR_IS_UNSIGNED
 
-// Register names.
+// Number of general registers.
 #define NUM_REGS  4
+// Register names.
 #define REG_NAMES { "R0", "R1", "R2", "R3", "ST", "PF", "PC", "imm" }
 #define REG_R0    0
 #define REG_R1    1

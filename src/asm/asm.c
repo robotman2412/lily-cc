@@ -3,11 +3,11 @@
 #include "ctxalloc_warn.h"
 #include <string.h>
 
-static inline asm_sect_t *asm_create_sect (asm_ctx_t  *ctx,  char *id,   address_t align);
-static inline void        asm_align_sect  (asm_sect_t *sect, address_t align);
-static        void        asm_append_chunk(asm_ctx_t  *ctx,  char  type);
-static inline void        asm_append_raw  (asm_ctx_t  *ctx,  char *data, size_t len);
-static inline void        asm_append      (asm_ctx_t  *ctx,  char *data, size_t len);
+static inline asm_sect_t *asm_create_sect (asm_ctx_t  *ctx,  const char *id,   address_t align);
+static inline void        asm_align_sect  (asm_sect_t *sect, address_t   align);
+static        void        asm_append_chunk(asm_ctx_t  *ctx,  char        type);
+static inline void        asm_append_raw  (asm_ctx_t  *ctx,  const char *data, size_t len);
+static inline void        asm_append      (asm_ctx_t  *ctx,  const char *data, size_t len);
 
 // Initialises the context.
 void asm_init(asm_ctx_t *ctx) {
@@ -41,7 +41,7 @@ void asm_init(asm_ctx_t *ctx) {
 }
 
 // Append more data is the RAW way.
-static inline void asm_append_raw(asm_ctx_t *ctx, char *data, size_t len) {
+static inline void asm_append_raw(asm_ctx_t *ctx, const char *data, size_t len) {
 	asm_sect_t *sect = ctx->current_section;
 	if (sect->chunks_capacity < sect->chunks_len + len) {
 		// Expand capacity.
@@ -61,7 +61,7 @@ static inline void asm_append_raw(asm_ctx_t *ctx, char *data, size_t len) {
 }
 
 // Append more data to the current chunk.
-static inline void asm_append(asm_ctx_t *ctx, char *data, size_t len) {
+static inline void asm_append(asm_ctx_t *ctx, const char *data, size_t len) {
 	asm_append_raw(ctx, data, len);
 	// Be careful here!
 	*ctx->current_section->chunk_len += len;
@@ -86,7 +86,7 @@ static inline void asm_append_chunk(asm_ctx_t *ctx, char type) {
 
 // Creates the section, optionally aligned.
 // Any alignment, even outside of powers of two accepted.
-static inline asm_sect_t *asm_create_sect(asm_ctx_t *ctx, char *id, address_t align) {
+static inline asm_sect_t *asm_create_sect(asm_ctx_t *ctx, const char *id, address_t align) {
 	asm_sect_t *sect      = (asm_sect_t *) xalloc(ctx->allocator, sizeof(asm_sect_t));
 	sect->chunks          = (uint8_t *)    xalloc(ctx->allocator, 256);
 	sect->chunks_capacity = 256;
@@ -117,7 +117,7 @@ static inline void asm_align_sect(asm_sect_t *sect, address_t align) {
 // Uses or creates the section.
 // Applies the alignment to the section.
 // Any alignment, even outside of powers of two accepted.
-void asm_use_sect(asm_ctx_t *ctx, char *id, address_t align) {
+void asm_use_sect(asm_ctx_t *ctx, const char *id, address_t align) {
 	asm_sect_t *sect = map_get(ctx->sections, id);
 	if (!sect) {
 		// Create a new section with alignment.
@@ -134,7 +134,7 @@ void asm_use_sect(asm_ctx_t *ctx, char *id, address_t align) {
 // Updates the alignment of the given section, or all if null.
 // Any alignment, even outside of powers of two accepted.
 // Does not implicitly create sections.
-void asm_set_align(asm_ctx_t *ctx, char *id, address_t align) {
+void asm_set_align(asm_ctx_t *ctx, const char *id, address_t align) {
 	if (id) {
 		// Align a specific section.
 		asm_sect_t *sect = map_get(ctx->sections, id);
@@ -142,13 +142,13 @@ void asm_set_align(asm_ctx_t *ctx, char *id, address_t align) {
 	} else {
 		// Align all sections.
 		for (size_t i = 0; i < map_size(ctx->sections); i++) {
-			asm_align_sect(ctx->sections->values[i], align);
+			asm_align_sect((asm_sect_t *) ctx->sections->values[i], align);
 		}
 	}
 }
 
 // Writes memory words to the current chunk.
-void asm_write_memwords(asm_ctx_t *ctx, memword_t *data, size_t memwords) {
+void asm_write_memwords(asm_ctx_t *ctx, const memword_t *data, size_t memwords) {
 	for (size_t i = 0; i < memwords; i++) {
 		asm_write_memword(ctx, data[i]);
 	}
@@ -216,7 +216,7 @@ char *asm_get_label(asm_ctx_t *ctx) {
 	}
 }
 
-static inline asm_label_def_t *get_or_create_label(asm_ctx_t *ctx, char *label) {
+static inline asm_label_def_t *get_or_create_label(asm_ctx_t *ctx, const char *label) {
 	asm_label_def_t *val = map_get(ctx->labels, label);
 	if (!val) {
 		val = xalloc(ctx->allocator, sizeof(asm_label_def_t));
@@ -232,7 +232,7 @@ static inline asm_label_def_t *get_or_create_label(asm_ctx_t *ctx, char *label) 
 }
 
 // Writes label definitions to the current chunk.
-static void asm_write_label0(asm_ctx_t *ctx, char *label) {
+static void asm_write_label0(asm_ctx_t *ctx, const char *label) {
 	DEBUG_GEN("%s:\n", label);
 	asm_label_def_t *def = get_or_create_label(ctx, label);
 	def->is_defined = true;
@@ -246,7 +246,7 @@ static void asm_write_label0(asm_ctx_t *ctx, char *label) {
 }
 
 // Writes label definitions to the current chunk.
-void asm_write_label(asm_ctx_t *ctx, char *label) {
+void asm_write_label(asm_ctx_t *ctx, const char *label) {
 	if (*label != '.') {
 		// This is a global label.
 		if (ctx->last_global_label) xfree(ctx->allocator, ctx->last_global_label);
@@ -269,7 +269,7 @@ void asm_write_label(asm_ctx_t *ctx, char *label) {
 }
 
 // Writes label references to the current chunk.
-static void asm_write_label_ref0(asm_ctx_t *ctx, char *label, address_t offset, asm_label_ref_t mode) {
+static void asm_write_label_ref0(asm_ctx_t *ctx, const char *label, address_t offset, asm_label_ref_t mode) {
 	get_or_create_label(ctx, label);
 	// New label reference chunk.
 	asm_append_chunk(ctx, ASM_CHUNK_LABEL_REF);
@@ -294,7 +294,7 @@ static void asm_write_label_ref0(asm_ctx_t *ctx, char *label, address_t offset, 
 }
 
 // Writes label references to the current chunk.
-void asm_write_label_ref(asm_ctx_t *ctx, char *label, address_t offset, asm_label_ref_t mode) {
+void asm_write_label_ref(asm_ctx_t *ctx, const char *label, address_t offset, asm_label_ref_t mode) {
 	if (*label != '.') {
 		// Global label.
 		asm_write_label_ref0(ctx, label, offset, mode);

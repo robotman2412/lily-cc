@@ -16,7 +16,7 @@ static inline void gen_var_scope(asm_ctx_t *ctx, map_t *map) {
 	// Add the variables to the current scope.
 	for (size_t i = 0; i < map_size(map); i++) {
 		DEBUG_PRE("got var '%s'\n", map->strings[i]);
-		gen_var_t *var = map->values[i];
+		gen_var_t *var = (gen_var_t *) map->values[i];
 		
 		if ((var->type == VAR_TYPE_STACKFRAME || var->type == VAR_TYPE_STACKOFFS) && var->offset == (address_t) -1) {
 			// Have it in the stack.

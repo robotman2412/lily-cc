@@ -8,7 +8,7 @@ void map_create(map_t *map) {
 	map->numEntries = 0;
 	map->capacity = MAP_DEFAULT_CAPACITY;
 	map->strings = (char **) malloc(sizeof(char *) * map->capacity);
-	map->values = (void **) malloc(sizeof(void *) * map->capacity);
+	map->values = (const void **) malloc(sizeof(void *) * map->capacity);
 }
 
 // Deletes a map.
@@ -22,14 +22,14 @@ void map_delete(map_t *map) {
 // Deletes a map and every value.
 void map_delete_with_values(map_t *map) {
 	for (int i = 0; i < map->numEntries; i++) {
-		free(map->values[i]);
+		free((void *) map->values[i]);
 	}
 	map_delete(map);
 }
 
 // Finds key in map.
 // Returns -1 if not found.
-static inline int map_lkup(map_t *map, char *key) {
+static inline int map_lkup(map_t *map, const char *key) {
 	for (int i = 0; i < map->numEntries; i++) {
 		if (!strcmp(map->strings[i], key)) {
 			return i;
@@ -40,10 +40,10 @@ static inline int map_lkup(map_t *map, char *key) {
 
 // Gets key from map.
 // Returns null if no such key.
-void *map_get(map_t *map, char *key) {
+void *map_get(map_t *map, const char *key) {
 	int i = map_lkup(map, key);
 	if (i >= 0) {
-		return map->values[i];
+		return (void *) map->values[i];
 	} else {
 		return 0;
 	}
@@ -54,11 +54,11 @@ void *map_get(map_t *map, char *key) {
 // Returns null or replaced item.
 // Will copy the provided string.
 // Will NOT copy the provided item.
-void *map_set(map_t *map, char *key, void *val) {
+void *map_set(map_t *map, const char *key, const void *val) {
 	if (!val) return map_remove(map, key);
 	int i = map_lkup(map, key);
 	if (i >= 0) {
-		void *ret = map->values[i];
+		void *ret = (void *) map->values[i];
 		map->values[i] = val;
 		return ret;
 	} else {
@@ -76,11 +76,11 @@ void *map_set(map_t *map, char *key, void *val) {
 
 // Removes key from map.
 // Returns null or removed item.
-void *map_remove(map_t *map, char *key) {
+void *map_remove(map_t *map, const char *key) {
 	int i = map_lkup(map, key);
 	if (i >= 0) {
 		free(map->strings[i]);
-		void *ret = map->values[i];
+		void *ret = (void *) map->values[i];
 		map->numEntries --;
 		if (i != map->numEntries) {
 			map->strings[i] = map->strings[map->numEntries];

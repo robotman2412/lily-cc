@@ -53,15 +53,15 @@ debugsettings:
 	$(LD) $^ -o $@ $(LDFLAGS)
 
 ./build/parser.c: ./src/parser.bison
-	mkdir -p $(shell dirname $@)
+	@mkdir -p $(shell dirname $@)
 	$(YACC) $< $(YACCFLAGS) -o build/parser.c --defines=build/parser.h
 
 ./build/parser.c.o: ./build/parser.c $(HEADERS)
-	mkdir -p $(shell dirname $@)
+	@mkdir -p $(shell dirname $@)
 	$(CC) -c $< $(CCFLAGS) -o $@
 
 ./build/%.o: ./src/% $(HEADERS)
-	mkdir -p $(shell dirname $@)
+	@mkdir -p $(shell dirname $@)
 	$(CC) -c $< $(CCFLAGS) -o $@
 
 # Clean

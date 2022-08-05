@@ -13,16 +13,14 @@
 // 	return ptr - offs;
 // }
 
-// Dummy function to create my raw data.
-void dummy() {
-	asm(".db 0, 0, entry");
-}
-
 void entry() {
-	asm("MOV ST, 0xfeff");
+	// Initialise stack.
+	asm("MOV ST, 0xffff");
+	asm("SUB ST, [0xffff]");
+	
 	short str;
 	str = "Hello, World!";
-	// while (*str) {
+	while (*str) {
 		// Put char.
 		asm(
 			"MOV [0xfff6], %[reg]"
@@ -30,8 +28,8 @@ void entry() {
 			: [reg] "ri" (*str) // Inputs.
 		);
 		// Inc pointer.
-	// 	str += 1;
-	// }
+		str += 1;
+	}
 	// Halt.
 	asm("DEC PC");
 }

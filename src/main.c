@@ -58,12 +58,10 @@ int main(int argc, char **argv) {
 	for (argIndex = 1; argIndex < argc; argIndex++) {
 		if (!strcmp(argv[argIndex], "-v") || !strcmp(argv[argIndex], "--version")) {
 			// Show version
-			if (options.showVersion) printf("Note: Show version already specified.\n");
 			options.showVersion = true;
 			
 		} else if (!strcmp(argv[argIndex], "-h") || !strcmp(argv[argIndex], "--help")) {
 			// Show help.
-			if (options.showHelp) printf("Note: Show help already specified.\n");
 			options.showHelp = true;
 			
 		} else if (!strncmp(argv[argIndex], "-I", 2)) {
@@ -112,6 +110,18 @@ int main(int argc, char **argv) {
 			options.numIncludeDirs ++;
 			options.includeDirs = (char **) xrealloc(global_alloc, options.includeDirs, sizeof(char *) * options.numIncludeDirs);
 			options.includeDirs[options.numIncludeDirs - 1] = &(argv[argIndex])[10];
+		#ifdef HAS_MACHINE_ARGPARSE
+		} else if (!strncmp(argv[argIndex], "-m", 2)) {
+			// Machine option.
+			if (!machine_argparse(argv[argIndex]+2)) {
+				options.abort = true;
+			}
+		#endif
+		} else if (!strncmp(argv[argIndex], "-f", 2)) {
+			// Machine-independant option.
+			if (!flag_argparse(argv[argIndex]+2)) {
+				options.abort = true;
+			}
 		} else if (*argv[argIndex] == '-') {
 			// Unknown option.
 			fflush(stdout);
@@ -155,7 +165,7 @@ int main(int argc, char **argv) {
 	}
 	
 	// Read file.
-	if (argc > argIndex + 1) printf("Please note: Only the first input file is compiled for now.\n");
+	if (argc > argIndex + 1) printf("Note: Only the first input file is compiled for now.\n");
 	char *filename = argv[argIndex];
 	FILE *file = fopen(filename, "r");
 	if (!file) {
@@ -174,11 +184,32 @@ int main(int argc, char **argv) {
 	FILE *tempfile = fopen("/tmp/lily-cc-dbg-bin", "w+");
 	// chmod("/tmp/lily-cc-dbg-bin", 0666);
 	asm_ctx->out_fd = tempfile;
-	asm_ppc(asm_ctx);
 	output_native(asm_ctx);
 	fclose(tempfile);
 	xfree(global_alloc, asm_ctx);
 	system("hexdump -ve '8/2 \"%04X \" \"\n\"' /tmp/lily-cc-dbg-bin");
+}
+
+// Parse -f arguments, the '-f' removed.
+// Returns true on success.
+bool flag_argparse(const char *arg) {
+	if (!strcmp(arg, "pic") || !strcmp(arg, "PIC")) {
+		#ifdef HAS_PIE_OBJ
+		printf("Note: -fpic and -fPIC are TODO.\n");
+		#else
+		printf("Error: -f%s is not supported by %s.", arg, ARCH_ID);
+		#endif
+	} else if (!strcmp(arg, "no-pic") || !strcmp(arg, "no-PIC")) {
+		// TODO.
+	} else if (!strcmp(arg, "no-pie") || !strcmp(arg, "no-PIE")) {
+		// TODO.
+	} else if (!strcmp(arg, "pie") || !strcmp(arg, "PIE")) {
+		#ifdef HAS_PIE_OBJ
+		printf("Note: -fpie and -fPIE are TODO.\n");
+		#else
+		printf("Error: -f%s is not supported by %s.", arg, ARCH_ID);
+		#endif
+	}
 }
 
 // Show help on the command line.

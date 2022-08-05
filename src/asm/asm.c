@@ -126,7 +126,8 @@ void asm_use_sect(asm_ctx_t *ctx, const char *id, address_t align) {
 		asm_align_sect(sect, align);
 	}
 	ctx->current_section = sect;
-	ctx->current_section_id = id;
+	if (ctx->current_section_id) xfree(ctx->allocator, ctx->current_section_id);
+	ctx->current_section_id = xstrdup(ctx->allocator, id);
 	DEBUG_GEN("  .section \"%s\"\n", id);
 	DEBUG_ASM("s    .section \"%s\"\n", id);
 }

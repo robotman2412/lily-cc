@@ -720,9 +720,21 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 			// Variable references.
 			gen_var_t *val = gen_get_variable(ctx, expr->ident->strval);
 			if (!val) {
-				// TODO: Some fix or error report goes here.
-				report_errorf(ctx->tokeniser_ctx, E_ERROR, expr->pos, "Identifier '%s' is undefined", expr->ident->strval);
-				return NULL;
+				// Is it maybe a function?
+				funcdef_t *func = map_get(&ctx->functions, expr->ident->strval);
+				if (func) {
+					// It's a function, so make a label variable out of it.
+					val = (gen_var_t *) xalloc(ctx->allocator, sizeof(gen_var_t));
+					*val = (gen_var_t) {
+						.type   = VAR_TYPE_LABEL,
+						.label  = expr->ident->strval,
+						.ctype  = ctype_ptr_simple(ctx, STYPE_VOID),
+					};
+				} else {
+					// Neither function nor variable, so it's an error.
+					report_errorf(ctx->tokeniser_ctx, E_ERROR, expr->pos, "Identifier '%s' is undefined", expr->ident->strval);
+					return NULL;
+				}
 			}
 			val->owner = expr->ident->strval;
 			return val;
@@ -730,7 +742,27 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 		
 		case EXPR_TYPE_CALL: {
 			// TODO: check for inlining possibilities.
-			return gen_expr_call(ctx, NULL, expr->func, expr->args->num, expr->args->arr);
+			
+			// For now, enforce that func is always an ident.
+			// Then, look up it's funcdef.
+			funcdef_t *funcdef;
+			if (expr->func->type == EXPR_TYPE_IDENT) {
+				// Funcdef lookup.
+				const char *name = expr->func->ident->strval;
+				funcdef = map_get(&ctx->functions, name);
+				
+				if (!funcdef) {
+					// Undefined function called.
+					report_error(ctx->tokeniser_ctx, E_ERROR, expr->func->pos, "WIP: Implicit function definitions are unsupported.");
+					return NULL;
+				}
+			} else {
+				// Simply reject all other scenarios.
+				report_error(ctx->tokeniser_ctx, E_ERROR, expr->func->pos, "WIP: Function calls other than by name are unsupported.");
+				return NULL;
+			}
+			
+			return gen_expr_call(ctx, funcdef, expr->func, expr->args->num, expr->args->arr);
 		} break;
 		
 		case EXPR_TYPE_MATH1: {

@@ -303,7 +303,7 @@ expr_t expr_math1(parser_ctx_t *ctx, oper_t type, expr_t *val) {
 expr_t expr_call(parser_ctx_t *ctx, expr_t *func, exprs_t *args) {
 	return (expr_t) {
 		.type     = EXPR_TYPE_CALL,
-		.func     = func,
+		.func     = XCOPY(ctx->allocator, func, expr_t),
 		.args     = XCOPY(ctx->allocator, args, exprs_t)
 	};
 }

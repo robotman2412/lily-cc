@@ -131,6 +131,11 @@ void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words)
 // Unconditional LEA instructions.
 #define PX_OP_LEA 066
 
+// Offset for MOV instructions.
+#define PX_OFFS_MOV 040
+// Offset for LEA instructions.
+#define PX_OFFS_LEA 060
+
 // Offset for carry continue.
 #define PX_OFFS_CC 010
 

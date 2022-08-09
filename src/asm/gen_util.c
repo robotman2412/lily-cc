@@ -121,6 +121,7 @@ void gen_unuse(asm_ctx_t *ctx, gen_var_t *var) {
 
 
 // Compare gen_var_t against each other.
+// Returns true when equal.
 bool gen_cmp(asm_ctx_t *ctx, gen_var_t *a, gen_var_t *b) {
 	if (a == b) return 1;
 	if (!a && b) return 0;
@@ -141,6 +142,8 @@ bool gen_cmp(asm_ctx_t *ctx, gen_var_t *a, gen_var_t *b) {
 			return a->offset == b->offset;
 		case VAR_TYPE_STACKOFFS:
 			return a->offset == b->offset;
+		case VAR_TYPE_PTR:
+			return gen_cmp(ctx, a->ptr, b->ptr);
 	}
 }
 

@@ -42,32 +42,57 @@ px_insn_t px_unpack_insn(memword_t packed) {
 // Write an instruction with some context.
 void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1) {
 	#ifdef ENABLE_DEBUG_LOGS
+	// Debug log variables.
 	char *imm0 = NULL;
 	char *imm1 = NULL;
 	#endif
+	
+	// Determine memory clobbers.
 	if (insn.a == REG_ST || insn.b == REG_ST) {
 		px_memclobber(ctx, true);
 	}
+	
+	// Write the basic instruction.
 	asm_write_memword(ctx, px_pack_insn(insn));
+	
+	// Determine the count of IMM parameters.
+	uint_fast8_t num_param = (insn.a == REG_IMM) + (insn.b == REG_IMM);
+	
 	if (insn.a == REG_IMM) {
 		if (label0) {
-			// Put label.
-			asm_write_label_ref(
-				ctx, label0, offs0,
-				insn.x == ADDR_PC ? ASM_LABEL_REF_OFFS_PTR : ASM_LABEL_REF_ABS_PTR
-			);
+			if (!insn.y && insn.x == ADDR_PC) {
+				// Determine offset relative to instruction end instead of label reference.
+				address_t offs = (insn.b == REG_IMM) ? offs0 - 2 : offs0 - 1;
+				// Write label reference (PIE).
+				asm_write_label_ref(
+					ctx, label0, offs,
+					ASM_LABEL_REF_OFFS_PTR
+				);
+			} else {
+				// Write label reference (Non-PIE).
+				asm_write_label_ref(
+					ctx, label0, offs0,
+					ASM_LABEL_REF_ABS_PTR
+				);
+			}
+			
 			#ifdef ENABLE_DEBUG_LOGS
 			imm0 = xalloc(ctx->allocator, strlen(label0) + 10);
 			if (offs0) {
+				// Label and constant to hexadecimal.
 				sprintf(imm0, "%s+0x%04x", label0, offs0);
 			} else {
+				// Copy label to description.
 				strcpy(imm0, label0);
 			}
 			#endif
+			
 		} else {
-			// Put const.
+			// Write constant.
 			asm_write_memword(ctx, offs0);
+			
 			#ifdef ENABLE_DEBUG_LOGS
+			// Constant to hexadecimal.
 			imm0 = xalloc(ctx->allocator, 10);
 			sprintf(imm0, "0x%04x", offs0);
 			#endif
@@ -75,30 +100,47 @@ void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t
 	}
 	if (insn.b == REG_IMM) {
 		if (label1) {
-			// Put label.
-			asm_write_label_ref(
-				ctx, label1, offs1,
-				insn.x == ADDR_PC ? ASM_LABEL_REF_OFFS_PTR : ASM_LABEL_REF_ABS_PTR
-			);
+			if (insn.y && insn.x == ADDR_PC) {
+				// Write label reference (PIE).
+				asm_write_label_ref(
+					ctx, label1, offs1 - 1,
+					ASM_LABEL_REF_OFFS_PTR
+				);
+			} else {
+				// Write label reference (Non-PIE).
+				asm_write_label_ref(
+					ctx, label1, offs1,
+					ASM_LABEL_REF_ABS_PTR
+				);
+			}
+			
 			#ifdef ENABLE_DEBUG_LOGS
 			imm1 = xalloc(ctx->allocator, strlen(label1) + 10);
 			if (offs1) {
+				// Label and constant to hexadecimal.
 				sprintf(imm1, "%s+0x%04x", label1, offs1);
 			} else {
+				// Copy label to description.
 				strcpy(imm1, label1);
 			}
 			#endif
+			
 		} else {
-			// Put const.
+			// Write constant.
 			asm_write_memword(ctx, offs1);
+			
 			#ifdef ENABLE_DEBUG_LOGS
+			// Constant to hexadecimal.
 			imm1 = xalloc(ctx->allocator, 10);
 			sprintf(imm1, "0x%04x", offs1);
 			#endif
 		}
 	}
+	
 	#ifdef ENABLE_DEBUG_LOGS
+	// Describe instruction.
 	PX_DESC_INSN(insn, imm0, imm1);
+	// Clean up.
 	if (imm0) xfree(ctx->allocator, imm0);
 	if (imm1) xfree(ctx->allocator, imm1);
 	#endif
@@ -151,6 +193,11 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, reg_t *addrmod
 				// This is a bit simpler.
 				*addrmode = ADDR_MEM;
 				return var->ptr->reg;
+			} else if (var->ptr->type == VAR_TYPE_CONST) {
+				// A constant point might as well be a normal memory access.
+				*addrmode = ADDR_MEM;
+				*offs = var->ptr->iconst;
+				return REG_IMM;
 			} else {
 				char *imm1 = NULL;
 				// Im poimtre.
@@ -208,28 +255,46 @@ void px_branch(asm_ctx_t *ctx, gen_var_t *cond_var, char *l_true, char *l_false)
 	if (DET_PIE(ctx)) {
 		// PIE alternative.
 		if (l_true) {
-			DEBUG_GEN("  LEA%s PC, [PC~%s]\n", b_insn_names[cond&15], l_true);
-			asm_write_memword(ctx, INSN_JMP_PIE);
-			asm_write_label_ref(ctx, l_true, 0, ASM_LABEL_REF_OFFS_PTR);
+			px_insn_t insn = {
+				.y = true,
+				.x = ADDR_PC,
+				.b = REG_IMM,
+				.a = REG_PC,
+				.o = PX_OFFS_LEA | cond,
+			};
+			px_write_insn(ctx, insn, NULL, 0, l_true, 0);
 		}
 		if (l_false) {
-			cond = INV_BR(cond);
-			DEBUG_GEN("  LEA%s PC, [PC~%s]\n", b_insn_names[cond&15], l_false);
-			asm_write_memword(ctx, INSN_JMP_PIE);
-			asm_write_label_ref(ctx, l_false, 0, ASM_LABEL_REF_OFFS_PTR);
+			px_insn_t insn = {
+				.y = true,
+				.x = ADDR_PC,
+				.b = REG_IMM,
+				.a = REG_PC,
+				.o = PX_OFFS_LEA | INV_BR(cond),
+			};
+			px_write_insn(ctx, insn, NULL, 0, l_false, 0);
 		}
 	} else {
 		// Non-PIE alternative
 		if (l_true) {
-			DEBUG_GEN("  MOV%s PC, %s\n", b_insn_names[cond&15], l_true);
-			asm_write_memword(ctx, INSN_JMP);
-			asm_write_label_ref(ctx, l_true, 0, ASM_LABEL_REF_ABS_PTR);
+			px_insn_t insn = {
+				.y = true,
+				.x = ADDR_MEM,
+				.b = REG_IMM,
+				.a = REG_PC,
+				.o = PX_OFFS_MOV | cond,
+			};
+			px_write_insn(ctx, insn, NULL, 0, l_true, 0);
 		}
 		if (l_false) {
-			cond = INV_BR(cond);
-			DEBUG_GEN("  MOV%s PC, %s\n", b_insn_names[cond&15], l_false);
-			asm_write_memword(ctx, INSN_JMP);
-			asm_write_label_ref(ctx, l_false, 0, ASM_LABEL_REF_ABS_PTR);
+			px_insn_t insn = {
+				.y = true,
+				.x = ADDR_MEM,
+				.b = REG_IMM,
+				.a = REG_PC,
+				.o = PX_OFFS_MOV | INV_BR(cond),
+			};
+			px_write_insn(ctx, insn, NULL, 0, l_false, 0);
 		}
 	}
 }
@@ -238,14 +303,24 @@ void px_branch(asm_ctx_t *ctx, gen_var_t *cond_var, char *l_true, char *l_false)
 void px_jump(asm_ctx_t *ctx, char *label) {
 	if (DET_PIE(ctx)) {
 		// PIE alternative.
-		DEBUG_GEN("  LEA PC, [PC~%s]\n", label);
-		asm_write_memword(ctx, INSN_JMP_PIE);
-		asm_write_label_ref(ctx, label, 0, ASM_LABEL_REF_OFFS_PTR);
+		px_insn_t insn = {
+			.y = true,
+			.x = ADDR_PC,
+			.b = REG_IMM,
+			.a = REG_PC,
+			.o = PX_OP_LEA,
+		};
+		px_write_insn(ctx, insn, NULL, 0, label, 0);
 	} else {
 		// Non-PIE alternative
-		DEBUG_GEN("  MOV PC, %s\n", label);
-		asm_write_memword(ctx, INSN_JMP);
-		asm_write_label_ref(ctx, label, 0, ASM_LABEL_REF_ABS_PTR);
+		px_insn_t insn = {
+			.y = true,
+			.x = ADDR_MEM,
+			.b = REG_IMM,
+			.a = REG_PC,
+			.o = PX_OP_MOV,
+		};
+		px_write_insn(ctx, insn, NULL, 0, label, 0);
 	}
 }
 
@@ -570,11 +645,13 @@ void gen_return(asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *retval) {
 		}
 		px_mov_to_reg(ctx, retval, REG_R0);
 	}
+	
 	// Pop some stuff off the stack.
 	address_t sub = ctx->current_scope->stack_size;
 	ctx->current_scope->stack_size = 0;
 	gen_stack_clear(ctx, sub);
 	px_memclobber(ctx, true);
+	
 	// Append the return.
 	DEBUG_GEN("  MOV PC, [ST]\n");
 	asm_write_memword(ctx, INSN_RET);
@@ -602,9 +679,9 @@ bool gen_if(asm_ctx_t *ctx, gen_var_t *cond, stmt_t *s_if, stmt_t *s_else) {
 			// False:
 			asm_write_label(ctx, l_true);
 			bool else_explicit = gen_stmt(ctx, s_else, false);
-			// Skip label.
+			// Skip label (after if code runs, to jump over else code).
 			if (!if_explicit) {
-				// Don't add a useless label.
+				// Only add this label when the if code does not explicitly return.
 				asm_write_label(ctx, l_skip);
 			}
 			return if_explicit && else_explicit;
@@ -614,7 +691,7 @@ bool gen_if(asm_ctx_t *ctx, gen_var_t *cond, stmt_t *s_if, stmt_t *s_else) {
 			px_branch(ctx, cond, NULL, l_skip);
 			// True:
 			gen_stmt(ctx, s_if, false);
-			// Skip label.
+			// Skip label (to skip over if code when codition is not met).
 			asm_write_label(ctx, l_skip);
 			return false;
 		}
@@ -626,8 +703,10 @@ void gen_while(asm_ctx_t *ctx, expr_t *cond, stmt_t *code, bool is_do_while) {
 	char *loop_label  = asm_get_label(ctx);
 	char *check_label = asm_get_label(ctx);
 	
+	bool is_forever = cond->type == EXPR_TYPE_CONST && cond->iconst;
+	
 	// Initial check?
-	if (!is_do_while) {
+	if (!is_do_while && !is_forever) {
 		// For "while (condition) {}" loops, check condition before entering loop.
 		px_jump(ctx, check_label);
 	}
@@ -636,15 +715,20 @@ void gen_while(asm_ctx_t *ctx, expr_t *cond, stmt_t *code, bool is_do_while) {
 	asm_write_label(ctx, loop_label);
 	gen_stmt(ctx, code, false);
 	
-	// Condition check.
-	gen_var_t cond_hint = {
-		.type = VAR_TYPE_COND,
-	};
-	asm_write_label(ctx, check_label);
-	gen_var_t *cond_res = gen_expression(ctx, cond, &cond_hint);
-	px_branch(ctx, cond_res, loop_label, NULL);
-	if (cond_res != &cond_hint) {
-		gen_unuse(ctx, cond_res);
+	if (is_forever) {
+		// No check because it loops forever.
+		px_jump(ctx, loop_label);
+	} else {
+		// Condition check.
+		gen_var_t cond_hint = {
+			.type = VAR_TYPE_COND,
+		};
+		asm_write_label(ctx, check_label);
+		gen_var_t *cond_res = gen_expression(ctx, cond, &cond_hint);
+		px_branch(ctx, cond_res, loop_label, NULL);
+		if (cond_res != &cond_hint) {
+			gen_unuse(ctx, cond_res);
+		}
 	}
 }
 
@@ -705,10 +789,117 @@ char *gen_iasm_var(asm_ctx_t *ctx, gen_var_t *var, iasm_reg_t *reg) {
 // Expression: Function call.
 // args may be null for zero arguments.
 gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, size_t n_args, expr_t *args) {
-	// TODO.
+	// Find the calling convention.
+	px_update_cc(ctx, funcdef);
+	
+	DEBUG_GEN("// Starting function call to %s\n", funcdef->ident.strval);
+	
+	// Generate callee address first so it won't interfere with parameters.
+	gen_var_t *var = gen_expression(ctx, callee, NULL);
+	
+	if (funcdef->call_conv == PX_CC_REGS) {
+		// Output hints for locations, if any.
+		gen_var_t *hints[NUM_REGS];
+		// Actual locations of parameters.
+		gen_var_t *locations[NUM_REGS];
+		
+		// Generate parameter values.
+		reg_t regindex = 0;
+		for (size_t i = 0; i < n_args; i++) {
+			// Make an output hint for the appropriate register.
+			gen_var_t *out_hint = xalloc(ctx->allocator, sizeof(gen_var_t));
+			*out_hint = (gen_var_t) {
+				.type  = VAR_TYPE_REG,
+				.reg   = regindex,
+				.ctype = funcdef->args.arr[i].type,
+			};
+			hints[i] = out_hint;
+			regindex += funcdef->args.arr[i].type->size;
+			
+			// Generate the expression.
+			gen_var_t *res = gen_expression(ctx, &args[i], out_hint);
+			if (!res) {
+				// Abort.
+				return NULL;
+			}
+			// Save the result for later so that it can be moved to the right register.
+			locations[i] = res;
+		}
+		
+		// Move parameters to registers.
+		for (size_t i = 0; i < n_args; i++) {
+			gen_mov(ctx, hints[i], locations[i]);
+		}
+		
+	} else if (funcdef->call_conv == PX_CC_STACK) {
+		// TODO.
+	}
+	
+	DEBUG_GEN("// Jumping to subroutine %s\n", funcdef->ident.strval);
+	
+	// Jump to the subroutine.
+	switch (var->type) {
+		
+		case (VAR_TYPE_CONST): {
+			// Jump to constant.
+			px_insn_t insn = {
+				.y = true,
+				.x = ADDR_IMM,
+				.b = REG_IMM,
+				.a = REG_PC,
+				.o = PX_OFFS_MOV | COND_JSR,
+			};
+			px_write_insn(ctx, insn, NULL, 0, NULL, var->iconst);
+		} break;
+		case (VAR_TYPE_LABEL): {
+			if (DET_PIE(ctx)) {
+				// Jump to label (PIE).
+				px_insn_t insn = {
+					.y = true,
+					.x = ADDR_PC,
+					.b = REG_IMM,
+					.a = REG_PC,
+					.o = PX_OFFS_LEA | COND_JSR,
+				};
+				px_write_insn(ctx, insn, NULL, 0, var->label, 0);
+			} else {
+				// Jump to label (Non-PIE).
+				px_insn_t insn = {
+					.y = true,
+					.x = ADDR_IMM,
+					.b = REG_IMM,
+					.a = REG_PC,
+					.o = PX_OFFS_MOV | COND_JSR,
+				};
+				px_write_insn(ctx, insn, NULL, 0, var->label, 0);
+			}
+		} break;
+		case (VAR_TYPE_PTR): {
+			// Jump to pointer (TODO).
+			px_insn_t insn = {
+			};
+		} break;
+		case (VAR_TYPE_REG): {
+			// Jump to register.
+			px_insn_t insn = {
+				.y = true,
+				.x = ADDR_IMM,
+				.b = var->reg,
+				.a = REG_PC,
+				.o = PX_OFFS_MOV | COND_JSR,
+			};
+			px_write_insn(ctx, insn, NULL, 0, NULL, 0);
+		} break;
+		case (VAR_TYPE_STACKOFFS): {
+			// Jump to stack offset (TODO).
+			px_insn_t insn = {
+			};
+		} break;
+	}
+	
+	// Make a return void.
 	gen_var_t dummy = {
-		.type   = VAR_TYPE_CONST,
-		.iconst = 0
+		.type   = VAR_TYPE_VOID,
 	};
 	return XCOPY(ctx->allocator, &dummy, gen_var_t);
 }
@@ -823,7 +1014,6 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 			reg_t regno = use_hint ? output->reg : px_pick_reg(ctx, true);
 			if (DET_PIE(ctx)) {
 				// LEA (pie).
-				DEBUG_GEN("  LEA %s, [PC~%s]\n", reg_names[regno], a->label);
 				px_insn_t insn = {
 					.y = true,
 					.x = ADDR_PC,
@@ -831,10 +1021,9 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 					.a = regno,
 					.o = PX_OP_LEA,
 				};
-				px_write_insn(ctx, insn, NULL, 0, a->label, -1);
+				px_write_insn(ctx, insn, NULL, 0, a->label, 0);
 			} else {
 				// LEA (non-pie).
-				DEBUG_GEN("  LEA %s, [%s]\n", reg_names[regno], a->label);
 				px_insn_t insn = {
 					.y = true,
 					.x = ADDR_MEM,
@@ -862,7 +1051,6 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 			bool use_hint = output && output->type == VAR_TYPE_REG;
 			// LEA (stack).
 			reg_t regno = use_hint ? output->reg : px_pick_reg(ctx, true);
-			DEBUG_GEN("  LEA %s, [ST+%d]\n", reg_names[regno], px_get_depth(ctx, a, 0));
 			px_insn_t insn = {
 				.y = true,
 				.x = ADDR_ST,
@@ -870,8 +1058,7 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 				.a = regno,
 				.o = PX_OP_LEA,
 			};
-			asm_write_memword(ctx, px_pack_insn(insn));
-			asm_write_memword(ctx, px_get_depth(ctx, a, 0));
+			px_write_insn(ctx, insn, NULL, 0, NULL, px_get_depth(ctx, a, 0));
 			// Create a nice var.
 			gen_var_t *var;
 			if (use_hint) {

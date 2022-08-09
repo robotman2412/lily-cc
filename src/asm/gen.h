@@ -40,7 +40,7 @@ struct gen_var {
 // Definitions of types, pointer types and structs.
 struct var_type {
 	// Shorthand for the size, in memory words, of this type.
-	size_t          size;
+	address_t       size;
 	
 	// The simple type underlying this type.
 	// Does not apply to union, struct nor array types.

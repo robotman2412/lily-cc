@@ -331,12 +331,12 @@ size_t asm_read_numb(uint8_t *buf, size_t bytes) {
 #if IS_LITTLE_ENDIAN
 		// For little endian.
 		for (size_t i = 0; i < bytes; i++) {
-			data |= buf[i] >> (i * 8);
+			data |= buf[i] << (i * 8);
 		}
 #else
 		// For big endian.
 		for (size_t i = 0; i < bytes; i++) {
-			data |= buf[bytes - i - 1] >> (i * 8);
+			data |= buf[bytes - i - 1] << (i * 8);
 		}
 #endif
 		// Return the result.

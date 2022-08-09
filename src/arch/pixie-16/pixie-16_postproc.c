@@ -3,7 +3,7 @@
 #include "pixie-16_options.h"
 
 static inline void output_native_padd(FILE *fd, address_t n) {
-	char *buf = malloc(256);
+	char *buf = xalloc(global_alloc, 256);
 	memset(buf, 0, 256);
 	while (n > 256) {
 		// Write a bit at a time.
@@ -13,7 +13,7 @@ static inline void output_native_padd(FILE *fd, address_t n) {
 	if (n) {
 		fwrite(buf, 1, n, fd);
 	}
-	free(buf);
+	xfree(global_alloc, buf);
 }
 
 // Reduce: write everything we know as a chunk of machine code.
@@ -80,10 +80,16 @@ void output_native(asm_ctx_t *ctx) {
     }
 	
 	if (irqvector && !entrypoint) {
-		printf("Warning: -mirqhandler without -mentrypoint: -mirqhandler ignored.");
+		printf("Warning: -mirqhandler without -mentrypoint: -mirqhandler ignored.\n");
 	}
 	if (nmivector && !entrypoint) {
-		printf("Warning: -mnmihandler without -mentrypoint: -mnmihandler ignored.");
+		printf("Warning: -mnmihandler without -mentrypoint: -mnmihandler ignored.\n");
+	}
+	if (entrypoint && !irqvector) {
+		printf("Warning: -mentrypoint without -mirqhandler: IRQs unhandled.\n");
+	}
+	if (entrypoint && !nmivector) {
+		printf("Warning: -mentrypoint without -mnmihandler: NMIs unhandled.\n");
 	}
     
 	// Find the desired section order:
@@ -117,7 +123,6 @@ void output_native(asm_ctx_t *ctx) {
 	ctx->pc = 0;
 	asm_ppc_iterate(ctx, n_sect, sect_ids, sects, &asm_ppc_pass1, NULL, false);
 	// Pass 2: binary generation.
-	printf(" ==== RESET ==== \n");
 	ctx->pc = 0;
 	asm_ppc_iterate(ctx, n_sect, sect_ids, sects, &output_native_reduce, NULL, true);
     

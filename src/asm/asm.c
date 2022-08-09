@@ -13,7 +13,7 @@ static inline void        asm_append      (asm_ctx_t  *ctx,  const char *data, s
 void asm_init(asm_ctx_t *ctx) {
 	// Sections.
 	ctx->allocator   = alloc_create(ALLOC_NO_PARENT);
-	ctx->sections    = (map_t *)      xalloc(ctx->allocator, sizeof(map_t));
+	ctx->sections    = (map_t *) xalloc(ctx->allocator, sizeof(map_t));
 	map_create(ctx->sections);
 	// Scopeth.
 	map_create(&ctx->functions);
@@ -27,9 +27,10 @@ void asm_init(asm_ctx_t *ctx) {
 	}
 	// Labels.
 	ctx->last_global_label = NULL;
-	ctx->labels      = (map_t *)      xalloc(ctx->allocator, sizeof(map_t));
+	ctx->labels      = (map_t *) xalloc(ctx->allocator, sizeof(map_t));
 	map_create(ctx->labels);
 	// Sections.
+	ctx->current_section_id = NULL;
 	// Compiled machine code
 	asm_use_sect   (ctx, ".text",   ASM_NOT_ALIGNED);
 	// Read-only initialised data

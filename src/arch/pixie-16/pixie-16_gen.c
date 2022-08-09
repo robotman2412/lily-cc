@@ -66,7 +66,7 @@ void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t
 			#endif
 		} else {
 			// Put const.
-			asm_write_memword(ctx, offs1);
+			asm_write_memword(ctx, offs0);
 			#ifdef ENABLE_DEBUG_LOGS
 			imm0 = xalloc(ctx->allocator, 10);
 			sprintf(imm0, "0x%04x", offs0);
@@ -77,7 +77,7 @@ void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t
 		if (label1) {
 			// Put label.
 			asm_write_label_ref(
-				ctx, label0, offs0,
+				ctx, label1, offs1,
 				insn.x == ADDR_PC ? ASM_LABEL_REF_OFFS_PTR : ASM_LABEL_REF_ABS_PTR
 			);
 			#ifdef ENABLE_DEBUG_LOGS
@@ -293,8 +293,7 @@ void px_part_to_reg(asm_ctx_t *ctx, gen_var_t *var, reg_t dest, address_t index)
 				.a = dest,
 				.o = PX_OP_XOR,
 			};
-			asm_write_memword(ctx, px_pack_insn(insn));
-			PX_DESC_INSN(insn, NULL, NULL);
+			px_write_insn(ctx, insn, NULL, 0, NULL, 0);
 			return;
 		}
 	}
@@ -832,8 +831,7 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 					.a = regno,
 					.o = PX_OP_LEA,
 				};
-				asm_write_memword(ctx, px_pack_insn(insn));
-				asm_write_label_ref(ctx, a->label, 0, ASM_LABEL_REF_OFFS_PTR);
+				px_write_insn(ctx, insn, NULL, 0, a->label, -1);
 			} else {
 				// LEA (non-pie).
 				DEBUG_GEN("  LEA %s, [%s]\n", reg_names[regno], a->label);
@@ -844,8 +842,7 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 					.a = regno,
 					.o = PX_OP_LEA,
 				};
-				asm_write_memword(ctx, px_pack_insn(insn));
-				asm_write_label_ref(ctx, a->label, 0, ASM_LABEL_REF_ABS_PTR);
+				px_write_insn(ctx, insn, NULL, 0, a->label, 0);
 			}
 			// Create a nice var.
 			gen_var_t *var;

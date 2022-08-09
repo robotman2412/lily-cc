@@ -15,7 +15,7 @@ void asm_ppc_iterate(asm_ctx_t *ctx, size_t n_sect, char **sect_ids, asm_sect_t 
 		
 		if (use_align) {
 			ctx->pc = sects[i]->offset;
-			DEBUG_GEN("Loading offset for %s as %04x\n", sect_ids[i], ctx->pc);
+			DEBUG_ASM("Loading offset for %s as %04x\n", sect_ids[i], ctx->pc);
 		} else {
 			// Fix alignment.
 			address_t offs = ctx->pc;
@@ -25,10 +25,10 @@ void asm_ppc_iterate(asm_ctx_t *ctx, size_t n_sect, char **sect_ids, asm_sect_t 
 					offs += sects[i]->align - error;
 				}
 				ctx->pc = offs;
-				DEBUG_GEN("Realigning offset for %s to %04x\n", sect_ids[i], offs);
+				DEBUG_ASM("Realigning offset for %s to %04x\n", sect_ids[i], offs);
 				sects[i]->offset = offs;
 			} else {
-				DEBUG_GEN("Setting offset for %s to %04x\n", sect_ids[i], ctx->pc);
+				DEBUG_ASM("Setting offset for %s to %04x\n", sect_ids[i], ctx->pc);
 				sects[i]->offset = ctx->pc;
 			}
 		

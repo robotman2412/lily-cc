@@ -11,6 +11,9 @@
 #include <pixie-16_iasm.h>
 #include "pixie-16_internal.h"
 
+// Defined in pixie-16_gen.c
+void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1);
+
 // All keywords that occur.
 char *px_iasm_keyw[] = {
 	// Math: two args.
@@ -423,76 +426,25 @@ void gen_asm(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 			// Can't have both be memory.
 			PX_ERROR_L(lex_ctx, start_pos, "No more than one memory reference is allowed.\n");
 		} else {
-			// Package it up.
+			// Determine instruction value.
 			px_insn_t insn = {
 				.y = n_args == 2 && args[1].addr_mode != ADDR_IMM,
 				.b = n_args == 2 ? args[1].regno : 0,
 				.a = args[0].regno,
 				.o = tkn.type
 			};
+			// Determine addressing mode.
 			px_token_t tkn_x = insn.y ? args[1] : args[0];
 			insn.x = tkn_x.addr_mode;
 			
-			#ifdef DEBUG_GENERATOR
-			char *imm0 = NULL;
-			char *imm1 = NULL;
-			#endif
-			
-			// Write the thingy.
-			asm_write_memword(ctx, px_pack_insn(insn));
-			if (insn.a == REG_IMM) {
-				if (args[0].ident) {
-					address_t offs = args[0].ival + (insn.b == REG_IMM);
-					asm_write_label_ref(
-						ctx, args[0].ident, offs,
-						args[0].addr_mode == ADDR_PC
-						 ? ASM_LABEL_REF_OFFS_PTR
-						 : ASM_LABEL_REF_ABS_PTR
-					);
-					#ifdef DEBUG_GENERATOR
-					imm0 = xalloc(ctx->allocator, strlen(args[0].ident) + 7);
-					if (args[0].ival)
-						sprintf(imm0, "%s+0x%04x", args[0].ident, (uint16_t) args[0].ival);
-					else
-						strcpy(imm0, args[0].ident);
-					#endif
-				} else {
-					asm_write_memword(ctx, args[0].ival);
-					#ifdef DEBUG_GENERATOR
-					imm0 = xalloc(ctx->allocator, 7);
-					sprintf(imm0, "0x%04x", (uint16_t) args[0].ival);
-					#endif
-				}
-			}
-			if (insn.b == REG_IMM) {
-				if (args[1].ident) {
-					asm_write_label_ref(
-						ctx, args[1].ident, args[1].ival,
-						args[1].addr_mode == ADDR_PC
-						 ? ASM_LABEL_REF_OFFS_PTR
-						 : ASM_LABEL_REF_ABS_PTR
-					);
-					#ifdef DEBUG_GENERATOR
-					imm1 = xalloc(ctx->allocator, strlen(args[1].ident) + 7);
-					if (args[1].ival)
-						sprintf(imm1, "%s+0x%04x", args[1].ident, (uint16_t) args[1].ival);
-					else
-						strcpy(imm1, args[1].ident);
-					#endif
-				} else {
-					asm_write_memword(ctx, args[1].ival);
-					#ifdef DEBUG_GENERATOR
-					imm1 = xalloc(ctx->allocator, 7);
-					sprintf(imm1, "0x%04x", (uint16_t) args[1].ival);
-					#endif
-				}
-			}
-			
-			#ifdef DEBUG_GENERATOR
-			PX_DESC_INSN(insn, imm0, imm1);
-			if (imm0) xfree(ctx->allocator, imm0);
-			if (imm1) xfree(ctx->allocator, imm1);
-			#endif
+			// Write it out.
+			px_write_insn(
+				ctx, insn,
+				args[0].ident,
+				args[0].ival,
+				n_args == 2 ? args[1].ident : NULL,
+				n_args == 2 ? args[1].ival  : 0
+			);
 		}
 		
 		// Clean up the args list.

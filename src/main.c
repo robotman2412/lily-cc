@@ -175,7 +175,10 @@ int main(int argc, char **argv) {
 	}
 	
 	// Have it PROCESSED.
-	asm_ctx_t *asm_ctx = compile(filename, file);
+	tokeniser_ctx_t tokeniser_ctx;
+	tokeniser_init_file(&tokeniser_ctx, file);
+	tokeniser_ctx.filename = filename;
+	asm_ctx_t *asm_ctx = compile(filename, &tokeniser_ctx);
 	if (!asm_ctx) {
 		return 1;
 	}
@@ -241,15 +244,15 @@ bool isdir(char *path) {
 }
 
 // Compile a file of unknown type.
-asm_ctx_t *compile(char *filename, FILE *file) {
+asm_ctx_t *compile(char *filename, tokeniser_ctx_t *tkn_ctx) {
 	char *dot = strrchr(filename, '.');
 	if (!dot) {
 		printf("%s: Filetype not recognised.\n", filename);
 		return NULL;
 	} else if (!strcmp(dot, ".c")) {
-		return compile_c(filename, file);
+		return compile_c(filename, tkn_ctx);
 	} else if (!strcmp(dot, ".s") || !strcmp(dot, ".asm")) {
-		return assemble_s(filename, file);
+		return assemble_s(filename, tkn_ctx);
 	} else {
 		printf("%s: Filetype not recognised.\n", filename);
 		return NULL;
@@ -257,19 +260,16 @@ asm_ctx_t *compile(char *filename, FILE *file) {
 }
 
 // Compile a C source file.
-asm_ctx_t *compile_c(char *filename, FILE *file) {
+asm_ctx_t *compile_c(char *filename, tokeniser_ctx_t *tokeniser_ctx) {
 	// Init some ctx.
 	parser_ctx_t    ctx;
-	tokeniser_ctx_t tokeniser_ctx;
 	asm_ctx_t       asm_ctx;
-	ctx.tokeniser_ctx = &tokeniser_ctx;
+	ctx.tokeniser_ctx = tokeniser_ctx;
 	ctx.asm_ctx       = &asm_ctx;
 	ctx.allocator     = alloc_create(ALLOC_NO_PARENT);
 	ctx.n_const       = 0;
-	tokeniser_init_file(&tokeniser_ctx, file);
-	tokeniser_ctx.filename = filename;
 	asm_init(&asm_ctx);
-	asm_ctx.tokeniser_ctx = &tokeniser_ctx;
+	asm_ctx.tokeniser_ctx = tokeniser_ctx;
 	
 	// Compile some CRAP.
 	yyparse(&ctx);
@@ -279,17 +279,14 @@ asm_ctx_t *compile_c(char *filename, FILE *file) {
 }
 
 // Assembles an assembly source file.
-asm_ctx_t *assemble_s(char *filename, FILE *file) {
+asm_ctx_t *assemble_s(char *filename, tokeniser_ctx_t *tokeniser_ctx) {
 	// Init some ctx.
-	tokeniser_ctx_t tokeniser_ctx;
-	asm_ctx_t       asm_ctx;
-	tokeniser_init_file(&tokeniser_ctx, file);
-	tokeniser_ctx.filename = filename;
+	asm_ctx_t asm_ctx;
 	asm_init(&asm_ctx);
-	asm_ctx.tokeniser_ctx = &tokeniser_ctx;
+	asm_ctx.tokeniser_ctx = tokeniser_ctx;
 	
 	// Compile some CRAP.
-	gen_asm_file(&asm_ctx, &tokeniser_ctx);
+	gen_asm_file(&asm_ctx, tokeniser_ctx);
 	
 	return XCOPY(global_alloc, &asm_ctx, asm_ctx_t);
 }

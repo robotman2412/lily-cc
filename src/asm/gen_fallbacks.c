@@ -133,6 +133,9 @@ bool gen_stmt(asm_ctx_t *ctx, void *ptr, bool is_stmts) {
 			if (explicit_ret) break;
 		}
 	} else {
+		// Mark line position.
+		asm_write_pos(ctx, stmt->pos);
+		
 		// One of the other statement types.
 		switch (stmt->type) {
 			case STMT_TYPE_IF: {
@@ -522,9 +525,14 @@ static char *asm_extract(tokeniser_ctx_t *lex_ctx, size_t len) {
 static void gen_asm_db(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 	gimme:
 	nomore_spaces(lex_ctx);
+	pos_t pre_pos = pos_empty(lex_ctx);
+	
 	// Try strconst.
 	char *str = asm_expect_str(lex_ctx);
 	if (str) {
+		// Note file position.
+		asm_write_pos(ctx, pos_merge(pre_pos, pos_empty(lex_ctx)));
+		
 		// It worked!
 		for (size_t i = 0; i < strlen(str); i++) {
 			asm_write_memword(ctx, str[i]);
@@ -534,7 +542,10 @@ static void gen_asm_db(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 	// Try ident.
 	size_t len = asm_expect_ident(lex_ctx);
 	if (len) {
-		// TODO: More fancy CRACK.
+		// Note file position.
+		asm_write_pos(ctx, pos_merge(pre_pos, pos_empty(lex_ctx)));
+		
+		// TODO: More fancy impl.
 		char *ident = asm_extract(lex_ctx, len);
 		asm_write_label_ref(ctx, ident, 0, ASM_LABEL_REF_ABS_PTR);
 		xfree(lex_ctx->allocator, ident);
@@ -542,9 +553,12 @@ static void gen_asm_db(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 	}
 	// Try ival.
 	long long ival;
-	bool succ = asm_expect_ival(lex_ctx, &ival);
-	if (succ) {
-		// APPEND CRACK.
+	bool success = asm_expect_ival(lex_ctx, &ival);
+	if (success) {
+		// Note file position.
+		asm_write_pos(ctx, pos_merge(pre_pos, pos_empty(lex_ctx)));
+		
+		// APPEND integer.
 		asm_write_memword(ctx, ival);
 		goto next;
 	}

@@ -52,6 +52,8 @@ pos_t pos_merge(pos_t one, pos_t two);
 pos_t pos_empty(tokeniser_ctx_t *ctx);
 // void  print_pos(tokeniser_ctx_t *ctx, pos_t pos);
 void  report_error(tokeniser_ctx_t *ctx, error_type_t type, pos_t pos, char *message);
+// Prints a numbered line of the source code.
+void print_line(tokeniser_ctx_t *ctx, int lineno);
 
 #define report_errorf(ctx, type, pos, ...) do{ \
 		size_t len = snprintf(NULL, 0, __VA_ARGS__); \

@@ -10,6 +10,7 @@
 #define ASM_CHUNK_LABEL     0x9A
 #define ASM_CHUNK_LABEL_REF 0x3B
 #define ASM_CHUNK_ZERO      0x82
+#define ASM_CHUNK_POS       0x27
 
 #define ASM_NOT_ALIGNED     0
 
@@ -158,6 +159,9 @@ char *asm_get_label     (asm_ctx_t *ctx);
 void asm_write_label    (asm_ctx_t *ctx, const char *label);
 // Writes label references to the current chunk.
 void asm_write_label_ref(asm_ctx_t *ctx, const char *label, address_t offset, asm_label_ref_t mode);
+
+// Writes linenumber and position information.
+void asm_write_pos      (asm_ctx_t *ctx, pos_t pos);
 
 // Writes zeroes.
 void asm_write_zero     (asm_ctx_t *ctx, address_t   count);

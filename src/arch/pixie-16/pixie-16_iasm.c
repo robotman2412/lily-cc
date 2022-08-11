@@ -437,6 +437,9 @@ void gen_asm(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 			px_token_t tkn_x = insn.y ? args[1] : args[0];
 			insn.x = tkn_x.addr_mode;
 			
+			// Add linenumbering information.
+			asm_write_pos(ctx, start_pos);
+			
 			// Write it out.
 			px_write_insn_iasm(
 				ctx, insn,

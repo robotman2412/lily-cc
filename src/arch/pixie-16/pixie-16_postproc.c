@@ -125,6 +125,10 @@ void output_native(asm_ctx_t *ctx) {
 	// Pass 2: binary generation.
 	ctx->pc = 0;
 	asm_ppc_iterate(ctx, n_sect, sect_ids, sects, &output_native_reduce, NULL, true);
+	// Pass 3: do an address dump for easy debugging.
+	int theindex = 1;
+	asm_ppc_iterate(ctx, n_sect, sect_ids, sects, &asm_ppc_addrdump, &theindex, true);
+	asm_fini_addrdump(ctx, theindex);
     
 	// Enforce vector addresses.
 	if (entrypoint) {

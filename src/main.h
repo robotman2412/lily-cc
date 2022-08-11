@@ -44,11 +44,11 @@ bool       machine_argparse(const char *arg);
 bool       flag_argparse (const char *arg);
 
 // Compile a file of unknown type.
-asm_ctx_t *compile       (char *filename, FILE *file);
+asm_ctx_t *compile       (char *filename, tokeniser_ctx_t *tkn_ctx);
 // Compile a C source file.
-asm_ctx_t *compile_c     (char *filename, FILE *file);
+asm_ctx_t *compile_c     (char *filename, tokeniser_ctx_t *tkn_ctx);
 // Assembles an assembly source file.
-asm_ctx_t *assemble_s    (char *filename, FILE *file);
+asm_ctx_t *assemble_s    (char *filename, tokeniser_ctx_t *tkn_ctx);
 
 // Bison tokeniser callback.
 int        yylex         (parser_ctx_t *ctx);

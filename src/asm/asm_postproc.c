@@ -51,19 +51,106 @@ void asm_ppc_iterate(asm_ctx_t *ctx, size_t n_sect, char **sect_ids, asm_sect_t 
 
 // Pass 1: label resolution.
 void asm_ppc_pass1(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
-	// printf("%02x\n", chunk_type);
+	bool dump_addr = (bool) args;
 	if (chunk_type == ASM_CHUNK_ZERO) {
+		// A chunk that indicates zeroes (usualy for .bss).
 		size_t n = asm_read_numb(chunk_data, sizeof(address_t));
 		ctx->pc += n;
 	} else if (chunk_type == ASM_CHUNK_DATA) {
+		// A chunk with raw output data.
 		ctx->pc += chunk_len / sizeof(memword_t);
 	} else if (chunk_type == ASM_CHUNK_LABEL_REF) {
+		// A label reference.
 		ctx->pc += ADDRESS_TO_MEMWORDS;
 	} else if (chunk_type == ASM_CHUNK_LABEL) {
+		// Look up the label.
 		char *label = chunk_data;
 		asm_label_def_t *def = map_get(ctx->labels, label);
+		// And assign the current PC to it.
 		def->address = ctx->pc;
 		printf("%s = %04x\n", label, def->address);
+	} else if (chunk_type == ASM_CHUNK_POS) {
+		// A position chuck (usually for addr2line purposes).
+		(*(address_t *) chunk_data) = ctx->pc;
+	}
+}
+
+// Optional addr2line dump pass.
+// Prints by address order.
+// Argument is `int *` initialised to 1 -- last linenumber printed.
+void asm_ppc_addrdump(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
+	int *last_line = args;
+	if (chunk_type == ASM_CHUNK_POS) {
+		// A position chuck (usually for addr2line purposes).
+		address_t addr = *(address_t *) chunk_data;
+		pos_t pos = {
+			.x0       = asm_read_numb(chunk_data + sizeof(address_t),                                    sizeof(int)),
+			.y0       = asm_read_numb(chunk_data + sizeof(address_t) +   sizeof(int),                    sizeof(int)),
+			.x1       = asm_read_numb(chunk_data + sizeof(address_t) + 2*sizeof(int),                    sizeof(int)),
+			.y1       = asm_read_numb(chunk_data + sizeof(address_t) + 3*sizeof(int),                    sizeof(int)),
+			.index0   = asm_read_numb(chunk_data + sizeof(address_t) + 4*sizeof(int),                    sizeof(size_t)),
+			.index1   = asm_read_numb(chunk_data + sizeof(address_t) + 4*sizeof(int) +   sizeof(size_t), sizeof(size_t)),
+			.filename =               chunk_data + sizeof(address_t) + 4*sizeof(int) + 2*sizeof(size_t),
+		};
+		
+		// Spacer and hex dump formats.
+		#if ADDR_BITS <= 4
+		const char *spacer  = "    ";
+		const char *linefmt = "    %01x | ";
+		#elif ADDR_BITS <= 8
+		const char *spacer  = "    ";
+		const char *linefmt = "   %02x | ";
+		#elif ADDR_BITS <= 16
+		const char *spacer  = "    ";
+		const char *linefmt = " %04x | ";
+		#elif ADDR_BITS <= 32
+		const char *spacer  = "        ";
+		const char *linefmt = " %08x | ";
+		#else // 64
+		const char *spacer  = "                ";
+		const char *linefmt = " %016x | ";
+		#endif
+		
+		// Dump source before this chunk.
+		for (int line = *last_line + 1; line < pos.y0; line ++) {
+			printf(" %s | ", spacer);
+			print_line(ctx->tokeniser_ctx, line);
+		}
+		
+		if (*last_line < pos.y0) {
+			// Dump initial line of this chunk.
+			printf(linefmt, addr);
+			print_line(ctx->tokeniser_ctx, pos.y0);
+			*last_line = pos.y0;
+		}
+	}
+}
+
+// Prints the remainder of the lines for asm_ppc_addrdump.
+void asm_fini_addrdump(asm_ctx_t *ctx, int last_line) {
+	// Spacer and hex dump formats.
+	#if ADDR_BITS <= 4
+	const char *spacer  = "    ";
+	const char *linefmt = "    %01x | ";
+	#elif ADDR_BITS <= 8
+	const char *spacer  = "    ";
+	const char *linefmt = "   %02x | ";
+	#elif ADDR_BITS <= 16
+	const char *spacer  = "    ";
+	const char *linefmt = " %04x | ";
+	#elif ADDR_BITS <= 32
+	const char *spacer  = "        ";
+	const char *linefmt = " %08x | ";
+	#else // 64
+	const char *spacer  = "                ";
+	const char *linefmt = " %016x | ";
+	#endif
+	
+	// Dump source until end.
+	int end = pos_empty(ctx->tokeniser_ctx).y1;
+	for (int line = last_line + 1; line < end; line ++) {
+		printf(" %s | ", spacer);
+		print_line(ctx->tokeniser_ctx, line);
 	}
 }
 

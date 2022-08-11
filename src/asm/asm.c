@@ -323,6 +323,25 @@ void asm_write_zero(asm_ctx_t *ctx, address_t count) {
 	asm_append_chunk(ctx, ASM_CHUNK_DATA);
 }
 
+// Writes linenumber and position information.
+void asm_write_pos(asm_ctx_t *ctx, pos_t pos) {
+	DEBUG_GEN("// %s:%d (col %d)\n", pos.filename, pos.y0, pos.x0);
+	asm_append_chunk(ctx, ASM_CHUNK_POS);
+	// Address (for more convenient independent dumping).
+	asm_write_address(ctx, 0);
+	// File position.
+	asm_write_num(ctx, pos.x0, sizeof(int));
+	asm_write_num(ctx, pos.y0, sizeof(int));
+	asm_write_num(ctx, pos.x1, sizeof(int));
+	asm_write_num(ctx, pos.y1, sizeof(int));
+	// File index.
+	asm_write_num(ctx, pos.index0, sizeof(size_t));
+	asm_write_num(ctx, pos.index1, sizeof(size_t));
+	// File name.
+	asm_append(ctx, pos.filename, strlen(pos.filename) + 1);
+	asm_append_chunk(ctx, ASM_CHUNK_DATA);
+}
+
 // Reads a number of arbitrary size from the given buffer.
 size_t asm_read_numb(uint8_t *buf, size_t bytes) {
 	if (bytes > 1) {

@@ -12,6 +12,14 @@ void asm_ppc_iterate(asm_ctx_t *ctx, size_t n_sect, char **sect_ids, asm_sect_t 
 // Pass 1: label resolution.
 void asm_ppc_pass1(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args);
 
+// Optional addr2line dump pass.
+// Prints by address order.
+// Argument is `int *` initialised to 1 -- last linenumber printed.
+void asm_ppc_addrdump(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args);
+
+// Prints the remainder of the lines for asm_ppc_addrdump.
+void asm_fini_addrdump(asm_ctx_t *ctx, int last_line);
+
 // Post-processes the label reference for outputting.
 bool asm_ppc_label(asm_ctx_t *ctx, uint8_t *chunk, uint8_t *buf, size_t *len);
 

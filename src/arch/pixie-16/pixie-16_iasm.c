@@ -12,7 +12,7 @@
 #include "pixie-16_internal.h"
 
 // Defined in pixie-16_gen.c
-void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1);
+void px_write_insn_iasm(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1);
 
 // All keywords that occur.
 char *px_iasm_keyw[] = {
@@ -438,7 +438,7 @@ void gen_asm(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 			insn.x = tkn_x.addr_mode;
 			
 			// Write it out.
-			px_write_insn(
+			px_write_insn_iasm(
 				ctx, insn,
 				args[0].ident,
 				args[0].ival,

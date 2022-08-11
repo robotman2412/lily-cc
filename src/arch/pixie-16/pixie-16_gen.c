@@ -40,7 +40,7 @@ px_insn_t px_unpack_insn(memword_t packed) {
 }
 
 // Write an instruction with some context.
-void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1) {
+void px_write_insn0(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1, bool is_iasm) {
 	#ifdef ENABLE_DEBUG_LOGS
 	// Debug log variables.
 	char *imm0 = NULL;
@@ -48,7 +48,7 @@ void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t
 	#endif
 	
 	// Determine memory clobbers.
-	if (insn.a == REG_ST || insn.b == REG_ST) {
+	if (!is_iasm && (insn.a == REG_ST || insn.b == REG_ST)) {
 		px_memclobber(ctx, true);
 	}
 	
@@ -144,6 +144,16 @@ void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t
 	if (imm0) xfree(ctx->allocator, imm0);
 	if (imm1) xfree(ctx->allocator, imm1);
 	#endif
+}
+
+// Write an instruction with some context.
+void px_write_insn_iasm(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1) {
+	px_write_insn0(ctx, insn, label0, offs0, label1, offs1, true);
+}
+
+// Write an instruction with some context.
+void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1) {
+	px_write_insn0(ctx, insn, label0, offs0, label1, offs1, false);
 }
 
 // Grab an addressing mode for a parameter.

@@ -118,13 +118,15 @@ void output_native(asm_ctx_t *ctx) {
         sects[i] = map_get(ctx->sections, sect_ids[i]);
     }
 	
+	// Temporary: Align .bss to 0x2000.
+	asm_set_align(ctx, ".bss", 0x2000);
 	
 	// Pass 1: label resolution.
 	ctx->pc = 0;
 	asm_ppc_iterate(ctx, n_sect, sect_ids, sects, &asm_ppc_pass1, NULL, false);
-	// Pass 2: binary generation.
+	// Pass 2: binary generation (do not write .bss).
 	ctx->pc = 0;
-	asm_ppc_iterate(ctx, n_sect, sect_ids, sects, &output_native_reduce, NULL, true);
+	asm_ppc_iterate(ctx, n_sect-1, sect_ids, sects, &output_native_reduce, NULL, true);
 	// Pass 3: do an address dump for easy debugging.
 	int theindex = 1;
 	asm_ppc_iterate(ctx, n_sect, sect_ids, sects, &asm_ppc_addrdump, &theindex, true);

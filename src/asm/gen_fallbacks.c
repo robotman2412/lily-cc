@@ -609,6 +609,17 @@ void gen_asm_file(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 				} else {
 					printf("Error: Expected STRING after '.section'\n");
 				}
+			} else if (!strcmp(directive, "zero")) {
+				// Zero-ed bytes instertion.
+				long long count;
+				bool success = asm_expect_ival(lex_ctx, &count);
+				if (success) {
+					// Found the ival.
+					asm_write_zero(ctx, count);
+				} else {
+					// Expected a ival, but did not get it.
+					printf("Error: Expected NUMBER after '.zero'\n");
+				}
 			} else if (!strcmp(directive, "db")) {
 				// Handle the D.B.
 				gen_asm_db(ctx, lex_ctx);

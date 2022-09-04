@@ -11,6 +11,25 @@
 
 /* ======== Gen-specific helper functions ======== */
 
+// Bump a register to the top of the usage list.
+void px_touch_reg(asm_ctx_t *ctx, reg_t regno) {
+	for (int i = 3; i > 1; i--) {
+		if (ctx->reg_usage_order[i] == regno) {
+			for (; i > 1; i--) {
+				ctx->reg_usage_order[i] = ctx->reg_usage_order[i - 1];
+			}
+			ctx->reg_usage_order[0] = regno;
+			return;
+		}
+	}
+}
+
+// Gets the least used register in the list.
+__attribute__((__always_inline__))
+reg_t px_least_used_reg(asm_ctx_t *ctx) {
+	return ctx->reg_usage_order[3];
+}
+
 // Gets the constant required for a stack indexing memory access.
  __attribute__((pure))
 static inline address_t px_get_depth(asm_ctx_t *ctx, gen_var_t *var, address_t var_offs) {
@@ -48,7 +67,7 @@ void px_write_insn0(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_
 	#endif
 	
 	// Determine memory clobbers.
-	if (!is_iasm && (insn.a == REG_ST || insn.b == REG_ST)) {
+	if (!is_iasm && (insn.a == REG_ST || insn.b == REG_ST || insn.x == REG_ST)) {
 		px_memclobber(ctx, true);
 	}
 	
@@ -137,6 +156,16 @@ void px_write_insn0(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_
 		}
 	}
 	
+	if (insn.a < 4) {
+		px_touch_reg(ctx, insn.a);
+	}
+	if (insn.b < 4) {
+		px_touch_reg(ctx, insn.b);
+	}
+	if (insn.x < 4) {
+		px_touch_reg(ctx, insn.x);
+	}
+	
 	#ifdef ENABLE_DEBUG_LOGS
 	// Describe instruction.
 	PX_DESC_INSN(insn, imm0, imm1);
@@ -170,6 +199,8 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, reg_t *addrmod
 	}
 	
 	switch (var->type) {
+			gen_var_t *a, *b;
+			
 		case VAR_TYPE_CONST:
 			// Constant thingy.
 			*addrmode = ADDR_IMM;
@@ -225,16 +256,85 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, reg_t *addrmod
 				// Return the registrex.
 				return dest;
 			}
-		break;
+			break;
+		
+		case VAR_TYPE_INDEXED:
+			// Array indexing.
+			a = var->indexed.location;
+			b = var->indexed.index;
+			
+			// Get components into registers if not already.
+			px_var_to_reg(ctx, a, true);
+			px_var_to_reg(ctx, b, true);
+			
+			// Check for constants.
+			if (a->type == VAR_TYPE_CONST) {
+				if (b->type == VAR_TYPE_CONST) {
+					// TODO: Those are both constants.
+				} else {
+					// Swapperoni.
+					gen_var_t *tmp = a;
+					a = b;
+					b = tmp;
+				}
+			}
+			
+			if (b->type == VAR_TYPE_CONST) {
+				// Constant offset and variable offset.
+				*addrmode = a->reg;
+				*offs     = b->iconst + part;
+				return REG_IMM;
+			} else if (part == 0) {
+				// Two variable offsets, index part 0.
+				*addrmode = a->reg;
+				return b->reg;
+			} else {
+				// Two variable offsets, index exceeding 0.
+				if (var->indexed.combined == NULL) {
+					// Combine the two.
+					reg_t dest = px_pick_reg(ctx, true);
+					px_insn_t insn = {
+						.y = 1,
+						.x = a->reg,
+						.b = b->reg,
+						.a = dest,
+						.o = PX_OP_LEA,
+					};
+					px_write_insn(ctx, insn, NULL, 0, NULL, 0);
+					
+					// Make a fancy variable for next time.
+					var->indexed.combined = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
+					*var->indexed.combined = (gen_var_t) {
+						.type        = VAR_TYPE_REG,
+						.reg         = dest,
+						.ctype       = ctype_ptr_simple(ctx, STYPE_CHAR), // TODO: Determine the correqt one.
+						.owner       = NULL,
+						.default_loc = NULL,
+					};
+					
+					ctx->current_scope->reg_usage[dest] = var->indexed.combined;
+				}
+				
+				// Construct with the offset.
+				*addrmode = var->indexed.combined->reg;
+				*offset   = part;
+				return REG_IMM;
+			}
+			break;
 	}
 	return 0;
 }
 
 // Determine the calling conventions to use.
 void px_update_cc(asm_ctx_t *ctx, funcdef_t *funcdef) {
-	if (funcdef->args.num > 4) {
+	address_t arg_size = 0;
+	for (size_t i = 0; i < funcdef->args.num; i++) {
+		arg_size += funcdef->args.arr[i].type->size;
+	}
+	
+	if (arg_size > NUM_REGS) {
 		funcdef->call_conv = PX_CC_STACK;
-	} else if (funcdef->args.num) {
+	} else if (arg_size) {
 		funcdef->call_conv = PX_CC_REGS;
 	} else {
 		funcdef->call_conv = PX_CC_NONE;
@@ -343,10 +443,8 @@ reg_t px_pick_reg(asm_ctx_t *ctx, bool do_vacate) {
 		}
 	}
 	
-	// Otherwise, free up a pseudorandom one.
-	// Eenie meenie minie moe...
-	// TODO: Detect least used?
-	reg_t pick = (((*ctx->current_func->ident.strval + ctx->current_scope->stack_size) * 27483676) >> 21) % 4;
+	// Otherwise, free up the least used one.
+	reg_t pick = px_least_used_reg(ctx);
 	
 	if (do_vacate) {
 		gen_var_t *var = ctx->current_scope->reg_usage[pick];
@@ -361,6 +459,7 @@ reg_t px_pick_reg(asm_ctx_t *ctx, bool do_vacate) {
 			*var = *tmp;
 		}
 	}
+	px_touch_reg(ctx, pick);
 	
 	return pick;
 }
@@ -575,6 +674,10 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	asm_write_label(ctx, funcdef->ident.strval);
 	// Initialise the real stack size to 0.
 	ctx->current_scope->real_stack_size = 0;
+	// Preset the register usages.
+	for (int i = 0; i < 4; i++) {
+		ctx->reg_usage_order[i] = i;
+	}
 	
 	if (funcdef->call_conv == PX_CC_REGS) {
 		// Registers.
@@ -907,11 +1010,35 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, siz
 		} break;
 	}
 	
-	// Make a return void.
-	gen_var_t dummy = {
-		.type   = VAR_TYPE_VOID,
-	};
-	return XCOPY(ctx->allocator, &dummy, gen_var_t);
+	if (funcdef->returns && funcdef->returns->simple_type != STYPE_VOID) {
+		// Make a return with values.
+		gen_var_t retval;
+		if (funcdef->returns->size <= NUM_REGS) {
+			// Registrex.
+			retval = (gen_var_t) {
+				.type  = VAR_TYPE_REG,
+				.reg   = REG_R0,
+				.ctype = funcdef->returns,
+				.owner = NULL
+			};
+		} else {
+			// TODO!
+			retval = (gen_var_t) {
+				.type   = VAR_TYPE_VOID,
+				.ctype  = ctype_simple(ctx, STYPE_VOID)
+			};
+		}
+		
+		return XCOPY(ctx->allocator, &retval, gen_var_t);
+		
+	} else {
+		// Make a return void.
+		gen_var_t dummy = {
+			.type   = VAR_TYPE_VOID,
+			.ctype  = ctype_simple(ctx, STYPE_VOID)
+		};
+		return XCOPY(ctx->allocator, &dummy, gen_var_t);
+	}
 }
 
 // Expression: Binary math operation.
@@ -927,7 +1054,30 @@ gen_var_t *gen_expr_math2(asm_ctx_t *ctx, oper_t oper, gen_var_t *out_hint, gen_
 	if (OP_IS_LOGIC(oper)) {
 		// TODO.
 	} else if (oper == OP_INDEX) {
-		// TODO.
+		// Construct the indexing hint.
+		gen_var_t *hint = xalloc(ctx->allocator, sizeof(gen_var_t));
+		*hint = (gen_var_t) {
+			.type        = VAR_TYPE_INDEXED,
+			.indexed     = {
+				.location = a,
+				.index    = b,
+				.combined = NULL,
+			},
+			.ctype 	     = (a->ctype->category == TYPE_CAT_ARRAY || a->ctype->category == TYPE_CAT_POINTER)
+						 ? a->ctype->underlying : ctype_simple(STYPE_S_INT),
+			.owner       = NULL,
+			.default_loc = NULL
+		};
+		
+		if (out_hint) {
+			// Move directly to the destination thing.
+			gen_mov(ctx, out_hint, hint);
+			return out_hint;
+		} else {
+			// Just give back the hint.
+			return hint;
+		}
+		
 	} else if (OP_IS_SHIFT(oper)) {
 		// TODO.
 	} else if (OP_IS_COMP(oper)) {
@@ -945,7 +1095,9 @@ gen_var_t *gen_expr_math2(asm_ctx_t *ctx, oper_t oper, gen_var_t *out_hint, gen_
 		return px_math2(ctx, opcode, out_hint, a, b);
 	}
 	
-	return out_hint ? out_hint : px_get_tmp(ctx, 1, true);
+	printf("Unimplemented point was reached!\n");
+	raise(SIGABRT);
+	return NULL;
 }
 
 // Expression: Unary math operation.
@@ -1220,42 +1372,44 @@ void gen_stack_clear(asm_ctx_t *ctx, address_t num) {
 
 // Called before a memory clobbering instruction is to be written.
 void px_memclobber(asm_ctx_t *ctx, bool clobbers_stack) {
-	// Check whether the stack size differs at all.
-	addrdiff_t diff = ctx->current_scope->real_stack_size - ctx->current_scope->stack_size;
-	// Prevent infinite recursion.
-	ctx->current_scope->real_stack_size = ctx->current_scope->stack_size;
-	
-	// Fix stack size.
-	if (diff == 1 || diff == -1) {
-		// Increment or decrement ST.
-		px_insn_t insn = {
-			.y = 0,
-			.x = ADDR_IMM,
-			.b = 0,
-			.a = REG_ST,
-			.o = diff == 1 ? PX_OP_INC : PX_OP_DEC,
-		};
-		px_write_insn(ctx, insn, NULL, 0, NULL, 0);
-	} else if (diff > 1) {
-		// Add to ST.
-		px_insn_t insn = {
-			.y = 0,
-			.x = ADDR_IMM,
-			.b = REG_IMM,
-			.a = REG_ST,
-			.o = PX_OP_ADD,
-		};
-		px_write_insn(ctx, insn, NULL, 0, NULL, diff);
-	} else if (diff < -1) {
-		// Sub from ST for clarity.
-		px_insn_t insn = {
-			.y = 0,
-			.x = ADDR_IMM,
-			.b = REG_IMM,
-			.a = REG_ST,
-			.o = PX_OP_SUB,
-		};
-		px_write_insn(ctx, insn, NULL, 0, NULL, -diff);
+	if (clobbers_stack) {
+		// Check whether the stack size differs at all.
+		addrdiff_t diff = ctx->current_scope->real_stack_size - ctx->current_scope->stack_size;
+		// Prevent infinite recursion.
+		ctx->current_scope->real_stack_size = ctx->current_scope->stack_size;
+		
+		// Fix stack size.
+		if (diff == 1 || diff == -1) {
+			// Increment or decrement ST.
+			px_insn_t insn = {
+				.y = 0,
+				.x = ADDR_IMM,
+				.b = 0,
+				.a = REG_ST,
+				.o = diff == 1 ? PX_OP_INC : PX_OP_DEC,
+			};
+			px_write_insn(ctx, insn, NULL, 0, NULL, 0);
+		} else if (diff > 1) {
+			// Add to ST.
+			px_insn_t insn = {
+				.y = 0,
+				.x = ADDR_IMM,
+				.b = REG_IMM,
+				.a = REG_ST,
+				.o = PX_OP_ADD,
+			};
+			px_write_insn(ctx, insn, NULL, 0, NULL, diff);
+		} else if (diff < -1) {
+			// Sub from ST for clarity.
+			px_insn_t insn = {
+				.y = 0,
+				.x = ADDR_IMM,
+				.b = REG_IMM,
+				.a = REG_ST,
+				.o = PX_OP_SUB,
+			};
+			px_write_insn(ctx, insn, NULL, 0, NULL, -diff);
+		}
 	}
 }
 
@@ -1311,6 +1465,32 @@ void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words)
 			}
 			// Write the resulting instruction.
 			px_write_insn(ctx, insn, label0, offs0, label1, offs1);
+		}
+	}
+}
+
+// Variables: Move given variable into a register.
+void px_var_to_reg(asm_ctx_t *ctx, gen_var_t *var, bool allow_const) {
+	// Check whether it's already in a register.
+	if ((var->type != VAR_TYPE_CONST || !allow_const) && var->type != VAR_TYPE_REG) {
+		// Make a copy of the original.
+		gen_var_t *orig = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
+		memcpy(orig, var, sizeof(gen_var_t));
+		
+		// Reconfigure the variable.
+		reg_t regno = px_pick_reg(ctx, true);
+		*var = (gen_var_t) {
+			.type        = VAR_TYPE_REG,
+			.reg         = regno,
+			.owner       = orig->owner,
+			.ctype       = orig->ctype,
+			.default_loc = orig->default_loc ? orig->default_loc : orig,
+		};
+		ctx->current_scope->reg_usage[regno] = var;
+		
+		// Clean up.
+		if (orig->default_loc) {
+			xfree(ctx->current_scope->allocator, orig);
 		}
 	}
 }

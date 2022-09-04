@@ -1,31 +1,26 @@
 
-// Type support is low, so pointers are just ints.
+#define short char *
 
-// A very simple function that outputs msg to the debug TTY.
-void print(short msg) {
-	// While there is data to print...
-	while (*msg) {
-		// Move from message pointer (msg) to debug output (MMIO 0xfff6).
-		*0xfff6 = *msg;
-		// Next character.
-		msg += 1;
-	}
-}
+// int strlen(short pointer) {
+// 	short initial = pointer;
+// 	while (*pointer) ++pointer;
+// 	return pointer - initial;
+// }
 
-// The entrypoint function.
-// Entrypoint may not have parameters nor return type, and must never return.
-// 
 void entry() {
 	// Initialise stack.
 	asm("MOV ST, 0xffff");
 	asm("SUB ST, [0xffff]");
 	
-	print("Hello, World!\n");
-	print("This is a second message!\n");
-	while (1) {
-		print("This message repeats.\n");
-	}
+	short str = "World, Hello?";
+	// int quantum = strlen(str);
 	
-	// Return is not allowed (nothing to return to),
-	// but this point will not be reached.
+	// while (quantum) {
+	// 	*0xfff6 = *str;
+	// 	++str;
+	// 	--quantum;
+	// }
+	
+	*0xfff6 = str[0];
+	
 }

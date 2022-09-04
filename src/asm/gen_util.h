@@ -24,6 +24,7 @@ bool       gen_define_temp (asm_ctx_t *ctx, char      *label);
 void       gen_unuse       (asm_ctx_t *ctx, gen_var_t *var);
 
 // Compare gen_var_t against each other.
+// Returns true when equal.
 bool       gen_cmp         (asm_ctx_t *ctx, gen_var_t *a, gen_var_t *b);
 
 // New scope.

@@ -15,6 +15,11 @@ typedef struct {
 	reg_t     o;
 } px_insn_t;
 
+// Bump a register to the top of the usage list.
+void px_touch_reg(asm_ctx_t *ctx, reg_t regno);
+// Gets the least used register in the list.
+reg_t px_least_used_reg(asm_ctx_t *ctx);
+
 // Macro for determining PIE.
 #define DET_PIE(ctx)  1
 // Macro for determining PIE and applying relative addressing based on context (pointer).
@@ -35,26 +40,33 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, reg_t *addrmod
 
 // Determine the calling conventions to use.
 void px_update_cc(asm_ctx_t *ctx, funcdef_t *funcdef);
+
 // Creates a branch condition from a variable.
 cond_t px_var_to_cond(asm_ctx_t *ctx, gen_var_t *var);
 // Generate a branch to one of two labels.
 void px_branch(asm_ctx_t *ctx, gen_var_t *cond_var, char *l_true, char *l_false);
 // Generate a jump to a label.
 void px_jump(asm_ctx_t *ctx, char *label);
+
 // Pick a register to use.
 reg_t px_pick_reg(asm_ctx_t *ctx, bool do_vacate);
 // Move part of a value to a register.
 void px_part_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest, address_t index);
 // Move a value to a register.
 void px_mov_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest);
+
 // Creates MATH1 instructions.
 gen_var_t *px_math1(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_var_t *a);
 // Creates MATH2 instructions.
 gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_var_t *a, gen_var_t *b);
+
 // Called before a memory clobbering instruction is to be written.
 void px_memclobber(asm_ctx_t *ctx, bool clobbers_stack);
+
 // Variables: Move variable to another location.
 void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words);
+// Variables: Move given variable into a register.
+void px_var_to_reg(asm_ctx_t *ctx, gen_var_t *var, bool allow_const);
 
 /* ========= Common instruction patterns ========= */
 

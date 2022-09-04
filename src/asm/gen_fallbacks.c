@@ -1,4 +1,5 @@
 
+#include "ansi_codes.h"
 #include "config.h"
 #include "gen.h"
 #include "gen_util.h"
@@ -165,9 +166,21 @@ bool gen_stmt(asm_ctx_t *ctx, void *ptr, bool is_stmts) {
 				return true;
 			} break;
 			case STMT_TYPE_VAR: {
-				// TODO: Vardecls structure to change later.
+				// Handle variable assignment status.
 				for (size_t i = 0; i < stmt->vars->num; i++) {
-					// TODO: Make variables initially unassigned.
+					// Find the variable.
+					gen_var_t *var = gen_get_variable(ctx, stmt->vars->arr[i].strval);
+					
+					if (stmt->vars->arr[i].initialiser) {
+						// Perform assignment.
+						gen_var_t *res = gen_expression(ctx, stmt->vars->arr[i].initialiser, var);
+						if (!gen_cmp(ctx, var, res)) {
+							gen_mov(ctx, var, res);
+						}
+					} else {
+						// Mark as not very full.
+						var->type = VAR_TYPE_UNASSIGNED;
+					}
 				}
 			} break;
 			case STMT_TYPE_EXPR: {
@@ -849,7 +862,7 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 						gen_unuse(ctx, a);
 						return NULL;
 					}
-					gen_var_t *b = gen_expression(ctx, expr->par_b, NULL);
+					gen_var_t *b = gen_expression(ctx, expr->par_b, a);
 					if (!b && a) gen_unuse(ctx, a);
 					if (!b) return NULL;
 					// Have the move performed.

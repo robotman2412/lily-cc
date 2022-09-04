@@ -192,7 +192,7 @@ typedef enum oper {
 	OP_LOGIC_NOT,
 	OP_LOGIC_AND,
 	OP_LOGIC_OR,
-	//Bitwise operators.
+	// Bitwise operators.
 	OP_BIT_NOT,
 	OP_BIT_AND,
 	OP_BIT_OR,
@@ -273,13 +273,16 @@ typedef enum gen_var_type {
 	
 	// Stored in register.
 	VAR_TYPE_REG,
-	// Stored as return value.
+	// Hint to store to return value.
+	// There is no need to vacate any variables coincidentally stored there.
 	VAR_TYPE_RETVAL,
 	
 	// Conditions.
 	VAR_TYPE_COND,
 	// Hint to use for adrof and storing to pointers.
 	VAR_TYPE_PTR,
+	// Hint to use for loading from and storing to array indexing.
+	VAR_TYPE_INDEXED,
 	
 	// As of yet unassigned variables.
 	// Only applies to variables which can under no circumstance be assigned at this point.
@@ -323,7 +326,7 @@ typedef enum simple_type {
 	
 	/* ===== Other types ===== */
 	
-	// _Bool (bool)
+	// _Bool (bool; boolean)
 	STYPE_BOOL,
 	// void
 	STYPE_VOID

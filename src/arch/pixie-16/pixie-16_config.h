@@ -88,7 +88,14 @@ typedef enum {
 #define FUNCDEF_EXTRAS px_call_conv_t call_conv;
 
 // Extra data added to asm_scope_t.
-#define ASM_SCOPE_EXTRAS address_t real_stack_size;
+#define ASM_SCOPE_EXTRAS \
+	/* Keeps track of the actual size of the stack instead of the target size. */ \
+	address_t real_stack_size;
+
+// Extra data added to asm_ctx_t.
+#define ASM_CTX_EXTRAS \
+	/* Keeps track of the most used registers. */ \
+	reg_t reg_usage_order[4];
 
 // State that inline assembly is supported
 #define INLINE_ASM_SUPPORTED

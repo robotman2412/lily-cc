@@ -166,24 +166,25 @@ idents_t idents_empty(parser_ctx_t *ctx) {
 }
 
 // Concatenate to a list of identities.
-idents_t idents_cat(parser_ctx_t *ctx, idents_t *idents, int *s_type, strval_t *name) {
+idents_t idents_cat(parser_ctx_t *ctx, idents_t *idents, int *s_type, strval_t *name, expr_t *init) {
 	idents->num ++;
 	idents->arr = xrealloc(ctx->allocator, idents->arr, idents->num * sizeof(ident_t));
 	idents->arr[idents->num - 1] = (ident_t) {
-		.pos    = name->pos,
-		.strval = name->strval,
-		.type   = s_type ? ctype_simple(ctx->asm_ctx, *s_type) : NULL
+		.pos         = name->pos,
+		.strval      = name->strval,
+		.type        = s_type ? ctype_simple(ctx->asm_ctx, *s_type) : NULL,
+		.initialiser = init ? XCOPY(ctx->allocator, init, expr_t) : NULL,
 	};
 	return *idents;
 }
 
 // A list of one identity.
-idents_t idents_one(parser_ctx_t *ctx, int *s_type, strval_t *name) {
-	
+idents_t idents_one(parser_ctx_t *ctx, int *s_type, strval_t *name, expr_t *init) {
 	ident_t ident = {
-		.pos    = name->pos,
-		.strval = name->strval,
-		.type   = s_type ? ctype_simple(ctx->asm_ctx, *s_type) : NULL
+		.pos         = name->pos,
+		.strval      = name->strval,
+		.type        = s_type ? ctype_simple(ctx->asm_ctx, *s_type) : NULL,
+		.initialiser = init ? XCOPY(ctx->allocator, init, expr_t) : NULL,
 	};
 	return (idents_t) {
 		.arr = XCOPY(ctx->allocator, &ident, ident_t),
@@ -269,7 +270,7 @@ expr_t expr_ident(parser_ctx_t *ctx, strval_t *ident) {
 	};
 }
 
-// Unary math expression (things like &a, b++ and !c).
+// Unary math expression non-additive (things like &a, *b and !c).
 expr_t expr_math1(parser_ctx_t *ctx, oper_t type, expr_t *val) {
 	if (val->type == EXPR_TYPE_CONST) {
 		// Optimise out numbers.
@@ -297,6 +298,35 @@ expr_t expr_math1(parser_ctx_t *ctx, oper_t type, expr_t *val) {
 		.oper     = type,
 		.par_a    = XCOPY(ctx->allocator, val, expr_t)
 	};
+}
+
+// Unary math expression additive (things like ++a and --b).
+expr_t expr_math1a(parser_ctx_t *ctx, oper_t type, expr_t *val) {
+	if (val->type == EXPR_TYPE_CONST) {
+		// Optimise out numbers.
+		switch (type) {
+			case OP_ADD:
+				val->iconst = val->iconst + 1;
+				break;
+			case OP_SUB:
+				val->iconst = val->iconst - 1;
+				break;
+			default:
+				goto the_usual;
+		}
+		return *val;
+	}
+	
+	expr_t *one;
+	the_usual:
+	// This is quite simple: val = val operator 1.
+	one = xalloc(ctx->allocator, sizeof(expr_t));
+	*one = (expr_t) {
+		.type = EXPR_TYPE_CONST,
+		.iconst = 1,
+	};
+	expr_t param_b = expr_math2(ctx, type, val, one);
+	return expr_math2(ctx, OP_ASSIGN, val, &param_b);
 }
 
 // Function call expression.
@@ -386,7 +416,7 @@ expr_t expr_math2(parser_ctx_t *ctx, oper_t type, expr_t *val1, expr_t *val2) {
 
 // Assignment math expression (things like a += b, c *= d and e |= f).
 // Generalises to a combination of an assignment and expr_math2.
-expr_t expr_matha(parser_ctx_t *ctx, oper_t type, expr_t *val1, expr_t *val2) {
+expr_t expr_math2a(parser_ctx_t *ctx, oper_t type, expr_t *val1, expr_t *val2) {
 	// This is quite simple: val1 = val1 operator val2.
 	expr_t param_b = expr_math2(ctx, type, val1, val2);
 	return expr_math2(ctx, OP_ASSIGN, val1, &param_b);

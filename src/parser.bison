@@ -114,7 +114,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 %left "+" //"-"
 %left "%" "/" //"*"
 
-%right "!" "~" "*" "&" "-"
+%right "!" "~" "*" "&" "-" "--" "++"
 
 %precedence "(" "["
 
@@ -169,11 +169,13 @@ vardecls:		simple_type idents ";"						{$$=$2; idents_settype(ctx, &$$, $1.ival)
 
 // Function parameters.
 opt_params:		params										{$$=$1;}
-|				%empty										{$$=idents_empty(ctx);                       $$.pos=pos_empty(ctx->tokeniser_ctx);};
-params:			params "," simple_type TKN_IDENT			{$$=idents_cat  (ctx, &$1,  &$3.ival, &$4);  $$.pos=pos_merge($1.pos, $4.pos);}
-|				simple_type TKN_IDENT						{$$=idents_one  (ctx, &$1.ival, &$2);        $$.pos=pos_merge($1.pos, $2.pos);};
-idents:			idents "," TKN_IDENT						{$$=idents_cat  (ctx, &$1,  NULL, &$3);      $$.pos=pos_merge($1.pos, $3.pos);}
-|				TKN_IDENT									{$$=idents_one  (ctx, NULL, &$1);            $$.pos=$1.pos;};
+|				%empty										{$$=idents_empty(ctx);                         $$.pos=pos_empty(ctx->tokeniser_ctx);};
+params:			params "," simple_type TKN_IDENT			{$$=idents_cat(ctx, &$1, &$3.ival, &$4, NULL); $$.pos=pos_merge($1.pos, $4.pos);}
+|				simple_type TKN_IDENT						{$$=idents_one(ctx, &$1.ival, &$2, NULL);      $$.pos=pos_merge($1.pos, $2.pos);};
+idents:			idents "," TKN_IDENT "=" expr				{$$=idents_cat(ctx, &$1, NULL, &$3, &$5);      $$.pos=pos_merge($1.pos, $3.pos);}
+|				idents "," TKN_IDENT						{$$=idents_cat(ctx, &$1, NULL, &$3, NULL);     $$.pos=pos_merge($1.pos, $3.pos);}
+|				TKN_IDENT "=" expr							{$$=idents_one(ctx, NULL, &$1, &$3);           $$.pos=$1.pos;}
+|				TKN_IDENT									{$$=idents_one(ctx, NULL, &$1, NULL);          $$.pos=$1.pos;};
 
 // Statements.
 stmts:			stmts stmt									{$$=stmts_cat   (ctx, &$1, &$2);             $$.pos=pos_merge($1.pos, $2.pos);}
@@ -200,6 +202,9 @@ expr:			TKN_IVAL									{$$=expr_icnst(ctx, &$1);                    $$.pos=$1.
 |				expr "(" opt_exprs ")"						{$$=expr_call (ctx, &$1, &$3);               $$.pos=pos_merge($1.pos, $4);}
 |				expr "[" expr "]"							{$$=expr_math2(ctx, OP_INDEX, &$1, &$3);     $$.pos=pos_merge($1.pos, $4);}
 |				"(" expr ")"								{$$=$2;                                      $$.pos=pos_merge($1, $3);}
+
+|				"++" expr									{$$=expr_math1a(ctx, OP_ADD,      &$2);      $$.pos=pos_merge($1, $2.pos);}
+|				"--" expr									{$$=expr_math1a(ctx, OP_SUB,      &$2);      $$.pos=pos_merge($1, $2.pos);}
 
 |				"-" expr									{$$=expr_math1(ctx, OP_0_MINUS,   &$2);      $$.pos=pos_merge($1, $2.pos);}
 |				"!" expr									{$$=expr_math1(ctx, OP_LOGIC_NOT, &$2);      $$.pos=pos_merge($1, $2.pos);}
@@ -232,16 +237,16 @@ expr:			TKN_IVAL									{$$=expr_icnst(ctx, &$1);                    $$.pos=$1.
 |				expr "||" expr								{$$=expr_math2(ctx, OP_LOGIC_OR,  &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
 
 |				expr "=" expr								{$$=expr_math2(ctx, OP_ASSIGN,    &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
-|				expr "+=" expr				%prec "="		{$$=expr_matha(ctx, OP_ADD,       &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
-|				expr "-=" expr				%prec "="		{$$=expr_matha(ctx, OP_SUB,       &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
-|				expr "*=" expr				%prec "="		{$$=expr_matha(ctx, OP_MUL,       &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
-|				expr "/=" expr				%prec "="		{$$=expr_matha(ctx, OP_DIV,       &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
-|				expr "%=" expr				%prec "="		{$$=expr_matha(ctx, OP_MOD,       &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
-|				expr "&=" expr				%prec "="		{$$=expr_matha(ctx, OP_BIT_AND,   &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
-|				expr "|=" expr				%prec "="		{$$=expr_matha(ctx, OP_BIT_OR,    &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
-|				expr "^=" expr				%prec "="		{$$=expr_matha(ctx, OP_BIT_XOR,   &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
-|				expr "<<=" expr				%prec "="		{$$=expr_matha(ctx, OP_SHIFT_L,   &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
-|				expr ">>=" expr				%prec "="		{$$=expr_matha(ctx, OP_SHIFT_R,   &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);};
+|				expr "+=" expr				%prec "="		{$$=expr_math2a(ctx, OP_ADD,      &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "-=" expr				%prec "="		{$$=expr_math2a(ctx, OP_SUB,      &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "*=" expr				%prec "="		{$$=expr_math2a(ctx, OP_MUL,      &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "/=" expr				%prec "="		{$$=expr_math2a(ctx, OP_DIV,      &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "%=" expr				%prec "="		{$$=expr_math2a(ctx, OP_MOD,      &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "&=" expr				%prec "="		{$$=expr_math2a(ctx, OP_BIT_AND,  &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "|=" expr				%prec "="		{$$=expr_math2a(ctx, OP_BIT_OR,   &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "^=" expr				%prec "="		{$$=expr_math2a(ctx, OP_BIT_XOR,  &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
+|				expr "<<=" expr				%prec "="		{$$=expr_math2a(ctx, OP_SHIFT_L,  &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
+|				expr ">>=" expr				%prec "="		{$$=expr_math2a(ctx, OP_SHIFT_R,  &$1, &$3); $$.pos=pos_merge($1.pos, $3.pos);};
 
 // Inline assembly snippets.
 inline_asm:		"asm" asm_qual asm_code						{$$=$3; $$.iasm->qualifiers=$2; $$.iasm->qualifiers.is_volatile |= !$$.iasm->outputs;};

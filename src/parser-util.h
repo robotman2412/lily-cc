@@ -73,6 +73,8 @@ struct ident {
 	char       *strval;
 	// Type associated, if any.
 	var_type_t *type;
+	// The value to assign, if any.
+	expr_t     *initialiser;
 };
 
 struct expr {
@@ -243,9 +245,9 @@ iasm_regs_t iasm_regs_one  (parser_ctx_t *ctx, iasm_reg_t  *iasm_reg);
 // An empty list of identities.
 idents_t    idents_empty   (parser_ctx_t *ctx);
 // Concatenate to a list of identities.
-idents_t    idents_cat     (parser_ctx_t *ctx, idents_t      *idents, int           *type, strval_t *ident);
+idents_t    idents_cat     (parser_ctx_t *ctx, idents_t      *idents, int           *type,  strval_t *ident, expr_t   *init);
 // A list of one identity.
-idents_t    idents_one     (parser_ctx_t *ctx, int           *type,   strval_t      *ident);
+idents_t    idents_one     (parser_ctx_t *ctx, int           *type,   strval_t      *ident, expr_t   *init);
 // Set the type of all identities contained.
 idents_t    idents_settype (parser_ctx_t *ctx, idents_t      *idents, simple_type_t  type);
 
@@ -262,14 +264,16 @@ expr_t      expr_icnst     (parser_ctx_t *ctx, ival_t   *val);
 expr_t      expr_scnst     (parser_ctx_t *ctx, strval_t *val);
 // Identity expression (things like variables and functions).
 expr_t      expr_ident     (parser_ctx_t *ctx, strval_t *ident);
-// Unary math expression (things like &a, b++ and !c).
+// Unary math expression non-additive (things like &a, *b and !c).
 expr_t      expr_math1     (parser_ctx_t *ctx, oper_t    type,   expr_t   *val);
+// Unary math expression additive (things like ++a and --b).
+expr_t      expr_math1a    (parser_ctx_t *ctx, oper_t    type,   expr_t   *val);
 // Function call expression.
 expr_t      expr_call      (parser_ctx_t *ctx, expr_t   *func,   exprs_t  *args);
 // Binary math expression (things like a + b, c = d and e[f]).
 expr_t      expr_math2     (parser_ctx_t *ctx, oper_t    type,   expr_t   *val1, expr_t *val2);
 // Assignment math expression (things like a += b, c *= d and e |= f).
 // Generalises to a combination of an assignment and expr_math2.
-expr_t      expr_matha     (parser_ctx_t *ctx, oper_t    type,   expr_t   *val1, expr_t *val2);
+expr_t      expr_math2a     (parser_ctx_t *ctx, oper_t    type,   expr_t   *val1, expr_t *val2);
 
 #endif // PARSER_UTIL_H

@@ -325,7 +325,7 @@ void asm_write_zero(asm_ctx_t *ctx, address_t count) {
 
 // Writes linenumber and position information.
 void asm_write_pos(asm_ctx_t *ctx, pos_t pos) {
-	DEBUG_GEN("// %s:%d (col %d)\n", pos.filename, pos.y0, pos.x0);
+	DEBUG_ASM("// %s:%d (col %d)\n", pos.filename, pos.y0, pos.x0);
 	asm_append_chunk(ctx, ASM_CHUNK_POS);
 	// Address (for more convenient independent dumping).
 	asm_write_address(ctx, 0);

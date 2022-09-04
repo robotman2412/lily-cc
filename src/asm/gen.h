@@ -26,8 +26,17 @@ struct gen_var {
 		// Condition result.
 		cond_t      cond;
 		// Pointer to dereference.
-		// The value is how the pointer is stored.
+		// The value represents the location which stores the pointer.
 		gen_var_t  *ptr;
+		// Array or pointer index.
+		struct {
+			// Location of the array to be indexed.
+			gen_var_t *location;
+			// Location of the index to use.
+			gen_var_t *index;
+			// Completed pointer of (location + index), if any.
+			gen_var_t *combined;
+		} indexed;
 	};
 	// The type associated with the variable, if any.
 	var_type_t     *ctype;

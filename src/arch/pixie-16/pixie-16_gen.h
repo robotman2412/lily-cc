@@ -50,6 +50,8 @@ void px_jump(asm_ctx_t *ctx, char *label);
 
 // Pick a register to use.
 reg_t px_pick_reg(asm_ctx_t *ctx, bool do_vacate);
+// Pick a register to use, but only pick empty registers.
+bool px_pick_empty_reg(asm_ctx_t *ctx, reg_t *regno);
 // Move part of a value to a register.
 void px_part_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest, address_t index);
 // Move a value to a register.

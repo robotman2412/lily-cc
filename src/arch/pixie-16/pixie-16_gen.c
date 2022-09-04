@@ -1,5 +1,6 @@
 
 #include "pixie-16_gen.h"
+#include "pixie-16_options.h"
 #include "gen_util.h"
 #include "definitions.h"
 #include "asm.h"
@@ -25,7 +26,6 @@ void px_touch_reg(asm_ctx_t *ctx, reg_t regno) {
 }
 
 // Gets the least used register in the list.
-__attribute__((__always_inline__))
 reg_t px_least_used_reg(asm_ctx_t *ctx) {
 	return ctx->reg_usage_order[3];
 }
@@ -279,11 +279,15 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, reg_t *addrmod
 				}
 			}
 			
-			if (b->type == VAR_TYPE_CONST) {
-				// Constant offset and variable offset.
+			if (b->type == VAR_TYPE_CONST && (b->iconst + part)) {
+				// Constant (nonzero) offset and variable offset.
 				*addrmode = a->reg;
 				*offs     = b->iconst + part;
 				return REG_IMM;
+			} else if (b->type == VAR_TYPE_CONST) {
+				// Constant (zero) offset and variable offset.
+				*addrmode = ADDR_MEM;
+				return a->reg;
 			} else if (part == 0) {
 				// Two variable offsets, index part 0.
 				*addrmode = a->reg;
@@ -334,11 +338,34 @@ void px_update_cc(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	
 	if (arg_size > NUM_REGS) {
 		funcdef->call_conv = PX_CC_STACK;
+		if (funcdef->returns->size < 4) {
+			funcdef->num_reg_to_push = 4 - funcdef->returns->size;
+		} else {
+			funcdef->num_reg_to_push = 4;
+		}
+		
 	} else if (arg_size) {
 		funcdef->call_conv = PX_CC_REGS;
+		if (funcdef->returns->size > 4 || funcdef->returns->size == 0) {
+			funcdef->num_reg_to_push = 4 - arg_size;
+		} else {
+			int a = 4 - arg_size;
+			int b = 4 - funcdef->returns->size;
+			funcdef->num_reg_to_push = a < b ? a : b;
+		}
+		
 	} else {
 		funcdef->call_conv = PX_CC_NONE;
+		if (funcdef->returns->size < 4) {
+			funcdef->num_reg_to_push = 4 - funcdef->returns->size;
+		} else {
+			funcdef->num_reg_to_push = 4;
+		}
 	}
+	
+	funcdef->is_entry = entrypoint && !strcmp(funcdef->ident.strval, entrypoint);
+	funcdef->is_irq   = irqvector  && !strcmp(funcdef->ident.strval, irqvector);
+	funcdef->is_nmi   = nmivector  && !strcmp(funcdef->ident.strval, nmivector);
 }
 
 // Creates a branch condition from a variable.
@@ -437,7 +464,7 @@ void px_jump(asm_ctx_t *ctx, char *label) {
 // Pick a register to use.
 reg_t px_pick_reg(asm_ctx_t *ctx, bool do_vacate) {
 	// Check for a free register.
-	for (size_t i = 0; i < NUM_REGS; i++) {
+	for (reg_t i = 0; i < NUM_REGS; i++) {
 		if (!ctx->current_scope->reg_usage[i]) {
 			return i;
 		}
@@ -462,6 +489,19 @@ reg_t px_pick_reg(asm_ctx_t *ctx, bool do_vacate) {
 	px_touch_reg(ctx, pick);
 	
 	return pick;
+}
+
+// Pick a register to use, but only pick empty registers.
+bool px_pick_empty_reg(asm_ctx_t *ctx, reg_t *regno) {
+	// Check for a free register.
+	for (reg_t i = 0; i < NUM_REGS; i++) {
+		if (!ctx->current_scope->reg_usage[i]) {
+			*regno = i;
+			return true;
+		}
+	}
+	
+	return false;
 }
 
 // Move part of a value to a register.
@@ -603,6 +643,7 @@ gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 	reg_t reg_b = y ? 0 : b->reg;
 	if (conv_b) {
 		reg_b = px_pick_reg(ctx, true);
+		px_touch_reg(ctx, reg_b);
 	} else if (b->type == VAR_TYPE_CONST) {
 		reg_b = REG_IMM;
 	}
@@ -679,6 +720,21 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 		ctx->reg_usage_order[i] = i;
 	}
 	
+	// Is this entry point?
+	if (!funcdef->is_entry) {
+		// If not, push the o t h e r registers.
+		for (int i = 0; i < funcdef->num_reg_to_push; i++) {
+			px_insn_t insn = {
+				.y = 0,
+				.x = ADDR_MEM,
+				.b = 3 - i,
+				.a = REG_ST,
+				.o = PX_OP_MOV,
+			};
+			px_write_insn(ctx, insn, NULL, 0, NULL, 0);
+		}
+	}
+	
 	if (funcdef->call_conv == PX_CC_REGS) {
 		// Registers.
 		DEBUG_GEN("// calling convention: registers\n");
@@ -708,6 +764,7 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 			
 			// Mark the register as used.
 			ctx->current_scope->reg_usage[i] = var;
+			px_touch_reg(ctx, i);
 			
 			gen_define_var(ctx, var, funcdef->args.arr[i].strval);
 			arg_size += var->ctype->size;
@@ -765,9 +822,42 @@ void gen_return(asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *retval) {
 	gen_stack_clear(ctx, sub);
 	px_memclobber(ctx, true);
 	
+	// Is this entry point?
+	if (!funcdef->is_entry) {
+		// If not, p o p h the other r e g i s t e r s.
+		for (int i = 0; i < funcdef->num_reg_to_push; i++) {
+			px_insn_t insn = {
+				.y = 1,
+				.x = ADDR_MEM,
+				.b = REG_ST,
+				.a = 4 - funcdef->num_reg_to_push + i,
+				.o = PX_OP_MOV,
+			};
+			px_write_insn(ctx, insn, NULL, 0, NULL, 0);
+		}
+	}
+	
+	if (funcdef->is_irq || funcdef->is_nmi) {
+		// Append the special interrupt return.
+		px_insn_t insn = {
+			.y = 1,
+			.x = ADDR_MEM,
+			.b = REG_ST,
+			.a = REG_PF,
+			.o = PX_OP_MOV,
+		};
+		px_write_insn(ctx, insn, NULL, 0, NULL, 0);
+	}
+	
 	// Append the return.
-	DEBUG_GEN("  MOV PC, [ST]\n");
-	asm_write_memword(ctx, INSN_RET);
+	px_insn_t insn = {
+		.y = 1,
+		.x = ADDR_MEM,
+		.b = REG_ST,
+		.a = REG_PC,
+		.o = PX_OP_MOV,
+	};
+	px_write_insn(ctx, insn, NULL, 0, NULL, 0);
 }
 
 /* ================== Statements ================= */
@@ -845,6 +935,47 @@ void gen_while(asm_ctx_t *ctx, expr_t *cond, stmt_t *code, bool is_do_while) {
 	}
 }
 
+// For loop implementation.
+void gen_for(asm_ctx_t *ctx, exprs_t *cond, stmt_t *code, exprs_t *next) {
+	bool is_forever = cond->num == 0;
+	
+	char *loop_label  = asm_get_label(ctx);
+	char *check_label;
+	
+	if (!is_forever) {
+		check_label = asm_get_label(ctx);
+		// Jump to check.
+		px_jump(ctx, check_label);
+	}
+	
+	// Loop code.
+	asm_write_label(ctx, loop_label);
+	gen_stmt(ctx, code, false);
+	
+	// Check condition.
+	asm_write_label(ctx, check_label);
+	if (is_forever) {
+		px_jump(ctx, loop_label);
+	} else {
+		// Do everything but the last condition, which is the only one that influences looping.
+		for (size_t i = 0; i < cond->num - 1; i++) {
+			gen_var_t *ignore = gen_expression(ctx, &cond->arr[i], NULL);
+			gen_unuse(ctx, ignore);
+		}
+		
+		// Condition check.
+		gen_var_t cond_hint = {
+			.type = VAR_TYPE_COND,
+		};
+		gen_var_t *cond_res = gen_expression(ctx, &cond->arr[cond->num - 1], &cond_hint);
+		px_branch(ctx, cond_res, loop_label, NULL);
+		if (cond_res != &cond_hint) {
+			gen_unuse(ctx, cond_res);
+		}
+	}
+	
+}
+
 // Create a string for the variable to insert into the assembly. (only if inline assembly is supported)
 // The string will be freed later and it is allowed to generate code in this method.
 char *gen_iasm_var(asm_ctx_t *ctx, gen_var_t *var, iasm_reg_t *reg) {
@@ -911,6 +1042,8 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, siz
 	gen_var_t *var = gen_expression(ctx, callee, NULL);
 	
 	if (funcdef->call_conv == PX_CC_REGS) {
+		// Vacate the registers used by the function.
+		
 		// Output hints for locations, if any.
 		gen_var_t *hints[NUM_REGS];
 		// Actual locations of parameters.
@@ -1044,7 +1177,7 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, siz
 // Expression: Binary math operation.
 gen_var_t *gen_expr_math2(asm_ctx_t *ctx, oper_t oper, gen_var_t *out_hint, gen_var_t *a, gen_var_t *b) {
 	address_t n_words = 1;
-	bool isSigned     = true;
+	bool isSigned     = STYPE_IS_SIGNED(a->ctype->simple_type) && STYPE_IS_SIGNED(b->ctype->simple_type);
 	
 	// Can we simplify?
 	if ((OP_IS_SHIFT(oper) || OP_IS_ADD(oper) || OP_IS_COMP(oper)) && b->type == VAR_TYPE_CONST && b->iconst == 1) {
@@ -1081,7 +1214,31 @@ gen_var_t *gen_expr_math2(asm_ctx_t *ctx, oper_t oper, gen_var_t *out_hint, gen_
 	} else if (OP_IS_SHIFT(oper)) {
 		// TODO.
 	} else if (OP_IS_COMP(oper)) {
-		// TODO.
+		// A comparison.
+		gen_var_t *ignored = px_math2(ctx, PX_OP_CMP, NULL, a, b);
+		gen_unuse(ctx, ignored);
+		
+		// Give back a condition representation.
+		gen_var_t *cond = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
+		*cond = (gen_var_t) {
+			.type        = VAR_TYPE_COND,
+			.ctype       = ctype_simple(ctx, STYPE_BOOL),
+			.owner       = NULL,
+			.default_loc = NULL,
+		};
+		
+		// Determine interpretation of flags.
+		switch (oper) {
+			case OP_GT: cond->cond = isSigned ? COND_SGT : COND_UGT; break;
+			case OP_GE: cond->cond = isSigned ? COND_SGE : COND_UGE; break;
+			case OP_LT: cond->cond = isSigned ? COND_SLT : COND_ULT; break;
+			case OP_LE: cond->cond = isSigned ? COND_SLE : COND_ULE; break;
+			case OP_EQ: cond->cond = COND_EQ; break;
+			case OP_NE: cond->cond = COND_NE; break;
+		}
+		
+		return cond;
+
 	} else {
 		// General math stuff.
 		memword_t opcode = 0;
@@ -1611,4 +1768,27 @@ gen_var_t *gen_preproc_var(asm_ctx_t *ctx, preproc_data_t *parent, ident_t *iden
 	
 	// And return a copy.
 	return XCOPY(ctx->allocator, &loc, gen_var_t);
+}
+
+// Variables: Populate the value from initialiser expression.
+void gen_init_var(asm_ctx_t *ctx, gen_var_t *var, expr_t *expr) {
+	gen_var_t *res = gen_expression(ctx, expr, var);
+	if (!gen_cmp(ctx, var, res)) {
+		if (var->type != VAR_TYPE_UNASSIGNED) {
+			// Have it moved.
+			gen_mov(ctx, var, res);
+		} else {
+			reg_t regno;
+			if (px_pick_empty_reg(ctx, &regno)) {
+				// Have it moved to a register for Exxtra Speeds.
+				var->type = VAR_TYPE_REG;
+				var->reg  = regno;
+				gen_mov(ctx, var, res);
+			} else {
+				// Have it moved to the default location.
+				*var = *var->default_loc;
+				gen_mov(ctx, var, res);
+			}
+		}
+	}
 }

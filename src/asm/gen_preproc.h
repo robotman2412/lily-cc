@@ -23,12 +23,13 @@ struct preproc_data {
 
 // Preprocess a function.
 // Determines recursive nature, number of variables per scope and number of intermidiaries.
-void gen_preproc_function  (asm_ctx_t *ctx, funcdef_t      *funcdef);
+void gen_preproc_function   (asm_ctx_t *ctx, funcdef_t      *funcdef);
 // Preprocess a statement.
 // Returns true if an explicit return occurred.
-bool gen_preproc_stmt      (asm_ctx_t *ctx, preproc_data_t *parent, void      *stmt, bool       is_stmts);
+bool gen_preproc_stmt       (asm_ctx_t *ctx, preproc_data_t *parent, void      *stmt, bool       is_stmts);
 // Preprocess an expression.
-// Returns the number of required temporary variables.
-void gen_preproc_expression(asm_ctx_t *ctx, preproc_data_t *parent, expr_t    *expr);
+void gen_preproc_expression (asm_ctx_t *ctx, preproc_data_t *parent, expr_t    *expr);
+// Preprocess a list of expressions.
+void gen_preproc_expressions(asm_ctx_t *ctx, preproc_data_t *parent, exprs_t    *expr);
 
 #endif //GEN_PREPROC_H

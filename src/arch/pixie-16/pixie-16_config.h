@@ -85,7 +85,17 @@ typedef enum {
 	// Stored in the stack, first parameter pushed last.
 	PX_CC_STACK,
 } px_call_conv_t;
-#define FUNCDEF_EXTRAS px_call_conv_t call_conv;
+#define FUNCDEF_EXTRAS \
+	/* The calling conventions for this function. */ \
+	px_call_conv_t call_conv; \
+	/* The number of registers that the function must internally push. */ \
+	uint_least8_t num_reg_to_push; \
+	/* Whether this is the entry vector. */ \
+	bool is_entry; \
+	/* Whether this is the nmi vector. */ \
+	bool is_nmi; \
+	/* Whether this is the irq vector. */ \
+	bool is_irq;
 
 // Extra data added to asm_scope_t.
 #define ASM_SCOPE_EXTRAS \

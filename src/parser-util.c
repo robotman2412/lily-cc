@@ -69,6 +69,17 @@ stmt_t stmt_while(parser_ctx_t *ctx, expr_t *cond, stmt_t *code) {
 	};
 }
 
+// For loops.
+stmt_t stmt_for(parser_ctx_t *ctx, stmt_t *initial, exprs_t *cond, exprs_t *after, stmt_t *code) {
+	return (stmt_t) {
+		.type     = STMT_TYPE_FOR,
+		.for_init = XCOPY(ctx->allocator, initial, stmt_t),
+		.for_cond = XCOPY(ctx->allocator, cond,    exprs_t),
+		.for_next = XCOPY(ctx->allocator, after,   exprs_t),
+		.for_code = XCOPY(ctx->allocator, code,    stmt_t),
+	};
+}
+
 // Return statements.
 stmt_t stmt_ret(parser_ctx_t *ctx, expr_t *expr) {
 	return (stmt_t) {

@@ -231,6 +231,8 @@ typedef enum stmt_type {
 	STMT_TYPE_IF,
 	// while (loops);
 	STMT_TYPE_WHILE,
+	// for (;;) loops;
+	STMT_TYPE_FOR,
 	// return statements;
 	STMT_TYPE_RET,
 	// variable declaration = statements;

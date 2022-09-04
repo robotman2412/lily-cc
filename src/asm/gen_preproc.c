@@ -35,6 +35,7 @@ bool gen_preproc_stmt(asm_ctx_t *ctx, preproc_data_t *parent, void *ptr, bool is
 	preproc_data_t *current = parent;
 	stmt_t *stmt = ptr;
 	if (is_stmts) goto stmts_impl;
+	
 	if (stmt->type == STMT_TYPE_MULTI) {
 		// Pointer perplexing.
 		pre_stmt_push(ctx, &current, stmt);
@@ -51,6 +52,7 @@ bool gen_preproc_stmt(asm_ctx_t *ctx, preproc_data_t *parent, void *ptr, bool is
 		}
 		return false;
 	}
+	
 	// One of the other statement types.
 	switch (stmt->type) {
 		case STMT_TYPE_IF: {
@@ -64,17 +66,38 @@ bool gen_preproc_stmt(asm_ctx_t *ctx, preproc_data_t *parent, void *ptr, bool is
 			gen_preproc_expression(ctx, current, stmt->expr);
 			gen_preproc_stmt(ctx, parent, stmt->code_true, false);
 		} break;
+		case STMT_TYPE_FOR: {
+			// For loops are wierd in many ways...
+			pre_stmt_push(ctx, &current, stmt);
+			
+			gen_preproc_stmt(ctx, parent, stmt->for_init, false);
+			gen_preproc_expressions(ctx, current, stmt->for_cond);
+			gen_preproc_stmt(ctx, parent, stmt->for_code, false);
+			gen_preproc_expressions(ctx, current, stmt->for_next);
+		} break;
 		case STMT_TYPE_RET: {
 			// A return statement.
 			gen_preproc_expression(ctx, current, stmt->expr);
 			return true;
 		} break;
 		case STMT_TYPE_VAR: {
-			// TODO: Vardecls structure to change later.
+			// Preprocess variables.
 			for (size_t i = 0; i < stmt->vars->num; i++) {
+				// Get the default location for it.
 				gen_var_t *loc = gen_preproc_var(ctx, current, &stmt->vars->arr[i]);
 				DEBUG_PRE("var '%s'\n", stmt->vars->arr[i].strval);
-				map_set(current->vars, stmt->vars->arr[i].strval, loc);
+				
+				// Mark it as 'not very occupied'.
+				gen_var_t *cur = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
+				*cur = (gen_var_t) {
+					.type        = VAR_TYPE_UNASSIGNED,
+					.owner       = stmt->vars->arr[i].strval,
+					.ctype       = stmt->vars->arr[i].type,
+					.default_loc = loc,
+				};
+				
+				// Add the entry.
+				map_set(current->vars, stmt->vars->arr[i].strval, cur);
 			}
 		} break;
 		case STMT_TYPE_EXPR: {
@@ -85,6 +108,7 @@ bool gen_preproc_stmt(asm_ctx_t *ctx, preproc_data_t *parent, void *ptr, bool is
 			// TODO (low priority).
 		} break;
 	}
+	
 	return false;
 }
 
@@ -93,3 +117,9 @@ void gen_preproc_expression(asm_ctx_t *ctx, preproc_data_t *parent, expr_t *expr
 	
 }
 
+// Preprocess a list of expressions.
+void gen_preproc_expressions(asm_ctx_t *ctx, preproc_data_t *parent, exprs_t *exprs) {
+	for (size_t i = 0; i < exprs->num; i++) {
+		gen_preproc_expression(ctx, parent, &exprs->arr[i]);
+	}
+}

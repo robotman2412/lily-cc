@@ -94,8 +94,10 @@ void       gen_inline_return (asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *ret
 bool       gen_stmt          (asm_ctx_t *ctx, void      *stmt,    bool is_stmts);
 // If statement implementation.
 bool       gen_if            (asm_ctx_t *ctx, gen_var_t *cond,    stmt_t    *s_if,     stmt_t    *s_else);
-// While statement implementation.
+// While loop implementation.
 void       gen_while         (asm_ctx_t *ctx, expr_t    *cond,    stmt_t    *code,     bool       is_do_while);
+// For loop implementation.
+void       gen_for           (asm_ctx_t *ctx, exprs_t   *cond,    stmt_t    *code,     exprs_t   *next);
 // Complete file of assembly. (only if inline assembly is supported)
 void       gen_asm_file      (asm_ctx_t *ctx, tokeniser_ctx_t *lex);
 // Inline assembly implementation. (only if inline assembly is supported)
@@ -128,9 +130,11 @@ void       gen_stack_space   (asm_ctx_t *ctx, address_t num);
 void       gen_stack_clear   (asm_ctx_t *ctx, address_t num);
 // Variables: Move variable to another location.
 void       gen_mov           (asm_ctx_t *ctx, gen_var_t *dest,    gen_var_t *src);
-// Variables: Create a memory location for the vaariable at preprocessing time.
+// Variables: Create a memory location for the variable at preprocessing time.
 // Must allocate a new gen_var_t object.
 gen_var_t *gen_preproc_var   (asm_ctx_t *ctx, preproc_data_t *parent, ident_t *ident);
+// Variables: Populate the value from initialiser expression.
+void       gen_init_var      (asm_ctx_t *ctx, gen_var_t *var, expr_t *expr);
 
 
 #endif //GEN_H

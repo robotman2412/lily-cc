@@ -104,6 +104,12 @@ struct stmt {
 			stmt_t *code_true;
 			stmt_t *code_false;
 		};
+		struct {
+			stmt_t  *for_init;
+			exprs_t *for_cond;
+			exprs_t *for_next;
+			stmt_t  *for_code;
+		};
 		expr_t     *expr;
 		idents_t   *vars;
 		iasm_t     *iasm;
@@ -223,6 +229,8 @@ stmt_t      stmt_multi     (parser_ctx_t *ctx, stmts_t  *stmts);
 stmt_t      stmt_if        (parser_ctx_t *ctx, expr_t   *cond,  stmt_t *s_if, stmt_t *s_else);
 // While loops.
 stmt_t      stmt_while     (parser_ctx_t *ctx, expr_t   *cond,  stmt_t *code);
+// For loops.
+stmt_t      stmt_for       (parser_ctx_t *ctx, stmt_t   *initial, exprs_t *cond, exprs_t *after, stmt_t *code);
 // Return statements.
 stmt_t      stmt_ret       (parser_ctx_t *ctx, expr_t   *expr);
 // Variable declaration statements.

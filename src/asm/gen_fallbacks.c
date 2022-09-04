@@ -150,6 +150,14 @@ bool gen_stmt(asm_ctx_t *ctx, void *ptr, bool is_stmts) {
 				gen_while(ctx, stmt->cond, stmt->code_true, false);
 				return false;
 			} break;
+			case STMT_TYPE_FOR: {
+				gen_push_scope(ctx);
+				gen_var_scope(ctx, stmt->preproc->vars);
+				gen_stmt(ctx, stmt->for_init, false);
+				gen_for(ctx, stmt->for_cond, stmt->for_code, stmt->for_next);
+				gen_pop_scope(ctx);
+				return false;
+			} break;
 			case STMT_TYPE_RET: {
 				// A return statement.
 				gen_var_t return_hint = {
@@ -173,13 +181,8 @@ bool gen_stmt(asm_ctx_t *ctx, void *ptr, bool is_stmts) {
 					
 					if (stmt->vars->arr[i].initialiser) {
 						// Perform assignment.
-						gen_var_t *res = gen_expression(ctx, stmt->vars->arr[i].initialiser, var);
-						if (!gen_cmp(ctx, var, res)) {
-							gen_mov(ctx, var, res);
-						}
-					} else {
-						// Mark as not very full.
-						var->type = VAR_TYPE_UNASSIGNED;
+						expr_t *expr = stmt->vars->arr[i].initialiser;
+						gen_init_var(ctx, var, expr);
 					}
 				}
 			} break;

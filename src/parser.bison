@@ -51,7 +51,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 %token <pos> TKN_CHAR "char" TKN_SHORT "short" TKN_INT "int" TKN_LONG "long"
 %token <pos> TKN_VOID "void"
 %token <pos> TKN_VOLATILE "volatile" TKN_INLINE "inline" TKN_GOTO "goto"
-%token <pos> TKN_IF "if" TKN_ELSE "else" TKN_WHILE "while" TKN_RETURN "return" TKN_ASM "asm"
+%token <pos> TKN_IF "if" TKN_ELSE "else" TKN_WHILE "while" TKN_RETURN "return" TKN_FOR "for" TKN_ASM "asm"
 %token TKN_THEN "then"
 %token <pos> TKN_LPAR "(" TKN_RPAR ")" TKN_LBRAC "{" TKN_RBRAC "}" TKN_LSBRAC "[" TKN_RSBRAC "]"
 %token <pos> TKN_SEMI ";" TKN_COLON ":" TKN_COMMA ","
@@ -84,6 +84,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 
 %type <stmts> stmts
 %type <stmt> stmt
+%type <stmt> stmt_no_stmts
 %type <stmt> inline_asm
 %type <stmt> asm_code
 %type <asm_qual> asm_qual
@@ -181,10 +182,13 @@ idents:			idents "," TKN_IDENT "=" expr				{$$=idents_cat(ctx, &$1, NULL, &$3, &
 stmts:			stmts stmt									{$$=stmts_cat   (ctx, &$1, &$2);             $$.pos=pos_merge($1.pos, $2.pos);}
 |				%empty										{$$=stmts_empty (ctx);                       $$.pos=pos_empty(ctx->tokeniser_ctx);};
 stmt:			"{" stmts "}"								{$$=stmt_multi  (ctx, &$2);                  $$.pos=pos_merge($1, $3);}
-|				"if" "(" expr ")" stmt		%prec "then"	{$$=stmt_if     (ctx, &$3, &$5, NULL);       $$.pos=pos_merge($1, $5.pos);}
+|				stmt_no_stmts								{$$=$1;};
+stmt_no_stmts:	"if" "(" expr ")" stmt		%prec "then"	{$$=stmt_if     (ctx, &$3, &$5, NULL);       $$.pos=pos_merge($1, $5.pos);}
 |				"if" "(" expr ")" stmt
 				"else" stmt									{$$=stmt_if     (ctx, &$3, &$5, &$7);        $$.pos=pos_merge($1, $7.pos);}
 |				"while" "(" expr ")" stmt					{$$=stmt_while  (ctx, &$3, &$5);             $$.pos=pos_merge($1, $5.pos);}
+|				"for" "(" stmt_no_stmts opt_exprs ";"
+				opt_exprs ")" stmt							{$$=stmt_for    (ctx, &$3, &$4, &$6, &$8);   $$.pos=pos_merge($1, $8.pos);}
 |				"return" ";"								{$$=stmt_ret    (ctx, NULL);                 $$.pos=pos_merge($1, $2);}
 |				"return" expr ";"							{$$=stmt_ret    (ctx, &$2);                  $$.pos=pos_merge($1, $3);}
 |				vardecls									{$$=stmt_var    (ctx, &$1);                  $$.pos=$1.pos;}

@@ -317,7 +317,7 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, reg_t *addrmod
 				
 				// Construct with the offset.
 				*addrmode = var->indexed.combined->reg;
-				*offset   = part;
+				*offs     = part;
 				return REG_IMM;
 			}
 			break;
@@ -1064,7 +1064,7 @@ gen_var_t *gen_expr_math2(asm_ctx_t *ctx, oper_t oper, gen_var_t *out_hint, gen_
 				.combined = NULL,
 			},
 			.ctype 	     = (a->ctype->category == TYPE_CAT_ARRAY || a->ctype->category == TYPE_CAT_POINTER)
-						 ? a->ctype->underlying : ctype_simple(STYPE_S_INT),
+						 ? a->ctype->underlying : ctype_simple(ctx, STYPE_S_INT), // TODO: : : : ?
 			.owner       = NULL,
 			.default_loc = NULL
 		};

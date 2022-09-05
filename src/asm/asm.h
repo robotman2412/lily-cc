@@ -45,9 +45,9 @@ struct asm_scope {
     // A list of usage for registers.
     gen_var_t   *reg_usage[NUM_REGS];
     // Relative size of the stack.
-    address_t   stack_size;
+    address_t    stack_size;
     // The memory allocator for this scope.
-    alloc_ctx_t allocator;
+    alloc_ctx_t  allocator;
     // Extra bits of context on an architecture basis.
     ASM_SCOPE_EXTRAS
 };

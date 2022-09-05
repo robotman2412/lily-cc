@@ -59,17 +59,12 @@ px_insn_t px_unpack_insn(memword_t packed) {
 }
 
 // Write an instruction with some context.
-void px_write_insn0(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1, bool is_iasm) {
+static void px_write_insn0(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1) {
 	#ifdef ENABLE_DEBUG_LOGS
 	// Debug log variables.
 	char *imm0 = NULL;
 	char *imm1 = NULL;
 	#endif
-	
-	// Determine memory clobbers.
-	if (!is_iasm && (insn.a == REG_ST || insn.b == REG_ST || insn.x == REG_ST)) {
-		px_memclobber(ctx, true);
-	}
 	
 	// Write the basic instruction.
 	asm_write_memword(ctx, px_pack_insn(insn));
@@ -177,12 +172,26 @@ void px_write_insn0(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_
 
 // Write an instruction with some context.
 void px_write_insn_iasm(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1) {
-	px_write_insn0(ctx, insn, label0, offs0, label1, offs1, true);
+	px_write_insn0(ctx, insn, label0, offs0, label1, offs1);
 }
 
 // Write an instruction with some context.
 void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1) {
-	px_write_insn0(ctx, insn, label0, offs0, label1, offs1, false);
+	// Test whether this is a write to stack.
+	if (insn.y == 0 && insn.x == ADDR_ST) {
+		// Test for possible stack push operation.
+		addrdiff_t error = ctx->current_scope->stack_size - ctx->current_scope->real_stack_size;
+		if (error - 1 == offs0) {
+			DEBUG_GEN("// ==== Stack optimisation? ==== //\n");
+		}
+	}
+	
+	// Determine memory clobbers.
+	if (insn.a == REG_ST || insn.b == REG_ST || insn.x == ADDR_ST) {
+		px_memclobber(ctx, true);
+	}
+	
+	px_write_insn0(ctx, insn, label0, offs0, label1, offs1);
 }
 
 // Grab an addressing mode for a parameter.
@@ -660,7 +669,7 @@ gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 	
 	gen_var_t *output = out_hint;
 	bool      do_copy = !gen_cmp(ctx, output, a) && opcode != PX_OP_CMP;
-	if (!output || do_copy) {
+	if (!output) {
 		output = px_get_tmp(ctx, n_words, true);
 		output->ctype = a->ctype;
 	}
@@ -975,6 +984,9 @@ void gen_for(asm_ctx_t *ctx, exprs_t *cond, stmt_t *code, exprs_t *next) {
 	char *loop_label  = asm_get_label(ctx);
 	char *check_label;
 	
+	// Fix the stack.
+	px_memclobber(ctx, true);
+	
 	if (!is_forever) {
 		check_label = asm_get_label(ctx);
 		// Jump to check.
@@ -984,6 +996,9 @@ void gen_for(asm_ctx_t *ctx, exprs_t *cond, stmt_t *code, exprs_t *next) {
 	// Loop code.
 	asm_write_label(ctx, loop_label);
 	gen_stmt(ctx, code, false);
+	
+	// Fix the stack.
+	px_memclobber(ctx, true);
 	
 	// Check condition.
 	asm_write_label(ctx, check_label);
@@ -1597,7 +1612,7 @@ void px_memclobber(asm_ctx_t *ctx, bool clobbers_stack) {
 				.a = REG_ST,
 				.o = diff == 1 ? PX_OP_INC : PX_OP_DEC,
 			};
-			px_write_insn(ctx, insn, NULL, 0, NULL, 0);
+			px_write_insn0(ctx, insn, NULL, 0, NULL, 0);
 		} else if (diff > 1) {
 			// Add to ST.
 			px_insn_t insn = {
@@ -1607,7 +1622,7 @@ void px_memclobber(asm_ctx_t *ctx, bool clobbers_stack) {
 				.a = REG_ST,
 				.o = PX_OP_ADD,
 			};
-			px_write_insn(ctx, insn, NULL, 0, NULL, diff);
+			px_write_insn0(ctx, insn, NULL, 0, NULL, diff);
 		} else if (diff < -1) {
 			// Sub from ST for clarity.
 			px_insn_t insn = {
@@ -1617,7 +1632,7 @@ void px_memclobber(asm_ctx_t *ctx, bool clobbers_stack) {
 				.a = REG_ST,
 				.o = PX_OP_SUB,
 			};
-			px_write_insn(ctx, insn, NULL, 0, NULL, -diff);
+			px_write_insn0(ctx, insn, NULL, 0, NULL, -diff);
 		}
 	}
 }

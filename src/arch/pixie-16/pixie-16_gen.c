@@ -547,6 +547,39 @@ void px_mov_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest) {
 	}
 }
 
+// Variables: Move stored variablue out of the given register.
+void px_vacate_reg(asm_ctx_t *ctx, reg_t regno) {
+	// Check for existing data.
+	gen_var_t *stored = ctx->current_scope->reg_usage[regno];
+	if (!stored) {
+		DEBUG_GEN("// Nothing to vacate.\n");
+		return;
+	}
+	
+	// Does it have a default which is not register?
+	if (stored->default_loc && stored->default_loc->type != VAR_TYPE_REG) {
+		// Then move it to it's default.
+		gen_mov(ctx, stored->default_loc, stored);
+		*stored = *stored->default_loc;
+		DEBUG_GEN("// Vacated to default loc.\n");
+	} else {
+		// Otherwise, give it a non-register temp location.
+		gen_var_t *temp_loc   = px_get_tmp(ctx, stored->ctype->size, false);
+		temp_loc->ctype       = stored->ctype;
+		temp_loc->owner       = stored->owner;
+		temp_loc->default_loc = stored->default_loc;
+		
+		// Move it in.
+		gen_mov(ctx, temp_loc, stored);
+		*stored = *temp_loc;
+		xfree(ctx->current_scope->allocator, temp_loc);
+		DEBUG_GEN("// Vacated to temp loc.\n");
+	}
+	
+	// Mark as free.
+	ctx->current_scope->reg_usage[regno] = NULL;
+}
+
 // Creates MATH1 instructions.
 gen_var_t *px_math1(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_var_t *a) {
 	gen_var_t *output = out_hint;
@@ -1042,7 +1075,16 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, siz
 	gen_var_t *var = gen_expression(ctx, callee, NULL);
 	
 	if (funcdef->call_conv == PX_CC_REGS) {
+		DEBUG_GEN("// Writing call for convention: registers\n");
+		
 		// Vacate the registers used by the function.
+		reg_t regindex = 0;
+		for (size_t i = 0; i < n_args; i++) {
+			for (reg_t x = 0; x < funcdef->args.arr[i].type->size; x++) {
+				px_vacate_reg(ctx, regindex);
+				regindex ++;
+			}
+		}
 		
 		// Output hints for locations, if any.
 		gen_var_t *hints[NUM_REGS];
@@ -1050,7 +1092,7 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, siz
 		gen_var_t *locations[NUM_REGS];
 		
 		// Generate parameter values.
-		reg_t regindex = 0;
+		regindex = 0;
 		for (size_t i = 0; i < n_args; i++) {
 			// Make an output hint for the appropriate register.
 			gen_var_t *out_hint = xalloc(ctx->allocator, sizeof(gen_var_t));
@@ -1145,30 +1187,40 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, siz
 	
 	if (funcdef->returns && funcdef->returns->simple_type != STYPE_VOID) {
 		// Make a return with values.
-		gen_var_t retval;
+		gen_var_t *retval = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
 		if (funcdef->returns->size <= NUM_REGS) {
 			// Registrex.
-			retval = (gen_var_t) {
+			*retval = (gen_var_t) {
 				.type  = VAR_TYPE_REG,
 				.reg   = REG_R0,
 				.ctype = funcdef->returns,
 				.owner = NULL
 			};
+			
+			// Mark REGISTER USAGE.
+			for (reg_t i = 0; i < funcdef->returns->size; i++) {
+				ctx->current_scope->reg_usage[i] = retval;
+			}
+			
 		} else {
 			// TODO!
-			retval = (gen_var_t) {
-				.type   = VAR_TYPE_VOID,
-				.ctype  = ctype_simple(ctx, STYPE_VOID)
+			*retval = (gen_var_t) {
+				.type        = VAR_TYPE_VOID,
+				.ctype       = ctype_simple(ctx, STYPE_VOID),
+				.owner       = NULL,
+				.default_loc = NULL,
 			};
 		}
 		
-		return XCOPY(ctx->allocator, &retval, gen_var_t);
+		return retval;
 		
 	} else {
 		// Make a return void.
-		gen_var_t dummy = {
-			.type   = VAR_TYPE_VOID,
-			.ctype  = ctype_simple(ctx, STYPE_VOID)
+		gen_var_t dummy  = {
+			.type        = VAR_TYPE_VOID,
+			.ctype       = ctype_simple(ctx, STYPE_VOID),
+			.owner       = NULL,
+			.default_loc = NULL,
 		};
 		return XCOPY(ctx->allocator, &dummy, gen_var_t);
 	}
@@ -1734,7 +1786,7 @@ gen_var_t *px_get_tmp(asm_ctx_t *ctx, size_t size, bool allow_reg) {
 	func_label = ctx->current_func->ident.strval;
 	label = xalloc(ctx->allocator, strlen(func_label) + 8);
 	sprintf(label, "%s.LT%04x", func_label, ctx->temp_num);
-	DEBUG_GEN("// Add temp label %s\n", label);
+	// DEBUG_GEN("// Add temp label %s\n", label);
 	gen_define_temp(ctx, label);
 	
 	// Return the new stack bit.
@@ -1784,6 +1836,7 @@ void gen_init_var(asm_ctx_t *ctx, gen_var_t *var, expr_t *expr) {
 				var->type = VAR_TYPE_REG;
 				var->reg  = regno;
 				gen_mov(ctx, var, res);
+				ctx->current_scope->reg_usage[regno] = var;
 			} else {
 				// Have it moved to the default location.
 				*var = *var->default_loc;

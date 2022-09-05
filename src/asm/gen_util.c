@@ -98,6 +98,9 @@ bool gen_define_temp(asm_ctx_t *ctx, char *label) {
 
 // Mark the label as not in use.
 void gen_unuse(asm_ctx_t *ctx, gen_var_t *var) {
+	// Ignore when has owner name.
+	if (var->owner) return;
+	
 	// Mark registers as free.
 	if (var->type == VAR_TYPE_REG) {
 		ctx->current_scope->reg_usage[var->reg] = NULL;

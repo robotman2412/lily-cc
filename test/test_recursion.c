@@ -5,7 +5,15 @@ int fibonacci(int depth) {
 	} else if (depth == 1) {
 		return 1;
 	} else {
-		return fibonacci(depth - 2) + fibonacci(depth - 1);
+		int x = 0;
+		int y = 0;
+		int z = 1;
+		for (int i = 1; i < depth; ++i) {
+			x = y + z;
+			y = z;
+			z = x;
+		}
+		return z;
 	}
 }
 
@@ -14,7 +22,7 @@ void entry() {
 	asm("MOV ST, 0xffff");
 	asm("SUB ST, [0xffff]");
 	
-	int result = fibonacci(5);
+	int result = fibonacci(14);
 	
 	asm("DEC PC");
 }

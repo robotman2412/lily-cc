@@ -69,6 +69,8 @@ void px_memclobber(asm_ctx_t *ctx, bool clobbers_stack);
 void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words);
 // Variables: Move given variable into a register.
 void px_var_to_reg(asm_ctx_t *ctx, gen_var_t *var, bool allow_const);
+// Variables: Move stored variablue out of the given register.
+void px_vacate_reg(asm_ctx_t *ctx, reg_t regno);
 
 /* ========= Common instruction patterns ========= */
 

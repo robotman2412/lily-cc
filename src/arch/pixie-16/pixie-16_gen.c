@@ -987,7 +987,7 @@ bool gen_if(asm_ctx_t *ctx, gen_var_t *cond, stmt_t *s_if, stmt_t *s_else) {
 	
 	if (!s_if && !s_else) return false;
 	
-	if (px_cond_mov_applicable(ctx, cond, s_if, s_else)) {
+	if (0 && px_cond_mov_applicable(ctx, cond, s_if, s_else)) {
 		// Conditional MOV branch.
 	} else {
 		// Traditional branch.

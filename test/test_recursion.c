@@ -5,16 +5,8 @@ int fibonacci(int depth) {
 	} else if (depth == 1) {
 		return 1;
 	} else {
-		// int x = 0;
-		// int y = 0;
-		// int z = 1;
-		// for (int i = 1; i < depth; ++i) {
-		// 	x = y + z;
-		// 	y = z;
-		// 	z = x;
-		// }
-		// return z;
-		return fibonacci(depth - 2) + fibonacci(depth - 1);
+		return fibonacci(depth - 2)
+			+ fibonacci(depth - 1);
 	}
 }
 

@@ -182,8 +182,20 @@ void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t
 		// Test for possible stack push operation.
 		addrdiff_t error = ctx->current_scope->stack_size - ctx->current_scope->real_stack_size;
 		if (error - 1 == offs0) {
-			DEBUG_GEN("// ==== Stack optimisation? ==== //\n");
+			DEBUG_GEN("// Stack optimised (push).\n");
+			
+			// Re-write the insn.
+			insn.x = ADDR_MEM;
+			insn.a = REG_ST;
+			px_write_insn0(ctx, insn, NULL, 0, label1, offs1);
+			ctx->current_scope->real_stack_size ++;
+			return;
 		}
+	}
+	
+	// Test for suspicious instructions.
+	if ((insn.y == 0 && insn.x == insn.a && insn.x != ADDR_IMM) || (insn.y == 1 && insn.x == insn.b && insn.x != ADDR_IMM)) {
+		DEBUG_GEN("// WARNING: Suspicious instruction.\n");
 	}
 	
 	// Determine memory clobbers.
@@ -663,12 +675,29 @@ gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 	}
 	
 	// Determine the amount of bytes to operate on.
-	bool      a_big   = a->ctype->size > b->ctype->size;
-	address_t n_words = a_big ? b->ctype->size : a->ctype->size;
-	address_t n_ext   = (a_big ? a->ctype->size : b->ctype->size) - n_words;
+	bool      a_big      = a->ctype->size > b->ctype->size;
+	address_t n_words    = a_big ? b->ctype->size : a->ctype->size;
+	address_t n_ext      = (a_big ? a->ctype->size : b->ctype->size) - n_words;
 	
-	gen_var_t *output = out_hint;
-	bool      do_copy = !gen_cmp(ctx, output, a) && opcode != PX_OP_CMP;
+	bool       swappable = opcode == PX_OP_ADD || opcode == PX_OP_XOR || opcode == PX_OP_AND || opcode == PX_OP_OR;
+	
+	// Translate retval into it's real location.
+	if (out_hint && out_hint->type == VAR_TYPE_RETVAL) {
+		out_hint->type = VAR_TYPE_REG;
+		out_hint->reg  = REG_R0;
+		if (b->type == VAR_TYPE_REG && b->reg == REG_R0) {
+			if (swappable) {
+				gen_var_t *tmp = a;
+				a = b;
+				b = tmp;
+			} else {
+				px_vacate_reg(ctx, REG_R0);
+			}
+		}
+	}
+	
+	gen_var_t *output    = out_hint;
+	bool       do_copy   = !gen_cmp(ctx, output, a) && opcode != PX_OP_CMP;
 	if (!output) {
 		output = px_get_tmp(ctx, n_words, true);
 		output->ctype = a->ctype;
@@ -1640,6 +1669,13 @@ void px_memclobber(asm_ctx_t *ctx, bool clobbers_stack) {
 // Variables: Move variable to another location.
 void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words) {
 	if (gen_cmp(ctx, dst, src)) return;
+	
+	// Translate retval into it's real location.
+	if (dst->type == VAR_TYPE_RETVAL) {
+		dst->type = VAR_TYPE_REG;
+		dst->reg  = REG_R0;
+	}
+	
 	if (dst->type == VAR_TYPE_REG) {
 		// To register move.
 		for (address_t i = 0; i < n_words; i++) {

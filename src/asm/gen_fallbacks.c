@@ -52,6 +52,9 @@ void gen_function(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	gen_push_scope(ctx);
 	gen_var_scope(ctx, funcdef->preproc->vars);
 	
+	// Mark line position.
+	asm_write_pos(ctx, funcdef->pos);
+	
 	// Start the process with the function entry.
 	DEBUG_GEN("// function entry\n");
 	gen_function_entry(ctx, funcdef);
@@ -782,6 +785,9 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 		} break;
 		
 		case EXPR_TYPE_CALL: {
+			// Mark line position.
+			asm_write_pos(ctx, expr->pos);
+			
 			// TODO: check for inlining possibilities.
 			
 			// For now, enforce that func is always an ident.
@@ -807,6 +813,9 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 		} break;
 		
 		case EXPR_TYPE_MATH1: {
+			// Mark line position.
+			asm_write_pos(ctx, expr->pos);
+			
 			// Unary math operations (things like ++a, &b, *c and !d)
 			oper_t oper = expr->oper;
 			if (oper == OP_DEREF && out_hint && out_hint->type == VAR_TYPE_PTR) {
@@ -833,6 +842,9 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 		} break;
 		
 		case EXPR_TYPE_MATH2: {
+			// Mark line position.
+			asm_write_pos(ctx, expr->pos);
+			
 			if (expr->oper == OP_ASSIGN) {
 				// Handle assignment seperately.
 				if (expr->par_a->type == EXPR_TYPE_IDENT) {

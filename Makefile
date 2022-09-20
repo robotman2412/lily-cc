@@ -15,7 +15,9 @@ OBJECTS		=$(shell echo $(SOURCES) | sed -e 's/src/build/g;s/\.c/.c.o/g')
 OBJ_DEBUG	=$(shell echo $(SOURCES) | sed -e 's/src/build/g;s/\.c/.c.debug.o/g')
 INCLUDES	=-Isrc -Isrc/arch/$(TARGET) -Isrc/asm -Isrc/objects -Isrc/util -Isrc/debug -Ibuild
 
-CCFLAGS=$(INCLUDES)
+OUTFILE     =comp
+CCFLAGS     =$(INCLUDES)
+FLAGS_DEBUG =$(INCLUDES) -ggdb -DENABLE_DEBUG_LOGS -DDEBUG_COMPILER -DDEBUG_GENERATOR
 LDFLAGS=
 YACCFLAGS=-v -Wnone -Wconflicts-sr -Wconflicts-rr
 
@@ -24,20 +26,11 @@ CFGFILES=build build/config.h build/current_arch build/
 .PHONY: all config debug debugsettings clean config install
 
 # Commands for the user.
-all: ./build/notdebug config ./comp
+all: config ./build/main.o
+	$(LD) ./build/main.o -o $(OUTFILE) $(LDFLAGS)
 
-debug: ./build/yesdebug config debugsettings ./comp
-
-# Auto clean when switching between yes and not debug.
-./build/notdebug:
-	rm -rf ./build/yesdebug
-	$(MAKE) clean
-	touch ./build/notdebug
-	
-./build/yesdebug:
-	rm -rf ./build/notdebug
-	$(MAKE) clean
-	touch ./build/yesdebug
+debug: config ./build/debug.o
+	$(LD) -ggdb ./build/debug.o -o $(OUTFILE) $(LDFLAGS)
 
 # Checks
 config: $(CFGFILES)
@@ -45,12 +38,12 @@ config: $(CFGFILES)
 $(CFGFILES):
 	./configure.sh --check
 
-debugsettings:
-	$(eval CCFLAGS = $(CCFLAGS) -ggdb -DENABLE_DEBUG_LOGS -DDEBUG_COMPILER -DDEBUG_GENERATOR)
-
 # Compilation
-./comp: $(OBJECTS)
-	$(LD) $^ -o $@ $(LDFLAGS)
+./build/main.o: $(OBJECTS)
+	$(LD) -r $^ -o $@
+	
+./build/debug.o: $(OBJ_DEBUG)
+	$(LD) -ggdb -r $^ -o $@
 
 ./build/parser.c: ./src/parser.bison
 	@mkdir -p $(shell dirname $@)
@@ -60,7 +53,15 @@ debugsettings:
 	@mkdir -p $(shell dirname $@)
 	$(CC) -c $< $(CCFLAGS) -o $@
 
+./build/parser.c.debug.o: ./build/parser.c $(HEADERS)
+	@mkdir -p $(shell dirname $@)
+	$(CC) -c $< $(FLAGS_DEBUG) -o $@
+
 ./build/%.o: ./src/% $(HEADERS)
+	@mkdir -p $(shell dirname $@)
+	$(CC) -c $< $(CCFLAGS) -o $@
+
+./build/%.debug.o: ./src/% $(HEADERS)
 	@mkdir -p $(shell dirname $@)
 	$(CC) -c $< $(CCFLAGS) -o $@
 

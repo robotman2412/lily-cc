@@ -42,11 +42,18 @@ stmts_t stmts_cat(parser_ctx_t *ctx, stmts_t *stmts, stmt_t *stmt) {
 
 
 
+// An emppty statement that does nothing.
+stmt_t stmt_empty(parser_ctx_t *ctx) {
+	return (stmt_t) {
+		.type  = STMT_TYPE_EMPTY,
+	};
+}
+
 // Statements contained in curly brackets.
 stmt_t stmt_multi(parser_ctx_t *ctx, stmts_t *stmts) {
 	return (stmt_t) {
 		.type  = STMT_TYPE_MULTI,
-		.stmts = XCOPY(ctx->allocator, stmts, stmts_t)
+		.stmts = XCOPY(ctx->allocator, stmts, stmts_t),
 	};
 }
 
@@ -129,6 +136,20 @@ stmt_t stmt_iasm(parser_ctx_t *ctx, strval_t *text, iasm_regs_t *outputs, iasm_r
 		.type  = STMT_TYPE_IASM,
 		.iasm  = iasm
 	};
+}
+
+// Check whether a statement is effectively an empty statement.
+bool stmt_is_empty(stmt_t *stmt) {
+	if (stmt->type == STMT_TYPE_EMPTY) {
+		return true;
+	} else if (stmt->type == STMT_TYPE_MULTI) {
+		for (size_t i = 0; i < stmt->stmts->num; i++) {
+			if (!stmt_is_empty(&stmt->stmts->arr[i])) return false;
+		}
+		return true;
+	} else {
+		return false;
+	}
 }
 
 

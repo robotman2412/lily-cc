@@ -6,15 +6,6 @@
 
 /* ======= Gen-specific helper definitions ======= */
 
-// Representation of an instruction.
-typedef struct {
-	bool      y;
-	reg_t     x;
-	reg_t     b;
-	reg_t     a;
-	reg_t     o;
-} px_insn_t;
-
 // Bump a register to the top of the usage list.
 void px_touch_reg(asm_ctx_t *ctx, reg_t regno);
 // Gets the least used register in the list.
@@ -36,7 +27,7 @@ px_insn_t px_unpack_insn(memword_t packed) __attribute__((pure));
 gen_var_t *px_get_tmp(asm_ctx_t *ctx, size_t size, bool allow_reg);
 
 // Grab an addressing mode for a parameter.
-reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, reg_t *addrmode, asm_label_t *label, address_t *offs, reg_t dest);
+reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, px_addr_t *addrmode, asm_label_t *label, address_t *offs, reg_t dest);
 
 // Determine the calling conventions to use.
 void px_update_cc(asm_ctx_t *ctx, funcdef_t *funcdef);
@@ -72,80 +63,14 @@ void px_var_to_reg(asm_ctx_t *ctx, gen_var_t *var, bool allow_const);
 // Variables: Move stored variablue out of the given register.
 void px_vacate_reg(asm_ctx_t *ctx, reg_t regno);
 
+// Generate some conditional MOV statements.
+void px_gen_cond_mov_stmt(asm_ctx_t *ctx, stmt_t *stmt, cond_t cond);
+// Check whether a statement can be reduced to some MOV.
+bool px_is_mov_stmt(asm_ctx_t *ctx, stmt_t *stmt);
+// Check whether an if statement can be reduced to conditional MOV.
+bool px_cond_mov_applicable(asm_ctx_t *ctx, gen_var_t *cond, stmt_t *s_if, stmt_t *s_else);
+
 /* ========= Common instruction patterns ========= */
-
-// Unsigned less than.
-#define COND_ULT  000
-// Unsigned greater than.
-#define COND_UGT  001
-// Signed less than.
-#define COND_SLT  002
-// Signed greater than.
-#define COND_SGT  003
-// Equal.
-#define COND_EQ   004
-// Unsigned carry set.
-#define COND_CS   005
-// Always true.
-#define COND_TRUE 006
-// Unsigned greater than or equal.
-#define COND_UGE  010
-// Unsigned less than or equal.
-#define COND_ULE  011
-// Signed greater than or equal.
-#define COND_SGE  012
-// Signed less than or equal.
-#define COND_SLE  013
-// Not equal.
-#define COND_NE   014
-// Unsigned carry not set.
-#define COND_CC   015
-// Reserved for JSR instruction.
-#define COND_JSR  016
-// Reserved for carry extend instruction.
-#define COND_CX   017
-
-// Address by memory.
-#define ADDR_MEM 5
-// Address by register or imm.
-#define ADDR_IMM 7
-// Address by register offset.
-#define ADDR_REG(regno) (regno)
-#define ADDR_R0 ADDR_REG(REG_R0)
-#define ADDR_R1 ADDR_REG(REG_R1)
-#define ADDR_R2 ADDR_REG(REG_R2)
-#define ADDR_R3 ADDR_REG(REG_R3)
-#define ADDR_ST ADDR_REG(REG_ST)
-#define ADDR_PC ADDR_REG(REG_PC)
-
-// ADD instructions.
-#define PX_OP_ADD 000
-// SUB instruction.
-#define PX_OP_SUB 001
-// CMP instructions.
-#define PX_OP_CMP 002
-// AND instructions.
-#define PX_OP_AND 003
-// OR instructions.
-#define PX_OP_OR  004
-// XOR instructions.
-#define PX_OP_XOR 005
-
-// INC instructions.
-#define PX_OP_INC 020
-// DEC instruction.
-#define PX_OP_DEC 021
-// CMP1 instructions.
-#define PX_OP_CMP1 022
-// SHL instructions.
-#define PX_OP_SHL 026
-// SHR instructions.
-#define PX_OP_SHR 027
-
-// Unconditional MOV instructions.
-#define PX_OP_MOV 046
-// Unconditional LEA instructions.
-#define PX_OP_LEA 066
 
 // Offset for MOV instructions.
 #define PX_OFFS_MOV 040

@@ -223,6 +223,8 @@ stmts_t     stmts_empty    (parser_ctx_t *ctx);
 // Concatenate to a list of statements.
 stmts_t     stmts_cat      (parser_ctx_t *ctx, stmts_t  *stmts, stmt_t  *stmt);
 
+// An emppty statement that does nothing.
+stmt_t      stmt_empty     (parser_ctx_t *ctx);
 // Statements contained in curly brackets.
 stmt_t      stmt_multi     (parser_ctx_t *ctx, stmts_t  *stmts);
 // If-else statements.
@@ -239,6 +241,9 @@ stmt_t      stmt_var       (parser_ctx_t *ctx, idents_t *decls);
 stmt_t      stmt_expr      (parser_ctx_t *ctx, expr_t   *expr);
 // Assembly statements (archtitecture-specific assembly code).
 stmt_t      stmt_iasm      (parser_ctx_t *ctx, strval_t *text,  iasm_regs_t *output, iasm_regs_t *input, void *clobbers);
+
+// Check whether a statement is effectively an empty statement.
+bool        stmt_is_empty  (stmt_t       *stmt);
 
 // Assembly parameter definition.
 iasm_reg_t  stmt_iasm_reg  (parser_ctx_t *ctx, strval_t *symbol, strval_t *mode, expr_t *expr);

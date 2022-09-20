@@ -225,6 +225,8 @@ typedef enum oper {
 
 // Types of statement.
 typedef enum stmt_type {
+	// An empty statement;
+	STMT_TYPE_EMPTY,
 	// Statements in { curly brackets }
 	STMT_TYPE_MULTI,
 	// if ; else { statements }

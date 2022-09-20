@@ -81,7 +81,7 @@ static void PX_DESC_INSN(px_insn_t insn, char *imm0, char *imm1) {
 	xfree(global_alloc, tmp);
 }
 #else
-#define PX_DESC_INSN(insn, a, b) do{}while(0)
+static inline void PX_DESC_INSN(px_insn_t insn, char *imm0, char *imm1) {}
 #endif
 
 #endif //PIXIE_16_INTERNAL_H

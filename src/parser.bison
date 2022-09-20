@@ -193,7 +193,8 @@ stmt_no_stmts:	"if" "(" expr ")" stmt		%prec "then"	{$$=stmt_if     (ctx, &$3, &
 |				"return" expr ";"							{$$=stmt_ret    (ctx, &$2);                  $$.pos=pos_merge($1, $3);}
 |				vardecls									{$$=stmt_var    (ctx, &$1);                  $$.pos=$1.pos;}
 |				expr ";"									{$$=stmt_expr   (ctx, &$1);                  $$.pos=pos_merge($1.pos, $2);}
-|				inline_asm ";"								{$$=$1;                                      $$.pos=pos_merge($1.pos, $2);};
+|				inline_asm ";"								{$$=$1;                                      $$.pos=pos_merge($1.pos, $2);}
+|				";"											{$$=stmt_empty  (ctx);                       $$.pos=$1;};
 
 // Expressions.
 opt_exprs:		exprs										{$$=$1;}

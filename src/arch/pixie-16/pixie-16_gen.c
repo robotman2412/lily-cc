@@ -33,7 +33,7 @@ reg_t px_least_used_reg(asm_ctx_t *ctx) {
 // Gets the constant required for a stack indexing memory access.
  __attribute__((pure))
 static inline address_t px_get_depth(asm_ctx_t *ctx, gen_var_t *var, address_t var_offs) {
-	return ctx->current_scope->stack_size - var->offset + var_offs - 1;
+	return ctx->current_scope->stack_size - var->offset + var_offs - var->ctype->size;
 }
 
 // Function for packing an instruction.
@@ -207,8 +207,8 @@ void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t
 }
 
 // Grab an addressing mode for a parameter.
-reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, reg_t *addrmode, asm_label_t *label, address_t *offs, reg_t dest) {
-	static reg_t addrmode_dummy;
+reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, px_addr_t *addrmode, asm_label_t *label, address_t *offs, reg_t dest) {
+	static px_addr_t addrmode_dummy;
 	if (!addrmode) {
 		if (var->type != VAR_TYPE_CONST && var->type != VAR_TYPE_REG) {
 			// We must move this to register.
@@ -933,10 +933,62 @@ void gen_return(asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *retval) {
 
 /* ================== Statements ================= */
 
+// Check whether a statement can be reduced to some MOV.
+bool px_is_mov_stmt(asm_ctx_t *ctx, stmt_t *stmt) {
+	if (!stmt) return false;
+	
+	if (stmt->type == STMT_TYPE_MULTI) {
+		for (size_t i = 0; i < stmt->stmts->num; i++) {
+			if (!px_is_mov_stmt(ctx, &stmt->stmts->arr[i])) return false;
+		}
+		return true;
+	} else if (stmt->type == STMT_TYPE_EXPR) {
+		expr_t *expr = stmt->expr;
+		return expr->type == EXPR_TYPE_MATH2 && expr->par_a->type == EXPR_TYPE_IDENT
+				&& (expr->par_b->type == EXPR_TYPE_IDENT
+				||  expr->par_b->type == EXPR_TYPE_CONST
+				||  expr->par_b->type == EXPR_TYPE_CSTR);
+	} else {
+		return false;
+	}
+}
+
+// Generate some conditional MOV statements.
+void px_gen_cond_mov_stmt(asm_ctx_t *ctx, stmt_t *stmt, cond_t cond) {
+	if (stmt->type == STMT_TYPE_MULTI) {
+		for (size_t i = 0; i < stmt->stmts->num; i++) {
+			px_gen_cond_mov_stmt(ctx, &stmt->stmts->arr[i], cond);
+		}
+		return;
+	} else if (stmt->type != STMT_TYPE_EXPR) {
+		return;
+	}
+	
+	oper_t oper = stmt->expr->oper;
+}
+
+// Check whether an if statement can be reduced to conditional MOV.
+bool px_cond_mov_applicable(asm_ctx_t *ctx, gen_var_t *cond, stmt_t *s_if, stmt_t *s_else) {
+	bool mov_if   = !s_if   || px_is_mov_stmt(ctx, s_if);
+	bool mov_else = !s_else || px_is_mov_stmt(ctx, s_else);
+	
+	return mov_if && mov_else;
+}
+
 // If statement implementation.
 bool gen_if(asm_ctx_t *ctx, gen_var_t *cond, stmt_t *s_if, stmt_t *s_else) {
-	if (0 /* Conditional mov optimisation? */) {
-		// TODO: Perform check for this one.
+	// Optimise out empty statements.
+	if (s_if   && stmt_is_empty(s_if)) {
+		s_if = NULL;
+	}
+	if (s_else && stmt_is_empty(s_else)) {
+		s_else = NULL;
+	}
+	
+	if (!s_if && !s_else) return false;
+	
+	if (px_cond_mov_applicable(ctx, cond, s_if, s_else)) {
+		// Conditional MOV branch.
 	} else {
 		// Traditional branch.
 		if (s_else) {
@@ -1277,7 +1329,33 @@ gen_var_t *gen_expr_math2(asm_ctx_t *ctx, oper_t oper, gen_var_t *out_hint, gen_
 	
 	// Can we simplify?
 	if ((OP_IS_SHIFT(oper) || OP_IS_ADD(oper) || OP_IS_COMP(oper)) && b->type == VAR_TYPE_CONST && b->iconst == 1) {
+		// B is constant 1: math1 will do.
 		return gen_expr_math1(ctx, oper, out_hint, a);
+		
+	} else if ((oper == OP_EQ || oper == OP_NE) && b->type == VAR_TYPE_CONST && b->iconst == 0) {
+		// B is constant 0 (for == or !=), math1 will do.
+		gen_var_t *output = out_hint;
+		if (!output || output->type != VAR_TYPE_COND) {
+			// Make a new output.
+			output  = xalloc(ctx->allocator, sizeof(gen_var_t));
+			*output = (gen_var_t) {
+				.type        = VAR_TYPE_COND,
+				.ctype       = ctype_simple(ctx, STYPE_BOOL),
+				.owner       = NULL,
+				.default_loc = NULL,
+			};
+		}
+		px_math1(ctx, PX_OP_CMP1, output, a);
+		// Translate comparison operators.
+		switch (oper) {
+			case OP_EQ:
+				output->cond = COND_ULT;
+				break;
+			case OP_NE:
+				output->cond = COND_UGE;
+				break;
+		}
+		return output;
 	}
 	
 	if (OP_IS_LOGIC(oper)) {
@@ -1375,6 +1453,7 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 			output  = xalloc(ctx->allocator, sizeof(gen_var_t));
 			*output = (gen_var_t) {
 				.type        = VAR_TYPE_COND,
+				.ctype       = ctype_simple(ctx, STYPE_BOOL),
 				.owner       = NULL,
 				.default_loc = NULL,
 			};
@@ -1700,7 +1779,11 @@ void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words)
 			mov_to_reg = true;
 		}
 		
-		for (address_t i = 0; i < n_words; i++) {
+		bool revloop = dst->type == VAR_TYPE_STACKOFFS;
+		address_t i   = revloop ? n_words - 1 : 0;
+		address_t lim = revloop ? -1          : n_words;
+		address_t di  = revloop ? -1          : +1;
+		for (; i != lim; i += di) {
 			px_insn_t insn = {
 				.y = 0,
 				.o = PX_OP_MOV,

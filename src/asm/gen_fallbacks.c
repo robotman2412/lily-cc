@@ -142,6 +142,9 @@ bool gen_stmt(asm_ctx_t *ctx, void *ptr, bool is_stmts) {
 		
 		// One of the other statement types.
 		switch (stmt->type) {
+			case STMT_TYPE_EMPTY: {
+				return false;
+			} break;
 			case STMT_TYPE_IF: {
 				gen_var_t cond_hint = {
 					.type = VAR_TYPE_COND

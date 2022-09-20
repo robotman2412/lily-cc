@@ -3,17 +3,17 @@ CC=gcc
 LD=gcc
 YACC=bison
 
-TARGET =$(shell cat build/current_arch)
-VERSION=$(shell cat version)
-SOURCES=./build/parser.c\
-		$(shell find ./src ! -path './src/debug/*' ! -path './src/arch/*' -name '*.c')\
-		$(shell find ./src/arch/$(TARGET) -name '*.c')
-HEADERS=./build/config.h ./build/parser.h ./build/version_number.h\
-		$(shell find ./src ! -path './src/debug/*' ! -path './src/arch/*' -name '*.h')\
-		$(shell find ./src/arch/$(TARGET) -name '*.h')
-OBJECTS=$(shell echo $(SOURCES) | sed -e 's/src/build/g;s/\.c/.c.o/g')
-INCLUDES=-Isrc -Isrc/arch/$(TARGET) -Isrc/asm -Isrc/objects -Isrc/util -Isrc/debug\
-		-Ibuild
+TARGET		=$(shell cat build/current_arch)
+VERSION		=$(shell cat version)
+SOURCES		=./build/parser.c\
+			$(shell find ./src ! -path './src/debug/*' ! -path './src/arch/*' -name '*.c')\
+			$(shell find ./src/arch/$(TARGET) -name '*.c')
+HEADERS		=./build/config.h ./build/parser.h ./build/version_number.h\
+			$(shell find ./src ! -path './src/debug/*' ! -path './src/arch/*' -name '*.h')\
+			$(shell find ./src/arch/$(TARGET) -name '*.h')
+OBJECTS		=$(shell echo $(SOURCES) | sed -e 's/src/build/g;s/\.c/.c.o/g')
+OBJ_DEBUG	=$(shell echo $(SOURCES) | sed -e 's/src/build/g;s/\.c/.c.debug.o/g')
+INCLUDES	=-Isrc -Isrc/arch/$(TARGET) -Isrc/asm -Isrc/objects -Isrc/util -Isrc/debug -Ibuild
 
 CCFLAGS=$(INCLUDES)
 LDFLAGS=

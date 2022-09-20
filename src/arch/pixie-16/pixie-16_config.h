@@ -3,6 +3,7 @@
 #define PIXIE_16_CONFIG_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #define ARCH_ID "Pixie 16"
 
@@ -58,21 +59,76 @@
 #define NUM_REGS  4
 // Register names.
 #define REG_NAMES { "R0", "R1", "R2", "R3", "ST", "PF", "PC", "imm" }
-#define REG_R0    0
-#define REG_R1    1
-#define REG_R2    2
-#define REG_R3    3
-#define REG_ST    4
-#define REG_PF    5
-#define REG_PC    6
-#define REG_IMM   7
+
+// Type used for opcodes.
+typedef enum {
+	PX_OP_ADD     = 000, PX_OP_SUB,  PX_OP_CMP,   PX_OP_AND,  PX_OP_OR,  PX_OP_XOR,
+	PX_OP_ADDC    = 010, PX_OP_SUBC, PX_OP_CMPC,  PX_OP_ANDC, PX_OP_ORC, PX_OP_XORC,
+	PX_OP_INC     = 020, PX_OP_DEC,  PX_OP_CMP1,  PX_OP_SHL  = 026, PX_OP_SHR,
+	PX_OP_INCC    = 020, PX_OP_DECC, PX_OP_CMP1C, PX_OP_SHLC = 026, PX_OP_SHRC,
+	PX_OP_MOV_ULT = 040, PX_OP_MOV_UGT, PX_OP_MOV_SLT, PX_OP_MOV_SGT, PX_OP_MOV_CS, PX_OP_MOV,
+	PX_OP_MOV_UGE = 050, PX_OP_MOV_ULE, PX_OP_MOV_SGE, PX_OP_MOV_SLE, PX_OP_MOV_CC, PX_OP_MOV_JSR, PX_OP_MOV_CX,
+	PX_OP_LEA_ULT = 060, PX_OP_LEA_UGT, PX_OP_LEA_SLT, PX_OP_LEA_SGT, PX_OP_LEA_CS, PX_OP_LEA,
+	PX_OP_LEA_UGE = 070, PX_OP_LEA_ULE, PX_OP_LEA_SGE, PX_OP_LEA_SLE, PX_OP_LEA_CC, PX_OP_LEA_JSR,
+} px_opcode_t;
 
 // Type used for registers.
-typedef uint_least8_t reg_t;
+typedef enum {
+	ADDR_R0,
+	ADDR_R1,
+	ADDR_R2,
+	ADDR_R3,
+	ADDR_ST,
+	ADDR_MEM,
+	ADDR_PC,
+	ADDR_IMM,
+} px_addr_t;
+
+// Type used for registers.
+typedef enum {
+	REG_R0,
+	REG_R1,
+	REG_R2,
+	REG_R3,
+	REG_ST,
+	REG_PF,
+	REG_PC,
+	REG_IMM,
+} reg_t;
+
 // Type used for conditions.
-typedef uint_least8_t cond_t;
-// Type used for pointers.
-typedef uint_least16_t ptr_t;
+typedef enum {
+	// Unsigned less than.
+	COND_ULT  = 000,
+	// Unsigned greater than.
+	COND_UGT  = 001,
+	// Signed less than.
+	COND_SLT  = 002,
+	// Signed greater than.
+	COND_SGT  = 003,
+	// Equal.
+	COND_EQ   = 004,
+	// Unsigned carry set.
+	COND_CS   = 005,
+	// Always true.
+	COND_TRUE = 006,
+	// Unsigned greater than or equal.
+	COND_UGE  = 010,
+	// Unsigned less than or equal.
+	COND_ULE  = 011,
+	// Signed greater than or equal.
+	COND_SGE  = 012,
+	// Signed less than or equal.
+	COND_SLE  = 013,
+	// Not equal.
+	COND_NE   = 014,
+	// Unsigned carry not set.
+	COND_CC   = 015,
+	// Reserved for JSR instruction.
+	COND_JSR  = 016,
+	// Reserved for carry extend instruction.
+	COND_CX   = 017,
+} cond_t;
 
 // Extra data added to funcdef_t.
 typedef enum {
@@ -85,6 +141,16 @@ typedef enum {
 	// Stored in the stack, first parameter pushed last.
 	PX_CC_STACK,
 } px_call_conv_t;
+
+// Struct representation of an instruction.
+typedef struct {
+	bool        y;
+	px_addr_t   x;
+	reg_t       b;
+	reg_t       a;
+	px_opcode_t o;
+} px_insn_t;
+
 #define FUNCDEF_EXTRAS \
 	/* The calling conventions for this function. */ \
 	px_call_conv_t call_conv; \

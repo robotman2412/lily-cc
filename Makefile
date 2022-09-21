@@ -63,7 +63,7 @@ $(CFGFILES):
 
 ./build/%.debug.o: ./src/% $(HEADERS)
 	@mkdir -p $(shell dirname $@)
-	$(CC) -c $< $(CCFLAGS) -o $@
+	$(CC) -c $< $(FLAGS_DEBUG) -o $@
 
 # Clean
 clean:

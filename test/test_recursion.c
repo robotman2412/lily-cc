@@ -1,5 +1,5 @@
 
-long fibonacci(long depth) {
+int fibonacci(int depth) {
 	if (depth == 0) {
 		return 0;
 	} else if (depth == 1) {
@@ -15,7 +15,7 @@ void entry() {
 	asm("MOV ST, 0xffff");
 	asm("SUB ST, [0xffff]");
 	
-	long result = fibonacci(6);
+	int result = fibonacci(6);
 	
 	asm("DEC PC");
 }

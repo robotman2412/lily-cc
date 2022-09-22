@@ -93,11 +93,11 @@ void       gen_inline_return (asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *ret
 // Returns true if the statement has an explicit return.
 bool       gen_stmt          (asm_ctx_t *ctx, void      *stmt,    bool is_stmts);
 // If statement implementation.
-bool       gen_if            (asm_ctx_t *ctx, gen_var_t *cond,    stmt_t    *s_if,     stmt_t    *s_else);
+bool       gen_if            (asm_ctx_t *ctx, stmt_t    *stmt,    gen_var_t *cond,    stmt_t    *s_if,     stmt_t    *s_else);
 // While loop implementation.
-void       gen_while         (asm_ctx_t *ctx, expr_t    *cond,    stmt_t    *code,     bool       is_do_while);
+void       gen_while         (asm_ctx_t *ctx, stmt_t    *stmt,    expr_t    *cond,    stmt_t    *code,     bool       is_do_while);
 // For loop implementation.
-void       gen_for           (asm_ctx_t *ctx, exprs_t   *cond,    stmt_t    *code,     exprs_t   *next);
+void       gen_for           (asm_ctx_t *ctx, stmt_t    *stmt,    exprs_t   *cond,    stmt_t    *code,     exprs_t   *next);
 // Complete file of assembly. (only if inline assembly is supported)
 void       gen_asm_file      (asm_ctx_t *ctx, tokeniser_ctx_t *lex);
 // Inline assembly implementation. (only if inline assembly is supported)
@@ -116,9 +116,9 @@ gen_var_t *gen_expression    (asm_ctx_t *ctx, expr_t    *expr,    gen_var_t *out
 // args may be null for zero arguments.
 gen_var_t *gen_expr_call     (asm_ctx_t *ctx, funcdef_t *funcdef, expr_t    *callee,   size_t     n_args, expr_t   *args);
 // Expression: Binary math operation.
-gen_var_t *gen_expr_math2    (asm_ctx_t *ctx, oper_t     oper,    gen_var_t *out_hint, gen_var_t *a,      gen_var_t *b);
+gen_var_t *gen_expr_math2    (asm_ctx_t *ctx, expr_t    *expr,    oper_t     oper,    gen_var_t *out_hint, gen_var_t *a,      gen_var_t *b);
 // Expression: Unary math operation.
-gen_var_t *gen_expr_math1    (asm_ctx_t *ctx, oper_t     oper,    gen_var_t *out_hint, gen_var_t *a);
+gen_var_t *gen_expr_math1    (asm_ctx_t *ctx, expr_t    *expr,    oper_t     oper,    gen_var_t *out_hint, gen_var_t *a);
 // Expression: Type cast.
 gen_var_t *gen_cast          (asm_ctx_t *ctx, gen_var_t *a,       var_type_t *ctype);
 

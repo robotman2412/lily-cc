@@ -7,8 +7,8 @@ void entry() {
 	asm("SUB ST, [0xffff]");
 	
 	// Try optimise cond mov?
-	int thing = 23;
-	int other = 91;
+	int thing;
+	int other;
 	if (thing) {
 		other = 1;
 	} else {

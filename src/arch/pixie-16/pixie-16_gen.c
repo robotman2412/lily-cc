@@ -390,7 +390,7 @@ void px_update_cc(asm_ctx_t *ctx, funcdef_t *funcdef) {
 }
 
 // Creates a branch condition from a variable.
-cond_t px_var_to_cond(asm_ctx_t *ctx, gen_var_t *var) {
+cond_t px_var_to_cond(asm_ctx_t *ctx, expr_t *expr, gen_var_t *var) {
 	if (var->type == VAR_TYPE_COND) {
 		// Already done.
 		return var->cond;
@@ -401,14 +401,14 @@ cond_t px_var_to_cond(asm_ctx_t *ctx, gen_var_t *var) {
 			.type = VAR_TYPE_COND,
 			.cond = COND_UGE
 		};
-		gen_expr_math1(ctx, OP_GE, &cond_hint, var);
+		gen_expr_math1(ctx, expr, OP_GE, &cond_hint, var);
 		return COND_UGE;
 	}
 }
 
 // Generate a branch to one of two labels.
-void px_branch(asm_ctx_t *ctx, gen_var_t *cond_var, char *l_true, char *l_false) {
-	cond_t cond = px_var_to_cond(ctx, cond_var);
+void px_branch(asm_ctx_t *ctx, expr_t *expr, gen_var_t *cond_var, char *l_true, char *l_false) {
+	cond_t cond = px_var_to_cond(ctx, expr, cond_var);
 	
 	if (DET_PIE(ctx)) {
 		// PIE alternative.
@@ -976,7 +976,7 @@ bool px_cond_mov_applicable(asm_ctx_t *ctx, gen_var_t *cond, stmt_t *s_if, stmt_
 }
 
 // If statement implementation.
-bool gen_if(asm_ctx_t *ctx, gen_var_t *cond, stmt_t *s_if, stmt_t *s_else) {
+bool gen_if(asm_ctx_t *ctx, stmt_t *stmt, gen_var_t *cond, stmt_t *s_if, stmt_t *s_else) {
 	// Optimise out empty statements.
 	if (s_if   && stmt_is_empty(s_if)) {
 		s_if = NULL;
@@ -995,7 +995,7 @@ bool gen_if(asm_ctx_t *ctx, gen_var_t *cond, stmt_t *s_if, stmt_t *s_else) {
 			// Write the branch.
 			char *l_true = asm_get_label(ctx);
 			char *l_skip;
-			px_branch(ctx, cond, l_true, NULL);
+			px_branch(ctx, stmt->cond, cond, l_true, NULL);
 			// True:
 			bool if_explicit = gen_stmt(ctx, s_if, false);
 			if (!if_explicit) {
@@ -1014,7 +1014,7 @@ bool gen_if(asm_ctx_t *ctx, gen_var_t *cond, stmt_t *s_if, stmt_t *s_else) {
 		} else {
 			// Write the branch.
 			char *l_skip = asm_get_label(ctx);
-			px_branch(ctx, cond, NULL, l_skip);
+			px_branch(ctx, stmt->cond, cond, NULL, l_skip);
 			// True:
 			gen_stmt(ctx, s_if, false);
 			// Skip label (to skip over if code when codition is not met).
@@ -1025,7 +1025,7 @@ bool gen_if(asm_ctx_t *ctx, gen_var_t *cond, stmt_t *s_if, stmt_t *s_else) {
 }
 
 // While statement implementation.
-void gen_while(asm_ctx_t *ctx, expr_t *cond, stmt_t *code, bool is_do_while) {
+void gen_while(asm_ctx_t *ctx, stmt_t *stmt, expr_t *cond, stmt_t *code, bool is_do_while) {
 	char *loop_label  = asm_get_label(ctx);
 	char *check_label = asm_get_label(ctx);
 	
@@ -1051,7 +1051,7 @@ void gen_while(asm_ctx_t *ctx, expr_t *cond, stmt_t *code, bool is_do_while) {
 		};
 		asm_write_label(ctx, check_label);
 		gen_var_t *cond_res = gen_expression(ctx, cond, &cond_hint);
-		px_branch(ctx, cond_res, loop_label, NULL);
+		px_branch(ctx, stmt->cond, cond_res, loop_label, NULL);
 		if (cond_res != &cond_hint) {
 			gen_unuse(ctx, cond_res);
 		}
@@ -1059,7 +1059,7 @@ void gen_while(asm_ctx_t *ctx, expr_t *cond, stmt_t *code, bool is_do_while) {
 }
 
 // For loop implementation.
-void gen_for(asm_ctx_t *ctx, exprs_t *cond, stmt_t *code, exprs_t *next) {
+void gen_for(asm_ctx_t *ctx, stmt_t *stmt, exprs_t *cond, stmt_t *code, exprs_t *next) {
 	bool is_forever = cond->num == 0;
 	
 	char *loop_label  = asm_get_label(ctx);
@@ -1097,7 +1097,7 @@ void gen_for(asm_ctx_t *ctx, exprs_t *cond, stmt_t *code, exprs_t *next) {
 			.type = VAR_TYPE_COND,
 		};
 		gen_var_t *cond_res = gen_expression(ctx, &cond->arr[cond->num - 1], &cond_hint);
-		px_branch(ctx, cond_res, loop_label, NULL);
+		px_branch(ctx, &cond->arr[cond->num - 1], cond_res, loop_label, NULL);
 		if (cond_res != &cond_hint) {
 			gen_unuse(ctx, cond_res);
 		}
@@ -1323,14 +1323,35 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, siz
 }
 
 // Expression: Binary math operation.
-gen_var_t *gen_expr_math2(asm_ctx_t *ctx, oper_t oper, gen_var_t *out_hint, gen_var_t *a, gen_var_t *b) {
+gen_var_t *gen_expr_math2(asm_ctx_t *ctx, expr_t *expr, oper_t oper, gen_var_t *out_hint, gen_var_t *a, gen_var_t *b) {
 	address_t n_words = 1;
 	bool isSigned     = STYPE_IS_SIGNED(a->ctype->simple_type) && STYPE_IS_SIGNED(b->ctype->simple_type);
+	
+	// Check for unassigned.
+	if (a->type == VAR_TYPE_UNASSIGNED) {
+		// Emit a warning i guess.
+		if (expr && expr->par_a->type == EXPR_TYPE_IDENT) {
+			report_errorf(ctx->tokeniser_ctx, E_WARN, expr->par_a->pos, "%s is uninitialised at this point", expr->par_a->ident->strval);
+		} else {
+			printf("Warning: <anonymous>:??: Usage of an uninitialised variable, this might be a bug\n");
+		}
+		*a = *a->default_loc;
+	}
+	if (b->type == VAR_TYPE_UNASSIGNED) {
+		// Emit a warning i guess.
+		if (expr && expr->par_b->type == EXPR_TYPE_IDENT) {
+			report_errorf(ctx->tokeniser_ctx, E_WARN, expr->par_b->pos, "%s is uninitialised at this point", expr->par_b->ident->strval);
+		} else {
+			printf("Warning: <anonymous>:??: Usage of an uninitialised variable, this might be a bug\n");
+		}
+		*b = *b->default_loc;
+	}
+	
 	
 	// Can we simplify?
 	if ((OP_IS_SHIFT(oper) || OP_IS_ADD(oper) || OP_IS_COMP(oper)) && b->type == VAR_TYPE_CONST && b->iconst == 1) {
 		// B is constant 1: math1 will do.
-		return gen_expr_math1(ctx, oper, out_hint, a);
+		return gen_expr_math1(ctx, expr, oper, out_hint, a);
 		
 	} else if ((oper == OP_EQ || oper == OP_NE) && b->type == VAR_TYPE_CONST && b->iconst == 0) {
 		// B is constant 0 (for == or !=), math1 will do.
@@ -1432,8 +1453,20 @@ gen_var_t *gen_expr_math2(asm_ctx_t *ctx, oper_t oper, gen_var_t *out_hint, gen_
 }
 
 // Expression: Unary math operation.
-gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_var_t *a) {
+gen_var_t *gen_expr_math1(asm_ctx_t *ctx, expr_t *expr, oper_t oper, gen_var_t *output, gen_var_t *a) {
 	bool isSigned     = true;
+	
+	// Check for unassigned.
+	if (a->type == VAR_TYPE_UNASSIGNED) {
+		// Emit a warning i guess.
+		if (expr && expr->par_a->type == EXPR_TYPE_IDENT) {
+			report_errorf(ctx->tokeniser_ctx, E_WARN, expr->par_a->pos, "%s is uninitialised at this point", expr->par_a->ident->strval);
+		} else {
+			printf("Warning: <anonymous>:??: Usage of an uninitialised variable, this might be a bug\n");
+		}
+		*a = *a->default_loc;
+	}
+	
 	if (oper == OP_LOGIC_NOT) {
 		if (a->type == VAR_TYPE_COND) {
 			// Invert a branch condition.
@@ -1502,7 +1535,7 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 		if (a->default_loc) {
 			// LEA of default location.
 			// This starts clobbering things up.
-			return gen_expr_math1(ctx, oper, output, a->default_loc);
+			return gen_expr_math1(ctx, expr, oper, output, a->default_loc);
 		} else if (a->type == VAR_TYPE_LABEL) {
 			bool use_hint = output && output->type == VAR_TYPE_REG;
 			reg_t regno = use_hint ? output->reg : px_pick_reg(ctx, true);
@@ -1573,7 +1606,7 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 			gen_var_t *tmp = px_get_tmp(ctx, 1, false);
 			tmp->ctype = a->ctype;
 			gen_mov(ctx, tmp, a);
-			return gen_expr_math1(ctx, oper, output, tmp);
+			return gen_expr_math1(ctx, expr, oper, output, tmp);
 		}
 	} else if (oper == OP_ADD) {
 		// Increment.
@@ -1762,7 +1795,7 @@ void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words)
 		}
 	} else if (dst->type == VAR_TYPE_COND) {
 		// Convert to condition.
-		dst->cond = px_var_to_cond(ctx, src);
+		dst->cond = px_var_to_cond(ctx, NULL, src);
 	} else {
 		// Move through register.
 		reg_t regno;
@@ -1841,7 +1874,7 @@ void px_var_to_reg(asm_ctx_t *ctx, gen_var_t *var, bool allow_const) {
 // Variables: Move variable to another location.
 void gen_mov(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src) {
 	address_t n_words;
-	if (dst->type == VAR_TYPE_UNASSIGNED && src->type == VAR_TYPE_REG && 0 /* no copy is ok? */) {
+	if (dst->type == VAR_TYPE_UNASSIGNED && !src->owner) {
 		// Unassigned variable optimisation.
 		// Make default location.
 		src->default_loc = dst;
@@ -1850,7 +1883,14 @@ void gen_mov(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src) {
 		*dst = *src;
 		*src = tmp;
 		return;
+	} else if (dst->type == VAR_TYPE_UNASSIGNED) {
+		// Replace dst by it's default location before copying.
+		gen_var_t *to_free = dst->default_loc;
+		*dst = *dst->default_loc;
+		// Free up old memory.
+		xfree(ctx->allocator, to_free);
 	}
+	
 	// Normal copy.
 	if (src->type == VAR_TYPE_CONST) {
 		n_words = dst->ctype->size;

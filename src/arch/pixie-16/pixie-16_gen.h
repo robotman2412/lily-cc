@@ -33,9 +33,9 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, px_addr_t *add
 void px_update_cc(asm_ctx_t *ctx, funcdef_t *funcdef);
 
 // Creates a branch condition from a variable.
-cond_t px_var_to_cond(asm_ctx_t *ctx, gen_var_t *var);
+cond_t px_var_to_cond(asm_ctx_t *ctx, expr_t *expr, gen_var_t *var);
 // Generate a branch to one of two labels.
-void px_branch(asm_ctx_t *ctx, gen_var_t *cond_var, char *l_true, char *l_false);
+void px_branch(asm_ctx_t *ctx, expr_t *expr, gen_var_t *cond_var, char *l_true, char *l_false);
 // Generate a jump to a label.
 void px_jump(asm_ctx_t *ctx, char *label);
 

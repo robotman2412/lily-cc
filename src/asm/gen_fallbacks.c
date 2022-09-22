@@ -150,17 +150,17 @@ bool gen_stmt(asm_ctx_t *ctx, void *ptr, bool is_stmts) {
 					.type = VAR_TYPE_COND
 				};
 				gen_var_t *cond = gen_expression(ctx, stmt->expr, &cond_hint);
-				return cond && gen_if(ctx, cond, stmt->code_true, stmt->code_false);
+				return cond && gen_if(ctx, stmt, cond, stmt->code_true, stmt->code_false);
 			} break;
 			case STMT_TYPE_WHILE: {
-				gen_while(ctx, stmt->cond, stmt->code_true, false);
+				gen_while(ctx, stmt, stmt->cond, stmt->code_true, false);
 				return false;
 			} break;
 			case STMT_TYPE_FOR: {
 				gen_push_scope(ctx);
 				gen_var_scope(ctx, stmt->preproc->vars);
 				gen_stmt(ctx, stmt->for_init, false);
-				gen_for(ctx, stmt->for_cond, stmt->for_code, stmt->for_next);
+				gen_for(ctx, stmt, stmt->for_cond, stmt->for_code, stmt->for_next);
 				gen_pop_scope(ctx);
 				return false;
 			} break;
@@ -760,7 +760,7 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 				.label  = expr->label,
 				.ctype  = ctype_ptr_simple(ctx, STYPE_CHAR),
 			};
-			return gen_expr_math1(ctx, OP_ADROF, NULL, val);
+			return gen_expr_math1(ctx, expr, OP_ADROF, NULL, val);
 		} break;
 		
 		case EXPR_TYPE_IDENT: {
@@ -835,12 +835,12 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 				};
 				// And do the rest as usual.
 				gen_var_t *a = gen_expression(ctx, expr->par_a, cond_hint);
-				return a ? gen_expr_math1(ctx, expr->oper, out_hint, a) : NULL;
+				return a ? gen_expr_math1(ctx, expr, expr->oper, out_hint, a) : NULL;
 				
 			} else {
 				// Simple expression.
 				gen_var_t *a = gen_expression(ctx, expr->par_a, out_hint);
-				return a ? gen_expr_math1(ctx, expr->oper, out_hint, a) : NULL;
+				return a ? gen_expr_math1(ctx, expr, expr->oper, out_hint, a) : NULL;
 			}
 		} break;
 		
@@ -896,7 +896,7 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 				gen_var_t *b   = gen_expression(ctx, expr->par_b, NULL);
 				if (!b && a) gen_unuse(ctx, a);
 				if (!b) return NULL;
-				gen_var_t *out = gen_expr_math2(ctx, expr->oper, out_hint, a, b);
+				gen_var_t *out = gen_expr_math2(ctx, expr, expr->oper, out_hint, a, b);
 				if (!out && a) gen_unuse(ctx, a);
 				if (!out && b) gen_unuse(ctx, b);
 				if (!out) return NULL;

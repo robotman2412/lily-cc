@@ -70,13 +70,13 @@ static void px_write_insn0(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, a
 	asm_write_memword(ctx, px_pack_insn(insn));
 	
 	// Determine the count of IMM parameters.
-	uint_fast8_t num_param = (insn.a == REG_IMM) + (insn.b == REG_IMM);
+	uint_fast8_t num_param = (insn.a == PX_REG_IMM) + (insn.b == PX_REG_IMM);
 	
-	if (insn.a == REG_IMM) {
+	if (insn.a == PX_REG_IMM) {
 		if (label0) {
-			if (!insn.y && insn.x == ADDR_PC) {
+			if (!insn.y && insn.x == PX_ADDR_PC) {
 				// Determine offset relative to instruction end instead of label reference.
-				address_t offs = (insn.b == REG_IMM) ? offs0 - 2 : offs0 - 1;
+				address_t offs = (insn.b == PX_REG_IMM) ? offs0 - 2 : offs0 - 1;
 				// Write label reference (PIE).
 				asm_write_label_ref(
 					ctx, label0, offs,
@@ -112,9 +112,9 @@ static void px_write_insn0(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, a
 			#endif
 		}
 	}
-	if (insn.b == REG_IMM) {
+	if (insn.b == PX_REG_IMM) {
 		if (label1) {
-			if (insn.y && insn.x == ADDR_PC) {
+			if (insn.y && insn.x == PX_ADDR_PC) {
 				// Write label reference (PIE).
 				asm_write_label_ref(
 					ctx, label1, offs1 - 1,
@@ -178,15 +178,15 @@ void px_write_insn_iasm(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, addr
 // Write an instruction with some context.
 void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1) {
 	// Test whether this is a write to stack.
-	if (insn.y == 0 && insn.x == ADDR_ST) {
+	if (insn.y == 0 && insn.x == PX_ADDR_ST) {
 		// Test for possible stack push operation.
 		addrdiff_t error = ctx->current_scope->stack_size - ctx->current_scope->real_stack_size;
 		if (error - 1 == offs0) {
 			DEBUG_GEN("// Stack optimised (push).\n");
 			
 			// Re-write the insn.
-			insn.x = ADDR_MEM;
-			insn.a = REG_ST;
+			insn.x = PX_ADDR_MEM;
+			insn.a = PX_REG_ST;
 			px_write_insn0(ctx, insn, NULL, 0, label1, offs1);
 			ctx->current_scope->real_stack_size ++;
 			return;
@@ -194,12 +194,12 @@ void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t
 	}
 	
 	// Test for suspicious instructions.
-	if ((insn.y == 0 && insn.x == insn.a && insn.x != ADDR_IMM) || (insn.y == 1 && insn.x == insn.b && insn.x != ADDR_IMM)) {
+	if ((insn.y == 0 && insn.x == insn.a && insn.x != PX_ADDR_IMM) || (insn.y == 1 && insn.x == insn.b && insn.x != PX_ADDR_IMM)) {
 		DEBUG_GEN("// WARNING: Suspicious instruction.\n");
 	}
 	
 	// Determine memory clobbers.
-	if (insn.a == REG_ST || insn.b == REG_ST || insn.x == ADDR_ST) {
+	if (insn.a == PX_REG_ST || insn.b == PX_REG_ST || insn.x == PX_ADDR_ST) {
 		px_memclobber(ctx, true);
 	}
 	
@@ -224,26 +224,26 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, px_addr_t *add
 			
 		case VAR_TYPE_CONST:
 			// Constant thingy.
-			*addrmode = ADDR_IMM;
+			*addrmode = PX_ADDR_IMM;
 			*offs = var->iconst >> (MEM_BITS * part);
-			return REG_IMM;
+			return PX_REG_IMM;
 			
 		case VAR_TYPE_LABEL:
 			// At label.
-			*addrmode = ADDR_MEM;
+			*addrmode = PX_ADDR_MEM;
 			*label = var->label;
 			*offs = part;
-			return REG_IMM;
+			return PX_REG_IMM;
 			
 		case VAR_TYPE_STACKOFFS:
 			// In stack.
-			*addrmode = ADDR_ST;
+			*addrmode = PX_ADDR_ST;
 			*offs = px_get_depth(ctx, var, part);
-			return REG_IMM;
+			return PX_REG_IMM;
 			
 		case VAR_TYPE_REG:
 			// In register.
-			*addrmode = ADDR_IMM;
+			*addrmode = PX_ADDR_IMM;
 			return var->reg + part;
 			
 		case VAR_TYPE_RETVAL:
@@ -253,13 +253,13 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, px_addr_t *add
 		case VAR_TYPE_PTR:
 			if (var->ptr->type == VAR_TYPE_REG) {
 				// This is a bit simpler.
-				*addrmode = ADDR_MEM;
+				*addrmode = PX_ADDR_MEM;
 				return var->ptr->reg;
 			} else if (var->ptr->type == VAR_TYPE_CONST) {
 				// A constant point might as well be a normal memory access.
-				*addrmode = ADDR_MEM;
+				*addrmode = PX_ADDR_MEM;
 				*offs = var->ptr->iconst;
-				return REG_IMM;
+				return PX_REG_IMM;
 			} else {
 				char *imm1 = NULL;
 				// Im poimtre.
@@ -273,7 +273,7 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, px_addr_t *add
 				// Do some recursive funnies.
 				insn.b = px_addr_var(ctx, var->ptr, 0, &insn.x, &label1, &offs1, dest);
 				px_write_insn(ctx, insn, NULL, 0, label1, offs1);
-				*addrmode = ADDR_MEM;
+				*addrmode = PX_ADDR_MEM;
 				// Return the registrex.
 				return dest;
 			}
@@ -304,10 +304,10 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, px_addr_t *add
 				// Constant (nonzero) offset and variable offset.
 				*addrmode = a->reg;
 				*offs     = b->iconst + part;
-				return REG_IMM;
+				return PX_REG_IMM;
 			} else if (b->type == VAR_TYPE_CONST) {
 				// Constant (zero) offset and variable offset.
-				*addrmode = ADDR_MEM;
+				*addrmode = PX_ADDR_MEM;
 				return a->reg;
 			} else if (part == 0) {
 				// Two variable offsets, index part 0.
@@ -343,7 +343,7 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, px_addr_t *add
 				// Construct with the offset.
 				*addrmode = var->indexed.combined->reg;
 				*offs     = part;
-				return REG_IMM;
+				return PX_REG_IMM;
 			}
 			break;
 	}
@@ -415,9 +415,9 @@ void px_branch(asm_ctx_t *ctx, gen_var_t *cond_var, char *l_true, char *l_false)
 		if (l_true) {
 			px_insn_t insn = {
 				.y = true,
-				.x = ADDR_PC,
-				.b = REG_IMM,
-				.a = REG_PC,
+				.x = PX_ADDR_PC,
+				.b = PX_REG_IMM,
+				.a = PX_REG_PC,
 				.o = PX_OFFS_LEA | cond,
 			};
 			px_write_insn(ctx, insn, NULL, 0, l_true, 0);
@@ -425,9 +425,9 @@ void px_branch(asm_ctx_t *ctx, gen_var_t *cond_var, char *l_true, char *l_false)
 		if (l_false) {
 			px_insn_t insn = {
 				.y = true,
-				.x = ADDR_PC,
-				.b = REG_IMM,
-				.a = REG_PC,
+				.x = PX_ADDR_PC,
+				.b = PX_REG_IMM,
+				.a = PX_REG_PC,
 				.o = PX_OFFS_LEA | INV_BR(cond),
 			};
 			px_write_insn(ctx, insn, NULL, 0, l_false, 0);
@@ -437,9 +437,9 @@ void px_branch(asm_ctx_t *ctx, gen_var_t *cond_var, char *l_true, char *l_false)
 		if (l_true) {
 			px_insn_t insn = {
 				.y = true,
-				.x = ADDR_MEM,
-				.b = REG_IMM,
-				.a = REG_PC,
+				.x = PX_ADDR_MEM,
+				.b = PX_REG_IMM,
+				.a = PX_REG_PC,
 				.o = PX_OFFS_MOV | cond,
 			};
 			px_write_insn(ctx, insn, NULL, 0, l_true, 0);
@@ -447,9 +447,9 @@ void px_branch(asm_ctx_t *ctx, gen_var_t *cond_var, char *l_true, char *l_false)
 		if (l_false) {
 			px_insn_t insn = {
 				.y = true,
-				.x = ADDR_MEM,
-				.b = REG_IMM,
-				.a = REG_PC,
+				.x = PX_ADDR_MEM,
+				.b = PX_REG_IMM,
+				.a = PX_REG_PC,
 				.o = PX_OFFS_MOV | INV_BR(cond),
 			};
 			px_write_insn(ctx, insn, NULL, 0, l_false, 0);
@@ -463,9 +463,9 @@ void px_jump(asm_ctx_t *ctx, char *label) {
 		// PIE alternative.
 		px_insn_t insn = {
 			.y = true,
-			.x = ADDR_PC,
-			.b = REG_IMM,
-			.a = REG_PC,
+			.x = PX_ADDR_PC,
+			.b = PX_REG_IMM,
+			.a = PX_REG_PC,
 			.o = PX_OP_LEA,
 		};
 		px_write_insn(ctx, insn, NULL, 0, label, 0);
@@ -473,9 +473,9 @@ void px_jump(asm_ctx_t *ctx, char *label) {
 		// Non-PIE alternative
 		px_insn_t insn = {
 			.y = true,
-			.x = ADDR_MEM,
-			.b = REG_IMM,
-			.a = REG_PC,
+			.x = PX_ADDR_MEM,
+			.b = PX_REG_IMM,
+			.a = PX_REG_PC,
 			.o = PX_OP_MOV,
 		};
 		px_write_insn(ctx, insn, NULL, 0, label, 0);
@@ -533,7 +533,7 @@ void px_part_to_reg(asm_ctx_t *ctx, gen_var_t *var, reg_t dest, address_t index)
 			// XOR dest, dest optimisation.
 			px_insn_t insn = {
 				.y = 0,
-				.x = ADDR_IMM,
+				.x = PX_ADDR_IMM,
 				.b = dest,
 				.a = dest,
 				.o = PX_OP_XOR,
@@ -684,14 +684,14 @@ gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 	// Translate retval into it's real location.
 	if (out_hint && out_hint->type == VAR_TYPE_RETVAL) {
 		out_hint->type = VAR_TYPE_REG;
-		out_hint->reg  = REG_R0;
-		if (b->type == VAR_TYPE_REG && b->reg == REG_R0) {
+		out_hint->reg  = PX_REG_R0;
+		if (b->type == VAR_TYPE_REG && b->reg == PX_REG_R0) {
 			if (swappable) {
 				gen_var_t *tmp = a;
 				a = b;
 				b = tmp;
 			} else {
-				px_vacate_reg(ctx, REG_R0);
+				px_vacate_reg(ctx, PX_REG_R0);
 			}
 		}
 	}
@@ -716,7 +716,7 @@ gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 		reg_b = px_pick_reg(ctx, true);
 		px_touch_reg(ctx, reg_b);
 	} else if (b->type == VAR_TYPE_CONST) {
-		reg_b = REG_IMM;
+		reg_b = PX_REG_IMM;
 	}
 	
 	// A fancy for loop.
@@ -747,7 +747,7 @@ gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 			// Move B to a temp register.
 			px_part_to_reg(ctx, b, reg_b, i);
 			insn.b = reg_b;
-		} else if (insn.x == ADDR_IMM) {
+		} else if (insn.x == PX_ADDR_IMM) {
 			// Address using B.
 			insn.y = 1;
 			insn.b = px_addr_var(ctx, b, i, &insn.x, &label1, &offs1, reg_b);
@@ -797,9 +797,9 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 		for (int i = 0; i < funcdef->num_reg_to_push; i++) {
 			px_insn_t insn = {
 				.y = 0,
-				.x = ADDR_MEM,
+				.x = PX_ADDR_MEM,
 				.b = 3 - i,
-				.a = REG_ST,
+				.a = PX_REG_ST,
 				.o = PX_OP_MOV,
 			};
 			px_write_insn(ctx, insn, NULL, 0, NULL, 0);
@@ -884,7 +884,7 @@ void gen_return(asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *retval) {
 		if (retval->ctype->size != funcdef->returns->size) {
 			retval = gen_cast(ctx, retval, funcdef->returns);
 		}
-		px_mov_to_reg(ctx, retval, REG_R0);
+		px_mov_to_reg(ctx, retval, PX_REG_R0);
 	}
 	
 	// Pop some stuff off the stack.
@@ -899,8 +899,8 @@ void gen_return(asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *retval) {
 		for (int i = 0; i < funcdef->num_reg_to_push; i++) {
 			px_insn_t insn = {
 				.y = 1,
-				.x = ADDR_MEM,
-				.b = REG_ST,
+				.x = PX_ADDR_MEM,
+				.b = PX_REG_ST,
 				.a = 4 - funcdef->num_reg_to_push + i,
 				.o = PX_OP_MOV,
 			};
@@ -912,9 +912,9 @@ void gen_return(asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *retval) {
 		// Append the special interrupt return.
 		px_insn_t insn = {
 			.y = 1,
-			.x = ADDR_MEM,
-			.b = REG_ST,
-			.a = REG_PF,
+			.x = PX_ADDR_MEM,
+			.b = PX_REG_ST,
+			.a = PX_REG_PF,
 			.o = PX_OP_MOV,
 		};
 		px_write_insn(ctx, insn, NULL, 0, NULL, 0);
@@ -923,9 +923,9 @@ void gen_return(asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *retval) {
 	// Append the return.
 	px_insn_t insn = {
 		.y = 1,
-		.x = ADDR_MEM,
-		.b = REG_ST,
-		.a = REG_PC,
+		.x = PX_ADDR_MEM,
+		.b = PX_REG_ST,
+		.a = PX_REG_PC,
 		.o = PX_OP_MOV,
 	};
 	px_write_insn(ctx, insn, NULL, 0, NULL, 0);
@@ -1228,9 +1228,9 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, siz
 			// Jump to constant.
 			px_insn_t insn = {
 				.y = true,
-				.x = ADDR_IMM,
-				.b = REG_IMM,
-				.a = REG_PC,
+				.x = PX_ADDR_IMM,
+				.b = PX_REG_IMM,
+				.a = PX_REG_PC,
 				.o = PX_OFFS_MOV | COND_JSR,
 			};
 			px_write_insn(ctx, insn, NULL, 0, NULL, var->iconst);
@@ -1240,9 +1240,9 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, siz
 				// Jump to label (PIE).
 				px_insn_t insn = {
 					.y = true,
-					.x = ADDR_PC,
-					.b = REG_IMM,
-					.a = REG_PC,
+					.x = PX_ADDR_PC,
+					.b = PX_REG_IMM,
+					.a = PX_REG_PC,
 					.o = PX_OFFS_LEA | COND_JSR,
 				};
 				px_write_insn(ctx, insn, NULL, 0, var->label, 0);
@@ -1250,9 +1250,9 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, siz
 				// Jump to label (Non-PIE).
 				px_insn_t insn = {
 					.y = true,
-					.x = ADDR_IMM,
-					.b = REG_IMM,
-					.a = REG_PC,
+					.x = PX_ADDR_IMM,
+					.b = PX_REG_IMM,
+					.a = PX_REG_PC,
 					.o = PX_OFFS_MOV | COND_JSR,
 				};
 				px_write_insn(ctx, insn, NULL, 0, var->label, 0);
@@ -1267,9 +1267,9 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, siz
 			// Jump to register.
 			px_insn_t insn = {
 				.y = true,
-				.x = ADDR_IMM,
+				.x = PX_ADDR_IMM,
 				.b = var->reg,
-				.a = REG_PC,
+				.a = PX_REG_PC,
 				.o = PX_OFFS_MOV | COND_JSR,
 			};
 			px_write_insn(ctx, insn, NULL, 0, NULL, 0);
@@ -1288,7 +1288,7 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, siz
 			// Registrex.
 			*retval = (gen_var_t) {
 				.type  = VAR_TYPE_REG,
-				.reg   = REG_R0,
+				.reg   = PX_REG_R0,
 				.ctype = funcdef->returns,
 				.owner = NULL
 			};
@@ -1510,8 +1510,8 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 				// LEA (pie).
 				px_insn_t insn = {
 					.y = true,
-					.x = ADDR_PC,
-					.b = REG_IMM,
+					.x = PX_ADDR_PC,
+					.b = PX_REG_IMM,
 					.a = regno,
 					.o = PX_OP_LEA,
 				};
@@ -1520,8 +1520,8 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 				// LEA (non-pie).
 				px_insn_t insn = {
 					.y = true,
-					.x = ADDR_MEM,
-					.b = REG_IMM,
+					.x = PX_ADDR_MEM,
+					.b = PX_REG_IMM,
 					.a = regno,
 					.o = PX_OP_LEA,
 				};
@@ -1547,8 +1547,8 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, oper_t oper, gen_var_t *output, gen_va
 			reg_t regno = use_hint ? output->reg : px_pick_reg(ctx, true);
 			px_insn_t insn = {
 				.y = true,
-				.x = ADDR_ST,
-				.b = REG_IMM,
+				.x = PX_ADDR_ST,
+				.b = PX_REG_IMM,
 				.a = regno,
 				.o = PX_OP_LEA,
 			};
@@ -1715,9 +1715,9 @@ void px_memclobber(asm_ctx_t *ctx, bool clobbers_stack) {
 			// Increment or decrement ST.
 			px_insn_t insn = {
 				.y = 0,
-				.x = ADDR_IMM,
+				.x = PX_ADDR_IMM,
 				.b = 0,
-				.a = REG_ST,
+				.a = PX_REG_ST,
 				.o = diff == 1 ? PX_OP_INC : PX_OP_DEC,
 			};
 			px_write_insn0(ctx, insn, NULL, 0, NULL, 0);
@@ -1725,9 +1725,9 @@ void px_memclobber(asm_ctx_t *ctx, bool clobbers_stack) {
 			// Add to ST.
 			px_insn_t insn = {
 				.y = 0,
-				.x = ADDR_IMM,
-				.b = REG_IMM,
-				.a = REG_ST,
+				.x = PX_ADDR_IMM,
+				.b = PX_REG_IMM,
+				.a = PX_REG_ST,
 				.o = PX_OP_ADD,
 			};
 			px_write_insn0(ctx, insn, NULL, 0, NULL, diff);
@@ -1735,9 +1735,9 @@ void px_memclobber(asm_ctx_t *ctx, bool clobbers_stack) {
 			// Sub from ST for clarity.
 			px_insn_t insn = {
 				.y = 0,
-				.x = ADDR_IMM,
-				.b = REG_IMM,
-				.a = REG_ST,
+				.x = PX_ADDR_IMM,
+				.b = PX_REG_IMM,
+				.a = PX_REG_ST,
 				.o = PX_OP_SUB,
 			};
 			px_write_insn0(ctx, insn, NULL, 0, NULL, -diff);
@@ -1752,7 +1752,7 @@ void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words)
 	// Translate retval into it's real location.
 	if (dst->type == VAR_TYPE_RETVAL) {
 		dst->type = VAR_TYPE_REG;
-		dst->reg  = REG_R0;
+		dst->reg  = PX_REG_R0;
 	}
 	
 	if (dst->type == VAR_TYPE_REG) {
@@ -1769,7 +1769,7 @@ void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words)
 		bool  mov_to_reg = false;
 		if (src->type == VAR_TYPE_CONST) {
 			// We can encode this differently.
-			regno = REG_IMM;
+			regno = PX_REG_IMM;
 		} else if (src->type == VAR_TYPE_REG) {
 			// Use the existing register.
 			regno = src->reg;
@@ -1798,7 +1798,7 @@ void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words)
 				// Move B to a temp register.
 				px_part_to_reg(ctx, src, regno, i);
 				insn.b = regno;
-			} else if (insn.x == ADDR_IMM) {
+			} else if (insn.x == PX_ADDR_IMM) {
 				// Address using B.
 				insn.y = 1;
 				insn.b = px_addr_var(ctx, src, i, &insn.x, &label1, &offs1, regno);

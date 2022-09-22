@@ -238,15 +238,15 @@ bool px_iasm_parse_addr(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx, px_token_t *ou
 	if (tkn.type == PX_TKN_IVAL || tkn.type == PX_TKN_IDENT) {
 		// imm
 		addressed = tkn;
-		addressed.regno = REG_IMM;
-		addressed.addr_mode = ADDR_IMM;
+		addressed.regno = PX_REG_IMM;
+		addressed.addr_mode = PX_ADDR_IMM;
 		TKN_EXPECT_EOL(lex_ctx);
 		goto check_addressed;
 	} else if (tkn.type >= PX_TKN_R0 && tkn.type <= PX_TKN_PC) {
 		// reg
 		addressed = tkn;
 		addressed.regno = tkn.type - PX_TKN_R0;
-		addressed.addr_mode = ADDR_IMM;
+		addressed.addr_mode = PX_ADDR_IMM;
 		TKN_EXPECT_EOL(lex_ctx);
 		goto check_addressed;
 	} else if (tkn.type == PX_TKN_LBRAC) {
@@ -263,7 +263,7 @@ bool px_iasm_parse_addr(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx, px_token_t *ou
 				// PF is not an addressable register.
 				PX_ERROR(lex_ctx, "Register 'PF' is not allowed in memory parameter.\n");
 				return false;
-			} else if (has_addressed && addressed.addr_mode != ADDR_MEM) {
+			} else if (has_addressed && addressed.addr_mode != PX_ADDR_MEM) {
 				// Two registers plus imm is not possible.
 				PX_ERROR(lex_ctx, "Argument too complex, consider removing a regiser.\n");
 				return false;
@@ -274,7 +274,7 @@ bool px_iasm_parse_addr(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx, px_token_t *ou
 				// Set the register.
 				addressed           = tkn;
 				addressed.regno     = tkn.type - PX_TKN_R0;
-				addressed.addr_mode = ADDR_MEM;
+				addressed.addr_mode = PX_ADDR_MEM;
 				has_reg             = true;
 				has_addressed       = true;
 			}
@@ -284,28 +284,28 @@ bool px_iasm_parse_addr(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx, px_token_t *ou
 				// Can't handle two idents at once.
 				PX_ERROR(lex_ctx, "Cannot handle more than one ident.");
 				return false;
-			} else if (has_addressed && !addressed.ival && addressed.addr_mode != ADDR_MEM) {
+			} else if (has_addressed && !addressed.ival && addressed.addr_mode != PX_ADDR_MEM) {
 				// Two registers plus imm is not possible.
 				PX_ERROR(lex_ctx, "Argument too complex, consider removing a regiser.");
 			} else if (has_addressed) {
 				// Add the ident.
 				if (has_reg && !addressed.ival) {
 					addressed.addr_mode = addressed.regno;
-					addressed.regno     = REG_IMM;
+					addressed.regno     = PX_REG_IMM;
 				}
 				addressed.ident     = tkn.ident;
 				has_ident           = true;
 			} else {
 				// Set the ident.
 				addressed           = tkn;
-				addressed.regno     = REG_IMM;
-				addressed.addr_mode = ADDR_MEM;
+				addressed.regno     = PX_REG_IMM;
+				addressed.addr_mode = PX_ADDR_MEM;
 				has_ident           = true;
 				has_addressed       = true;
 			}
 		} else if (tkn.type == PX_TKN_IVAL) {
 			// Ival.
-			if (has_reg && !has_ident && addressed.addr_mode != ADDR_MEM) {
+			if (has_reg && !has_ident && addressed.addr_mode != PX_ADDR_MEM) {
 				// Two registers plus imm is not possible.
 				PX_ERROR(lex_ctx, "Argument too complex, consider removing a regiser.");
 				return false;
@@ -313,14 +313,14 @@ bool px_iasm_parse_addr(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx, px_token_t *ou
 				// Add the FUNNY.
 				if (has_reg && !has_ident) {
 					addressed.addr_mode = addressed.regno;
-					addressed.regno     = REG_IMM;
+					addressed.regno     = PX_REG_IMM;
 				}
 				addressed.ival += tkn.ival;
 			} else {
 				// Set the FUNNY.
 				addressed           = tkn;
-				addressed.regno     = REG_IMM;
-				addressed.addr_mode = ADDR_MEM;
+				addressed.regno     = PX_REG_IMM;
+				addressed.addr_mode = PX_ADDR_MEM;
 				has_addressed       = true;
 			}
 		} else {
@@ -419,16 +419,16 @@ void gen_asm(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 			char buf[60];
 			sprintf(buf, "Instruction '%s' has %zd argument%s (%zd given).\n", px_iasm_keyw[(size_t) tkn.type], expect_args, expect_args == 1 ? "" : "s", n_args);
 			PX_ERROR_L(lex_ctx, start_pos, buf);
-		} else if (args[0].addr_mode == ADDR_IMM && args[0].regno == REG_IMM) {
+		} else if (args[0].addr_mode == PX_ADDR_IMM && args[0].regno == PX_REG_IMM) {
 			// Can't have A be imm.
 			PX_ERROR_L(lex_ctx, start_pos, "First parameter must be a register or memory reference.\n");
-		} else if (n_args == 2 && args[0].addr_mode == ADDR_MEM && args[1].addr_mode == ADDR_MEM) {
+		} else if (n_args == 2 && args[0].addr_mode == PX_ADDR_MEM && args[1].addr_mode == PX_ADDR_MEM) {
 			// Can't have both be memory.
 			PX_ERROR_L(lex_ctx, start_pos, "No more than one memory reference is allowed.\n");
 		} else {
 			// Determine instruction value.
 			px_insn_t insn = {
-				.y = n_args == 2 && args[1].addr_mode != ADDR_IMM,
+				.y = n_args == 2 && args[1].addr_mode != PX_ADDR_IMM,
 				.b = n_args == 2 ? args[1].regno : 0,
 				.a = args[0].regno,
 				.o = tkn.type

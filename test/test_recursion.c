@@ -15,7 +15,7 @@ void entry() {
 	asm("MOV ST, 0xffff");
 	asm("SUB ST, [0xffff]");
 	
-	int result = fibonacci(6);
+	while (1) int result = fibonacci(14);
 	
 	asm("DEC PC");
 }

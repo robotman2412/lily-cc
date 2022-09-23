@@ -110,7 +110,8 @@ px_token_t px_iasm_lex(tokeniser_ctx_t *ctx) {
 						tokeniser_readchar(ctx);
 					}
 				}
-				goto retry;
+				DEBUG_TKN("line comment\n");
+				return (px_token_t) {.type = PX_TKN_END, .ident=NULL, .ival=0};
 			} else if (next == '*') {
 				// This starts a block commment.
 				for (long i = 1; c != 0; i++) {

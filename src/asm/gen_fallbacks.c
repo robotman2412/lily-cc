@@ -490,16 +490,15 @@ static bool asm_expect_ival(tokeniser_ctx_t *lex_ctx, long long *out) {
 	
 	// This could be hexadecimal.
 	if (c == '0' && (next == 'x' || next == 'X')) {
-		int offs = 2;
-		while (is_hexadecimal(tokeniser_nextchar_no(lex_ctx, offs))) offs++;
+		int offs = 0;
+		while (is_hexadecimal(tokeniser_nextchar_no(lex_ctx, offs+2))) offs++;
 		// Skip the 0x.
 		tokeniser_readchar(lex_ctx);
 		tokeniser_readchar(lex_ctx);
 		// Now, grab it.
-		offs --;
 		char *strval = (char *) xalloc(lex_ctx->allocator, sizeof(char) * offs);
 		strval[offs] = 0;
-		for (int i = 0; i < offs-1; i++) {
+		for (int i = 0; i < offs; i++) {
 			strval[i] = tokeniser_readchar(lex_ctx);
 		}
 		// Turn it into a number, hexadecimal.

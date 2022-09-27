@@ -698,8 +698,13 @@ int tokenise(tokeniser_ctx_t *ctx) {
 	return tkn_id;
 }
 
-static void print_src(tokeniser_ctx_t *ctx, FILE *outfile, int line, int x0, int x1, char *col) {
+static void print_src(tokeniser_ctx_t *ctx, FILE *outfile, int line, int x0, int x1, char *col, int *outX0, int *outX1) {
+	int dummy;
+	if (!outX0) outX0 = &dummy;
+	if (!outX1) outX1 = &dummy;
+	
 	int tab_size = 4;
+	
 	if (ctx->use_fd) {
 		// File descriptor source.
 		// Save the stream position.
@@ -738,12 +743,14 @@ static void print_src(tokeniser_ctx_t *ctx, FILE *outfile, int line, int x0, int
 			char c = fgetc(ctx->fd);
 			if (i == x0 - 1) {
 				fputs(col, outfile);
+				*outX0 = printed_x + 1;
 			}
 			if (c == '\t') {
 				int error = printed_x % tab_size;
 				while (error < tab_size) {
 					fputc(' ', outfile);
 					error ++;
+					printed_x ++;
 				}
 			} else if (c < 0x20 || c >= 0x7f) {
 				fputc(' ', outfile);
@@ -754,6 +761,7 @@ static void print_src(tokeniser_ctx_t *ctx, FILE *outfile, int line, int x0, int
 			}
 			if (i == x1 - 2) {
 				fputs("\033[0m", outfile);
+				*outX1 = printed_x + 1;
 			}
 		}
 		
@@ -791,6 +799,7 @@ static void print_src(tokeniser_ctx_t *ctx, FILE *outfile, int line, int x0, int
 			char c = index[i];
 			if (i == x0 - 1) {
 				fputs(col, outfile);
+				*outX0 = printed_x + 1;
 			}
 			if (c < 0x20 || c >= 0x7f) {
 				fputc(' ', outfile);
@@ -800,6 +809,7 @@ static void print_src(tokeniser_ctx_t *ctx, FILE *outfile, int line, int x0, int
 				while (error < tab_size) {
 					fputc(' ', outfile);
 					error ++;
+					printed_x ++;
 				}
 			} else {
 				fputc(c, outfile);
@@ -807,6 +817,7 @@ static void print_src(tokeniser_ctx_t *ctx, FILE *outfile, int line, int x0, int
 			}
 			if (i == x1 - 2) {
 				fputs("\033[0m", outfile);
+				*outX1 = printed_x + 1;
 			}
 		}
 	}
@@ -848,15 +859,16 @@ void report_error(tokeniser_ctx_t *tokeniser_ctx, error_type_t e_type, pos_t pos
 	fflush(stdout);
 	fprintf(stderr, "in %s:%d:%d %s%s:\033[0m %s\n", pos.filename, pos.y0, pos.x0, col, type, message);
 	fprintf(stderr, "%5d | ", pos.y0);
-	print_src(tokeniser_ctx, stderr, pos.y0, pos.x0, pos.x1, col);
+	int offset0 = pos.x0, offset1 = pos.x1;
+	print_src(tokeniser_ctx, stderr, pos.y0, pos.x0, pos.x1, col, &offset0, &offset1);
 	fprintf(stderr, "      | ");
 	fputs(col, stderr);
-	print_pos_range(pos.x0, pos.x1);
+	print_pos_range(offset0, offset1);
 	fputs("\033[0m", stderr);
 	fflush(stderr);
 }
 
 // Prints a numbered line of the source code.
 void print_line(tokeniser_ctx_t *ctx, int line) {
-	print_src(ctx, stdout, line, 0, 65535, "");
+	print_src(ctx, stdout, line, 0, 65535, "", NULL, NULL);
 }

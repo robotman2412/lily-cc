@@ -8,8 +8,6 @@
 
 // Bump a register to the top of the usage list.
 void px_touch_reg(asm_ctx_t *ctx, reg_t regno);
-// Gets the least used register in the list.
-reg_t px_least_used_reg(asm_ctx_t *ctx);
 
 // Macro for determining PIE.
 #define DET_PIE(ctx)  1
@@ -42,7 +40,7 @@ void px_jump(asm_ctx_t *ctx, char *label);
 // Pick a register to use.
 reg_t px_pick_reg(asm_ctx_t *ctx, bool do_vacate);
 // Pick a register to use, but only pick empty registers.
-bool px_pick_empty_reg(asm_ctx_t *ctx, reg_t *regno);
+bool px_pick_empty_reg(asm_ctx_t *ctx, reg_t *regno, address_t size);
 // Move part of a value to a register.
 void px_part_to_reg(asm_ctx_t *ctx, gen_var_t *val, reg_t dest, address_t index);
 // Move a value to a register.

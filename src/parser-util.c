@@ -189,6 +189,18 @@ iasm_regs_t iasm_regs_one(parser_ctx_t *ctx, iasm_reg_t *iasm_reg) {
 
 
 
+// Creates an empty ident_t from a strval.
+ident_t ident_of_strval(parser_ctx_t *ctx, strval_t *strval) {
+	return (ident_t) {
+		.pos         = strval->pos,
+		.strval      = strval->strval,
+		.type        = NULL,
+		.initialiser = NULL,
+	};
+}
+
+
+
 // An empty list of identities.
 idents_t idents_empty(parser_ctx_t *ctx) {
 	return (idents_t) {
@@ -198,24 +210,38 @@ idents_t idents_empty(parser_ctx_t *ctx) {
 }
 
 // Concatenate to a list of identities.
-idents_t idents_cat(parser_ctx_t *ctx, idents_t *idents, int *s_type, strval_t *name, expr_t *init) {
+idents_t idents_cat(parser_ctx_t *ctx, idents_t *idents, int *s_type_ptr, strval_t *name, expr_t *init) {
+	simple_type_t s_type;
+	if (!s_type_ptr) {
+		s_type = ctx->s_type;
+	} else {
+		s_type = *s_type_ptr;
+	}
+	
 	idents->num ++;
 	idents->arr = xrealloc(ctx->allocator, idents->arr, idents->num * sizeof(ident_t));
 	idents->arr[idents->num - 1] = (ident_t) {
 		.pos         = name->pos,
 		.strval      = name->strval,
-		.type        = s_type ? ctype_simple(ctx->asm_ctx, *s_type) : NULL,
+		.type        = ctype_simple(ctx->asm_ctx, s_type),
 		.initialiser = init ? XCOPY(ctx->allocator, init, expr_t) : NULL,
 	};
 	return *idents;
 }
 
 // A list of one identity.
-idents_t idents_one(parser_ctx_t *ctx, int *s_type, strval_t *name, expr_t *init) {
+idents_t idents_one(parser_ctx_t *ctx, int *s_type_ptr, strval_t *name, expr_t *init) {
+	simple_type_t s_type;
+	if (!s_type_ptr) {
+		s_type = ctx->s_type;
+	} else {
+		s_type = *s_type_ptr;
+	}
+	
 	ident_t ident = {
 		.pos         = name->pos,
 		.strval      = name->strval,
-		.type        = s_type ? ctype_simple(ctx->asm_ctx, *s_type) : NULL,
+		.type        = ctype_simple(ctx->asm_ctx, s_type),
 		.initialiser = init ? XCOPY(ctx->allocator, init, expr_t) : NULL,
 	};
 	return (idents_t) {
@@ -224,12 +250,24 @@ idents_t idents_one(parser_ctx_t *ctx, int *s_type, strval_t *name, expr_t *init
 	};
 }
 
-// Set the type of all identities contained.
-idents_t idents_settype(parser_ctx_t *ctx, idents_t *idents, simple_type_t s_type) {
-	for (size_t i = 0; i < idents->num; i++) {
-		idents->arr[i].type = ctype_simple(ctx->asm_ctx, s_type);
-	}
+// Concatenate to a list of identities (using existing ident_t).
+idents_t idents_cat_ex(parser_ctx_t *ctx, idents_t *idents, ident_t *ident, expr_t *init) {
+	ident->initialiser = init ? XCOPY(ctx->allocator, init, expr_t) : NULL;
+	idents->num ++;
+	idents->arr = xrealloc(ctx->allocator, idents->arr, idents->num * sizeof(ident_t));
+	idents->arr[idents->num - 1] = *ident;
+	return *idents;
 }
+
+// A list of one identity (using existing ident_t).
+idents_t idents_one_ex(parser_ctx_t *ctx, ident_t *ident, expr_t *init) {
+	ident->initialiser = init ? XCOPY(ctx->allocator, init, expr_t) : NULL;
+	return (idents_t) {
+		.arr = XCOPY(ctx->allocator, ident, ident_t),
+		.num = 1
+	};
+}
+
 
 
 // An empty list of expressions.

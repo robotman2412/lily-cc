@@ -171,7 +171,9 @@ typedef struct {
 // Extra data added to asm_ctx_t.
 #define ASM_CTX_EXTRAS \
 	/* Keeps track of the most used registers. */ \
-	reg_t reg_usage_order[4];
+	reg_t reg_usage_order[4]; \
+	/* Keeps track of registers used for temporary values (such as address calculation). */ \
+	bool reg_temp_usage[4];
 
 // State that inline assembly is supported
 #define INLINE_ASM_SUPPORTED

@@ -11,6 +11,7 @@
 #include "debug/pront.h"
 #include <malloc.h>
 #include <string.h>
+#include <gen_util.h>
 
 extern int  yylex  (parser_ctx_t *ctx);
 extern void yyerror(parser_ctx_t *ctx, char *msg);
@@ -77,6 +78,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 %type <idents> opt_params
 %type <idents> params
 %type <idents> idents
+%type <ident> var_nonarr
 %type <func> funcdef
 %type <expr> expr
 %type <exprs> opt_exprs
@@ -159,24 +161,31 @@ simple_type:	"char"										{$$.pos=$1;                                  $$.iva
 |				"_Bool"										{$$.pos=$1;                                  $$.ival=STYPE_BOOL;}
 |				"void"										{$$.pos=$1;                                  $$.ival=STYPE_VOID;};
 
+// A variable definition (or similar) with no array type.
+var_nonarr:		"*" var_nonarr								{$$=$2; $$.pos=pos_merge($1, $2.pos); $$.type=ctype_ptr(ctx->asm_ctx, $$.type);}
+|				TKN_IDENT									{$$=ident_of_strval(ctx, &$1);      $$.type=ctype_simple(ctx->asm_ctx, ctx->s_type);};
+
 // A function definition (with code).
 funcdef:		simple_type TKN_IDENT "(" opt_params ")"
-				"{" stmts "}"								{$$=funcdef_decl(ctx, &$1, &$2, &$4, &$7);   $$.pos=pos_merge($1.pos, $8);}
+				"{" stmts "}"								{$$=funcdef_decl(ctx, &$1, &$2, &$4, &$7); $$.pos=pos_merge($1.pos, $8);}
 // A function definition (without code).
 |				simple_type TKN_IDENT "(" opt_params ")"
-				";"											{$$=funcdef_def(ctx, &$1, &$2, &$4);         $$.pos=pos_merge($1.pos, $6);};
+				";"											{$$=funcdef_def(ctx, &$1, &$2, &$4);       $$.pos=pos_merge($1.pos, $6);};
 // One or more variable declarations.
-vardecls:		simple_type idents ";"						{$$=$2; idents_settype(ctx, &$$, $1.ival);   $$.pos=pos_merge($1.pos, $3);};
+vardecls:		simple_type									{ctx->s_type = $1.ival;}
+				idents ";"									{$$=$3;                                    $$.pos=pos_merge($1.pos, $4);};
 
 // Function parameters.
 opt_params:		params										{$$=$1;}
 |				%empty										{$$=idents_empty(ctx);                         $$.pos=pos_empty(ctx->tokeniser_ctx);};
-params:			params "," simple_type TKN_IDENT			{$$=idents_cat(ctx, &$1, &$3.ival, &$4, NULL); $$.pos=pos_merge($1.pos, $4.pos);}
-|				simple_type TKN_IDENT						{$$=idents_one(ctx, &$1.ival, &$2, NULL);      $$.pos=pos_merge($1.pos, $2.pos);};
-idents:			idents "," TKN_IDENT "=" expr				{$$=idents_cat(ctx, &$1, NULL, &$3, &$5);      $$.pos=pos_merge($1.pos, $3.pos);}
-|				idents "," TKN_IDENT						{$$=idents_cat(ctx, &$1, NULL, &$3, NULL);     $$.pos=pos_merge($1.pos, $3.pos);}
-|				TKN_IDENT "=" expr							{$$=idents_one(ctx, NULL, &$1, &$3);           $$.pos=$1.pos;}
-|				TKN_IDENT									{$$=idents_one(ctx, NULL, &$1, NULL);          $$.pos=$1.pos;};
+params:			params "," simple_type						{ctx->s_type = $3.ival;}
+				var_nonarr									{$$=idents_cat_ex(ctx, &$1, &$5, NULL);        $$.pos=pos_merge($1.pos, $5.pos);}
+|				simple_type									{ctx->s_type = $1.ival;}
+				var_nonarr									{$$=idents_one_ex(ctx, &$3, NULL);             $$.pos=pos_merge($1.pos, $3.pos);};
+idents:			idents "," var_nonarr "=" expr				{$$=idents_cat_ex(ctx, &$1, &$3, &$5);         $$.pos=pos_merge($1.pos, $3.pos);}
+|				idents "," var_nonarr						{$$=idents_cat_ex(ctx, &$1, &$3, NULL);        $$.pos=pos_merge($1.pos, $3.pos);}
+|				var_nonarr "=" expr							{$$=idents_one_ex(ctx, &$1, &$3);              $$.pos=$1.pos;}
+|				var_nonarr									{$$=idents_one_ex(ctx, &$1, NULL);             $$.pos=$1.pos;};
 
 // Statements.
 stmts:			stmts stmt									{$$=stmts_cat   (ctx, &$1, &$2);             $$.pos=pos_merge($1.pos, $2.pos);}

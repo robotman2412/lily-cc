@@ -25,11 +25,6 @@ void px_touch_reg(asm_ctx_t *ctx, reg_t regno) {
 	}
 }
 
-// Gets the least used register in the list.
-reg_t px_least_used_reg(asm_ctx_t *ctx) {
-	return ctx->reg_usage_order[3];
-}
-
 // Gets the constant required for a stack indexing memory access.
  __attribute__((pure))
 static inline address_t px_get_depth(asm_ctx_t *ctx, gen_var_t *var, address_t var_offs) {
@@ -253,8 +248,14 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, px_addr_t *add
 		case VAR_TYPE_PTR:
 			if (var->ptr->type == VAR_TYPE_REG) {
 				// This is a bit simpler.
-				*addrmode = PX_ADDR_MEM;
-				return var->ptr->reg;
+				if (part) {
+					*addrmode = var->ptr->reg;
+					*offs = part;
+					return PX_REG_IMM;
+				} else {
+					*addrmode = PX_ADDR_MEM;
+					return var->ptr->reg;
+				}
 			} else if (var->ptr->type == VAR_TYPE_CONST) {
 				// A constant point might as well be a normal memory access.
 				*addrmode = PX_ADDR_MEM;
@@ -291,7 +292,7 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, px_addr_t *add
 			// Check for constants.
 			if (a->type == VAR_TYPE_CONST) {
 				if (b->type == VAR_TYPE_CONST) {
-					// TODO: Those are both constants.
+					// TODO: CONVERT the thingy.
 				} else {
 					// Swapperoni.
 					gen_var_t *tmp = a;
@@ -300,10 +301,13 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, px_addr_t *add
 				}
 			}
 			
+			// Determine the underlying type of the operation.
+			var_type_t *underlying = var->ctype;
+			
 			if (b->type == VAR_TYPE_CONST && (b->iconst + part)) {
 				// Constant (nonzero) offset and variable offset.
 				*addrmode = a->reg;
-				*offs     = b->iconst + part;
+				*offs     = b->iconst * underlying->size + part;
 				return PX_REG_IMM;
 			} else if (b->type == VAR_TYPE_CONST) {
 				// Constant (zero) offset and variable offset.
@@ -332,7 +336,7 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, px_addr_t *add
 					*var->indexed.combined = (gen_var_t) {
 						.type        = VAR_TYPE_REG,
 						.reg         = dest,
-						.ctype       = ctype_ptr_simple(ctx, STYPE_CHAR), // TODO: Determine the correqt one.
+						.ctype       = underlying,
 						.owner       = NULL,
 						.default_loc = NULL,
 					};
@@ -486,13 +490,18 @@ void px_jump(asm_ctx_t *ctx, char *label) {
 reg_t px_pick_reg(asm_ctx_t *ctx, bool do_vacate) {
 	// Check for a free register.
 	for (reg_t i = 0; i < NUM_REGS; i++) {
-		if (!ctx->current_scope->reg_usage[i]) {
+		if (!ctx->current_scope->reg_usage[i] && !ctx->reg_temp_usage[i]) {
 			return i;
 		}
 	}
 	
 	// Otherwise, free up the least used one.
-	reg_t pick = px_least_used_reg(ctx);
+	reg_t pick;
+	for (reg_t i = 0; i < NUM_REGS; i++) {
+		if (!ctx->reg_temp_usage[ctx->reg_usage_order[i]]) {
+			pick = ctx->reg_usage_order[i];
+		}
+	}
 	
 	if (do_vacate) {
 		gen_var_t *var = ctx->current_scope->reg_usage[pick];
@@ -513,12 +522,31 @@ reg_t px_pick_reg(asm_ctx_t *ctx, bool do_vacate) {
 }
 
 // Pick a register to use, but only pick empty registers.
-bool px_pick_empty_reg(asm_ctx_t *ctx, reg_t *regno) {
-	// Check for a free register.
-	for (reg_t i = 0; i < NUM_REGS; i++) {
-		if (!ctx->current_scope->reg_usage[i]) {
-			*regno = i;
-			return true;
+bool px_pick_empty_reg(asm_ctx_t *ctx, reg_t *regno, address_t size) {
+	if (size == 1) {
+		// Check for a free register.
+		for (reg_t i = 0; i < NUM_REGS; i++) {
+			if (!ctx->current_scope->reg_usage[i]) {
+				*regno = i;
+				return true;
+			}
+		}
+	} else if (size > 1) {
+		reg_t first_free;
+		bool  is_free = false;
+		// Check for a free register.
+		for (reg_t i = 0; i < NUM_REGS; i++) {
+			if (!ctx->current_scope->reg_usage[i]) {
+				if (is_free && i - first_free + 1 >= size) {
+					*regno = first_free;
+					return true;
+				} else if (!is_free) {
+					is_free = true;
+					first_free = i;
+				}
+			} else {
+				is_free = false;
+			}
 		}
 	}
 	
@@ -715,6 +743,7 @@ gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 	if (conv_b) {
 		reg_b = px_pick_reg(ctx, true);
 		px_touch_reg(ctx, reg_b);
+		ctx->reg_temp_usage[reg_b] = true;
 	} else if (b->type == VAR_TYPE_CONST) {
 		reg_b = PX_REG_IMM;
 	}
@@ -760,6 +789,11 @@ gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 		
 		// Make the rest carry continue.
 		opcode |= PX_OFFS_CC;
+	}
+	
+	if (conv_b) {
+		// We're done with any temp registers.
+		ctx->reg_temp_usage[reg_b] = false;
 	}
 	
 	if (out_hint && out_hint->type == VAR_TYPE_COND) {
@@ -1333,7 +1367,7 @@ gen_var_t *gen_expr_math2(asm_ctx_t *ctx, expr_t *expr, oper_t oper, gen_var_t *
 		if (expr && expr->par_a->type == EXPR_TYPE_IDENT) {
 			report_errorf(ctx->tokeniser_ctx, E_WARN, expr->par_a->pos, "%s is uninitialised at this point", expr->par_a->ident->strval);
 		} else {
-			printf("Warning: <anonymous>:??: Usage of an uninitialised variable, this might be a bug\n");
+			report_errorf(ctx->tokeniser_ctx, E_WARN, expr->pos, "<anonymous variable> is uninitialised at this point\n");
 		}
 		*a = *a->default_loc;
 	}
@@ -1342,7 +1376,7 @@ gen_var_t *gen_expr_math2(asm_ctx_t *ctx, expr_t *expr, oper_t oper, gen_var_t *
 		if (expr && expr->par_b->type == EXPR_TYPE_IDENT) {
 			report_errorf(ctx->tokeniser_ctx, E_WARN, expr->par_b->pos, "%s is uninitialised at this point", expr->par_b->ident->strval);
 		} else {
-			printf("Warning: <anonymous>:??: Usage of an uninitialised variable, this might be a bug\n");
+			report_errorf(ctx->tokeniser_ctx, E_WARN, expr->pos, "<anonymous variable> is uninitialised at this point\n");
 		}
 		*b = *b->default_loc;
 	}
@@ -1458,11 +1492,13 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, expr_t *expr, oper_t oper, gen_var_t *
 	
 	// Check for unassigned.
 	if (a->type == VAR_TYPE_UNASSIGNED) {
-		// Emit a warning i guess.
+		// Emit a warning for uninitialised variables.
 		if (expr && expr->par_a->type == EXPR_TYPE_IDENT) {
 			report_errorf(ctx->tokeniser_ctx, E_WARN, expr->par_a->pos, "%s is uninitialised at this point", expr->par_a->ident->strval);
+		} else if (expr->type == EXPR_TYPE_IDENT) {
+			report_errorf(ctx->tokeniser_ctx, E_WARN, expr->pos, "%s is uninitialised at this point", expr->ident->strval);
 		} else {
-			printf("Warning: <anonymous>:??: Usage of an uninitialised variable, this might be a bug\n");
+			report_errorf(ctx->tokeniser_ctx, E_WARN, expr->pos, "<unknown variable> is uninitialised at this point\n");
 		}
 		*a = *a->default_loc;
 	}
@@ -1539,6 +1575,7 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, expr_t *expr, oper_t oper, gen_var_t *
 		} else if (a->type == VAR_TYPE_LABEL) {
 			bool use_hint = output && output->type == VAR_TYPE_REG;
 			reg_t regno = use_hint ? output->reg : px_pick_reg(ctx, true);
+			ctx->reg_temp_usage[regno] = true;
 			if (DET_PIE(ctx)) {
 				// LEA (pie).
 				px_insn_t insn = {
@@ -1573,6 +1610,7 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, expr_t *expr, oper_t oper, gen_var_t *
 				var->ctype       = ctype_ptr(ctx, a->ctype);
 				ctx->current_scope->reg_usage[regno] = var;
 			}
+			ctx->reg_temp_usage[regno] = false;
 			return var;
 		} else if (a->type == VAR_TYPE_STACKOFFS) {
 			bool use_hint = output && output->type == VAR_TYPE_REG;
@@ -1676,6 +1714,7 @@ gen_var_t *gen_cast(asm_ctx_t *ctx, gen_var_t *a, var_type_t *ctype) {
 					// Move the highest word into our temp reg.
 					px_part_to_reg(ctx, a, regno, a->ctype->size - 1);
 				}
+				ctx->reg_temp_usage[regno] = true;
 				
 				// Now, extend using this value's sign bit.
 				for (address_t i = a->ctype->size; i < ctype->size; i++) {
@@ -1689,6 +1728,8 @@ gen_var_t *gen_cast(asm_ctx_t *ctx, gen_var_t *a, var_type_t *ctype) {
 					insn.a = px_addr_var(ctx, b, i, &insn.x, &label0, &offs0, regno);
 					px_write_insn(ctx, insn, label0, offs0, NULL, 0);
 				}
+				
+				ctx->reg_temp_usage[regno] = false;
 			} else {
 				// Carry extension code without temp reg.
 				px_mov_n(ctx, b, a, a->ctype->size);
@@ -1809,8 +1850,10 @@ void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words)
 		} else {
 			// Pick a new register.
 			regno = px_pick_reg(ctx, true);
+			px_touch_reg(ctx, regno);
 			mov_to_reg = true;
 		}
+		ctx->reg_temp_usage[regno] = true;
 		
 		bool revloop = dst->type == VAR_TYPE_STACKOFFS;
 		address_t i   = revloop ? n_words - 1 : 0;
@@ -1842,6 +1885,8 @@ void px_mov_n(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src, address_t n_words)
 			// Write the resulting instruction.
 			px_write_insn(ctx, insn, label0, offs0, label1, offs1);
 		}
+		
+		ctx->reg_temp_usage[regno] = false;
 	}
 }
 
@@ -1863,6 +1908,7 @@ void px_var_to_reg(asm_ctx_t *ctx, gen_var_t *var, bool allow_const) {
 			.default_loc = orig->default_loc ? orig->default_loc : orig,
 		};
 		ctx->current_scope->reg_usage[regno] = var;
+		gen_mov(ctx, var, orig);
 		
 		// Clean up.
 		if (orig->default_loc) {
@@ -1874,16 +1920,16 @@ void px_var_to_reg(asm_ctx_t *ctx, gen_var_t *var, bool allow_const) {
 // Variables: Move variable to another location.
 void gen_mov(asm_ctx_t *ctx, gen_var_t *dst, gen_var_t *src) {
 	address_t n_words;
-	if (dst->type == VAR_TYPE_UNASSIGNED && !src->owner) {
+	/*if (dst->type == VAR_TYPE_UNASSIGNED && !src->owner) {
 		// Unassigned variable optimisation.
 		// Make default location.
-		src->default_loc = dst;
+		src->default_loc = dst->default_loc;
 		// Swap src and dst.
 		gen_var_t tmp = *dst;
 		*dst = *src;
 		*src = tmp;
 		return;
-	} else if (dst->type == VAR_TYPE_UNASSIGNED) {
+	} else*/ if (dst->type == VAR_TYPE_UNASSIGNED) {
 		// Replace dst by it's default location before copying.
 		gen_var_t *to_free = dst->default_loc;
 		*dst = *dst->default_loc;
@@ -2005,12 +2051,15 @@ void gen_init_var(asm_ctx_t *ctx, gen_var_t *var, expr_t *expr) {
 			gen_mov(ctx, var, res);
 		} else {
 			reg_t regno;
-			if (px_pick_empty_reg(ctx, &regno)) {
+			if (px_pick_empty_reg(ctx, &regno, var->ctype->size)) {
 				// Have it moved to a register for Exxtra Speeds.
 				var->type = VAR_TYPE_REG;
 				var->reg  = regno;
+				for (reg_t i = 0; i < var->ctype->size; i++) {
+					ctx->current_scope->reg_usage[regno + i] = var;
+					px_touch_reg(ctx, regno + i);
+				}
 				gen_mov(ctx, var, res);
-				ctx->current_scope->reg_usage[regno] = var;
 			} else {
 				// Have it moved to the default location.
 				*var = *var->default_loc;

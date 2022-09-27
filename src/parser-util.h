@@ -55,6 +55,8 @@ struct parser_ctx {
 	size_t           n_const;
 	// Memory allocator to use.
 	alloc_ctx_t      allocator;
+	// Most recently used simple type.
+	simple_type_t    s_type;
 };
 
 struct ival {
@@ -255,14 +257,20 @@ iasm_regs_t iasm_regs_cat  (parser_ctx_t *ctx, iasm_regs_t *iasm_regs, iasm_reg_
 iasm_regs_t iasm_regs_one  (parser_ctx_t *ctx, iasm_reg_t  *iasm_reg);
 
 
+// Creates an empty ident_t from a strval.
+ident_t     ident_of_strval(parser_ctx_t *ctx, strval_t *strval);
+
+
 // An empty list of identities.
 idents_t    idents_empty   (parser_ctx_t *ctx);
 // Concatenate to a list of identities.
-idents_t    idents_cat     (parser_ctx_t *ctx, idents_t      *idents, int           *type,  strval_t *ident, expr_t   *init);
+idents_t    idents_cat     (parser_ctx_t *ctx, idents_t *idents, int      *type,  strval_t *ident, expr_t *init);
 // A list of one identity.
-idents_t    idents_one     (parser_ctx_t *ctx, int           *type,   strval_t      *ident, expr_t   *init);
-// Set the type of all identities contained.
-idents_t    idents_settype (parser_ctx_t *ctx, idents_t      *idents, simple_type_t  type);
+idents_t    idents_one     (parser_ctx_t *ctx, int      *type,   strval_t *ident, expr_t   *init);
+// Concatenate to a list of identities (using existing ident_t).
+idents_t    idents_cat_ex  (parser_ctx_t *ctx, idents_t *idents, ident_t  *ident, expr_t   *init);
+// A list of one identity (using existing ident_t).
+idents_t    idents_one_ex  (parser_ctx_t *ctx, ident_t  *ident,  expr_t   *init);
 
 // An empty list of expressions.
 exprs_t     exprs_empty    (parser_ctx_t *ctx);

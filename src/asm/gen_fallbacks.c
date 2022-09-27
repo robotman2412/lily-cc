@@ -22,7 +22,11 @@ static inline void gen_var_scope(asm_ctx_t *ctx, map_t *map) {
 		if ((var->type == VAR_TYPE_STACKFRAME || var->type == VAR_TYPE_STACKOFFS) && var->offset == (address_t) -1) {
 			// Have it in the stack.
 			var->offset = ctx->current_scope->stack_size;
-			ctx->current_scope->stack_size ++;
+			ctx->current_scope->stack_size += var->ctype->size;
+		} else if (var->default_loc && (var->default_loc->type == VAR_TYPE_STACKFRAME || var->default_loc->type == VAR_TYPE_STACKOFFS) && var->default_loc->offset == (address_t) -1) {
+			// Have it in the stack (but fancier this time).
+			var->default_loc->offset = ctx->current_scope->stack_size;
+			ctx->current_scope->stack_size += var->ctype->size;
 		}
 		
 		gen_define_var(ctx, var, map->strings[i]);

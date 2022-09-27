@@ -255,7 +255,7 @@ char *esc_cstr(alloc_ctx_t allocator, const char *cstr, size_t len) {
 					*(write++) = temp[1];
 				} else {
 					// Default.
-					*(write ++) = cstr[i];
+					*(write++) = cstr[i];
 				}
 		}
 	}

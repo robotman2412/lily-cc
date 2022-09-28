@@ -4,6 +4,40 @@
 #include "string.h"
 #include "malloc.h"
 
+
+// char (**c[2])[5]
+// Makes:
+//   Array(2) of
+//   Pointer to
+//   Pointer to
+//   Array(5) of
+//   char
+
+// *var[1]
+// Does:
+//   Index[1]
+//   Index[0]
+
+// (*var)[1]
+// Does:
+//   Index[0]
+//   Index[1]
+
+// char (*thing)[2]
+// Makes:
+//   A pointer to...
+//   An array of 2 of...
+//   char
+
+// char *(*thing[1])[2]
+// Makes:
+//   Array[1] of
+//   Pointer to
+//   Array[2] of
+//   Pointer to
+//   char
+
+
 // Get or create a simple type in the current scope.
 var_type_t *ctype_simple(asm_ctx_t *ctx, simple_type_t of) {
 	static bool did_i_init = false;
@@ -24,16 +58,58 @@ var_type_t *ctype_simple(asm_ctx_t *ctx, simple_type_t of) {
 }
 
 // Get or create an array type of a simple type in the current scope.
-// Define len as 0 if unknown.
-var_type_t *ctype_arr_simple(asm_ctx_t *ctx, simple_type_t of, size_t len) {
+// Define len as NULL if unknown.
+var_type_t *ctype_arr_simple(asm_ctx_t *ctx, simple_type_t of, size_t *len) {
 	var_type_t *ctype = xalloc(ctx->current_scope->allocator, sizeof(var_type_t));
 	*ctype = (var_type_t) {
-		.size        = simple_type_size[of] * len,
+		.size        = len ? simple_type_size[of] * *len : 0,
 		.simple_type = STYPE_VOID,
 		.is_complete = !!len,
 		.category    = TYPE_CAT_ARRAY,
 		.underlying  = ctype_simple(ctx, of),
 	};
+}
+
+// Get or create an array type of a complex type in the current scope.
+// Define len as NULL if unknown.
+var_type_t *ctype_arr(asm_ctx_t *ctx, var_type_t *of, size_t *len) {
+	var_type_t *ctype = xalloc(ctx->current_scope->allocator, sizeof(var_type_t));
+	*ctype = (var_type_t) {
+		.size        = len ? of->size * *len : 0,
+		.simple_type = STYPE_VOID,
+		.is_complete = !!len,
+		.category    = TYPE_CAT_ARRAY,
+		.underlying  = of,
+	};
+}
+
+// For array and pointer shenanigns reasons, reconstruct the type such that:
+//  1. The A chain without simple type.
+//  2. The B chain without simple type.
+//  3. The underlying simple type of the A chain.
+// And store it back to the A chain.
+var_type_t *ctype_shenanigans(asm_ctx_t *ctx, var_type_t *a, var_type_t *b, bool free_b_tip) {
+	// Step 1: Find the end of the A chain.
+	var_type_t *src = a;
+	var_type_t **ptrptr = &a;
+	while (a->category == TYPE_CAT_POINTER || a->category == TYPE_CAT_ARRAY) {
+		ptrptr = &a->underlying;
+		a      = a->underlying;
+	}
+	var_type_t *lowest = a;
+	
+	// Step 2: Insert the B chain.
+	*ptrptr = b;
+	// while (b->category == TYPE_CAT_POINTER || b->category == TYPE_CAT_ARRAY) {
+	// 	*ptrptr =  b;
+	// 	ptrptr  = &b->underlying;
+	// 	b       =  b->underlying;
+	// }
+	
+	// Step 3: Finalise the chain.
+	// *ptrptr = lowest;
+	
+	return src;
 }
 
 // Get or create a pointer type of a simple type in the current scope.

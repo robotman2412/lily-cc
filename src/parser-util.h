@@ -216,9 +216,9 @@ extern void *xmake_copy(alloc_ctx_t allocator, void *mem, size_t size);
 #define XCOPY(alloc, thing, type) ( (type *) xmake_copy(alloc, thing, sizeof(type)) )
 
 // Incomplete function definition (without code).
-funcdef_t   funcdef_def    (parser_ctx_t *ctx, ival_t *type, strval_t *ident,  idents_t *args);
+funcdef_t   funcdef_def    (parser_ctx_t *ctx, ival_t *type, ident_t *ident,  idents_t *args);
 // Complete function declaration (with code).
-funcdef_t   funcdef_decl   (parser_ctx_t *ctx, ival_t *type, strval_t *ident,  idents_t *args, stmts_t *code);
+funcdef_t   funcdef_decl   (parser_ctx_t *ctx, ival_t *type, ident_t *ident,  idents_t *args, stmts_t *code);
 
 // An empty list of statements.
 stmts_t     stmts_empty    (parser_ctx_t *ctx);
@@ -258,7 +258,9 @@ iasm_regs_t iasm_regs_one  (parser_ctx_t *ctx, iasm_reg_t  *iasm_reg);
 
 
 // Creates an empty ident_t from a strval.
-ident_t     ident_of_strval(parser_ctx_t *ctx, strval_t *strval);
+ident_t     ident_of_strval(parser_ctx_t *ctx, ident_t *ptrs, strval_t *strval, ident_t *arrs);
+// Creates ident_t from a lot of type fractions.
+ident_t     ident_of_types (parser_ctx_t *ctx, ident_t *ptrs, ident_t  *inner, ident_t *arrs);
 
 
 // An empty list of identities.

@@ -79,6 +79,9 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 %type <idents> params
 %type <idents> idents
 %type <ident> var_nonarr
+%type <ident> var
+%type <ident> var_stars
+%type <ident> var_arrays
 %type <func> funcdef
 %type <expr> expr
 %type <exprs> opt_exprs
@@ -96,6 +99,7 @@ extern void yyerror(parser_ctx_t *ctx, char *msg);
 
 %type <simple_type> simple_long
 %type <simple_type> simple_type
+%type <simple_type> simple_type_int
 %type <idents> vardecls
 %type <pos> opt_int opt_signed
 
@@ -144,7 +148,7 @@ simple_long:	opt_int										{$$.pos=$1;                                  $$.iv
 |				"double"									{$$.pos=$1;                                  $$.ival=STYPE_LONG_DOUBLE;}
 |				"long" opt_int								{$$.pos=pos_merge($1, $2);                   $$.ival=STYPE_S_LONGER;};
 // Simple types: Non-pointer, non-array types.
-simple_type:	"char"										{$$.pos=$1;                                  $$.ival=STYPE_CHAR;}
+simple_type_int:"char"										{$$.pos=$1;                                  $$.ival=STYPE_CHAR;}
 |				"signed" "char"								{$$.pos=pos_merge($1, $2);                   $$.ival=STYPE_S_CHAR;}
 |				"unsigned" "char"							{$$.pos=pos_merge($1, $2);                   $$.ival=STYPE_U_CHAR;}
 |				opt_signed "short" opt_int					{$$.pos=pos_merge($1, $3);                   $$.ival=STYPE_S_SHORT;}
@@ -160,32 +164,55 @@ simple_type:	"char"										{$$.pos=$1;                                  $$.iva
 |				"double"									{$$.pos=$1;                                  $$.ival=STYPE_DOUBLE;}
 |				"_Bool"										{$$.pos=$1;                                  $$.ival=STYPE_BOOL;}
 |				"void"										{$$.pos=$1;                                  $$.ival=STYPE_VOID;};
+// Simple type tracker(tm).
+simple_type:	simple_type_int								{ctx->s_type = $1.ival;}
 
-// A variable definition (or similar) with no array type.
+
+// A variable definition (or typedef) with no array type.
+var_nonarr:		var_stars TKN_IDENT							{$$=ident_of_strval(ctx, &$1, &$2, NULL); $$.pos=pos_merge($1.pos, $2.pos);};
+
+/* // A variable definition (or typedef) with no array type.
 var_nonarr:		"*" var_nonarr								{$$=$2; $$.pos=pos_merge($1, $2.pos); $$.type=ctype_ptr(ctx->asm_ctx, $$.type);}
-|				TKN_IDENT									{$$=ident_of_strval(ctx, &$1);      $$.type=ctype_simple(ctx->asm_ctx, ctx->s_type);};
+|				TKN_IDENT									{$$=ident_of_strval(ctx, &$1);        $$.type=ctype_simple(ctx->asm_ctx, ctx->s_type);}; */
+
+// Counting stars for the vars.
+var_stars:		var_stars "*"								{$$.type=ctype_ptr   (ctx->asm_ctx, $1.type);}
+|				%empty										{$$.type=ctype_simple(ctx->asm_ctx, ctx->s_type);};
+
+// Counting arrays for the vars.
+var_arrays:		var_arrays "[" "]"							{$$.type=ctype_arr   (ctx->asm_ctx, $1.type, NULL);}
+|				var_arrays "[" expr "]"						{$$.type=ctype_arr   (ctx->asm_ctx, $1.type, NULL);}
+|				%empty										{$$.type=ctype_simple(ctx->asm_ctx, ctx->s_type);};
+
+// A variable definition (or typedef).
+var:			var_stars TKN_IDENT var_arrays				{$$=ident_of_strval(ctx, &$1, &$2, &$3); $$.pos=pos_merge($1.pos, $3.pos);}
+|				var_stars "(" var ")" var_arrays			{$$=ident_of_types (ctx, &$1, &$3, &$5); $$.pos=pos_merge($1.pos, $5.pos);};
+
+// A variable definition (or typedef).
+/* var:			"*" var					%prec "*"			{$$=$2; $$.pos=pos_merge($1, $2.pos); $$.type=ctype_ptr(ctx->asm_ctx, $$.type);}
+|				"(" var ")"									{$$=$2; $$.pos=pos_merge($1, $3);}
+|				var "[" "]"				%prec "["			{$$=$1; $$.pos=pos_merge($1.pos, $3); $$.type=ctype_arr(ctx->asm_ctx, $1.type, NULL);}
+|				var "[" expr "]"		%prec "["			{$$=$1; $$.pos=pos_merge($1.pos, $4);}
+|				TKN_IDENT									{$$=ident_of_strval(ctx, &$1);        $$.type=ctype_simple(ctx->asm_ctx, ctx->s_type);}; */
 
 // A function definition (with code).
-funcdef:		simple_type TKN_IDENT "(" opt_params ")"
+funcdef:		simple_type var_nonarr "(" opt_params ")"
 				"{" stmts "}"								{$$=funcdef_decl(ctx, &$1, &$2, &$4, &$7); $$.pos=pos_merge($1.pos, $8);}
 // A function definition (without code).
-|				simple_type TKN_IDENT "(" opt_params ")"
+|				simple_type var_nonarr "(" opt_params ")"
 				";"											{$$=funcdef_def(ctx, &$1, &$2, &$4);       $$.pos=pos_merge($1.pos, $6);};
 // One or more variable declarations.
-vardecls:		simple_type									{ctx->s_type = $1.ival;}
-				idents ";"									{$$=$3;                                    $$.pos=pos_merge($1.pos, $4);};
+vardecls:		simple_type idents ";"						{$$=$2;                                    $$.pos=pos_merge($1.pos, $3);};
 
 // Function parameters.
 opt_params:		params										{$$=$1;}
 |				%empty										{$$=idents_empty(ctx);                         $$.pos=pos_empty(ctx->tokeniser_ctx);};
-params:			params "," simple_type						{ctx->s_type = $3.ival;}
-				var_nonarr									{$$=idents_cat_ex(ctx, &$1, &$5, NULL);        $$.pos=pos_merge($1.pos, $5.pos);}
-|				simple_type									{ctx->s_type = $1.ival;}
-				var_nonarr									{$$=idents_one_ex(ctx, &$3, NULL);             $$.pos=pos_merge($1.pos, $3.pos);};
-idents:			idents "," var_nonarr "=" expr				{$$=idents_cat_ex(ctx, &$1, &$3, &$5);         $$.pos=pos_merge($1.pos, $3.pos);}
-|				idents "," var_nonarr						{$$=idents_cat_ex(ctx, &$1, &$3, NULL);        $$.pos=pos_merge($1.pos, $3.pos);}
-|				var_nonarr "=" expr							{$$=idents_one_ex(ctx, &$1, &$3);              $$.pos=$1.pos;}
-|				var_nonarr									{$$=idents_one_ex(ctx, &$1, NULL);             $$.pos=$1.pos;};
+params:			params "," simple_type var_nonarr			{$$=idents_cat_ex(ctx, &$1, &$4, NULL);        $$.pos=pos_merge($1.pos, $4.pos);}
+|				simple_type var_nonarr						{$$=idents_one_ex(ctx, &$2, NULL);             $$.pos=pos_merge($1.pos, $2.pos);};
+idents:			idents "," var "=" expr						{$$=idents_cat_ex(ctx, &$1, &$3, &$5);         $$.pos=pos_merge($1.pos, $3.pos);}
+|				idents "," var								{$$=idents_cat_ex(ctx, &$1, &$3, NULL);        $$.pos=pos_merge($1.pos, $3.pos);}
+|				var "=" expr								{$$=idents_one_ex(ctx, &$1, &$3);              $$.pos=$1.pos;}
+|				var											{$$=idents_one_ex(ctx, &$1, NULL);             $$.pos=$1.pos;};
 
 // Statements.
 stmts:			stmts stmt									{$$=stmts_cat   (ctx, &$1, &$2);             $$.pos=pos_merge($1.pos, $2.pos);}

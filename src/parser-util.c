@@ -4,22 +4,28 @@
 #include <malloc.h>
 
 // Incomplete function definition (without code).
-funcdef_t funcdef_def(parser_ctx_t *ctx, ival_t *type, strval_t *ident, idents_t *args) {
+funcdef_t funcdef_def(parser_ctx_t *ctx, ival_t *type, ident_t *ident, idents_t *args) {
 	return (funcdef_t) {
-		.ident   = *ident,
+		.ident   = {
+			.pos    = ident->pos,
+			.strval = ident->strval,
+		},
 		.args    = *args,
 		.stmts   = NULL,
-		.returns = ctype_simple(ctx->asm_ctx, type->ival),
+		.returns = ident->type,
 	};
 }
 
 // Complete function declaration (with code).
-funcdef_t funcdef_decl(parser_ctx_t *ctx, ival_t *type, strval_t *ident, idents_t *args, stmts_t *code) {
+funcdef_t funcdef_decl(parser_ctx_t *ctx, ival_t *type, ident_t *ident, idents_t *args, stmts_t *code) {
 	return (funcdef_t) {
-		.ident   = *ident,
+		.ident   = {
+			.pos    = ident->pos,
+			.strval = ident->strval,
+		},
 		.args    = *args,
 		.stmts   = code,
-		.returns = ctype_simple(ctx->asm_ctx, type->ival),
+		.returns = ident->type,
 	};
 }
 
@@ -188,13 +194,44 @@ iasm_regs_t iasm_regs_one(parser_ctx_t *ctx, iasm_reg_t *iasm_reg) {
 }
 
 
-
 // Creates an empty ident_t from a strval.
-ident_t ident_of_strval(parser_ctx_t *ctx, strval_t *strval) {
+ident_t ident_of_strval(parser_ctx_t *ctx, ident_t *ptrs, strval_t *strval, ident_t *arrs) {
+	if (arrs) {
+		return (ident_t) {
+			.strval      = strval->strval,
+			.type        = ctype_shenanigans(
+				ctx->asm_ctx,
+				arrs->type,
+				ptrs->type,
+				true
+			),
+			.initialiser = NULL,
+		};
+	} else {
+		return (ident_t) {
+			.strval      = strval->strval,
+			.type        = ptrs->type,
+			.initialiser = NULL,
+		};
+	}
+}
+
+// Creates ident_t from a lot of type fractions.
+ident_t ident_of_types(parser_ctx_t *ctx, ident_t *ptrs, ident_t *inner, ident_t *arrs) {
 	return (ident_t) {
-		.pos         = strval->pos,
-		.strval      = strval->strval,
-		.type        = NULL,
+		.strval      = inner->strval,
+		.type        = 
+			ctype_shenanigans(
+				ctx->asm_ctx,
+				inner->type,
+				ctype_shenanigans(
+					ctx->asm_ctx,
+					arrs->type,
+					ptrs->type,
+					true
+				),
+				true
+			),
 		.initialiser = NULL,
 	};
 }

@@ -180,9 +180,9 @@ var_stars:		var_stars "*"								{$$.type=ctype_ptr   (ctx->asm_ctx, $1.type);}
 |				%empty										{$$.type=ctype_simple(ctx->asm_ctx, ctx->s_type);};
 
 // Counting arrays for the vars.
-var_arrays:		var_arrays "[" "]"							{$$.type=ctype_arr   (ctx->asm_ctx, $1.type, NULL);}
-|				var_arrays "[" expr "]"						{$$.type=ctype_arr   (ctx->asm_ctx, $1.type, NULL);}
-|				%empty										{$$.type=ctype_simple(ctx->asm_ctx, ctx->s_type);};
+var_arrays:		var_arrays "[" "]"							{$$.type=ctype_arr   (ctx->asm_ctx, $1.type, NULL); $$.pos=pos_merge($1.pos, $3);}
+|				var_arrays "[" expr "]"						{size_t i=expr_get_const(ctx, &$3); $$.type=ctype_arr(ctx->asm_ctx, $1.type, &i); $$.pos=pos_merge($1.pos, $4);}
+|				%empty										{$$.type=ctype_simple(ctx->asm_ctx, ctx->s_type); $$.pos=pos_empty(ctx->tokeniser_ctx);};
 
 // A variable definition (or typedef).
 var:			var_stars TKN_IDENT var_arrays				{$$=ident_of_strval(ctx, &$1, &$2, &$3); $$.pos=pos_merge($1.pos, $3.pos);}

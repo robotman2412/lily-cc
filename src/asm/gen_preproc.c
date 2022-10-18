@@ -87,17 +87,21 @@ bool gen_preproc_stmt(asm_ctx_t *ctx, preproc_data_t *parent, void *ptr, bool is
 				gen_var_t *loc = gen_preproc_var(ctx, current, &stmt->vars->arr[i]);
 				DEBUG_PRE("var '%s'\n", stmt->vars->arr[i].strval);
 				
-				// Mark it as 'not very occupied'.
-				gen_var_t *cur = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
-				*cur = (gen_var_t) {
-					.type        = VAR_TYPE_UNASSIGNED,
-					.owner       = stmt->vars->arr[i].strval,
-					.ctype       = stmt->vars->arr[i].type,
-					.default_loc = loc,
-				};
+				bool do_uninitialised = loc->ctype->simple_type != STYPE_VOID;
+				if (do_uninitialised) {
+					// Mark it as 'not very occupied'.
+					gen_var_t *cur = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
+					*cur = (gen_var_t) {
+						.type        = VAR_TYPE_UNASSIGNED,
+						.owner       = stmt->vars->arr[i].strval,
+						.ctype       = stmt->vars->arr[i].type,
+						.default_loc = loc,
+					};
+					loc = cur;
+				}
 				
 				// Add the entry.
-				map_set(current->vars, stmt->vars->arr[i].strval, cur);
+				map_set(current->vars, stmt->vars->arr[i].strval, loc);
 			}
 		} break;
 		case STMT_TYPE_EXPR: {

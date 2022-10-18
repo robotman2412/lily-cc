@@ -281,6 +281,8 @@ exprs_t     exprs_one      (parser_ctx_t *ctx, expr_t   *expr);
 // Concatenate to a list of expressions.
 exprs_t     exprs_cat      (parser_ctx_t *ctx, exprs_t  *exprs, expr_t *expr);
 
+// Enforce that the expression is constant and get it's value.
+uint64_t    expr_get_const (parser_ctx_t *ctx, expr_t   *expr);
 // Numeric constant expression.
 expr_t      expr_icnst     (parser_ctx_t *ctx, ival_t   *val);
 // String constant expression.

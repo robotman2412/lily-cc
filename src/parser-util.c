@@ -202,8 +202,7 @@ ident_t ident_of_strval(parser_ctx_t *ctx, ident_t *ptrs, strval_t *strval, iden
 			.type        = ctype_shenanigans(
 				ctx->asm_ctx,
 				arrs->type,
-				ptrs->type,
-				true
+				ptrs->type
 			),
 			.initialiser = NULL,
 		};
@@ -227,10 +226,8 @@ ident_t ident_of_types(parser_ctx_t *ctx, ident_t *ptrs, ident_t *inner, ident_t
 				ctype_shenanigans(
 					ctx->asm_ctx,
 					arrs->type,
-					ptrs->type,
-					true
-				),
-				true
+					ptrs->type
+				)
 			),
 		.initialiser = NULL,
 	};
@@ -331,6 +328,15 @@ exprs_t exprs_cat(parser_ctx_t *ctx, exprs_t *exprs, expr_t *expr) {
 	return *exprs;
 }
 
+
+// Enforce that the expression is constant and get it's value.
+uint64_t expr_get_const(parser_ctx_t *ctx, expr_t *expr) {
+	if (expr->type != EXPR_TYPE_CONST) {
+		report_error(ctx->tokeniser_ctx, E_ERROR, expr->pos, "Expected constant-expression");
+		return 0;
+	}
+	return expr->iconst;
+}
 
 // Numeric constant expression.
 expr_t expr_icnst(parser_ctx_t *ctx, ival_t *val) {

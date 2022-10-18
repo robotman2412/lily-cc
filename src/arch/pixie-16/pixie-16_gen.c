@@ -836,7 +836,7 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 				.a = PX_REG_ST,
 				.o = PX_OP_MOV,
 			};
-			px_write_insn(ctx, insn, NULL, 0, NULL, 0);
+			px_write_insn0(ctx, insn, NULL, 0, NULL, 0);
 		}
 	}
 	

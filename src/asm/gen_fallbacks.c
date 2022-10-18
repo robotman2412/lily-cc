@@ -1,4 +1,3 @@
-
 #include "ansi_codes.h"
 #include "config.h"
 #include "gen.h"
@@ -7,6 +6,7 @@
 #include "gen_preproc.h"
 #include <string.h>
 #include <stdlib.h>
+#include <signal.h>
 
 /* ================== Functions ================== */
 
@@ -910,8 +910,7 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 			}
 		} break;
 	}
-	printf("\n\nOH SHIT\n");
-	exit(23);
+	raise(SIGABRT);
 }
 #endif
 

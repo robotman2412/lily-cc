@@ -14,10 +14,9 @@ var_type_t *ctype_arr_simple (asm_ctx_t *ctx, simple_type_t of, size_t *len);
 var_type_t *ctype_arr        (asm_ctx_t *ctx, var_type_t   *of, size_t *len);
 // For array and pointer shenanigns reasons, reconstruct the type such that:
 //  1. The A chain without simple type.
-//  2. The B chain without simple type.
-//  3. The underlying simple type of the A chain.
+//  2. The B chain with simple type.
 // And store it back to the A chain.
-var_type_t *ctype_shenanigans(asm_ctx_t *ctx, var_type_t *a, var_type_t *b, bool free_b_tip);
+var_type_t *ctype_shenanigans(asm_ctx_t *ctx, var_type_t *a, var_type_t *b);
 // Get or create a pointer type of a simple type in the current scope.
 var_type_t *ctype_ptr_simple (asm_ctx_t *ctx, simple_type_t of);
 // Get or create a pointer type of a given type in the current scope.

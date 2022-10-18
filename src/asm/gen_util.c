@@ -85,10 +85,9 @@ var_type_t *ctype_arr(asm_ctx_t *ctx, var_type_t *of, size_t *len) {
 
 // For array and pointer shenanigns reasons, reconstruct the type such that:
 //  1. The A chain without simple type.
-//  2. The B chain without simple type.
-//  3. The underlying simple type of the A chain.
+//  2. The B chain with simple type.
 // And store it back to the A chain.
-var_type_t *ctype_shenanigans(asm_ctx_t *ctx, var_type_t *a, var_type_t *b, bool free_b_tip) {
+var_type_t *ctype_shenanigans(asm_ctx_t *ctx, var_type_t *a, var_type_t *b) {
 	// Step 1: Find the end of the A chain.
 	var_type_t *src = a;
 	var_type_t **ptrptr = &a;
@@ -100,14 +99,6 @@ var_type_t *ctype_shenanigans(asm_ctx_t *ctx, var_type_t *a, var_type_t *b, bool
 	
 	// Step 2: Insert the B chain.
 	*ptrptr = b;
-	// while (b->category == TYPE_CAT_POINTER || b->category == TYPE_CAT_ARRAY) {
-	// 	*ptrptr =  b;
-	// 	ptrptr  = &b->underlying;
-	// 	b       =  b->underlying;
-	// }
-	
-	// Step 3: Finalise the chain.
-	// *ptrptr = lowest;
 	
 	return src;
 }

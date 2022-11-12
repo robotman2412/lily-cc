@@ -1,27 +1,27 @@
 
-CC=gcc
-LD=gcc
-YACC=bison
+CC			=gcc
+LD			=gcc
+YACC		=bison
 
-TARGET		=$(shell cat build/current_arch)
-VERSION		=$(shell cat version)
-SOURCES		=./build/parser.c\
-			$(shell find ./src ! -path './src/debug/*' ! -path './src/arch/*' -name '*.c')\
-			$(shell find ./src/arch/$(TARGET) -name '*.c')
-HEADERS		=./build/config.h ./build/parser.h ./build/version_number.h\
-			$(shell find ./src ! -path './src/debug/*' ! -path './src/arch/*' -name '*.h')\
-			$(shell find ./src/arch/$(TARGET) -name '*.h')
-OBJECTS		=$(shell echo $(SOURCES) | sed -e 's/src/build/g;s/\.c/.c.o/g')
-OBJ_DEBUG	=$(shell echo $(SOURCES) | sed -e 's/src/build/g;s/\.c/.c.debug.o/g')
-INCLUDES	=-Isrc -Isrc/arch/$(TARGET) -Isrc/asm -Isrc/objects -Isrc/util -Isrc/debug -Ibuild
+TARGET		= $(shell cat build/current_arch)
+VERSION		= $(shell cat version)
+SOURCES		= ./build/parser.c\
+				$(shell find ./src ! -path './src/debug/*' ! -path './src/arch/*' -name '*.c')\
+				$(shell find ./src/arch/$(TARGET) -name '*.c')
+HEADERS		= ./build/config.h ./build/parser.h ./build/version_number.h\
+				$(shell find ./src ! -path './src/debug/*' ! -path './src/arch/*' -name '*.h')\
+				$(shell find ./src/arch/$(TARGET) -name '*.h')
+OBJECTS		= $(shell echo $(SOURCES) | sed -e 's/src/build/g;s/\.c/.c.o/g')
+OBJ_DEBUG	= $(shell echo $(SOURCES) | sed -e 's/src/build/g;s/\.c/.c.debug.o/g')
+INCLUDES	= -Isrc -Isrc/arch/$(TARGET) -Isrc/asm -Isrc/objects -Isrc/util -Isrc/debug -Ibuild
 
-OUTFILE     =comp
-CCFLAGS     =$(INCLUDES)
-FLAGS_DEBUG =$(INCLUDES) -ggdb -DENABLE_DEBUG_LOGS -DDEBUG_COMPILER -DDEBUG_GENERATOR
-LDFLAGS=
-YACCFLAGS=-v -Wnone -Wconflicts-sr -Wconflicts-rr
+OUTFILE		= comp
+CCFLAGS		= $(INCLUDES)
+FLAGS_DEBUG	= $(CCFLAGS) -ggdb -DENABLE_DEBUG_LOGS -DDEBUG_COMPILER -DDEBUG_GENERATOR
+LDFLAGS		=
+YACCFLAGS	= -v -Wnone -Wconflicts-sr -Wconflicts-rr
 
-CFGFILES=build build/config.h build/current_arch build/
+CFGFILES	= build build/config.h build/current_arch build/
 
 .PHONY: all config debug debugsettings clean config install
 
@@ -49,19 +49,19 @@ $(CFGFILES):
 	@mkdir -p $(shell dirname $@)
 	$(YACC) $< $(YACCFLAGS) -o build/parser.c --defines=build/parser.h
 
-./build/parser.c.o: ./build/parser.c $(HEADERS)
+./build/parser.c.o: ./build/parser.c $(HEADERS) Makefile
 	@mkdir -p $(shell dirname $@)
 	$(CC) -c $< $(CCFLAGS) -o $@
 
-./build/parser.c.debug.o: ./build/parser.c $(HEADERS)
+./build/parser.c.debug.o: ./build/parser.c $(HEADERS) Makefile
 	@mkdir -p $(shell dirname $@)
 	$(CC) -c $< $(FLAGS_DEBUG) -o $@
 
-./build/%.o: ./src/% $(HEADERS)
+./build/%.o: ./src/% $(HEADERS) Makefile
 	@mkdir -p $(shell dirname $@)
 	$(CC) -c $< $(CCFLAGS) -o $@
 
-./build/%.debug.o: ./src/% $(HEADERS)
+./build/%.debug.o: ./src/% $(HEADERS) Makefile
 	@mkdir -p $(shell dirname $@)
 	$(CC) -c $< $(FLAGS_DEBUG) -o $@
 

@@ -13,46 +13,62 @@
 /* ==== Debug information ==== */
 
 #ifdef DEBUG_COMPILER
+// Prompt debugger by raising SIGTRAP, if DEBUG_COMPILER is defined.
 #	define DEBUGGER() raise(SIGTRAP)
 #else
+// Prompt debugger by raising SIGTRAP, if DEBUG_COMPILER is defined.
 #	define DEBUGGER() do{}while(0)
 #endif
 
 #ifdef ENABLE_DEBUG_LOGS
+// Print a debug log, if ENABLE_DEBUG_LOGS is defined.
 #   define DEBUG(...) printf("[DEBUG] " __VA_ARGS__)
 #else
+// Print a debug log, if ENABLE_DEBUG_LOGS is defined.
 #   define DEBUG(...) do{}while(0)
 #endif
 
 #ifdef DEBUG_TOKENISER
+// Print a debug log, if DEBUG_TOKENISER and ENABLE_DEBUG_LOGS defined.
 #   define DEBUG_TKN(...) DEBUG("[TKN] " __VA_ARGS__)
 #else
+// Print a debug log, if DEBUG_TOKENISER and ENABLE_DEBUG_LOGS defined.
 #   define DEBUG_TKN(...) do{}while(0)
 #endif
 
 #ifdef DEBUG_PARSER
+// Print a debug log, if DEBUG_PARSER and ENABLE_DEBUG_LOGS defined.
 #   define DEBUG_PAR(...) DEBUG("[PAR] " __VA_ARGS__)
 #else
+// Print a debug log, if DEBUG_PARSER and ENABLE_DEBUG_LOGS defined.
 #   define DEBUG_PAR(...) do{}while(0)
 #endif
 
 #ifdef DEBUG_ASSEMBLER
+// Print a debug log, if DEBUG_ASSEMBLER and ENABLE_DEBUG_LOGS defined.
 #   define DEBUG_ASM(...) DEBUG("[ASM] " __VA_ARGS__)
 #else
+// Print a debug log, if DEBUG_ASSEMBLER and ENABLE_DEBUG_LOGS defined.
 #   define DEBUG_ASM(...) do{}while(0)
 #endif
 
 #ifdef DEBUG_GENERATOR
+// Print a debug log, if DEBUG_GENERATOR and ENABLE_DEBUG_LOGS defined.
 #   define DEBUG_GEN(...) DEBUG("[GEN] " __VA_ARGS__)
 #else
+// Print a debug log, if DEBUG_GENERATOR and ENABLE_DEBUG_LOGS defined.
 #   define DEBUG_GEN(...) do{}while(0)
 #endif
 
 #ifdef DEBUG_PREPROC
+// Print a debug log, if DEBUG_PREPROC and ENABLE_DEBUG_LOGS defined.
 #   define DEBUG_PRE(...) DEBUG("[PRE] " __VA_ARGS__)
 #else
+// Print a debug log, if DEBUG_PREPROC and ENABLE_DEBUG_LOGS defined.
 #   define DEBUG_PRE(...) do{}while(0)
 #endif
+
+/* ==== Checks on arch_config.h ==== */
 
 #if defined(CHAR_IS_SIGNED) && defined(CHAR_IS_UNSIGNED)
 #error "Cannot be both CHAR_IS_SIGNED and CHAR_IS_UNSIGNED, change in arch_config.h"
@@ -79,88 +95,131 @@
 #endif
 
 #ifdef CHAR_IS_SIGNED
+// Whether the 'char' type is treated as signed.
 #define IS_CHAR_SIGNED 1
+// Whether the 'char' type is treated as unsigned.
 #define IS_CHAR_UNSIGNED 0
 #else
+// Whether the 'char' type is treated as signed.
 #define IS_CHAR_SIGNED 0
+// Whether the 'char' type is treated as unsigned.
 #define IS_CHAR_UNSIGNED 1
 #endif
+
 #ifdef TARGET_LITTLE_ENDIAN
+// Whether the target stores numbers in little endian order.
 #define IS_LITTLE_ENDIAN 1
+// Whether the target stores numbers in big endian order.
 #define IS_BIG_ENDIAN 0
 #else
+// Whether the target stores numbers in little endian order.
 #define IS_LITTLE_ENDIAN 0
+// Whether the target stores numbers in big endian order.
 #define IS_BIG_ENDIAN 1
 #endif
 
 /* ==== Word sizes ==== */
 
 #if WORD_BITS <= 8
+// The native word size of the target.
 typedef uint_least8_t word_t;
 #elif WORD_BITS <= 16
+// The native word size of the target.
 typedef uint_least16_t word_t;
 #elif WORD_BITS <= 32
+// The native word size of the target.
 typedef uint_least32_t word_t;
 #elif WORD_BITS <= 64
+// The native word size of the target.
 typedef uint_least64_t word_t;
 #endif
 
 #if MEM_BITS <= 8
+// The smallest memory word size of the target.
 typedef uint_least8_t memword_t;
 #elif MEM_BITS <= 16
+// The smallest memory word size of the target.
 typedef uint_least16_t memword_t;
 #elif MEM_BITS <= 32
+// The smallest memory word size of the target.
 typedef uint_least32_t memword_t;
 #elif MEM_BITS <= 64
+// The smallest memory word size of the target.
 typedef uint_least64_t memword_t;
 #endif
 
 #if ADDR_BITS <= 8
+// The largest address size of the target.
 typedef uint_least8_t  address_t;
+// The largest address difference size of the target.
 typedef int_least8_t   addrdiff_t;
 #elif ADDR_BITS <= 16
+// The largest address size of the target.
 typedef uint_least16_t address_t;
+// The largest address difference size of the target.
 typedef int_least16_t  addrdiff_t;
 #elif ADDR_BITS <= 32
+// The largest address size of the target.
 typedef uint_least32_t address_t;
+// The largest address difference size of the target.
 typedef int_least32_t  addrdiff_t;
 #elif ADDR_BITS <= 64
+// The largest address size of the target.
 typedef uint_least64_t address_t;
+// The largest address difference size of the target.
 typedef int_least64_t  addrdiff_t;
 #endif
 
 /* ==== Word ratios ==== */
 
 #if WORD_BITS > MEM_BITS
+// How many word_t completely fit in one memword_t
 #define WORDS_TO_MEMWORDS ((WORD_BITS + MEM_BITS - 1) / MEM_BITS)
+// How many memword_t completely fit in one word_t.
 #define MEMWORDS_TO_WORDS 1
 #elif WORD_BITS < MEM_BITS
+// How many word_t completely fit in one memword_t
 #define WORDS_TO_MEMWORDS 1
+// How many memword_t completely fit in one word_t.
 #define MEMWORDS_TO_WORDS ((MEM_BITS + WORD_BITS - 1) / WORD_BITS)
 #else
+// How many word_t completely fit in one memword_t
 #define WORDS_TO_MEMWORDS 1
+// How many memword_t completely fit in one word_t.
 #define MEMWORDS_TO_WORDS 1
 #endif
 
 #if WORD_BITS > ADDR_BITS
+// How many word_t completely fit in one address_t.
 #define WORDS_TO_ADDRESS ((WORD_BITS + MEM_BITS - 1) / MEM_BITS)
+// How many address_t completely fit in one word_t.
 #define ADDRESS_TO_WORDS 1
 #elif WORD_BITS < ADDR_BITS
+// How many word_t completely fit in one address_t.
 #define WORDS_TO_ADDRESS 1
+// How many address_t completely fit in one word_t.
 #define ADDRESS_TO_WORDS ((ADDR_BITS + WORD_BITS - 1) / WORD_BITS)
 #else
+// How many word_t completely fit in one address_t.
 #define WORDS_TO_ADDRESS 1
+// How many address_t completely fit in one word_t.
 #define ADDRESS_TO_WORDS 1
 #endif
 
+// How many address_t completely fit in one memword_t.
 #if ADDR_BITS > MEM_BITS
 #define ADDRESS_TO_MEMWORDS ((ADDR_BITS + MEM_BITS - 1) / MEM_BITS)
+// How many memword_t completely fit in one address_t.
 #define MEMWORDS_TO_ADDRESS 1
 #elif ADDR_BITS < MEM_BITS
+// How many address_t completely fit in one memword_t.
 #define ADDRESS_TO_MEMWORDS 1
+// How many memword_t completely fit in one address_t.
 #define MEMWORDS_TO_ADDRESS ((MEM_BITS + ADDR_BITS - 1) / ADDR_BITS)
 #else
+// How many address_t completely fit in one memword_t.
 #define ADDRESS_TO_MEMWORDS 1
+// How many memword_t completely fit in one address_t.
 #define MEMWORDS_TO_ADDRESS 1
 #endif
 
@@ -268,22 +327,26 @@ typedef enum oper {
 
 // Types of statement.
 typedef enum stmt_type {
-	// An empty statement;
+	// An empty statement ;
 	STMT_TYPE_EMPTY,
+	
 	// Statements in { curly brackets }
 	STMT_TYPE_MULTI,
-	// if ; else { statements }
+	
+	// if ; else ; statements
 	STMT_TYPE_IF,
 	// while (loops);
 	STMT_TYPE_WHILE,
 	// for (;;) loops;
 	STMT_TYPE_FOR,
+	
 	// return statements;
 	STMT_TYPE_RET,
 	// variable declaration = statements;
 	STMT_TYPE_VAR,
-	// expression && statements
+	// expression + statements
 	STMT_TYPE_EXPR,
+	
 	// asm ("inline assembly" : "=r" (statements));
 	STMT_TYPE_IASM
 } stmt_type_t;
@@ -294,10 +357,13 @@ typedef enum expr_type {
 	EXPR_TYPE_CONST,
 	// C-string by label reference.
 	EXPR_TYPE_CSTR,
+	
 	// Identity (e.g. variable references).
 	EXPR_TYPE_IDENT,
+	
 	// Method calls.
 	EXPR_TYPE_CALL,
+	
 	// Unary math (e.g. !a, -b or *c).
 	EXPR_TYPE_MATH1,
 	// Binary math (e.g. a+b, c*d or e^f).
@@ -419,20 +485,44 @@ static inline bool STYPE_IS_SIGNED(simple_type_t type) {
 
 // Determine the best type that fits a pointer.
 #if SSIZE_INT == ADDRESS_TO_MEMWORDS
+
+// Integer type of size_t on target.
 #define STYPE_POINTER STYPE_U_INT
+// Size of pointer types, in memory words.
 #define SSIZE_POINTER SSIZE_INT
+
 #elif SSIZE_SHORT == ADDRESS_TO_MEMWORDS
+
+// Integer type of size_t on target.
 #define STYPE_POINTER STYPE_U_SHORT
+// Size of pointer types, in memory words.
 #define SSIZE_POINTER SSIZE_SHORT
-#elif SSIZE_CHAR == ADDRESS_TO_MEMWORDS
+
+#elif SSIZE_CHAR >= ADDRESS_TO_MEMWORDS
+
+// Integer type of size_t on target.
 #define STYPE_POINTER STYPE_U_CHAR
+// Size of pointer types, in memory words.
 #define SSIZE_POINTER SSIZE_CHAR
-#elif SSIZE_LONG == ADDRESS_TO_MEMWORDS
+
+#elif SSIZE_LONG >= ADDRESS_TO_MEMWORDS
+
+// Integer type of size_t on target.
 #define STYPE_POINTER STYPE_U_LONG
+// Size of pointer types, in memory words.
 #define SSIZE_POINTER SSIZE_LONG
-#elif SSIZE_LONGER == ADDRESS_TO_MEMWORDS
+
+#elif SSIZE_LONGER >= ADDRESS_TO_MEMWORDS
+
+// Integer type of size_t on target.
 #define STYPE_POINTER STYPE_U_LONGER
+// Size of pointer types, in memory words.
 #define SSIZE_POINTER SSIZE_LONGER
+
+#else
+
+#error "No integer type can fit target address size!"
+
 #endif
 
 // Sizes of the simple types, in memory words, by index.

@@ -118,6 +118,13 @@ struct expr {
 		// Arguments for EXPR_TYPE_CALL.
 		exprs_t *args;
 	};
+	
+	// Whether this expression uses pointers.
+	bool uses_pointers;
+	// Whether this expression has side effects.
+	bool has_side_effects;
+	// The amount of expressions going down, including this one.
+	size_t operation_count;
 };
 
 // Statement; used to represent actions to perform, often evaluation of expressions.

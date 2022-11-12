@@ -244,6 +244,9 @@ expr:			TKN_IVAL									{$$=expr_icnst(ctx, &$1);                    $$.pos=$1.
 |				expr "[" expr "]"							{$$=expr_math2(ctx, OP_INDEX, &$1, &$3);     $$.pos=pos_merge($1.pos, $4);}
 |				"(" expr ")"								{$$=$2;                                      $$.pos=pos_merge($1, $3);}
 
+|				expr "++"									{$$=expr_math1(ctx, OP_POST_INC,  &$1);      $$.pos=pos_merge($1.pos, $2);}
+|				expr "--"									{$$=expr_math1(ctx, OP_POST_DEC,  &$1);      $$.pos=pos_merge($1.pos, $2);}
+
 |				"++" expr									{$$=expr_math1a(ctx, OP_ADD,      &$2);      $$.pos=pos_merge($1, $2.pos);}
 |				"--" expr									{$$=expr_math1a(ctx, OP_SUB,      &$2);      $$.pos=pos_merge($1, $2.pos);}
 

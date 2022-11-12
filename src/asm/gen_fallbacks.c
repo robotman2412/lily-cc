@@ -868,12 +868,6 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 					
 				} else {
 					// Assignment to a different type (usually pointer dereference).
-					// gen_var_t *ptr_hint = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
-					// *ptr_hint = (gen_var_t) {
-					// 	.type = VAR_TYPE_PTR,
-					// 	.ctype = ctype_simple(ctx, STYPE_BOOL),
-					// };
-					// Generate with the pointer hint.
 					gen_var_t *a = gen_expression(ctx, expr->par_a, NULL);
 					if (!a) return NULL;
 					// Enforce that A is writable.
@@ -892,6 +886,11 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 					if (!gen_cmp(ctx, a, b)) gen_unuse(ctx, a);
 					return a;
 				}
+				
+			} else if (OP_IS_LOGIC(expr->oper)) {
+				// Logic math doesn't always evaluate both parameters.
+				return gen_expr_logic2(ctx, expr, out_hint);
+				
 			} else {
 				// Simple binary math (things like a * b, c + d, e & f, etc.)
 				gen_var_t *a   = gen_expression(ctx, expr->par_a, out_hint);

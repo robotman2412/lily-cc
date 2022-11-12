@@ -118,7 +118,47 @@ bool gen_preproc_stmt(asm_ctx_t *ctx, preproc_data_t *parent, void *ptr, bool is
 
 // Preprocess an expression.
 void gen_preproc_expression(asm_ctx_t *ctx, preproc_data_t *parent, expr_t *expr) {
-	
+	switch (expr->type) {
+		case EXPR_TYPE_CONST:
+			expr->operation_count  = 0;
+			expr->has_side_effects = false;
+			expr->uses_pointers    = false;
+			break;
+			
+		case EXPR_TYPE_CSTR:
+			expr->operation_count  = 0;
+			expr->has_side_effects = false;
+			expr->uses_pointers    = true;
+			break;
+			
+		case EXPR_TYPE_IDENT:
+			expr->operation_count  = 0;
+			expr->has_side_effects = false;
+			expr->uses_pointers    = false;
+			break;
+			
+		case EXPR_TYPE_CALL:
+			expr->operation_count  = 1;
+			expr->has_side_effects = true;
+			expr->uses_pointers    = true;
+			break;
+			
+		case EXPR_TYPE_MATH1:
+			gen_preproc_expression(ctx, parent, expr->par_a);
+			expr->operation_count  = expr->par_a->operation_count + 1;
+			expr->has_side_effects = expr->par_a->has_side_effects;
+			expr->uses_pointers    = expr->par_a->uses_pointers;
+			break;
+			
+		case EXPR_TYPE_MATH2:
+			expr->operation_count  = 1;
+			gen_preproc_expression(ctx, parent, expr->par_a);
+			gen_preproc_expression(ctx, parent, expr->par_b);
+			expr->operation_count  = expr->par_a->operation_count  +  expr->par_b->operation_count + 1;
+			expr->has_side_effects = expr->par_a->has_side_effects || expr->par_b->has_side_effects;
+			expr->uses_pointers    = expr->par_a->uses_pointers    || expr->par_b->uses_pointers;
+			break;
+	}
 }
 
 // Preprocess a list of expressions.

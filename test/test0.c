@@ -1,16 +1,21 @@
 
 #define short char *
 
+// void strtolower(int size, char *src, char *dst) {
+// 	for (int i = 0; i < size; ++i) {
+		
+// 	}
+// }
+
 void entry() {
 	// Initialise stack.
 	asm("MOV ST, 0xffff");
 	asm("SUB ST, [0xffff]");
 	
-	int array[5];
+	// Logic operator test.
+	int a, b;
 	
-	for (int i = 0; i < 5; ++i) {
-		int tmp = array[i];
-	}
+	int res = a && b;
 	
 	// Halt.
 	asm("DEC PC");

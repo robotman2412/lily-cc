@@ -1172,6 +1172,12 @@ void gen_for(asm_ctx_t *ctx, stmt_t *stmt, exprs_t *cond, stmt_t *code, exprs_t 
 	// Fix the stack.
 	px_memclobber(ctx, true);
 	
+	// Perform increment code.
+	for (size_t i = 0; i < next->num; i++) {
+		gen_var_t *ignore = gen_expression(ctx, &next->arr[i], NULL);
+		gen_unuse(ctx, ignore);
+	}
+	
 	// Check condition.
 	asm_write_label(ctx, check_label);
 	if (is_forever) {
@@ -1413,6 +1419,45 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, siz
 	}
 }
 
+// Writes logical AND/OR code for jumping to labels.
+void px_logic2(asm_ctx_t *ctx, expr_t *expr, asm_label_t l_true, asm_label_t l_false) {
+	
+}
+
+// Expression: Logical operation.
+gen_var_t *gen_expr_logic2(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
+	gen_var_t *output = out_hint;
+	if (!output) {
+		output        = px_get_tmp(ctx, 1, true);
+		output->ctype = ctype_simple(ctx, STYPE_BOOL);
+	}
+	
+	// Create labels for true and false outcomes.
+	asm_label_t l_true  = asm_get_label(ctx);
+	asm_label_t l_false = asm_get_label(ctx);
+	asm_label_t l_skip  = asm_get_label(ctx);
+	
+	// Use the internal device.
+	px_logic2(ctx, expr, l_true, l_false);
+	
+	// Write setter for true outcome.
+	asm_write_label(ctx, l_true);
+	px_insn_t insn = {
+		.y = 0,
+		.b = PX_REG_IMM,
+		.o = PX_OP_MOV,
+	};
+	px_write_insn(ctx, insn, NULL, 0, NULL, 1);
+	px_jump(ctx, l_skip);
+	
+	// Write setter for false outcome.
+	asm_write_label(ctx, l_false);
+	px_write_insn(ctx, insn, NULL, 0, NULL, 0);
+	asm_write_label(ctx, l_skip);
+	
+	return output;
+}
+
 // Expression: Binary math operation.
 gen_var_t *gen_expr_math2(asm_ctx_t *ctx, expr_t *expr, oper_t oper, gen_var_t *out_hint, gen_var_t *a, gen_var_t *b) {
 	address_t n_words = 1;
@@ -1470,9 +1515,7 @@ gen_var_t *gen_expr_math2(asm_ctx_t *ctx, expr_t *expr, oper_t oper, gen_var_t *
 		return output;
 	}
 	
-	if (OP_IS_LOGIC(oper)) {
-		// TODO.
-	} else if (oper == OP_INDEX) {
+	if (oper == OP_INDEX) {
 		// Construct the indexing hint.
 		gen_var_t *hint = xalloc(ctx->allocator, sizeof(gen_var_t));
 		*hint = (gen_var_t) {
@@ -1560,7 +1603,26 @@ gen_var_t *gen_expr_math1(asm_ctx_t *ctx, expr_t *expr, oper_t oper, gen_var_t *
 		*a = *a->default_loc;
 	}
 	
-	if (oper == OP_LOGIC_NOT) {
+	if (oper == OP_POST_INC || oper == OP_POST_DEC) {
+		// Create a temp variable with a copy.
+		gen_var_t *temp;
+		if (output) {
+			temp = output;
+		} else {
+			temp = px_get_tmp(ctx, a->ctype->size, true);
+			temp->ctype = a->ctype;
+		}
+		
+		// Copy current value to temporary.
+		gen_mov(ctx, temp, a);
+		
+		// Perform math operation.
+		gen_var_t *ignored = px_math1(ctx, oper == OP_POST_INC ? PX_OP_INC : PX_OP_DEC, a, a);
+		
+		// Return copied value.
+		return temp;
+		
+	} else if (oper == OP_LOGIC_NOT) {
 		if (a->type == VAR_TYPE_COND) {
 			// Invert a branch condition.
 			if (!output) output = a;

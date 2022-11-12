@@ -409,6 +409,9 @@ static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 			if (next == '=') {
 				tokeniser_readchar(ctx);
 				ret = TKN_ASSIGN_AND;
+			} else if (next == '&') {
+				tokeniser_readchar(ctx);
+				ret = TKN_LOGIC_AND;
 			} else {
 				ret = TKN_AMP;
 			}
@@ -519,6 +522,9 @@ static int tokenise_int(tokeniser_ctx_t *ctx, int *i0, int *x0, int *y0) {
 			if (next == '=') {
 				tokeniser_readchar(ctx);
 				ret = TKN_ASSIGN_OR;
+			} else if (next == '|') {
+				tokeniser_readchar(ctx);
+				ret = TKN_LOGIC_OR;
 			} else {
 				ret = TKN_OR;
 			}

@@ -115,6 +115,8 @@ gen_var_t *gen_expression    (asm_ctx_t *ctx, expr_t    *expr,    gen_var_t *out
 // Expression: Function call.
 // args may be null for zero arguments.
 gen_var_t *gen_expr_call     (asm_ctx_t *ctx, funcdef_t *funcdef, expr_t    *callee,   size_t     n_args, expr_t   *args);
+// Expression: Logical operation.
+gen_var_t *gen_expr_logic2   (asm_ctx_t *ctx, expr_t    *expr,    gen_var_t *out_hint);
 // Expression: Binary math operation.
 gen_var_t *gen_expr_math2    (asm_ctx_t *ctx, expr_t    *expr,    oper_t     oper,    gen_var_t *out_hint, gen_var_t *a,      gen_var_t *b);
 // Expression: Unary math operation.

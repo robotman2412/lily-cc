@@ -8,13 +8,8 @@ void entry() {
 	
 	int array[5];
 	
-	// Try optimise cond mov?
-	int thing;
-	int other;
-	if (thing) {
-		other = 1;
-	} else {
-		other = 2;
+	for (int i = 0; i < 5; ++i) {
+		int tmp = array[i];
 	}
 	
 	// Halt.

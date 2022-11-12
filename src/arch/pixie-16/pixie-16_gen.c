@@ -292,69 +292,119 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, px_addr_t *add
 			a = var->indexed.location;
 			b = var->indexed.index;
 			
-			// Get components into registers if not already.
-			px_var_to_reg(ctx, a, true);
-			px_var_to_reg(ctx, b, true);
-			
-			// Check for constants.
-			if (a->type == VAR_TYPE_CONST) {
+			if (a->ctype->category == TYPE_CAT_ARRAY && a->type != VAR_TYPE_PTR) {
+				// Array type indexing.
+				
+				// Get components into registers if not already.
+				px_var_to_reg(ctx, b, true);
+				
+				// Determine the underlying type of the operation.
+				var_type_t *underlying = var->ctype;
+				
 				if (b->type == VAR_TYPE_CONST) {
-					// TODO: CONVERT the thingy.
-				} else {
-					// Swapperoni.
-					gen_var_t *tmp = a;
-					a = b;
-					b = tmp;
-				}
-			}
-			
-			// Determine the underlying type of the operation.
-			var_type_t *underlying = var->ctype;
-			
-			if (b->type == VAR_TYPE_CONST && (b->iconst + part)) {
-				// Constant (nonzero) offset and variable offset.
-				*addrmode = a->reg;
-				*offs     = b->iconst * underlying->size + part;
-				return PX_REG_IMM;
-			} else if (b->type == VAR_TYPE_CONST) {
-				// Constant (zero) offset and variable offset.
-				*addrmode = PX_ADDR_MEM;
-				return a->reg;
-			} else if (part == 0) {
-				// Two variable offsets, index part 0.
-				*addrmode = a->reg;
-				return b->reg;
-			} else {
-				// Two variable offsets, index exceeding 0.
-				if (var->indexed.combined == NULL) {
-					// Combine the two.
-					reg_t dest = px_pick_reg(ctx, true);
+					// B is a constant, modify offset.
+					return px_addr_var(ctx, a, part + b->iconst * underlying->size, addrmode, label, offs, dest);
+					
+				} else if (underlying->size == 1 && a->type == VAR_TYPE_LABEL) {
+					// Underlying size is 1, add B to address.
+					*addrmode = b->reg;
+					*offs     = part;
+					return PX_REG_IMM;
+					
+				} else if (underlying->size == 1) {
+					// Underlying size is 1, add B to address.
+					gen_var_t *tmp = px_get_tmp(ctx, 1, true);
+					tmp->ctype = ctype_simple(ctx, STYPE_U_INT);
+					
+					// Perform LEA of location to index.
 					px_insn_t insn = {
 						.y = 1,
-						.x = a->reg,
-						.b = b->reg,
-						.a = dest,
-						.o = PX_OP_LEA,
+						.o = PX_OP_LEA
 					};
-					px_write_insn(ctx, insn, NULL, 0, NULL, 0);
+					asm_label_t label1 = NULL;
+					address_t   offs1  = 0;
+					insn.b = px_addr_var(ctx, a, 0, &insn.x, &label1, &offs1, dest);
+					px_var_to_reg(ctx, tmp, false);
+					insn.a = tmp->reg;
+					px_write_insn(ctx, insn, NULL, 0, label1, offs1);
 					
-					// Make a fancy variable for next time.
-					var->indexed.combined = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
-					*var->indexed.combined = (gen_var_t) {
-						.type        = VAR_TYPE_REG,
-						.reg         = dest,
-						.ctype       = underlying,
-						.owner       = NULL,
-						.default_loc = NULL,
-					};
+					// Return a combined form.
+					*addrmode = tmp->reg;
+					*offs     = 0;
+					return b->reg;
 					
-					ctx->current_scope->reg_usage[dest] = var->indexed.combined;
+				} else {
+					// B is in a register, perform address calculation.
+					// TODO: There is a multiplication here.
 				}
 				
-				// Construct with the offset.
-				*addrmode = var->indexed.combined->reg;
-				*offs     = part;
-				return PX_REG_IMM;
+			} else {
+				// Pointer type index.
+				
+				// Get components into registers if not already.
+				px_var_to_reg(ctx, a, true);
+				px_var_to_reg(ctx, b, true);
+				
+				// Check for constants.
+				if (a->type == VAR_TYPE_CONST) {
+					if (b->type == VAR_TYPE_CONST) {
+						// TODO: CONVERT the thingy.
+					} else {
+						// Swapperoni.
+						gen_var_t *tmp = a;
+						a = b;
+						b = tmp;
+					}
+				}
+				
+				// Determine the underlying type of the operation.
+				var_type_t *underlying = var->ctype;
+				
+				if (b->type == VAR_TYPE_CONST && (b->iconst + part)) {
+					// Constant (nonzero) offset and variable offset.
+					*addrmode = a->reg;
+					*offs     = b->iconst * underlying->size + part;
+					return PX_REG_IMM;
+				} else if (b->type == VAR_TYPE_CONST) {
+					// Constant (zero) offset and variable offset.
+					*addrmode = PX_ADDR_MEM;
+					return a->reg;
+				} else if (part == 0) {
+					// Two variable offsets, index part 0.
+					*addrmode = a->reg;
+					return b->reg;
+				} else {
+					// Two variable offsets, index exceeding 0.
+					if (var->indexed.combined == NULL) {
+						// Combine the two.
+						reg_t dest = px_pick_reg(ctx, true);
+						px_insn_t insn = {
+							.y = 1,
+							.x = a->reg,
+							.b = b->reg,
+							.a = dest,
+							.o = PX_OP_LEA,
+						};
+						px_write_insn(ctx, insn, NULL, 0, NULL, 0);
+						
+						// Make a fancy variable for next time.
+						var->indexed.combined = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
+						*var->indexed.combined = (gen_var_t) {
+							.type        = VAR_TYPE_REG,
+							.reg         = dest,
+							.ctype       = underlying,
+							.owner       = NULL,
+							.default_loc = NULL,
+						};
+						
+						ctx->current_scope->reg_usage[dest] = var->indexed.combined;
+					}
+					
+					// Construct with the offset.
+					*addrmode = var->indexed.combined->reg;
+					*offs     = part;
+					return PX_REG_IMM;
+				}
 			}
 			break;
 	}
@@ -819,7 +869,7 @@ gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 
 /* ================== Functions ================== */
 
-// Function entry for non-inlined functions. 
+// Function entry for non-inlined functions.
 void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	// Update the calling conventions.
 	px_update_cc(ctx, funcdef);
@@ -2074,4 +2124,31 @@ void gen_init_var(asm_ctx_t *ctx, gen_var_t *var, expr_t *expr) {
 			}
 		}
 	}
+}
+
+
+
+// New scope.
+void gen_push_scope(asm_ctx_t *ctx) {
+	asm_scope_t *scope = (asm_scope_t *) xalloc(ctx->allocator, sizeof(asm_scope_t));
+	*scope = *ctx->current_scope;
+	scope->allocator   = alloc_create(ctx->allocator);
+	scope->parent      = ctx->current_scope;
+	map_create(&scope->vars);
+	ctx->current_scope = scope;
+}
+
+// Close scope.
+void gen_pop_scope(asm_ctx_t *ctx) {
+	asm_scope_t *old = ctx->current_scope;
+	address_t real_size = ctx->current_scope->real_stack_size;
+	
+	// Delete the map.
+	map_delete(&old->vars);
+	alloc_destroy(old->allocator);
+	
+	// Unlink it.
+	ctx->current_scope = old->parent;
+	xfree(ctx->allocator, old);
+	ctx->current_scope->real_stack_size = real_size;
 }

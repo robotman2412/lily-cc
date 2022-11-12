@@ -219,31 +219,6 @@ bool gen_cmp(asm_ctx_t *ctx, gen_var_t *a, gen_var_t *b) {
 
 
 
-// New scope.
-void gen_push_scope(asm_ctx_t *ctx) {
-	asm_scope_t *scope = (asm_scope_t *) xalloc(ctx->allocator, sizeof(asm_scope_t));
-	*scope = *ctx->current_scope;
-	scope->allocator   = alloc_create(ctx->allocator);
-	scope->parent      = ctx->current_scope;
-	map_create(&scope->vars);
-	ctx->current_scope = scope;
-}
-
-// Close scope.
-void gen_pop_scope(asm_ctx_t *ctx) {
-	asm_scope_t *old = ctx->current_scope;
-	
-	// Delete the map.
-	map_delete(&old->vars);
-	alloc_destroy(old->allocator);
-	
-	// Unlink it.
-	ctx->current_scope = old->parent;
-	xfree(ctx->allocator, old);
-}
-
-
-
 // Creates an escaped representation of a given C-string.
 char *esc_cstr(alloc_ctx_t allocator, const char *cstr, size_t len) {
 	if (!cstr) return NULL;

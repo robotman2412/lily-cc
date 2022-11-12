@@ -868,13 +868,13 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 					
 				} else {
 					// Assignment to a different type (usually pointer dereference).
-					gen_var_t *ptr_hint = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
-					*ptr_hint = (gen_var_t) {
-						.type = VAR_TYPE_PTR,
-						.ctype = ctype_simple(ctx, STYPE_BOOL),
-					};
+					// gen_var_t *ptr_hint = xalloc(ctx->current_scope->allocator, sizeof(gen_var_t));
+					// *ptr_hint = (gen_var_t) {
+					// 	.type = VAR_TYPE_PTR,
+					// 	.ctype = ctype_simple(ctx, STYPE_BOOL),
+					// };
 					// Generate with the pointer hint.
-					gen_var_t *a = gen_expression(ctx, expr->par_a, ptr_hint);
+					gen_var_t *a = gen_expression(ctx, expr->par_a, NULL);
 					if (!a) return NULL;
 					// Enforce that A is writable.
 					if (a->type == VAR_TYPE_COND || a->type == VAR_TYPE_CONST) {

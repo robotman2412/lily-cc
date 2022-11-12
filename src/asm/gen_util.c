@@ -304,3 +304,30 @@ char *esc_cstr(alloc_ctx_t allocator, const char *cstr, size_t len) {
 	*(write++) = 0;
 	return buffer;
 }
+
+
+
+// New scope.
+void gen_push_scope(asm_ctx_t *ctx) {
+	asm_scope_t *scope = (asm_scope_t *) xalloc(ctx->allocator, sizeof(asm_scope_t));
+	*scope = *ctx->current_scope;
+	scope->allocator   = alloc_create(ctx->allocator);
+	scope->parent      = ctx->current_scope;
+	map_create(&scope->vars);
+	ctx->current_scope = scope;
+}
+
+// Close scope.
+void gen_pop_scope(asm_ctx_t *ctx) {
+	asm_scope_t *old = ctx->current_scope;
+	address_t real_size = ctx->current_scope->real_stack_size;
+	
+	// Delete the map.
+	map_delete(&old->vars);
+	alloc_destroy(old->allocator);
+	
+	// Unlink it.
+	ctx->current_scope = old->parent;
+	xfree(ctx->allocator, old);
+	ctx->current_scope->real_stack_size = real_size;
+}

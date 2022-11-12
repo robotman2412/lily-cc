@@ -24,6 +24,10 @@
 #include "alloc_tests.h"
 #endif
 
+#if __WORDSIZE < WORD_BITS
+#warning "The target has a larger word size than the current machine, the compiler might not be able to handle it."
+#endif
+
 // Filling in of an external array.
 char *reg_names[] = REG_NAMES;
 

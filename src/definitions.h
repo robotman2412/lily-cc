@@ -184,37 +184,72 @@ typedef enum asm_label_ref {
 
 // All operators defined by the C language.
 typedef enum oper {
-	// Unary operators.
+	/* ==== Unary operators ==== */
+	// Address of operator (prefix &).
 	OP_ADROF,
+	// Dereference operator (prefix *).
 	OP_DEREF,
+	// Zero minus operator (prefix -).
 	OP_0_MINUS,
-	//Binary operators.
+	
+	/* ==== Post-use modification operators ==== */
+	// Post-increment operator (postfix ++).
+	OP_POST_INC,
+	// Post-decrement operator (postfix --).
+	OP_POST_DEC,
+	
+	/* ==== Binary operators ==== */
+	// Addition operator (+).
 	OP_ADD,
+	// Subtraction operator (-).
 	OP_SUB,
+	// Multiplication operator (*).
 	OP_MUL,
+	// Division operator (/).
 	OP_DIV,
+	// Modulo operator (%).
 	OP_MOD,
-	OP_SHIFT_L,
-	OP_SHIFT_R,
-	// Logic operators.
+	
+	/* ==== Logic operators ==== */
+	// Logical NOT operator (!).
 	OP_LOGIC_NOT,
+	// Logical AND operator (&&).
 	OP_LOGIC_AND,
+	// Logical OR operator (||).
 	OP_LOGIC_OR,
-	// Bitwise operators.
+	
+	/* ==== Bitwise operators ==== */
+	// Bitwise NOT operator (~).
 	OP_BIT_NOT,
+	// Bitwise AND operator (&).
 	OP_BIT_AND,
+	// Bitwise OR operator (|).
 	OP_BIT_OR,
+	// Bitwise XOR operator (^).
 	OP_BIT_XOR,
-	// Comparison operators.
+	// Bitwise left shift operator (<<).
+	OP_SHIFT_L,
+	// Bitwise right shift operator (>>).
+	OP_SHIFT_R,
+	
+	/* ==== Comparison operators ==== */
+	// Greater than operator (>).
 	OP_GT,
+	// Greater than or equal to operator (>=).
 	OP_GE,
+	// Less than operator (<).
 	OP_LT,
+	// Less than or equal to operator (<=).
 	OP_LE,
+	// Equality operator (==).
 	OP_EQ,
+	// Inequality operator (!=).
 	OP_NE,
-	// Assignment operators.
+	
+	// Assignment operator.
 	OP_ASSIGN,
-	// Miscellaneous operators.
+	
+	// Array and/or pointer indexing operator.
 	OP_INDEX
 } oper_t;
 

@@ -12,7 +12,9 @@ HEADERS		= ./build/config.h ./build/parser.h ./build/version_number.h\
 				$(shell find ./src ! -path './src/debug/*' ! -path './src/arch/*' -name '*.h')\
 				$(shell find ./src/arch/$(TARGET) -name '*.h')
 OBJECTS		= $(shell echo $(SOURCES) | sed -e 's/src/build/g;s/\.c/.c.o/g')
-OBJ_DEBUG	= $(shell echo $(SOURCES) | sed -e 's/src/build/g;s/\.c/.c.debug.o/g')
+SRC_DEBUG	= $(SOURCES) $(shell find ./src -path './src/debug/*' ! -path './src/arch/*' -name '*.c')
+HDR_DEBUG	= $(HEADERS) $(shell find ./src -path './src/debug/*' ! -path './src/arch/*' -name '*.h')
+OBJ_DEBUG	= $(shell echo $(SRC_DEBUG) | sed -e 's/src/build/g;s/\.c/.c.debug.o/g')
 INCLUDES	= -Isrc -Isrc/arch/$(TARGET) -Isrc/asm -Isrc/objects -Isrc/util -Isrc/debug -Ibuild
 
 OUTFILE		= comp
@@ -53,7 +55,7 @@ $(CFGFILES):
 	@mkdir -p $(shell dirname $@)
 	$(CC) -c $< $(CCFLAGS) -o $@
 
-./build/parser.c.debug.o: ./build/parser.c $(HEADERS) Makefile
+./build/parser.c.debug.o: ./build/parser.c $(HDR_DEBUG) Makefile
 	@mkdir -p $(shell dirname $@)
 	$(CC) -c $< $(FLAGS_DEBUG) -o $@
 
@@ -61,7 +63,7 @@ $(CFGFILES):
 	@mkdir -p $(shell dirname $@)
 	$(CC) -c $< $(CCFLAGS) -o $@
 
-./build/%.debug.o: ./src/% $(HEADERS) Makefile
+./build/%.debug.o: ./src/% $(HDR_DEBUG) Makefile
 	@mkdir -p $(shell dirname $@)
 	$(CC) -c $< $(FLAGS_DEBUG) -o $@
 

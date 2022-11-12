@@ -38,10 +38,6 @@ typedef struct token {
 int main(int argc, char **argv) {
 	alloc_init();
 	
-#if defined(ENABLE_DEBUG_LOGS) && YYDEBUG
-	yydebug = 1;
-#endif
-	
 	options_t options = {
 		.abort          = false,
 		.showHelp       = false,

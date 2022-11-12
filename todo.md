@@ -1,7 +1,7 @@
 # lily-cc TODO
 
 ## The C language
-- When that is complete: Add support for arrays, unions and structs.
+- Add support for arrays, unions and structs.
 
 ## Generator
 - Create a system to match variables' sizes before an operation.

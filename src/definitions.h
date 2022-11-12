@@ -6,9 +6,17 @@
 #include "stdint.h"
 #include "stddef.h"
 #include "stdbool.h"
+#include "signal.h"
+#include "sys/ptrace.h"
 #include "version_number.h"
 
 /* ==== Debug information ==== */
+
+#ifdef DEBUG_COMPILER
+#	define DEBUGGER() raise(SIGTRAP)
+#else
+#	define DEBUGGER() do{}while(0)
+#endif
 
 #ifdef ENABLE_DEBUG_LOGS
 #   define DEBUG(...) printf("[DEBUG] " __VA_ARGS__)

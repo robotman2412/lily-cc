@@ -52,9 +52,9 @@ void pront_expr(expr_t *expr) {
 		case (EXPR_TYPE_CONST):
 			printf("%ld ", expr->iconst);
 			break;
-		// case (EXPR_TYPE_STRCONST):
-		// 	printf("\"%s\" ", expr->strconst);
-		// 	break;
+		case (EXPR_TYPE_CSTR):
+			printf("\"%s\" ", expr->ident->strval);
+			break;
 		case (EXPR_TYPE_IDENT):
 			printf("%s ", expr->ident->strval);
 			break;

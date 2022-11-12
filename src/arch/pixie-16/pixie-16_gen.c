@@ -61,6 +61,18 @@ static void px_write_insn0(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, a
 	char *imm1 = NULL;
 	#endif
 	
+	// Test for suspicious instructions.
+	if ((insn.y == 0 && insn.x == insn.a && insn.x != PX_ADDR_IMM) || (insn.y == 1 && insn.x == insn.b && insn.x != PX_ADDR_IMM)) {
+		DEBUG_GEN("// WARNING: Suspicious instruction.\n");
+		DEBUGGER();
+	}
+	
+	// Test for impossible instructions.
+	if ((insn.y == 0 && insn.x == PX_ADDR_IMM && insn.a == PX_REG_IMM) || (insn.y == 1 && insn.a == PX_REG_IMM)) {
+		DEBUG_GEN("// WARNING: Invalid instruction.\n");
+		DEBUGGER();
+	}
+	
 	// Write the basic instruction.
 	asm_write_memword(ctx, px_pack_insn(insn));
 	
@@ -186,11 +198,6 @@ void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t
 			ctx->current_scope->real_stack_size ++;
 			return;
 		}
-	}
-	
-	// Test for suspicious instructions.
-	if ((insn.y == 0 && insn.x == insn.a && insn.x != PX_ADDR_IMM) || (insn.y == 1 && insn.x == insn.b && insn.x != PX_ADDR_IMM)) {
-		DEBUG_GEN("// WARNING: Suspicious instruction.\n");
 	}
 	
 	// Determine memory clobbers.

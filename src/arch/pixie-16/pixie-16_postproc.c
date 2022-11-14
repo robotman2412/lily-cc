@@ -119,7 +119,7 @@ void output_native(asm_ctx_t *ctx) {
     }
 	
 	// Temporary: Align .bss to 0x2000.
-	asm_set_align(ctx, ".bss", 0x2000);
+	// asm_set_align(ctx, ".bss", 0x2000);
 	
 	// Pass 1: label resolution.
 	ctx->pc = 0;

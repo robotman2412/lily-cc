@@ -6,11 +6,12 @@
 #include <stdbool.h>
 #include <definitions.h>
 
-#define ASM_CHUNK_DATA      0xCE
-#define ASM_CHUNK_LABEL     0x9A
-#define ASM_CHUNK_LABEL_REF 0x3B
-#define ASM_CHUNK_ZERO      0x82
-#define ASM_CHUNK_POS       0x27
+#define ASM_CHUNK_DATA      0x01
+#define ASM_CHUNK_LABEL     0x02
+#define ASM_CHUNK_LABEL_REF 0x03
+#define ASM_CHUNK_ZERO      0x04
+#define ASM_CHUNK_POS       0x05
+#define ASM_CHUNK_EQU       0x06
 
 #define ASM_NOT_ALIGNED     0
 
@@ -142,6 +143,7 @@ void asm_use_sect       (asm_ctx_t *ctx, const char      *id,   address_t  align
 // Any alignment, even outside of powers of two accepted.
 // Does not implicitly create sections.
 void asm_set_align      (asm_ctx_t *ctx, const char      *id,   address_t  align);
+
 // Writes memory words to the current chunk.
 void asm_write_memwords (asm_ctx_t *ctx, const memword_t *data, size_t     len);
 // Writes memory words to the current chunk.
@@ -165,6 +167,9 @@ void asm_write_pos      (asm_ctx_t *ctx, pos_t pos);
 
 // Writes zeroes.
 void asm_write_zero     (asm_ctx_t *ctx, address_t   count);
+
+// Writes an equation label.
+void asm_write_equ      (asm_ctx_t *ctx, const char *label, address_t value);
 
 // Reads a number of arbitrary size from the given buffer.
 size_t asm_read_numb    (uint8_t   *buf, size_t      bytes);

@@ -323,6 +323,23 @@ void asm_write_zero(asm_ctx_t *ctx, address_t count) {
 	asm_append_chunk(ctx, ASM_CHUNK_DATA);
 }
 
+// Writes an equation label.
+void asm_write_equ(asm_ctx_t *ctx, const char *label, address_t value) {
+	DEBUG_GEN(".equ %s, 0x%x\n", label, value);
+	asm_label_def_t *def = get_or_create_label(ctx, label);
+	def->is_defined = true;
+	def->address = value;
+	// New label equation chunk.
+	asm_append_chunk(ctx, ASM_CHUNK_EQU);
+	// Label value.
+	asm_write_num(ctx, value, sizeof(address_t));
+	// Label string.
+	asm_append(ctx, label, strlen(label) + 1);
+	// New data chunk.
+	asm_append_chunk(ctx, ASM_CHUNK_DATA);
+	DEBUG_ASM("e  %s = 0x%x\n", label, value);
+}
+
 // Writes linenumber and position information.
 void asm_write_pos(asm_ctx_t *ctx, pos_t pos) {
 	if (!pos.filename) return;

@@ -68,7 +68,16 @@ void asm_ppc_pass1(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t
 		asm_label_def_t *def = map_get(ctx->labels, label);
 		// And assign the current PC to it.
 		def->address = ctx->pc;
-		printf("%s = %04x\n", label, def->address);
+		printf("%-20s @ %04x\n", label, def->address);
+	} else if (chunk_type == ASM_CHUNK_EQU) {
+		// GIT address.
+		address_t addr = asm_read_numb(chunk_data, sizeof(address_t));
+		// Look up the label.
+		char *label = chunk_data + sizeof(address_t);
+		asm_label_def_t *def = map_get(ctx->labels, label);
+		// And assign the equation result to it.
+		def->address = addr;
+		printf("%-20s = %04x\n", label, def->address);
 	} else if (chunk_type == ASM_CHUNK_POS) {
 		// A position chuck (usually for addr2line purposes).
 		(*(address_t *) chunk_data) = ctx->pc;

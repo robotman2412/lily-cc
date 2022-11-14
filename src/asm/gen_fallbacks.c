@@ -598,6 +598,42 @@ static void gen_asm_db(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 	}
 }
 
+// Handles the .equ macro in assembly.
+static void gen_asm_equ(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
+	// Expect a label.
+	nomore_spaces(lex_ctx);
+	size_t len = asm_expect_ident(lex_ctx);
+	if (!len) {
+		printf("Error: Expected IDENT after '.equ'\n");
+		return;
+	}
+	char *label = asm_extract(lex_ctx, len);
+	
+	// Expect the comma.
+	nomore_spaces(lex_ctx);
+	if (tokeniser_readchar(lex_ctx) != ',') {
+		printf("Error: Expected ',' after %s\n", label);
+		xfree(lex_ctx->allocator, label);
+		return;
+	}
+	nomore_spaces(lex_ctx);
+	
+	// Expect an integer value.
+	// TODO: Support for equations?
+	long long ival;
+	bool success = asm_expect_ival(lex_ctx, &ival);
+	if (success) {
+		// Write equation asm.
+		asm_write_equ(ctx, label, ival);
+		
+	} else {
+		printf("Error: Expected IVAL after ','\n");
+	}
+	
+	// Clean up.
+	xfree(lex_ctx->allocator, label);
+}
+
 // Complete file of assembly. (only if inline assembly is supported)
 // Splits the assembly file into lines and nicely asks the backend to fix it.
 void gen_asm_file(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
@@ -646,8 +682,12 @@ void gen_asm_file(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 					printf("Error: Expected NUMBER after '.zero'\n");
 				}
 			} else if (!strcmp(directive, "db")) {
-				// Handle the D.B.
+				// Handle the data bytes.
+				// TODO: Different word sizes for this.
 				gen_asm_db(ctx, lex_ctx);
+			} else if (!strcmp(directive, "equ")) {
+				// Handle the label equation.
+				gen_asm_equ(ctx, lex_ctx);
 			} else {
 				printf("Warning: Unknown directive '%s'\n", directive);
 			}

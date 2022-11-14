@@ -88,18 +88,12 @@ int main(int argc, char **argv) {
 			// Specify output file.
 			if (argIndex < argc - 1) {
 				argIndex ++;
-				printf("%s\n", argv[argIndex]);
-				if (access(argv[argIndex], W_OK)) {
-					options.outputFile = argv[argIndex];
-				} else if (isdir(argv[argIndex])) {
+				if (isdir(argv[argIndex])) {
 					fflush(stdout);
 					fprintf(stderr, "Error: '%s' is a directory\n", argv[argIndex]);
 					options.abort = true;
-				} else if (access(argv[argIndex], F_OK)) {
-					fflush(stdout);
-					fprintf(stderr, "Error: Permission denied for '%s'\n", argv[argIndex]);
-					options.abort = true;
 				}
+				options.outputFile = argv[argIndex];
 			} else {
 				fflush(stdout);
 				fprintf(stderr, "Error: Missing filename for '-o'\n");
@@ -164,6 +158,11 @@ int main(int argc, char **argv) {
 		return 0;
 	}
 	
+	FILE *outfile = fopen(options.outputFile, "w+");
+	if (!outfile) {
+		fprintf(stderr, "Error: Cannot access %s: %s\n", options.outputFile, strerror(errno));
+	}
+	
 	// Read file.
 	if (argc > argIndex + 1) printf("Note: Only the first input file is compiled for now.\n");
 	char *filename = argv[argIndex];
@@ -184,13 +183,15 @@ int main(int argc, char **argv) {
 	}
 	
 	// Output it.
-	FILE *tempfile = fopen("/tmp/lily-cc-dbg-bin", "w+");
 	// chmod("/tmp/lily-cc-dbg-bin", 0666);
-	asm_ctx->out_fd = tempfile;
+	asm_ctx->out_fd = outfile;
 	output_native(asm_ctx);
-	fclose(tempfile);
+	fclose(outfile);
 	xfree(global_alloc, asm_ctx);
-	system("hexdump -ve '8/2 \"%04X \" \"\n\"' /tmp/lily-cc-dbg-bin");
+	
+	char tmp[34+strlen(options.outputFile)];
+	snprintf(tmp, sizeof(tmp), "hexdump -ve '8/2 \"%%04X \" \"\n\"' %s", options.outputFile);
+	system(tmp);
 }
 
 // Parse -f arguments, the '-f' removed.

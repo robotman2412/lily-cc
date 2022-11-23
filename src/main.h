@@ -25,6 +25,7 @@ struct options {
 	int numIncludeDirs;
 	char **includeDirs;
 	char *outputFile;
+	char *linenumFile;
 };
 
 // Check wether a file exists and is a directory.

@@ -51,6 +51,7 @@ int main(int argc, char **argv) {
 		.numIncludeDirs = 0,
 		.includeDirs    = NULL,
 		.outputFile     = NULL,
+		.linenumFile    = NULL,
 	};
 	
 	// Read options.
@@ -84,6 +85,7 @@ int main(int argc, char **argv) {
 				fprintf(stderr, "Error: No such file or directory '%s'\n", dir);
 				options.abort = true;
 			}
+			
 		} else if (!strcmp(argv[argIndex], "-o")) {
 			// Specify output file.
 			if (argIndex < argc - 1) {
@@ -99,11 +101,29 @@ int main(int argc, char **argv) {
 				fprintf(stderr, "Error: Missing filename for '-o'\n");
 				options.abort = true;
 			}
+			
+		} else if (!strcmp(argv[argIndex], "--linenumbers")) {
+			// Linenumbers dump file.
+			if (argIndex < argc - 1) {
+				argIndex ++;
+				if (isdir(argv[argIndex])) {
+					fflush(stdout);
+					fprintf(stderr, "Error: '%s' is a directory\n", argv[argIndex]);
+					options.abort = true;
+				}
+				options.linenumFile = argv[argIndex];
+			} else {
+				fflush(stdout);
+				fprintf(stderr, "Error: Missing filename for '--linenumbers'\n");
+				options.abort = true;
+			}
+			
 		} else if (!strncmp(argv[argIndex], "--include=", 10)) {
 			// Add include directory.
 			options.numIncludeDirs ++;
 			options.includeDirs = (char **) xrealloc(global_alloc, options.includeDirs, sizeof(char *) * options.numIncludeDirs);
 			options.includeDirs[options.numIncludeDirs - 1] = &(argv[argIndex])[10];
+			
 		#ifdef HAS_MACHINE_ARGPARSE
 		} else if (!strncmp(argv[argIndex], "-m", 2)) {
 			// Machine option.
@@ -111,16 +131,19 @@ int main(int argc, char **argv) {
 				options.abort = true;
 			}
 		#endif
+			
 		} else if (!strncmp(argv[argIndex], "-f", 2)) {
 			// Machine-independant option.
 			if (!flag_argparse(argv[argIndex]+2)) {
 				options.abort = true;
 			}
+			
 		} else if (*argv[argIndex] == '-') {
 			// Unknown option.
 			fflush(stdout);
 			fprintf(stderr, "Error: Unknown option '%s'!\n", argv[argIndex]);
 			options.showHelp = true;
+			
 		} else {
 			// End of options.
 			break;
@@ -185,8 +208,15 @@ int main(int argc, char **argv) {
 	// Output it.
 	// chmod("/tmp/lily-cc-dbg-bin", 0666);
 	asm_ctx->out_fd = outfile;
+	asm_ctx->out_addr2line = options.linenumFile ? fopen(options.linenumFile, "w") : NULL;
+	if (asm_ctx->out_addr2line) {
+		char *pwd = getcwd(NULL, 0);
+		fprintf(asm_ctx->out_addr2line, "pwd %s\n", pwd);
+		free(pwd);
+	}
 	output_native(asm_ctx);
 	fclose(outfile);
+	if (asm_ctx->out_addr2line) fclose(asm_ctx->out_addr2line);
 	xfree(global_alloc, asm_ctx);
 	
 	char tmp[34+strlen(options.outputFile)];

@@ -23,6 +23,9 @@ void asm_fini_addrdump(asm_ctx_t *ctx, int last_line);
 // Post-processes the label reference for outputting.
 bool asm_ppc_label(asm_ctx_t *ctx, uint8_t *chunk, uint8_t *buf, size_t *len);
 
+// Addr2line file dump pass.
+void asm_ppc_addr2line(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args);
+
 // Outputs in the target architecture's native format.
 void output_native(asm_ctx_t *ctx);
 

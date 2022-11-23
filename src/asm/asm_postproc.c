@@ -195,3 +195,28 @@ bool asm_ppc_label(asm_ctx_t *ctx, uint8_t *chunk, uint8_t *buf, size_t *len) {
 	
 	return true;
 }
+
+// Addr2line file dump pass.
+void asm_ppc_addr2line(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
+	if (chunk_type == ASM_CHUNK_POS) {
+		// A position chuck (usually for addr2line purposes).
+		address_t addr = *(address_t *) chunk_data;
+		pos_t pos = {
+			.x0       = asm_read_numb(chunk_data + sizeof(address_t),                                    sizeof(int)),
+			.y0       = asm_read_numb(chunk_data + sizeof(address_t) +   sizeof(int),                    sizeof(int)),
+			.x1       = asm_read_numb(chunk_data + sizeof(address_t) + 2*sizeof(int),                    sizeof(int)),
+			.y1       = asm_read_numb(chunk_data + sizeof(address_t) + 3*sizeof(int),                    sizeof(int)),
+			.index0   = asm_read_numb(chunk_data + sizeof(address_t) + 4*sizeof(int),                    sizeof(size_t)),
+			.index1   = asm_read_numb(chunk_data + sizeof(address_t) + 4*sizeof(int) +   sizeof(size_t), sizeof(size_t)),
+			.filename =               chunk_data + sizeof(address_t) + 4*sizeof(int) + 2*sizeof(size_t),
+		};
+		
+		// Printf this to the line dump file.
+		fprintf(ctx->out_addr2line, "pos %s %x %d,%d %d,%d\n",
+			pos.filename,
+			addr,
+			pos.x0, pos.y0,
+			pos.x1, pos.y1
+		);
+	}
+}

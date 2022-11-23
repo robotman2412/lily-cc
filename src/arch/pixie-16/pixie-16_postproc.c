@@ -131,7 +131,12 @@ void output_native(asm_ctx_t *ctx) {
 	int theindex = 1;
 	asm_ppc_iterate(ctx, n_sect, sect_ids, sects, &asm_ppc_addrdump, &theindex, true);
 	asm_fini_addrdump(ctx, theindex);
-    
+    // Pass 4: the optional addr2line file.
+	if (ctx->out_addr2line) {
+		ctx->pc = 0;
+		asm_ppc_iterate(ctx, n_sect, sect_ids, sects, &asm_ppc_addr2line, NULL, true);
+	}
+	
 	// Enforce vector addresses.
 	if (entrypoint) {
 		asm_label_def_t *def = map_get(ctx->labels, "__px16_vectors.irq");

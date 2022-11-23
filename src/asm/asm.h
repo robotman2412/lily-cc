@@ -102,6 +102,8 @@ struct asm_ctx {
     address_t   pc;
     // The output file descriptor to be used.
     FILE       *out_fd;
+    // The outputfile descriptor for addr2line files.
+    FILE       *out_addr2line;
 };
 
 struct asm_sect {

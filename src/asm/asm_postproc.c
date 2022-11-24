@@ -211,9 +211,13 @@ void asm_ppc_addr2line(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uin
 			.filename =               chunk_data + sizeof(address_t) + 4*sizeof(int) + 2*sizeof(size_t),
 		};
 		
+		const char *absfile = realpath(pos.filename, NULL);
+		
 		// Printf this to the line dump file.
-		fprintf(ctx->out_addr2line, "pos %s %x %d,%d %d,%d\n",
+		// Format: "pos", relative filename, absolute filename (before symlinks), X0,Y0, X1,Y1
+		fprintf(ctx->out_addr2line, "pos %s %s %x %d,%d %d,%d\n",
 			pos.filename,
+			absfile,
 			addr,
 			pos.x0, pos.y0,
 			pos.x1, pos.y1

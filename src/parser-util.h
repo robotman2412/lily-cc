@@ -43,7 +43,7 @@ typedef struct funcdef		funcdef_t;
 #include "main.h"
 #include "asm.h"
 #include "gen_preproc.h"
-#include "ctxalloc_warn.h"
+#include "ctxalloc.h"
 
 // All context required for the parser to function.
 // Stores all data relevant to a translation unit.

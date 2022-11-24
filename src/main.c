@@ -209,11 +209,6 @@ int main(int argc, char **argv) {
 	// chmod("/tmp/lily-cc-dbg-bin", 0666);
 	asm_ctx->out_fd = outfile;
 	asm_ctx->out_addr2line = options.linenumFile ? fopen(options.linenumFile, "w") : NULL;
-	if (asm_ctx->out_addr2line) {
-		char *pwd = getcwd(NULL, 0);
-		fprintf(asm_ctx->out_addr2line, "pwd %s\n", pwd);
-		free(pwd);
-	}
 	output_native(asm_ctx);
 	fclose(outfile);
 	if (asm_ctx->out_addr2line) fclose(asm_ctx->out_addr2line);

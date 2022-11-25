@@ -196,6 +196,38 @@ bool asm_ppc_label(asm_ctx_t *ctx, uint8_t *chunk, uint8_t *buf, size_t *len) {
 	return true;
 }
 
+// Escapes spaces in the file path.
+// Also replaces backslash with double backslash.
+char *escapespaces(const char *in) {
+	size_t in_len  = strlen(in);
+	size_t out_len = in_len;
+	
+	// Count amount of spaces and backslashes in the device.
+	for (size_t i = 0; in[i]; i++) {
+		if (in[i] == ' ' || in[i] == '\\') {
+			out_len ++;
+		}
+	}
+	
+	// If no special, return input.
+	if (out_len == in_len) {
+		return strdup(in);
+	}
+	
+	// Build new string.
+	char   *out = malloc(out_len + 1);
+	size_t  out_ptr = 0;
+	for (size_t i = 0; i < in_len; i++) {
+		if (in[i] == ' ' || in[i] == '\\') {
+			out[out_ptr++] = '\\';
+		}
+		out[out_ptr++] = in[i];
+	}
+	out[out_ptr] = 0;
+	
+	return out;
+}
+
 // Addr2line file dump pass.
 void asm_ppc_addr2line(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
 	if (chunk_type == ASM_CHUNK_POS) {
@@ -211,16 +243,22 @@ void asm_ppc_addr2line(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uin
 			.filename =               chunk_data + sizeof(address_t) + 4*sizeof(int) + 2*sizeof(size_t),
 		};
 		
-		const char *absfile = realpath(pos.filename, NULL);
+		char *absfile = realpath(pos.filename, NULL);
+		char *absesc  = escapespaces(absfile);
+		char *rawesc  = escapespaces(pos.filename);
 		
 		// Printf this to the line dump file.
 		// Format: "pos", relative filename, absolute filename (before symlinks), X0,Y0, X1,Y1
 		fprintf(ctx->out_addr2line, "pos %s %s %x %d,%d %d,%d\n",
-			pos.filename,
-			absfile,
+			absesc,
+			rawesc,
 			addr,
 			pos.x0, pos.y0,
 			pos.x1, pos.y1
 		);
+		
+		free(absfile);
+		free(absesc);
+		free(rawesc);
 	}
 }

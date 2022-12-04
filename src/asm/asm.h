@@ -118,6 +118,8 @@ struct asm_sect {
     size_t      chunks_len;
     // Alignment of this section.
     address_t   align;
+    // Size of section contents in memory.
+    address_t   size;
     
     /* ===== Post-processing ===== */
     // The offset of this section.

@@ -43,25 +43,31 @@ void asm_ppc_iterate(asm_ctx_t *ctx, size_t n_sect, char **sect_ids, asm_sect_t 
 		size_t index = 0;
 		while (index < sect->chunks_len) {
 			size_t len = *(size_t *) (sect->chunks + index + 1);
-			(*func)(ctx, sect->chunks[index], len, sect->chunks + index + sizeof(size_t) + 1, func_args);
+			(*func)(ctx, sect, sect->chunks[index], len, sect->chunks + index + sizeof(size_t) + 1, func_args);
 			index += len + sizeof(size_t) + 1;
 		}
 	}
 }
 
 // Pass 1: label resolution.
-void asm_ppc_pass1(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
+void asm_ppc_pass1(asm_ctx_t *ctx, asm_sect_t *sect, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
 	bool dump_addr = (bool) args;
 	if (chunk_type == ASM_CHUNK_ZERO) {
 		// A chunk that indicates zeroes (usualy for .bss).
 		size_t n = asm_read_numb(chunk_data, sizeof(address_t));
 		ctx->pc += n;
+		// Count towards size.
+		sect->size += chunk_len / sizeof(memword_t);
 	} else if (chunk_type == ASM_CHUNK_DATA) {
 		// A chunk with raw output data.
 		ctx->pc += chunk_len / sizeof(memword_t);
+		// Count towards size.
+		sect->size += chunk_len / sizeof(memword_t);
 	} else if (chunk_type == ASM_CHUNK_LABEL_REF) {
 		// A label reference.
 		ctx->pc += ADDRESS_TO_MEMWORDS;
+		// Count towards size.
+		sect->size += ADDRESS_TO_MEMWORDS;
 	} else if (chunk_type == ASM_CHUNK_LABEL) {
 		// Look up the label.
 		char *label = chunk_data;
@@ -70,7 +76,7 @@ void asm_ppc_pass1(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t
 		def->address = ctx->pc;
 		printf("%-20s @ %04x\n", label, def->address);
 	} else if (chunk_type == ASM_CHUNK_EQU) {
-		// GIT address.
+		// Get address.
 		address_t addr = asm_read_numb(chunk_data, sizeof(address_t));
 		// Look up the label.
 		char *label = chunk_data + sizeof(address_t);
@@ -87,7 +93,7 @@ void asm_ppc_pass1(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t
 // Optional addr2line dump pass.
 // Prints by address order.
 // Argument is `int *` initialised to 1 -- last linenumber printed.
-void asm_ppc_addrdump(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
+void asm_ppc_addrdump(asm_ctx_t *ctx, asm_sect_t *sect, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
 	int *last_line = args;
 	if (chunk_type == ASM_CHUNK_POS) {
 		// A position chuck (usually for addr2line purposes).
@@ -229,7 +235,7 @@ char *escapespaces(const char *in) {
 }
 
 // Addr2line file dump pass.
-void asm_ppc_addr2line(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
+void asm_ppc_addr2line(asm_ctx_t *ctx, asm_sect_t *sect, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
 	if (chunk_type == ASM_CHUNK_POS) {
 		// A position chuck (usually for addr2line purposes).
 		address_t addr = *(address_t *) chunk_data;
@@ -248,7 +254,7 @@ void asm_ppc_addr2line(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uin
 		char *rawesc  = escapespaces(pos.filename);
 		
 		// Printf this to the line dump file.
-		// Format: "pos", relative filename, absolute filename (before symlinks), X0,Y0, X1,Y1
+		// Format: "pos", absolute filename, relative filename, X0,Y0, X1,Y1
 		fprintf(ctx->out_addr2line, "pos %s %s %x %d,%d %d,%d\n",
 			absesc,
 			rawesc,
@@ -260,5 +266,38 @@ void asm_ppc_addr2line(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uin
 		free(absfile);
 		free(absesc);
 		free(rawesc);
+		
+	} else if (chunk_type == ASM_CHUNK_LABEL) {
+		// Look up the label.
+		char *label = chunk_data;
+		asm_label_def_t *def = map_get(ctx->labels, label);
+		if (def->is_defined) {
+			char *nameesc = escapespaces(label);
+			
+			// Format: "label", label name, address
+			fprintf(ctx->out_addr2line, "label %s %x",
+				nameesc, def->address
+			);
+			
+			free(nameesc);
+		}
+	}
+}
+
+// Addr2line section dump function.
+// Adds sections to the dump file.
+void asm_sects_addr2line(asm_ctx_t *ctx) {
+	for (size_t i = 0; i < ctx->sections->numEntries; i++) {
+		asm_sect_t *sect = (asm_sect_t *) ctx->sections->values[i];
+		char *nameesc = escapespaces(ctx->sections->strings[i]);
+		
+		// Format: "sect", section name, address, size
+		fprintf(ctx->out_addr2line, "sect %s %x %x",
+			nameesc,
+			sect->offset,
+			sect->size
+		);
+		
+		free(nameesc);
 	}
 }

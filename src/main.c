@@ -206,7 +206,6 @@ int main(int argc, char **argv) {
 	}
 	
 	// Output it.
-	// chmod("/tmp/lily-cc-dbg-bin", 0666);
 	asm_ctx->out_fd = outfile;
 	asm_ctx->out_addr2line = options.linenumFile ? fopen(options.linenumFile, "w") : NULL;
 	output_native(asm_ctx);

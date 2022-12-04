@@ -17,7 +17,7 @@ static inline void output_native_padd(FILE *fd, address_t n) {
 }
 
 // Reduce: write everything we know as a chunk of machine code.
-static void output_native_reduce(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
+static void output_native_reduce(asm_ctx_t *ctx, asm_sect_t *sect, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
 	fseek(ctx->out_fd, 0, SEEK_END);
 	long pos = ftell(ctx->out_fd);
 	if (pos >= 0 && pos < ctx->pc) {
@@ -135,6 +135,7 @@ void output_native(asm_ctx_t *ctx) {
 	if (ctx->out_addr2line) {
 		ctx->pc = 0;
 		asm_ppc_iterate(ctx, n_sect, sect_ids, sects, &asm_ppc_addr2line, NULL, true);
+		asm_sects_addr2line(ctx);
 	}
 	
 	// Enforce vector addresses.

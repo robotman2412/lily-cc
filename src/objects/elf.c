@@ -29,7 +29,7 @@ static inline uint_least64_t ELF_U64(uint_least64_t in) {
 		: (in));
 }
 
-static void output_elf32_reduce(asm_ctx_t *ctx, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
+static void output_elf32_reduce(asm_ctx_t *ctx, asm_sect_t *sect, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
 	
 }
 

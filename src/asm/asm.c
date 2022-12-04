@@ -94,6 +94,7 @@ static inline asm_sect_t *asm_create_sect(asm_ctx_t *ctx, const char *id, addres
 	sect->chunks_len      = sizeof(size_t) + 1;
 	sect->chunk_len       = (void *) sect->chunks + 1;
 	sect->align           = align;
+	sect->size            = 0;
 	*sect->chunks         = ASM_CHUNK_DATA;
 	*sect->chunk_len      = 0;
 	map_set(ctx->sections, id, sect);

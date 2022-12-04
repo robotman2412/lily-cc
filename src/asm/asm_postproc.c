@@ -275,7 +275,7 @@ void asm_ppc_addr2line(asm_ctx_t *ctx, asm_sect_t *sect, uint8_t chunk_type, siz
 			char *nameesc = escapespaces(label);
 			
 			// Format: "label", label name, address
-			fprintf(ctx->out_addr2line, "label %s %x",
+			fprintf(ctx->out_addr2line, "label %s %x\n",
 				nameesc, def->address
 			);
 			
@@ -292,7 +292,7 @@ void asm_sects_addr2line(asm_ctx_t *ctx) {
 		char *nameesc = escapespaces(ctx->sections->strings[i]);
 		
 		// Format: "sect", section name, address, size
-		fprintf(ctx->out_addr2line, "sect %s %x %x",
+		fprintf(ctx->out_addr2line, "sect %s %x %x\n",
 			nameesc,
 			sect->offset,
 			sect->size

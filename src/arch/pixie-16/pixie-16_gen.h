@@ -36,6 +36,9 @@ cond_t px_var_to_cond(asm_ctx_t *ctx, expr_t *expr, gen_var_t *var);
 void px_branch(asm_ctx_t *ctx, expr_t *expr, gen_var_t *cond_var, char *l_true, char *l_false);
 // Generate a jump to a label.
 void px_jump(asm_ctx_t *ctx, char *label);
+// Writes logical AND/OR code for jumping to labels.
+// Flow type indicates what condition happens on flow through.
+void px_logic(asm_ctx_t *ctx, expr_t *expr, asm_label_t l_true, asm_label_t l_false, bool flow_type);
 
 // Pick a register to use.
 reg_t px_pick_reg(asm_ctx_t *ctx, bool do_vacate);

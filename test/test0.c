@@ -13,7 +13,7 @@ void entry() {
 	asm("SUB ST, [0xffff]");
 	
 	// Logic operator test.
-	int a, b;
+	int a = 1, b = 1;
 	
 	int res = a && b;
 	

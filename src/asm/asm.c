@@ -20,6 +20,7 @@ void asm_init(asm_ctx_t *ctx) {
 	ctx->global_scope.parent    = NULL;
 	ctx->global_scope.num       = 0;
 	ctx->global_scope.local_num = 0;
+	ctx->global_scope.allocator = ctx->allocator;
 	map_create(&ctx->global_scope.vars);
 	ctx->current_scope = &ctx->global_scope;
 	for (reg_t i = 0; i < NUM_REGS; i++) {

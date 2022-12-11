@@ -1420,8 +1420,61 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, siz
 }
 
 // Writes logical AND/OR code for jumping to labels.
-void px_logic2(asm_ctx_t *ctx, expr_t *expr, asm_label_t l_true, asm_label_t l_false) {
-	
+// Flow type indicates what condition happens on flow through.
+void px_logic(asm_ctx_t *ctx, expr_t *expr, asm_label_t l_true, asm_label_t l_false, bool flow_type) {
+	if (expr->type == EXPR_TYPE_MATH2 && expr->oper == OP_LOGIC_AND) {
+		// AND code.
+		// Evaluate A.
+		gen_var_t cond_hint = { .type = VAR_TYPE_COND };
+		gen_var_t *a = gen_expression(ctx, expr->par_a, &cond_hint);
+		// Branch A.
+		px_branch(ctx, expr->par_a, a, NULL, l_false);
+		
+		// Evaluate B.
+		gen_var_t *b = gen_expression(ctx, expr->par_b, &cond_hint);
+		// Eliminate unnecessary branches.
+		if (flow_type) l_true = NULL;
+		else l_false = NULL;
+		// Branch B.
+		px_branch(ctx, expr->par_b, b, l_true, l_false);
+		
+	} else if (expr->type == EXPR_TYPE_MATH2 && expr->oper == OP_LOGIC_OR) {
+		// OR code.
+		// Evaluate A.
+		gen_var_t cond_hint = { .type = VAR_TYPE_COND };
+		gen_var_t *a = gen_expression(ctx, expr->par_a, &cond_hint);
+		// Branch A.
+		px_branch(ctx, expr->par_a, a, l_true, NULL);
+		
+		// Evaluate B.
+		gen_var_t *b = gen_expression(ctx, expr->par_b, &cond_hint);
+		// Eliminate unnecessary branches.
+		if (flow_type) l_true = NULL;
+		else l_false = NULL;
+		// Branch B.
+		px_branch(ctx, expr->par_b, b, l_true, l_false);
+		
+	} else if (expr->type == EXPR_TYPE_MATH1 && expr->oper == OP_LOGIC_NOT) {
+		// NOT code.
+		// Invert labels.
+		px_logic(ctx, expr->par_a, l_false, l_true, !flow_type);
+		
+	} else if (expr->type == EXPR_TYPE_CONST) {
+		// Constant expression.
+		// Write jump.
+		px_jump(ctx, expr->iconst ? l_true : l_false);
+		
+	} else {
+		// Other expression.
+		gen_var_t cond_hint = { .type = VAR_TYPE_COND };
+		gen_var_t *a = gen_expression(ctx, expr, &cond_hint);
+		
+		// Eliminate unnecessary branches.
+		if (flow_type) l_true = NULL;
+		else l_false = NULL;
+		// Write branch.
+		px_branch(ctx, expr, a, l_true, l_false);
+	}
 }
 
 // Expression: Logical operation.
@@ -1438,12 +1491,13 @@ gen_var_t *gen_expr_logic2(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 	asm_label_t l_skip  = asm_get_label(ctx);
 	
 	// Use the internal device.
-	px_logic2(ctx, expr, l_true, l_false);
+	px_logic(ctx, expr, l_true, l_false, true);
 	
 	// Write setter for true outcome.
 	asm_write_label(ctx, l_true);
 	px_insn_t insn = {
 		.y = 0,
+		.x = PX_ADDR_IMM,
 		.b = PX_REG_IMM,
 		.o = PX_OP_MOV,
 	};

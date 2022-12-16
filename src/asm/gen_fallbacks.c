@@ -54,7 +54,6 @@ void gen_function(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	
 	// New function, new scope.
 	gen_push_scope(ctx);
-	gen_var_scope(ctx, funcdef->preproc->vars);
 	
 	// Mark line position.
 	asm_write_pos(ctx, funcdef->pos);
@@ -62,6 +61,9 @@ void gen_function(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	// Start the process with the function entry.
 	DEBUG_GEN("// function entry\n");
 	gen_function_entry(ctx, funcdef);
+	
+	// Add variables to scope.
+	gen_var_scope(ctx, funcdef->preproc->vars);
 	
 	// The statements.
 	DEBUG_GEN("// function code\n");

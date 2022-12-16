@@ -469,6 +469,7 @@ cond_t px_var_to_cond(asm_ctx_t *ctx, expr_t *expr, gen_var_t *var) {
 
 // Generate a branch to one of two labels.
 void px_branch(asm_ctx_t *ctx, expr_t *expr, gen_var_t *cond_var, char *l_true, char *l_false) {
+	if (!l_true && !l_false) return;
 	cond_t cond = px_var_to_cond(ctx, expr, cond_var);
 	
 	if (DET_PIE(ctx)) {
@@ -869,6 +870,24 @@ gen_var_t *px_math2(asm_ctx_t *ctx, memword_t opcode, gen_var_t *out_hint, gen_v
 
 /* ================== Functions ================== */
 
+// Helper for generating register push.
+static void px_entry_push_regs(asm_ctx_t *ctx, funcdef_t *funcdef) {
+	// Is this entry point?
+	if (!funcdef->is_entry) {
+		// If not, push the non-param registers.
+		for (int i = 0; i < funcdef->num_reg_to_push; i++) {
+			px_insn_t insn = {
+				.y = 0,
+				.x = PX_ADDR_MEM,
+				.b = 3 - i,
+				.a = PX_REG_ST,
+				.o = PX_OP_MOV,
+			};
+			px_write_insn0(ctx, insn, NULL, 0, NULL, 0);
+		}
+	}
+}
+
 // Function entry for non-inlined functions.
 void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 	// Update the calling conventions.
@@ -882,24 +901,12 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 		ctx->reg_usage_order[i] = i;
 	}
 	
-	// Is this entry point?
-	if (!funcdef->is_entry) {
-		// If not, push the o t h e r registers.
-		for (int i = 0; i < funcdef->num_reg_to_push; i++) {
-			px_insn_t insn = {
-				.y = 0,
-				.x = PX_ADDR_MEM,
-				.b = 3 - i,
-				.a = PX_REG_ST,
-				.o = PX_OP_MOV,
-			};
-			px_write_insn0(ctx, insn, NULL, 0, NULL, 0);
-		}
-	}
-	
 	if (funcdef->call_conv == PX_CC_REGS) {
 		// Registers.
 		DEBUG_GEN("// calling convention: registers\n");
+		
+		// Push regs now.
+		px_entry_push_regs(ctx, funcdef);
 		
 		// Define variables in registers.
 		address_t arg_size = 0;
@@ -917,7 +924,7 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 			// It's default location is in the stack.
 			*loc = (gen_var_t) {
 				.type        = VAR_TYPE_STACKOFFS,
-				.offset      = i,
+				.offset      = ctx->current_scope->stack_size,
 				.owner       = funcdef->args.arr[i].strval,
 				.ctype       = funcdef->args.arr[i].type,
 				.default_loc = NULL
@@ -930,9 +937,8 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 			
 			gen_define_var(ctx, var, funcdef->args.arr[i].strval);
 			arg_size += var->ctype->size;
+			ctx->current_scope->stack_size += var->ctype->size;
 		}
-		// Update stack size.
-		ctx->current_scope->stack_size += arg_size;
 	} else if (funcdef->call_conv == PX_CC_STACK) {
 		// Stack.
 		DEBUG_GEN("// calling convention: stack\n");
@@ -946,7 +952,7 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 			// Variable in stack.
 			*var = (gen_var_t) {
 				.type        = VAR_TYPE_STACKOFFS,
-				.offset      = i,
+				.offset      = ctx->current_scope->stack_size,
 				.owner       = funcdef->args.arr[i].strval,
 				.ctype       = funcdef->args.arr[i].type,
 				.default_loc = NULL
@@ -956,14 +962,26 @@ void gen_function_entry(asm_ctx_t *ctx, funcdef_t *funcdef) {
 			
 			gen_define_var(ctx, var, funcdef->args.arr[i].strval);
 			arg_size += var->ctype->size;
+			ctx->current_scope->stack_size += var->ctype->size;
+			ctx->current_scope->real_stack_size += var->ctype->size;
 		}
-		// Update stack size.
-		ctx->current_scope->stack_size += arg_size;
-		ctx->current_scope->real_stack_size = arg_size;
+		
+		// Account for return address in stack.
+		ctx->current_scope->stack_size ++;
+		ctx->current_scope->real_stack_size ++;
+		
+		// Push regs now.
+		px_entry_push_regs(ctx, funcdef);
 	} else {
 		// None.
 		DEBUG_GEN("// calling convention: no parameters\n");
+		
+		// Push regs now.
+		px_entry_push_regs(ctx, funcdef);
 	}
+	
+	funcdef->base_stack_size = ctx->current_scope->stack_size;
+	DEBUG_GEN("// base stack size: %u\n", funcdef->base_stack_size);
 }
 
 // Return statement for non-inlined functions.
@@ -979,14 +997,12 @@ void gen_return(asm_ctx_t *ctx, funcdef_t *funcdef, gen_var_t *retval) {
 	}
 	
 	// Pop some stuff off the stack.
-	address_t sub = ctx->current_scope->stack_size;
-	ctx->current_scope->stack_size = 0;
-	gen_stack_clear(ctx, sub);
+	ctx->current_scope->stack_size = funcdef->base_stack_size;
 	px_memclobber(ctx, true);
 	
 	// Is this entry point?
 	if (!funcdef->is_entry) {
-		// If not, p o p h the other r e g i s t e r s.
+		// If not, pop the non-parameter registers.
 		for (int i = 0; i < funcdef->num_reg_to_push; i++) {
 			px_insn_t insn = {
 				.y = 1,
@@ -1080,6 +1096,41 @@ bool gen_if(asm_ctx_t *ctx, stmt_t *stmt, gen_var_t *cond, stmt_t *s_if, stmt_t 
 	
 	if (0 && px_cond_mov_applicable(ctx, cond, s_if, s_else)) {
 		// Conditional MOV branch.
+		
+	} else if (stmt->cond->type == EXPR_TYPE_MATH2 && OP_IS_LOGIC(stmt->cond->oper)) {
+		// Logic operator branch.
+		asm_label_t l_true  = NULL;
+		asm_label_t l_false = NULL;
+		asm_label_t l_skip  = NULL;
+		
+		// Get some labels.
+		if (s_if) {
+			l_true  = asm_get_label(ctx);
+			l_skip  = asm_get_label(ctx);
+		}
+		if (s_else) {
+			l_false = asm_get_label(ctx);
+		} else {
+			l_false = l_skip;
+		}
+		
+		// Write branches.
+		px_logic(ctx, stmt->cond, l_true, l_false, !!s_if);
+		
+		// Write stataments.
+		if (s_if) {
+			asm_write_label(ctx, l_true);
+			gen_stmt(ctx, s_if, false);
+			if (s_else) px_jump(ctx, l_skip);
+		}
+		if (s_else) {
+			asm_write_label(ctx, l_false);
+			gen_stmt(ctx, s_else, false);
+		}
+		
+		// Skip label.
+		asm_write_label(ctx, l_skip);
+		
 	} else {
 		// Traditional branch.
 		if (s_else) {
@@ -1313,7 +1364,28 @@ gen_var_t *gen_expr_call(asm_ctx_t *ctx, funcdef_t *funcdef, expr_t *callee, siz
 		}
 		
 	} else if (funcdef->call_conv == PX_CC_STACK) {
-		// TODO.
+		DEBUG_GEN("// Writing call for convention: stack\n");
+		
+		// Actual locations of parameters.
+		gen_var_t *locations[n_args];
+		
+		// Generate parameter values.
+		for (size_t i = 0; i < n_args; i++) {
+			// Generate the expression.
+			gen_var_t *res = gen_expression(ctx, &args[i], NULL);
+			if (!res) {
+				// Abort.
+				return NULL;
+			}
+			// Save the result for later so that it can be moved to the right stack index.
+			locations[i] = res;
+		}
+		
+		// Transfer to actual stack locations.
+		address_t child_stack = 0;
+		for (size_t i = 0; i < n_args; i++) {
+			
+		}
 	}
 	
 	DEBUG_GEN("// Jumping to subroutine %s\n", funcdef->ident.strval);

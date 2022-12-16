@@ -156,6 +156,8 @@ typedef struct {
 	px_call_conv_t call_conv; \
 	/* The number of registers that the function must internally push. */ \
 	uint_least8_t num_reg_to_push; \
+	/* The stack offset at function entry time. */ \
+	address_t base_stack_size; \
 	/* Whether this is the entry vector. */ \
 	bool is_entry; \
 	/* Whether this is the nmi vector. */ \

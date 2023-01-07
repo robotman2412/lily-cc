@@ -8,8 +8,8 @@ void a2l_info_free(a2l_info_t *mem) {
 	// Clean up pos list.
 	for (size_t i = 0; i < mem->pos_count; i++) {
 		// Clean up filenames from pos list.
-		xfree(mem->allocator, mem->pos_list[i].rel_path)
-		xfree(mem->allocator, mem->pos_list[i].abs_path)
+		xfree(mem->allocator, mem->pos_list[i].rel_path);
+		xfree(mem->allocator, mem->pos_list[i].abs_path);
 	}
 	xfree(mem->allocator, mem->pos_list);
 	
@@ -19,10 +19,10 @@ void a2l_info_free(a2l_info_t *mem) {
 		a2l_sect_t *sect = mem->sect_map.values[i];
 		xfree(mem->allocator, sect->name);
 	}
-	map_delete(mem->sect_map);
+	map_delete(&mem->sect_map);
 	
 	// Clean up label map.
-	map_delete(mem->label_map);
+	map_delete(&mem->label_map);
 }
 
 // Discards characters from `fd` until a newline is encountered.
@@ -60,7 +60,7 @@ char *read_string_until_whitespace(alloc_ctx_t allocator, FILE *fd) {
 		} else if (c == ' ' || c == '\t' || c == '\n') {
 			break;
 		} else if (c == '\\') {
-			c = fgetc(c);
+			c = fgetc(fd);
 		}
 		
 		array_len_cap_concat(allocator, char, arr, cap, len, c);
@@ -90,9 +90,10 @@ a2l_info_t mode_addr2line_read(FILE *fd, alloc_ctx_t allocator) {
 				.rel_path = read_string_until_whitespace(allocator, fd),
 			};
 			
+			// Needs a warning fix
 			int success = fscanf(fd, "%x %d,%d %d,%d", &pos.addr, &pos.pos.x0, &pos.pos.y0, &pos.pos.x1, &pos.pos.y1);
 			if (success == 5) {
-				array_len_cap_concat(allocator, a2l_pos_t, out.pos_list, out.pos_count, pos_cap);
+				array_len_cap_concat(allocator, a2l_pos_t, out.pos_list, out.pos_count, pos_cap, pos);
 			}
 		}
 		

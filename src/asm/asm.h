@@ -180,4 +180,7 @@ size_t asm_read_numb    (uint8_t   *buf, size_t      bytes);
 // Writes a number of arbitrary size to the given buffer.
 void asm_write_numb     (uint8_t   *buf, size_t      data,  size_t    bytes);
 
+// Joins two asm_ctx_t, appending from `extra` onto `ctx`.
+void asm_join           (asm_ctx_t *ctx, asm_ctx_t *extra);
+
 #endif //ASM_H

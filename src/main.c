@@ -187,22 +187,42 @@ int main(int argc, char **argv) {
 	}
 	
 	// Read file.
-	if (argc > argIndex + 1) printf("Note: Only the first input file is compiled for now.\n");
 	char *filename = argv[argIndex];
 	FILE *file = fopen(filename, "r");
 	if (!file) {
 		fflush(stdout);
 		fprintf(stderr, "Error: Cannot access %s: %s\n", argv[argIndex], strerror(errno));
-		return 0;
+		return 1;
 	}
 	
-	// Have it PROCESSED.
+	// Compile the first file.
 	tokeniser_ctx_t tokeniser_ctx;
 	tokeniser_init_file(&tokeniser_ctx, file);
 	tokeniser_ctx.filename = filename;
 	asm_ctx_t *asm_ctx = compile(filename, &tokeniser_ctx);
 	if (!asm_ctx) {
 		return 1;
+	}
+	
+	// Compile additional files.
+	argIndex ++;
+	while (argIndex < argc) {
+		filename = argv[argIndex];
+		FILE *fd = fopen(filename, "r");
+		if (!fd) {
+			fflush(stdout);
+			fprintf(stderr, "Error: Cannot access %s: %s\n", argv[argIndex], strerror(errno));
+			return 1;
+		}
+		
+		tokeniser_ctx_t tokeniser_ctx2;
+		tokeniser_init_file(&tokeniser_ctx2, fd);
+		tokeniser_ctx2.filename = filename;
+		asm_ctx_t *extra = compile(filename, &tokeniser_ctx2);
+		if (!extra) return 1;
+		
+		asm_join(asm_ctx, extra);
+		argIndex ++;
 	}
 	
 	// Output it.

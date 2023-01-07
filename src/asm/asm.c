@@ -86,6 +86,7 @@ static inline void asm_append_chunk(asm_ctx_t *ctx, char type) {
 	*ctx->current_section->chunk_len = 0;
 }
 
+
 // Creates the section, optionally aligned.
 // Any alignment, even outside of powers of two accepted.
 static inline asm_sect_t *asm_create_sect(asm_ctx_t *ctx, const char *id, address_t align) {
@@ -151,6 +152,7 @@ void asm_set_align(asm_ctx_t *ctx, const char *id, address_t align) {
 	}
 }
 
+
 // Writes memory words to the current chunk.
 void asm_write_memwords(asm_ctx_t *ctx, const memword_t *data, size_t memwords) {
 	for (size_t i = 0; i < memwords; i++) {
@@ -204,6 +206,7 @@ void asm_write_num(asm_ctx_t *ctx, size_t data, size_t bytes) {
 		DEBUG_ASM("+    %02lx\n", data);
 	}
 }
+
 
 // Gets a new label based on asm_ctx::last_label_no.
 char *asm_get_label(asm_ctx_t *ctx) {
@@ -317,6 +320,28 @@ void asm_write_label_ref(asm_ctx_t *ctx, const char *label, address_t offset, as
 	}
 }
 
+
+// Writes linenumber and position information.
+void asm_write_pos(asm_ctx_t *ctx, pos_t pos) {
+	if (!pos.filename) return;
+	
+	DEBUG_ASM("// %s:%d (col %d)\n", pos.filename, pos.y0, pos.x0);
+	asm_append_chunk(ctx, ASM_CHUNK_POS);
+	// Address (for more convenient independent dumping).
+	asm_write_address(ctx, 0);
+	// File position.
+	asm_write_num(ctx, pos.x0, sizeof(int));
+	asm_write_num(ctx, pos.y0, sizeof(int));
+	asm_write_num(ctx, pos.x1, sizeof(int));
+	asm_write_num(ctx, pos.y1, sizeof(int));
+	// File index.
+	asm_write_num(ctx, pos.index0, sizeof(size_t));
+	asm_write_num(ctx, pos.index1, sizeof(size_t));
+	// File name.
+	asm_append(ctx, pos.filename, strlen(pos.filename) + 1);
+	asm_append_chunk(ctx, ASM_CHUNK_DATA);
+}
+
 // Writes zeroes.
 void asm_write_zero(asm_ctx_t *ctx, address_t count) {
 	DEBUG_GEN("  .zero 0x%x\n", count);
@@ -342,26 +367,6 @@ void asm_write_equ(asm_ctx_t *ctx, const char *label, address_t value) {
 	DEBUG_ASM("e  %s = 0x%x\n", label, value);
 }
 
-// Writes linenumber and position information.
-void asm_write_pos(asm_ctx_t *ctx, pos_t pos) {
-	if (!pos.filename) return;
-	
-	DEBUG_ASM("// %s:%d (col %d)\n", pos.filename, pos.y0, pos.x0);
-	asm_append_chunk(ctx, ASM_CHUNK_POS);
-	// Address (for more convenient independent dumping).
-	asm_write_address(ctx, 0);
-	// File position.
-	asm_write_num(ctx, pos.x0, sizeof(int));
-	asm_write_num(ctx, pos.y0, sizeof(int));
-	asm_write_num(ctx, pos.x1, sizeof(int));
-	asm_write_num(ctx, pos.y1, sizeof(int));
-	// File index.
-	asm_write_num(ctx, pos.index0, sizeof(size_t));
-	asm_write_num(ctx, pos.index1, sizeof(size_t));
-	// File name.
-	asm_append(ctx, pos.filename, strlen(pos.filename) + 1);
-	asm_append_chunk(ctx, ASM_CHUNK_DATA);
-}
 
 // Reads a number of arbitrary size from the given buffer.
 size_t asm_read_numb(uint8_t *buf, size_t bytes) {
@@ -405,5 +410,41 @@ void asm_write_numb(uint8_t *buf, size_t data, size_t bytes) {
 	} else {
 		// No endian-conversion for single bytes.
 		*buf = (char) data;
+	}
+}
+
+
+// Joins data from two asm_sect_t.
+static void asm_join_sect(asm_ctx_t *ctx, asm_ctx_t *extra, asm_sect_t *base, asm_sect_t *top) {
+	// Allocate memory for the joined array.
+	uint8_t *mem = xalloc(ctx->allocator, base->chunks_len + top->chunks_len);
+	// Concatenate contents.
+	memcpy(mem, base->chunks, base->chunks_len);
+	memcpy(mem + base->chunks_len, top->chunks, top->chunks_len);
+	
+	// Calculate sizes.
+	base->chunks_len     += top->chunks_len;
+	base->chunks_capacity = base->chunks_len;
+	
+	// Update pointers.
+	base->chunks          = mem;
+	base->chunk_len       = top->chunk_len - (size_t) top->chunks + (size_t) base->chunks;
+}
+
+// Joins two asm_ctx_t, appending from `extra` onto `ctx`.
+void asm_join(asm_ctx_t *ctx, asm_ctx_t *extra) {
+	for (size_t i = 0; i < extra->sections->numEntries; i++) {
+		// Locate sections.
+		asm_sect_t *top  = extra->sections->values[i];
+		const char *name = extra->sections->strings[i];
+		asm_sect_t *base = map_get(ctx->sections, name);
+		
+		if (!base) {
+			// Create a base to copy into if not yet present.
+			base = asm_create_sect(ctx, name, 1);
+		}
+		
+		// Do a per-section merger.
+		asm_join_sect(ctx, extra, base, top);
 	}
 }

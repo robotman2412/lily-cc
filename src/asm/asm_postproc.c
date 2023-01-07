@@ -90,85 +90,6 @@ void asm_ppc_pass1(asm_ctx_t *ctx, asm_sect_t *sect, uint8_t chunk_type, size_t 
 	}
 }
 
-// Optional addr2line dump pass.
-// Prints by address order.
-// Argument is `int *` initialised to 1 -- last linenumber printed.
-void asm_ppc_addrdump(asm_ctx_t *ctx, asm_sect_t *sect, uint8_t chunk_type, size_t chunk_len, uint8_t *chunk_data, void *args) {
-	int *last_line = args;
-	if (chunk_type == ASM_CHUNK_POS) {
-		// A position chuck (usually for addr2line purposes).
-		address_t addr = *(address_t *) chunk_data;
-		pos_t pos = {
-			.x0       = asm_read_numb(chunk_data + sizeof(address_t),                                    sizeof(int)),
-			.y0       = asm_read_numb(chunk_data + sizeof(address_t) +   sizeof(int),                    sizeof(int)),
-			.x1       = asm_read_numb(chunk_data + sizeof(address_t) + 2*sizeof(int),                    sizeof(int)),
-			.y1       = asm_read_numb(chunk_data + sizeof(address_t) + 3*sizeof(int),                    sizeof(int)),
-			.index0   = asm_read_numb(chunk_data + sizeof(address_t) + 4*sizeof(int),                    sizeof(size_t)),
-			.index1   = asm_read_numb(chunk_data + sizeof(address_t) + 4*sizeof(int) +   sizeof(size_t), sizeof(size_t)),
-			.filename =               chunk_data + sizeof(address_t) + 4*sizeof(int) + 2*sizeof(size_t),
-		};
-		
-		// Spacer and hex dump formats.
-		#if ADDR_BITS <= 4
-		const char *spacer  = "    ";
-		const char *linefmt = "    %01x | ";
-		#elif ADDR_BITS <= 8
-		const char *spacer  = "    ";
-		const char *linefmt = "   %02x | ";
-		#elif ADDR_BITS <= 16
-		const char *spacer  = "    ";
-		const char *linefmt = " %04x | ";
-		#elif ADDR_BITS <= 32
-		const char *spacer  = "        ";
-		const char *linefmt = " %08x | ";
-		#else // 64
-		const char *spacer  = "                ";
-		const char *linefmt = " %016x | ";
-		#endif
-		
-		// Dump source before this chunk.
-		for (int line = *last_line + 1; line < pos.y0; line ++) {
-			printf(" %s | ", spacer);
-			print_line(ctx->tokeniser_ctx, line);
-		}
-		
-		if (*last_line < pos.y0) {
-			// Dump initial line of this chunk.
-			printf(linefmt, addr);
-			print_line(ctx->tokeniser_ctx, pos.y0);
-			*last_line = pos.y0;
-		}
-	}
-}
-
-// Prints the remainder of the lines for asm_ppc_addrdump.
-void asm_fini_addrdump(asm_ctx_t *ctx, int last_line) {
-	// Spacer and hex dump formats.
-	#if ADDR_BITS <= 4
-	const char *spacer  = "    ";
-	const char *linefmt = "    %01x | ";
-	#elif ADDR_BITS <= 8
-	const char *spacer  = "    ";
-	const char *linefmt = "   %02x | ";
-	#elif ADDR_BITS <= 16
-	const char *spacer  = "    ";
-	const char *linefmt = " %04x | ";
-	#elif ADDR_BITS <= 32
-	const char *spacer  = "        ";
-	const char *linefmt = " %08x | ";
-	#else // 64
-	const char *spacer  = "                ";
-	const char *linefmt = " %016x | ";
-	#endif
-	
-	// Dump source until end.
-	int end = pos_empty(ctx->tokeniser_ctx).y1;
-	for (int line = last_line + 1; line < end; line ++) {
-		printf(" %s | ", spacer);
-		print_line(ctx->tokeniser_ctx, line);
-	}
-}
-
 // Post-processes the label reference for outputting.
 bool asm_ppc_label(asm_ctx_t *ctx, uint8_t *chunk, uint8_t *buf, size_t *len) {
 	// Extrach chunk data.
@@ -254,7 +175,7 @@ void asm_ppc_addr2line(asm_ctx_t *ctx, asm_sect_t *sect, uint8_t chunk_type, siz
 		char *rawesc  = escapespaces(pos.filename);
 		
 		// Printf this to the line dump file.
-		// Format: "pos", absolute filename, relative filename, X0,Y0, X1,Y1
+		// Format: "pos", absolute filename, relative filename, address, X0,Y0, X1,Y1
 		fprintf(ctx->out_addr2line, "pos %s %s %x %d,%d %d,%d\n",
 			absesc,
 			rawesc,
@@ -291,11 +212,12 @@ void asm_sects_addr2line(asm_ctx_t *ctx) {
 		asm_sect_t *sect = (asm_sect_t *) ctx->sections->values[i];
 		char *nameesc = escapespaces(ctx->sections->strings[i]);
 		
-		// Format: "sect", section name, address, size
-		fprintf(ctx->out_addr2line, "sect %s %x %x\n",
+		// Format: "sect", section name, address, size, alignment
+		fprintf(ctx->out_addr2line, "sect %s %x %x %x\n",
 			nameesc,
 			sect->offset,
-			sect->size
+			sect->size,
+			sect->align
 		);
 		
 		free(nameesc);

@@ -18,12 +18,6 @@
 #include "stdlib.h"
 #include "errno.h"
 
-#ifdef DEBUG_COMPILER
-#include "pront.h"
-#include "gen_tests.h"
-#include "alloc_tests.h"
-#endif
-
 #if __WORDSIZE < WORD_BITS
 #warning "The target has a larger word size than the current machine, the compiler might not be able to handle it."
 #endif
@@ -151,15 +145,6 @@ int main(int argc, char **argv) {
 	}
 	apply_defaults(&options);
 	
-#if defined(FUNC_TEST) || defined(EXPR_TEST)
-	perform_gen_tests(argc, argv);
-	return 0;
-#endif
-	
-#if defined(ALLOC_TEST) || defined(ALLOC_CRASH1) || defined(ALLOC_CRASH2) || defined(ALLOC_CRASH3)
-	perform_alloc_tests(argc, argv);
-#endif
-	
 	if (options.showHelp) {
 		printf("lily-cc " ARCH_ID " " COMPILER_VER "\n");
 		show_help(argc, argv);
@@ -234,9 +219,10 @@ int main(int argc, char **argv) {
 	xfree(global_alloc, asm_ctx);
 	
 	char tmp[34+strlen(options.outputFile)];
-	snprintf(tmp, sizeof(tmp), "hexdump -ve '8/2 \"%%04X \" \"\n\"' %s", options.outputFile);
+	snprintf(tmp, sizeof(tmp), "hexdump -ve '8/2 \"%%04X \" \"\n\"' '%s'", options.outputFile);
 	system(tmp);
 }
+
 
 // Parse -f arguments, the '-f' removed.
 // Returns true on success.
@@ -288,6 +274,7 @@ bool isdir(char *path) {
 	return S_ISDIR(statbuf.st_mode);
 }
 
+
 // Compile a file of unknown type.
 asm_ctx_t *compile(char *filename, tokeniser_ctx_t *tkn_ctx) {
 	char *dot = strrchr(filename, '.');
@@ -336,6 +323,7 @@ asm_ctx_t *assemble_s(char *filename, tokeniser_ctx_t *tokeniser_ctx) {
 	return XCOPY(global_alloc, &asm_ctx, asm_ctx_t);
 }
 
+
 int yylex(parser_ctx_t *ctx) {
 	int tkn = tokenise(ctx->tokeniser_ctx);
 	return tkn;
@@ -344,6 +332,7 @@ int yylex(parser_ctx_t *ctx) {
 void yyerror(parser_ctx_t *ctx, char *msg) {
 	report_error(ctx->tokeniser_ctx, E_ERROR, yylval.pos, msg);
 }
+
 
 // Determines whether two separate definitions of a function are incompatible with each other.
 static bool func_incompatible(parser_ctx_t *ctx, funcdef_t *func, funcdef_t *old) {

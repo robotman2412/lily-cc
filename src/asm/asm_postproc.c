@@ -171,7 +171,7 @@ void asm_ppc_addr2line(asm_ctx_t *ctx, asm_sect_t *sect, uint8_t chunk_type, siz
 		};
 		
 		char *absfile = realpath(pos.filename, NULL);
-		char *absesc  = escapespaces(absfile);
+		char *absesc  = absfile ? escapespaces(absfile) : strdup("??");
 		char *rawesc  = escapespaces(pos.filename);
 		
 		// Printf this to the line dump file.
@@ -184,7 +184,7 @@ void asm_ppc_addr2line(asm_ctx_t *ctx, asm_sect_t *sect, uint8_t chunk_type, siz
 			pos.x1, pos.y1
 		);
 		
-		free(absfile);
+		if (absfile) free(absfile);
 		free(absesc);
 		free(rawesc);
 		

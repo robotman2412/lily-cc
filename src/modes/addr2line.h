@@ -12,6 +12,8 @@ typedef struct a2l_sect  a2l_sect_t;
 #include <config.h>
 
 struct a2l_info {
+	// Indicates whether the file is a valid linenumbers dump.
+	bool        valid;
 	// Allocator used to create this info.
 	alloc_ctx_t allocator;
 	// Map of label name to address_t.
@@ -53,3 +55,8 @@ void a2l_info_free(a2l_info_t *mem);
 // Dumps linenumbering information from a previously generated addr2line file.
 // Creates a set of maps representing the stored information.
 a2l_info_t mode_addr2line_read(FILE *fd, alloc_ctx_t allocator);
+// Report found linenumber for given address.
+void mode_addr2line_report(a2l_info_t *info, address_t addr);
+
+// Addr2line / linenumber dump mode.
+int mode_addr2line(int argc, char **argv);

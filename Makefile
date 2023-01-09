@@ -1,7 +1,9 @@
 
-CC			=gcc
-LD			=gcc
-YACC		=bison
+MAKEFLAGS  += --jobs=$(shell nproc)
+
+CC			= gcc
+LD			= gcc
+YACC		= bison
 
 TARGET		= $(shell cat build/current_arch)
 VERSION		= $(shell cat version)
@@ -15,7 +17,7 @@ OBJECTS		= $(shell echo $(SOURCES) | sed -e 's/src/build/g;s/\.c/.c.o/g')
 SRC_DEBUG	= $(SOURCES) $(shell find ./src -path './src/debug/*' ! -path './src/arch/*' -name '*.c')
 HDR_DEBUG	= $(HEADERS) $(shell find ./src -path './src/debug/*' ! -path './src/arch/*' -name '*.h')
 OBJ_DEBUG	= $(shell echo $(SRC_DEBUG) | sed -e 's/src/build/g;s/\.c/.c.debug.o/g')
-INCLUDES	= -Isrc -Isrc/arch/$(TARGET) -Isrc/asm -Isrc/objects -Isrc/util -Isrc/debug -Ibuild
+INCLUDES	= -Isrc -Isrc/arch/$(TARGET) -Isrc/asm -Isrc/objects -Isrc/util -Isrc/modes -Isrc/debug -Ibuild
 
 OUTFILE		= comp
 CCFLAGS		= $(INCLUDES)
@@ -29,10 +31,12 @@ CFGFILES	= build build/config.h build/current_arch build/
 
 # Commands for the user.
 all: config ./build/main.o
-	$(LD) ./build/main.o -o $(OUTFILE) $(LDFLAGS)
+	@$(LD) ./build/main.o -o $(OUTFILE) $(LDFLAGS)
+	@echo LD $(OUTFILE)
 
 debug: config ./build/debug.o
-	$(LD) -ggdb ./build/debug.o -o $(OUTFILE) $(LDFLAGS)
+	@$(LD) -ggdb ./build/debug.o -o $(OUTFILE) $(LDFLAGS)
+	@echo LD $(OUTFILE)
 
 # Checks
 config: $(CFGFILES)
@@ -42,34 +46,42 @@ $(CFGFILES):
 
 # Compilation
 ./build/main.o: $(OBJECTS)
-	$(LD) -r $^ -o $@
+	@$(LD) -r $^ -o $@
+	@echo LD $@
 	
 ./build/debug.o: $(OBJ_DEBUG)
-	$(LD) -ggdb -r $^ -o $@
+	@$(LD) -ggdb -r $^ -o $@
+	@echo LD $@
 
+./build/parser.h: ./build/parser.c
 ./build/parser.c: ./src/parser.bison
 	@mkdir -p $(shell dirname $@)
-	$(YACC) $< $(YACCFLAGS) -o build/parser.c --defines=build/parser.h
+	@$(YACC) $< $(YACCFLAGS) -o build/parser.c --defines=build/parser.h
+	@echo YACC $<
 
 ./build/parser.c.o: ./build/parser.c $(HEADERS) Makefile
 	@mkdir -p $(shell dirname $@)
-	$(CC) -c $< $(CCFLAGS) -o $@
+	@$(CC) -c $< $(CCFLAGS) -o $@
+	@echo CC $<
 
 ./build/parser.c.debug.o: ./build/parser.c $(HDR_DEBUG) Makefile
 	@mkdir -p $(shell dirname $@)
-	$(CC) -c $< $(FLAGS_DEBUG) -o $@
+	@$(CC) -c $< $(FLAGS_DEBUG) -o $@
+	@echo CC $<
 
 ./build/%.o: ./src/% $(HEADERS) Makefile
 	@mkdir -p $(shell dirname $@)
-	$(CC) -c $< $(CCFLAGS) -o $@
+	@$(CC) -c $< $(CCFLAGS) -o $@
+	@echo CC $<
 
 ./build/%.debug.o: ./src/% $(HDR_DEBUG) Makefile
 	@mkdir -p $(shell dirname $@)
-	$(CC) -c $< $(FLAGS_DEBUG) -o $@
+	@$(CC) -c $< $(FLAGS_DEBUG) -o $@
+	@echo CC $<
 
 # Clean
 clean:
-	rm -f $(OBJECTS) ./comp ./build/parser.*
+	rm -f $(OBJECTS) ./comp ./build/parser.* ./build/*.o
 	rm -rf $(shell find build/* -type d)
 
 # Install the thing

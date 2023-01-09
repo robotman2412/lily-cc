@@ -5,7 +5,7 @@
 #include <asm.h>
 
 // Get or create a simple type in the current scope.
-var_type_t *ctype_simple    (asm_ctx_t *ctx, simple_type_t of);
+var_type_t *ctype_simple     (asm_ctx_t *ctx, simple_type_t of);
 // Get or create an array  type of a simple type in the current scope.
 // Define len as NULL if unknown.
 var_type_t *ctype_arr_simple (asm_ctx_t *ctx, simple_type_t of, size_t *len);
@@ -21,6 +21,10 @@ var_type_t *ctype_shenanigans(asm_ctx_t *ctx, var_type_t *a, var_type_t *b);
 var_type_t *ctype_ptr_simple (asm_ctx_t *ctx, simple_type_t of);
 // Get or create a pointer type of a given type in the current scope.
 var_type_t *ctype_ptr        (asm_ctx_t *ctx, var_type_t   *of);
+// Comprehensive equality test between types.
+// Types with identical struct defs but different struct names are still equal.
+// Returns true when exactly equal.
+bool        ctype_equals     (asm_ctx_t *ctx, var_type_t *a, var_type_t *b);
 
 // Find and return the location of the variable with the given name.
 gen_var_t *gen_get_variable  (asm_ctx_t *ctx, char      *label);

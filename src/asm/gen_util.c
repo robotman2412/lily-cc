@@ -127,6 +127,35 @@ var_type_t *ctype_ptr(asm_ctx_t *ctx, var_type_t *of) {
 	};
 }
 
+// Comprehensive equality test between types.
+// Types with identical struct defs but different struct names are still equal.
+// Returns true when exactly equal.
+bool ctype_equals(asm_ctx_t *ctx, var_type_t *a, var_type_t *b) {
+	// Trivial tests.
+	if (a->category != b->category) return false;
+	if (a->size != b->size) return false;
+	
+	if (a->category == TYPE_CAT_SIMPLE) {
+		// Simple type checks: equality.
+		return a->simple_type == b->simple_type;
+		
+	} else if (a->category == TYPE_CAT_ARRAY) {
+		// Array type check: match underlying (length already checked).
+		return ctype_equals(ctx, a->underlying, b->underlying);
+		
+	} else if (a->category == TYPE_CAT_POINTER) {
+		// Pointer type check: match underlying.
+		return ctype_equals(ctx, a->underlying, b->underlying);
+		
+	} else if (a->category == TYPE_CAT_STRUCT) {
+		printf("TODO\n");
+		return true;
+	} else if (a->category == TYPE_CAT_UNION) {
+		printf("TODO\n");
+		return true;
+	}
+}
+
 
 
 // Find and return the location of the variable with the given name.

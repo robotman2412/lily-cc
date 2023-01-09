@@ -84,4 +84,14 @@ static void PX_DESC_INSN(px_insn_t insn, char *imm0, char *imm1) {
 static inline void PX_DESC_INSN(px_insn_t insn, char *imm0, char *imm1) {}
 #endif
 
+// Write an instruction with some context.
+// Does not check for memory clobbers.
+void px_write_insn_raw(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1);
+// Write an instruction with some context.
+// Does not check for memory clobbers.
+void px_write_insn_iasm(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1);
+// Write an instruction with some context.
+// Checks for memory clobbers.
+void px_write_insn(asm_ctx_t *ctx, px_insn_t insn, asm_label_t label0, address_t offs0, asm_label_t label1, address_t offs1);
+
 #endif //PIXIE_16_INTERNAL_H

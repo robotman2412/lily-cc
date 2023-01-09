@@ -435,7 +435,7 @@ static void asm_join_sect(asm_ctx_t *ctx, asm_ctx_t *extra, asm_sect_t *base, as
 void asm_join(asm_ctx_t *ctx, asm_ctx_t *extra) {
 	for (size_t i = 0; i < extra->sections->numEntries; i++) {
 		// Locate sections.
-		asm_sect_t *top  = extra->sections->values[i];
+		asm_sect_t *top  = (asm_sect_t *) extra->sections->values[i];
 		const char *name = extra->sections->strings[i];
 		asm_sect_t *base = map_get(ctx->sections, name);
 		

@@ -3,8 +3,14 @@
 
 A work-in-progress C compiler for small CPUs.
 
+## Installing lily-cc
+1. Pull git repository: `git clone https://github.com/robotman2412/lily-cc && cd lily-cc`
+2. Configure (see [Configuration](#Configuration))
+3. Build for the first time: `make`
+4. Install the compiler: `sudo ./install.sh`
+
 ## Developing for lily-cc
-1. Pull git repository: `git clone https://github.com/robotman2412/lily-cc`
+1. Pull git repository: `git clone https://github.com/robotman2412/lily-cc && cd lily-cc`
 2. Configure (see [Configuration](#Configuration))
 3. Build for the first time: `make` <sup>(1)</sup>
 4. The output executable is called `comp`
@@ -13,11 +19,13 @@ A work-in-progress C compiler for small CPUs.
 Note 1: The initial build is required for IDE users because several files are generated.
 
 ## Configuration
+Confirguring is required to select the target architecture.
+
 There are two options at this point:
 
 ### Configure for an existing architecture:
-1. To list help and architectures: `./configure.sh --help`
-2. Pick an architecture and configure: `./configure.sh --arch=pixie-16`
+ - To list help and architectures: `./configure.sh --help`
+ - To pick an architecture and configure: `./configure.sh --arch=pixie-16`
 
 ### Create a new architecture:
 1. Think of an appropriate architecture ID, for example: `8086`

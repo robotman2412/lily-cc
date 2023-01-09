@@ -393,6 +393,9 @@ expr_t      expr_call      (parser_ctx_t *ctx, expr_t   *func,   exprs_t  *args)
 expr_t      expr_math2     (parser_ctx_t *ctx, oper_t    type,   expr_t   *val1, expr_t *val2);
 // Assignment math expression (things like a += b, c *= d and e |= f).
 // Generalises to a combination of an assignment and expr_math2.
-expr_t      expr_math2a     (parser_ctx_t *ctx, oper_t    type,   expr_t   *val1, expr_t *val2);
+expr_t      expr_math2a    (parser_ctx_t *ctx, oper_t    type,   expr_t   *val1, expr_t *val2);
+
+// Compile a function after parsing.
+void        function_added (parser_ctx_t *ctx, funcdef_t *func);
 
 #endif // PARSER_UTIL_H

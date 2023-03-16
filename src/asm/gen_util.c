@@ -187,8 +187,18 @@ gen_var_t *gen_get_variable(asm_ctx_t *ctx, char *label) {
 }
 
 // Decay some sort of array type into a pointer type.
-gen_var_t *gen_arr_decay(asm_ctx_t *ctx, gen_var_t *var) {
+// Generates code to do so.
+gen_var_t *gen_arr_decay(asm_ctx_t *ctx, gen_var_t *var, gen_var_t *out_hint) {
+	// If variable is not something memory-resident, store to default location.
+	if (var->type == VAR_TYPE_REG) {
+		gen_mov(ctx, var->default_loc, var);
+		void *to_free = var->default_loc;
+		*var = *var->default_loc;
+		xfree(to_free, ctx->current_scope->allocator);
+	}
 	
+	// Produce a pointer by performing OP_DEREF.
+	return gen_expr_math1(ctx, NULL, OP_ADROF, out_hint, var);
 }
 
 // Define the variable with the given ident.

@@ -31,7 +31,8 @@ bool        ctype_equals     (asm_ctx_t *ctx, var_type_t *a, var_type_t *b);
 // Find and return the location of the variable with the given name.
 gen_var_t *gen_get_variable  (asm_ctx_t *ctx, char      *label);
 // Decay some sort of array type into a pointer type.
-gen_var_t *gen_arr_decay     (asm_ctx_t *ctx, gen_var_t *var);
+// Generates code to do so.
+gen_var_t *gen_arr_decay     (asm_ctx_t *ctx, gen_var_t *var, gen_var_t *out_hint);
 // Define the variable with the given ident.
 bool       gen_define_var    (asm_ctx_t *ctx, gen_var_t *var, char *ident);
 // Define a temp var label.

@@ -869,6 +869,11 @@ gen_var_t *gen_expression(asm_ctx_t *ctx, expr_t *expr, gen_var_t *out_hint) {
 			if (oper == OP_DEREF && out_hint && out_hint->type == VAR_TYPE_PTR) {
 				// This happens when writing to a pointer dereference.
 				out_hint->ptr = gen_expression(ctx, expr->par_a, NULL);
+				// Special case for arrays.
+				if (out_hint->ptr->ctype->category == TYPE_CAT_ARRAY) {
+					// Reinterpret slightly.
+					out_hint->ptr = gen_arr_decay(ctx, out_hint->ptr, NULL);
+				}
 				return out_hint->ptr ? out_hint : NULL;
 				
 			} else if (oper == OP_LOGIC_NOT) {

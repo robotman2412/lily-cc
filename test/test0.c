@@ -11,9 +11,9 @@
 // 	}
 // }
 
-int stuff(int a, long long b) {
-	return a;
-}
+// int stuff(int a, long long b) {
+// 	return a;
+// }
 
 void entry() {
 	// Initialise stack.
@@ -30,7 +30,17 @@ void entry() {
 	// 	asm("MOV [0xfff6], 0x41");
 	// }
 	
-	stuff(12, 0x44cc);
+	char stuff[12];
+	// stuff[0] = 'a';
+	// stuff[1] = 'b';
+	// stuff[2] = 'c';
+	// stuff[3] = 0;
+	char a = stuff[0];
+	// char b = stuff[1];
+	// char *ptr = stuff;
+	// char **ptr = &stuff;
+	
+	// stuff(12, 0x44cc);
 	
 	// Halt.
 	asm("DEC PC");

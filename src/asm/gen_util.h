@@ -12,6 +12,8 @@ var_type_t *ctype_arr_simple (asm_ctx_t *ctx, simple_type_t of, size_t *len);
 // Get or create an array type of a complex type in the current scope.
 // Define len as NULL if unknown.
 var_type_t *ctype_arr        (asm_ctx_t *ctx, var_type_t   *of, size_t *len);
+// Decays an array type into an equivalent pointer type.
+var_type_t *ctype_arr_decay  (asm_ctx_t *ctx, var_type_t *arr);
 // For array and pointer shenanigns reasons, reconstruct the type such that:
 //  1. The A chain without simple type.
 //  2. The B chain with simple type.
@@ -28,6 +30,8 @@ bool        ctype_equals     (asm_ctx_t *ctx, var_type_t *a, var_type_t *b);
 
 // Find and return the location of the variable with the given name.
 gen_var_t *gen_get_variable  (asm_ctx_t *ctx, char      *label);
+// Decay some sort of array type into a pointer type.
+gen_var_t *gen_arr_decay     (asm_ctx_t *ctx, gen_var_t *var);
 // Define the variable with the given ident.
 bool       gen_define_var    (asm_ctx_t *ctx, gen_var_t *var, char *ident);
 // Define a temp var label.

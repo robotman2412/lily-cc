@@ -210,6 +210,37 @@ px_token_t px_iasm_lex(tokeniser_ctx_t *ctx) {
 		};
 	}
 	
+	// Or a character value.
+	if (c == '\'') {
+		char *strval = tokeniser_getstr(ctx, '\'');
+		int ival = 0;
+		
+		if (strlen(strval) > 1) {
+			// Warn if the constant is too long.
+			report_error(ctx, E_WARN, pos_empty(ctx), "Multi-character character constant.");
+		} else if (!*strval) {
+			// Error if the constant is empty.
+			report_error(ctx, E_ERROR, pos_empty(ctx), "Empty character constant.");
+			return (px_token_t) {
+				.type  = PX_TKN_OTHER,
+				.other = '\'',
+				.ident = NULL,
+				.ival  = 0,
+			};
+		}
+		
+		// Turn into an int.
+		while (*strval) {
+			ival = (ival << 8) | (unsigned char) *strval;
+			strval ++;
+		}
+		return (px_token_t) {
+			.type  = PX_TKN_IVAL,
+			.ival  = ival,
+			.ident = NULL,
+		};
+	}
+	
 	DEBUG_TKN("other '%c'\n", c);
 	return (px_token_t) {
 		.type  = PX_TKN_OTHER,

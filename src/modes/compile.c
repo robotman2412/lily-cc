@@ -84,6 +84,8 @@ int mode_compile(int argc, char **argv) {
 			printf("Cannot open %s: %s\n", options.linenumFile, strerror(errno));
 			return 1;
 		}
+	} else {
+		ctx->out_addr2line = NULL;
 	}
 	
 	// Output datas.

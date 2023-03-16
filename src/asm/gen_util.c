@@ -68,6 +68,7 @@ var_type_t *ctype_arr_simple(asm_ctx_t *ctx, simple_type_t of, size_t *len) {
 		.category    = TYPE_CAT_ARRAY,
 		.underlying  = ctype_simple(ctx, of),
 	};
+	return ctype;
 }
 
 // Get or create an array type of a complex type in the current scope.
@@ -81,6 +82,20 @@ var_type_t *ctype_arr(asm_ctx_t *ctx, var_type_t *of, size_t *len) {
 		.category    = TYPE_CAT_ARRAY,
 		.underlying  = of,
 	};
+	return ctype;
+}
+
+// Decays an array type into an equivalent pointer type.
+var_type_t *ctype_arr_decay(asm_ctx_t *ctx, var_type_t *arr) {
+	var_type_t *ctype = xalloc(ctx->current_scope->allocator, sizeof(var_type_t));
+	*ctype = (var_type_t) {
+		.size        = SSIZE_POINTER,
+		.simple_type = STYPE_POINTER,
+		.is_complete = true,
+		.category    = TYPE_CAT_POINTER,
+		.underlying  = arr->underlying,
+	};
+	return ctype;
 }
 
 // For array and pointer shenanigns reasons, reconstruct the type such that:
@@ -113,6 +128,7 @@ var_type_t *ctype_ptr_simple(asm_ctx_t *ctx, simple_type_t of) {
 		.category    = TYPE_CAT_POINTER,
 		.underlying  = ctype_simple(ctx, of),
 	};
+	return ctype;
 }
 
 // Get or create a pointer type of a given type in the current scope.
@@ -125,6 +141,7 @@ var_type_t *ctype_ptr(asm_ctx_t *ctx, var_type_t *of) {
 		.category    = TYPE_CAT_POINTER,
 		.underlying  = of,
 	};
+	return ctype;
 }
 
 // Comprehensive equality test between types.
@@ -167,6 +184,11 @@ gen_var_t *gen_get_variable(asm_ctx_t *ctx, char *label) {
 		scope = scope->parent;
 	}
 	return NULL;
+}
+
+// Decay some sort of array type into a pointer type.
+gen_var_t *gen_arr_decay(asm_ctx_t *ctx, gen_var_t *var) {
+	
 }
 
 // Define the variable with the given ident.

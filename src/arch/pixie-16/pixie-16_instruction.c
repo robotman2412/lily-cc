@@ -448,6 +448,7 @@ reg_t px_addr_var(asm_ctx_t *ctx, gen_var_t *var, address_t part, px_addr_t *add
 		
 		addrmode = &addrmode_dummy;
 	}
+	DEBUG_GEN("// Addr var type %d\n", var->type);
 	
 	switch (var->type) {
 			gen_var_t *a, *b;

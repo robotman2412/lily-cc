@@ -325,83 +325,6 @@ typedef enum oper {
 // Whether an oper_t is an instance of comparison.
 #define OP_IS_COMP(x)  (x >= OP_GT        && x <= OP_NE)
 
-// Types of statement.
-typedef enum stmt_type {
-	// An empty statement ;
-	STMT_TYPE_EMPTY,
-	
-	// Statements in { curly brackets }
-	STMT_TYPE_MULTI,
-	
-	// if ; else ; statements
-	STMT_TYPE_IF,
-	// while (loops);
-	STMT_TYPE_WHILE,
-	// for (;;) loops;
-	STMT_TYPE_FOR,
-	
-	// return statements;
-	STMT_TYPE_RET,
-	// variable declaration = statements;
-	STMT_TYPE_VAR,
-	// expression + statements
-	STMT_TYPE_EXPR,
-	
-	// asm ("inline assembly" : "=r" (statements));
-	STMT_TYPE_IASM
-} stmt_type_t;
-
-// Types of expression.
-typedef enum expr_type {
-	// Numeric constant value (e.g. number constantor predefined pointer).
-	EXPR_TYPE_CONST,
-	// C-string by label reference.
-	EXPR_TYPE_CSTR,
-	
-	// Identity (e.g. variable references).
-	EXPR_TYPE_IDENT,
-	
-	// Method calls.
-	EXPR_TYPE_CALL,
-	
-	// Unary math (e.g. !a, -b or *c).
-	EXPR_TYPE_MATH1,
-	// Binary math (e.g. a+b, c*d or e^f).
-	EXPR_TYPE_MATH2
-} expr_type_t;
-
-// Locations in which a variable can be stored at runtime.
-typedef enum gen_var_type {
-	// For void functions.
-	VAR_TYPE_VOID,
-	// Constant value.
-	VAR_TYPE_CONST,
-	
-	// Located at label.
-	VAR_TYPE_LABEL,
-	// Located in stack frame.
-	VAR_TYPE_STACKFRAME,
-	// Located in stack by offset.
-	VAR_TYPE_STACKOFFS,
-	
-	// Stored in register.
-	VAR_TYPE_REG,
-	// Hint to store to return value.
-	// There is no need to vacate any variables coincidentally stored there.
-	VAR_TYPE_RETVAL,
-	
-	// Conditions.
-	VAR_TYPE_COND,
-	// Hint to use for adrof and storing to pointers.
-	VAR_TYPE_PTR,
-	// Hint to use for loading from and storing to array indexing.
-	VAR_TYPE_INDEXED,
-	
-	// As of yet unassigned variables.
-	// Only applies to variables which can under no circumstance be assigned at this point.
-	VAR_TYPE_UNASSIGNED,
-} gen_var_type_t;
-
 // Things like numeric types and alike.
 // This is also a shorthand for the value of pointers end enumerations.
 typedef enum simple_type {
@@ -554,27 +477,5 @@ typedef enum type_cat {
 	// Union types
 	TYPE_CAT_UNION,
 } type_cat_t;
-
-// If no extra data groups have been defined, define them as empty.
-
-// Extras added to 'struct preprocessor_data'.
-#ifndef PREPROC_EXTRAS
-#define PREPROC_EXTRAS
-#endif
-
-// Extras added to 'struct asm_ctx'.
-#ifndef ASM_CTX_EXTRAS
-#define ASM_CTX_EXTRAS
-#endif
-
-// Extras added to 'struct asm_scope'.
-#ifndef ASM_SCOPE_EXTRAS
-#define ASM_SCOPE_EXTRAS
-#endif
-
-// Extras added to 'struct funcdef'.
-#ifndef FUNCDEF_EXTRAS
-#define FUNCDEF_EXTRAS
-#endif
 
 #endif //DEFINITIONS_H

@@ -55,11 +55,6 @@
 // Only applies to 'char' without 'signed' nor 'unsigned'.
 #define CHAR_IS_UNSIGNED
 
-// Number of general registers.
-#define NUM_REGS  4
-// Register names.
-#define REG_NAMES { "R0", "R1", "R2", "R3", "ST", "PF", "PC", "imm" }
-
 // Type used for opcodes.
 typedef enum {
 	PX_OP_ADD     = 000, PX_OP_SUB,     PX_OP_CMP,     PX_OP_AND,     PX_OP_OR,     PX_OP_XOR,
@@ -72,7 +67,7 @@ typedef enum {
 	PX_OP_LEA_UGE = 070, PX_OP_LEA_ULE, PX_OP_LEA_SGE, PX_OP_LEA_SLE, PX_OP_LEA_NE, PX_OP_LEA_CC, PX_OP_LEA_JSR,
 } px_opcode_t;
 
-// Type used for registers.
+// Type used for addressing mode.
 typedef enum {
 	PX_ADDR_R0,
 	PX_ADDR_R1,
@@ -95,6 +90,13 @@ typedef enum {
 	PX_REG_PC,
 	PX_REG_IMM,
 } reg_t;
+
+// Number of general registers.
+#define NUM_REGS  4
+// Register names.
+#define REG_NAMES { "R0", "R1", "R2", "R3", "ST", "PF", "PC", "imm" }
+// Registers that may be used as general registers in order of usage.
+#define REG_ORDER { 0, 1, 2, 3 }
 
 // Type used for conditions.
 typedef enum {
@@ -130,7 +132,7 @@ typedef enum {
 	COND_CX   = 017,
 } cond_t;
 
-// Extra data added to funcdef_t.
+// Type of calling convention to use.
 typedef enum {
 	// Functions with no parameters.
 	PX_CC_NONE,
@@ -151,39 +153,7 @@ typedef struct {
 	px_opcode_t o;
 } px_insn_t;
 
-#define FUNCDEF_EXTRAS \
-	/* The calling conventions for this function. */ \
-	px_call_conv_t call_conv; \
-	/* The number of registers that the function must internally push. */ \
-	uint_least8_t num_reg_to_push; \
-	/* The stack offset at function entry time. */ \
-	address_t base_stack_size; \
-	/* Whether this is the entry vector. */ \
-	bool is_entry; \
-	/* Whether this is the nmi vector. */ \
-	bool is_nmi; \
-	/* Whether this is the irq vector. */ \
-	bool is_irq;
-
-// Extra data added to asm_scope_t.
-#define ASM_SCOPE_EXTRAS \
-	/* Keeps track of the actual size of the stack instead of the target size. */ \
-	address_t real_stack_size;
-
-// Extra data added to asm_ctx_t.
-#define ASM_CTX_EXTRAS \
-	/* Keeps track of the most used registers. */ \
-	reg_t reg_usage_order[4]; \
-	/* Keeps track of registers used for temporary values (such as address calculation). */ \
-	bool reg_temp_usage[4];
-
 // State that inline assembly is supported
-#define INLINE_ASM_SUPPORTED
-
-// Generator fallbacks used.
-#define FALLBACK_gen_expression
-#define FALLBACK_gen_expr_inline
-#define FALLBACK_gen_function
-#define FALLBACK_gen_stmt
+// #define INLINE_ASM_SUPPORTED
 
 #endif //PIXIE_16_CONFIG_H

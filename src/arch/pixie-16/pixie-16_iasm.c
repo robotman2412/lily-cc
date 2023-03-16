@@ -1,4 +1,4 @@
-
+/*
 #include <asm.h>
 #include <gen.h>
 #include <pixie-16_gen.h>
@@ -505,3 +505,4 @@ void gen_asm(asm_ctx_t *ctx, tokeniser_ctx_t *lex_ctx) {
 		PX_ERROR(lex_ctx, "Expected INSTRUCTION or IDENT.\n");
 	}
 }
+*/

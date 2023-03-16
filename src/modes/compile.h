@@ -26,6 +26,3 @@ asm_ctx_t *assemble_s    (char *filename, tokeniser_ctx_t *tkn_ctx);
 int  yylex  (parser_ctx_t *ctx);
 // Bison error callback.
 void yyerror(parser_ctx_t *ctx, char *msg);
-
-// Compile a function after parsing.
-void function_added(parser_ctx_t *ctx, funcdef_t *func);

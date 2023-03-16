@@ -51,17 +51,3 @@ bool machine_argparse(const char *arg) {
         fprintf(stderr, ANSI_RED_FG "Error: Unknown option '-m%s'!" ANSI_DEFAULT "\n", arg);
     }
 }
-
-static inline void output_native_padd(FILE *fd, address_t n) {
-	char *buf = malloc(256);
-	memset(buf, 0, 256);
-	while (n > 256) {
-		// Write a bit at a time.
-		fwrite(buf, 1, 256, fd);
-		n -= 256;
-	}
-	if (n) {
-		fwrite(buf, 1, n, fd);
-	}
-	free(buf);
-}

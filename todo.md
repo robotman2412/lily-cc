@@ -2,11 +2,11 @@
 
 ## C frontend
 - Create C tokenizer
-    - Comments
+    - Comments ✓
     - Identifiers ✓
     - Keywords ✓
     - Symbol tokens ✓
-    - Strings and chars
+    - Strings and chars ✓
     - Numberic constants ✓
 - Create C preprocessor
     - Research preprocessor directives

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "frontend.h"
+#include "list.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -12,14 +13,25 @@
 
 
 
+// Diagnostic message severity level.
+typedef enum {
+    DIAG_HINT,
+    DIAG_INFO,
+    DIAG_WARN,
+    DIAG_ERR,
+} diag_lvl_t;
+
+
 // Source file.
-typedef struct srcfile   srcfile_t;
+typedef struct srcfile    srcfile_t;
 // Position in a source file.
-typedef struct pos       pos_t;
+typedef struct pos        pos_t;
 // Include file instance.
-typedef struct incfile   incfile_t;
+typedef struct incfile    incfile_t;
 // Frontend context.
-typedef struct front_ctx front_ctx_t;
+typedef struct front_ctx  front_ctx_t;
+// Diagnostic message.
+typedef struct diagnostic diagnostic_t;
 
 
 // Source file.
@@ -72,8 +84,22 @@ struct front_ctx {
     size_t      srcs_len;
     // Capacity for open source files.
     size_t      srcs_cap;
-    // List of open source files.
+    // Array of open source files.
     srcfile_t **srcs;
+    // Linked list of diagnostics.
+    dlist_t     diagnostics;
+};
+
+// Diagnostic message.
+struct diagnostic {
+    // Linked list node.
+    dlist_node_t node;
+    // Location of the message.
+    pos_t        pos;
+    // Diagnostic message severity.
+    diag_lvl_t   lvl;
+    // Diagnostic message.
+    char        *msg;
 };
 
 
@@ -82,9 +108,13 @@ struct front_ctx {
 pos_t pos_between(pos_t start, pos_t end);
 
 // Create new frontend context.
-front_ctx_t *front_create();
+front_ctx_t  *front_create();
 // Delete frontend context (and therefor all frondend resources).
-void         front_delete(front_ctx_t *ctx);
+void          front_delete(front_ctx_t *ctx);
+// Create a formatted diagnostic message.
+// Returns diagnostic created, or NULL on failure.
+diagnostic_t *front_diagnostic(front_ctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const *fmt, ...)
+    __attribute__((format(printf, 4, 5)));
 
 // Open or get a source file from frontend context.
 srcfile_t *srcfile_open(front_ctx_t *ctx, char const *path);

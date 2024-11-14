@@ -6,6 +6,7 @@
 
 #include "arrays.h"
 
+#include <stdarg.h>
 #include <string.h>
 
 
@@ -25,6 +26,37 @@ front_ctx_t *front_create() {
 // Delete frontend context (and therefor all frondend resources).
 void front_delete(front_ctx_t *ctx) {
     // TODO.
+}
+
+// Create a formatted diagnostic message.
+// Returns diagnostic created, or NULL on failure.
+diagnostic_t *front_diagnostic(front_ctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const *fmt, ...) {
+    // Measure how much space is needed for the message.
+    va_list va;
+    va_start(va, fmt);
+    size_t len = vsnprintf(NULL, 0, fmt, va);
+    va_end(va);
+
+    // Format the message.
+    size_t cap = len + 1;
+    char  *buf = calloc(cap, 1);
+    if (!buf)
+        return NULL;
+    va_start(va, fmt);
+    vsnprintf(buf, cap, fmt, va);
+    va_end(va);
+
+    // Allocate a diagnostic and add it to the list.
+    diagnostic_t *diag = malloc(sizeof(diagnostic_t));
+    if (!diag) {
+        free(buf);
+        return NULL;
+    }
+    diag->pos = pos;
+    diag->lvl = lvl;
+    diag->msg = buf;
+    dlist_append(&ctx->diagnostics, &diag->node);
+    return diag;
 }
 
 

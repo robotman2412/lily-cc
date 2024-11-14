@@ -4,6 +4,7 @@ add_library(util STATIC
     list.c
     map.c
     refcount.c
+    strong_malloc.c
     utf8.c
 )
 target_include_directories(util PUBLIC .)

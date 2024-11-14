@@ -1,7 +1,13 @@
 
+// Copyright © 2024, Julian Scheffers
+// SPDX-License-Identifier: MIT
+
 #include "token/c_tokenizer.h"
 
+#include "strong_malloc.h"
+
 #include <arrays.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -52,7 +58,7 @@ bool c_is_sym_char(int c) {
 
 
 // Tokenize numeric constant.
-static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, int base) {
+static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int base) {
     uint64_t val      = 0;
     bool     hasdat   = false;
     bool     toolarge = false;
@@ -80,28 +86,37 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, int base) {
         if (digit >= base) {
             invalid = true;
         }
-        if (val * base < val) {
+        if (val * base + digit < val) {
             toolarge = true;
         }
-        val    *= base;
-        val    += digit;
-        hasdat  = true;
-        pos0    = pos1;
+        val    = val * base + digit;
+        hasdat = true;
+        pos0   = pos1;
     }
     ctx->pos = pos0;
 
+    pos_t pos = pos_between(start_pos, pos0);
     if (invalid || !hasdat) {
-        // TODO: Report error (invalid constant).
+        // Report error (invalid constant).
+        char const *ctype;
+        switch (base) {
+            case 2: ctype = "binary"; break;
+            case 8: ctype = "octal"; break;
+            case 10: ctype = "decimal"; break;
+            case 16: ctype = "hexadecimal"; break;
+            default: __builtin_unreachable();
+        }
+        front_diagnostic(ctx->fe_ctx, pos, DIAG_ERR, "Invalid %s constant", ctype);
         return (token_t){
             .type = TOKENTYPE_GARBAGE,
-            .pos  = pos_between(start_pos, pos0),
+            .pos  = pos,
         };
     } else if (toolarge) {
-        // TODO: Report warning (constant too large).
+        front_diagnostic(ctx->fe_ctx, pos, DIAG_WARN, "Constant is too large and was truncated to %" PRId64, val);
     }
     return (token_t){
         .type = TOKENTYPE_ICONST,
-        .pos  = pos_between(start_pos, pos0),
+        .pos  = pos,
         .ival = val,
     };
 }
@@ -110,9 +125,8 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, int base) {
 static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
     size_t cap = 32;
     size_t len = 1;
-    char  *ptr = malloc(cap);
+    char  *ptr = strong_malloc(cap);
     ptr[0]     = first;
-    // TODO: Assert on ptr.
 
     pos_t pos0 = ctx->pos;
     pos_t pos1;
@@ -126,8 +140,7 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
         if (len == cap - 1) {
             // Even longer name, allocate more memory.
             cap *= 2;
-            ptr  = realloc(ptr, cap);
-            // TODO: Assert on ptr.
+            ptr  = strong_realloc(ptr, cap);
         }
         ptr[len++] = c;
         pos0       = pos1;
@@ -168,7 +181,12 @@ static int c_str_hex(tokenizer_t *ctx, pos_t start_pos, int min_w, int max_w) {
             value  |= (c | 0x20) - 'a' + 0xa;
         } else {
             if (i < min_w) {
-                // TODO: Report error.
+                front_diagnostic(
+                    ctx->fe_ctx,
+                    pos_between(start_pos, pos0),
+                    DIAG_ERR,
+                    "Invalid hexadecimal escape sequence"
+                );
             }
             break;
         }
@@ -202,14 +220,20 @@ static int c_str_octal(tokenizer_t *ctx, pos_t start_pos, int first, int max_w) 
 static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
     size_t cap = 32;
     size_t len = 0;
-    char  *ptr = malloc(cap);
-    // TODO: Assert on ptr.
+    char  *ptr = strong_malloc(cap);
 
     while (1) {
-        pos_t start_pos = ctx->pos;
-        int   c         = srcfile_getc(ctx->file, &ctx->pos);
-        if (c == -1) {
-            // TODO: Report EOF error.
+        pos_t pos0 = ctx->pos;
+        int   c    = srcfile_getc(ctx->file, &ctx->pos);
+        if (c == -1 || c == '\n') {
+            front_diagnostic(
+                ctx->fe_ctx,
+                pos_between(start_pos, pos0),
+                DIAG_ERR,
+                "%s constant spans end of %s",
+                is_char ? "Character" : "String",
+                c == '\n' ? "line" : "file"
+            );
             break;
         } else if (c == (is_char ? '\'' : '\"')) {
             // End of string.
@@ -247,13 +271,13 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
                     case 'r': c = '\r'; break;
                     case 't': c = '\t'; break;
                     case 'v': c = '\v'; break;
-                    default: /* TODO: report error */ break;
+                    default:
+                        front_diagnostic(ctx->fe_ctx, pos_between(pos0, ctx->pos), DIAG_ERR, "Invalid escape sequence");
+                        break;
                 }
             }
         }
-        if (!array_lencap_insert(&ptr, 1, &len, &cap, &c, len)) {
-            // TODO: Out of memory, abort.
-        }
+        array_lencap_insert_strong(&ptr, 1, &len, &cap, &c, len);
     }
 
     if (is_char) {
@@ -269,6 +293,7 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
             .ival = val,
         };
     } else {
+        array_lencap_insert_strong(&ptr, 1, &len, &cap, "", len);
         return (token_t){
             .pos    = pos_between(start_pos, ctx->pos),
             .type   = TOKENTYPE_SCONST,
@@ -364,28 +389,18 @@ retry:
     }
 
     // Single-character tokens.
-    if (c == '(') {
-        return other_tkn(C_TKN_LPAR, pos0, pos1);
-    } else if (c == ')') {
-        return other_tkn(C_TKN_RPAR, pos0, pos1);
-    } else if (c == '.') {
-        return other_tkn(C_TKN_DOT, pos0, pos1);
-    } else if (c == ':') {
-        return other_tkn(C_TKN_COLON, pos0, pos1);
-    } else if (c == ';') {
-        return other_tkn(C_TKN_SEMIC, pos0, pos1);
-    } else if (c == '?') {
-        return other_tkn(C_TKN_QUESTION, pos0, pos1);
-    } else if (c == '[') {
-        return other_tkn(C_TKN_LBRAC, pos0, pos1);
-    } else if (c == ']') {
-        return other_tkn(C_TKN_RBRAC, pos0, pos1);
-    } else if (c == '{') {
-        return other_tkn(C_TKN_LCURL, pos0, pos1);
-    } else if (c == '}') {
-        return other_tkn(C_TKN_RCURL, pos0, pos1);
-    } else if (c == '~') {
-        return other_tkn(C_TKN_NOT, pos0, pos1);
+    switch (c) {
+        case '(': return other_tkn(C_TKN_LPAR, pos0, pos1);
+        case ')': return other_tkn(C_TKN_RPAR, pos0, pos1);
+        case '.': return other_tkn(C_TKN_DOT, pos0, pos1);
+        case ':': return other_tkn(C_TKN_COLON, pos0, pos1);
+        case ';': return other_tkn(C_TKN_SEMIC, pos0, pos1);
+        case '?': return other_tkn(C_TKN_QUESTION, pos0, pos1);
+        case '[': return other_tkn(C_TKN_LBRAC, pos0, pos1);
+        case ']': return other_tkn(C_TKN_RBRAC, pos0, pos1);
+        case '{': return other_tkn(C_TKN_LCURL, pos0, pos1);
+        case '}': return other_tkn(C_TKN_RCURL, pos0, pos1);
+        case '~': return other_tkn(C_TKN_NOT, pos0, pos1);
     }
 
     // Possibly multi-character tokens.

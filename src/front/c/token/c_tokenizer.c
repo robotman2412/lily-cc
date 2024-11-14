@@ -88,6 +88,7 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, int base) {
         hasdat  = true;
         pos0    = pos1;
     }
+    ctx->pos = pos0;
 
     if (invalid || !hasdat) {
         // TODO: Report error (invalid constant).
@@ -153,10 +154,48 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
 
 // Hex parsing helper for strings.
 static int c_str_hex(tokenizer_t *ctx, pos_t start_pos, int min_w, int max_w) {
+    int   value = 0;
+    pos_t pos0  = ctx->pos;
+    pos_t pos1;
+    for (int i = 0; i < max_w; i++) {
+        pos1  = pos0;
+        int c = srcfile_getc(ctx->file, &pos1);
+        if (c >= '0' && c <= '9') {
+            value <<= 4;
+            value  |= c - '0';
+        } else if ((c | 0x20) >= 'a' && (c | 0x20) <= 'f') {
+            value <<= 4;
+            value  |= (c | 0x20) - 'a' + 0xa;
+        } else {
+            if (i < min_w) {
+                // TODO: Report error.
+            }
+            break;
+        }
+        pos0 = pos1;
+    }
+    ctx->pos = pos0;
+    return value;
 }
 
 // Octal parsing helper for strings.
 static int c_str_octal(tokenizer_t *ctx, pos_t start_pos, int first, int max_w) {
+    int   value = first - '0';
+    pos_t pos0  = ctx->pos;
+    pos_t pos1;
+    for (int i = 0; i < max_w; i++) {
+        pos1  = pos0;
+        int c = srcfile_getc(ctx->file, &pos1);
+        if (c < '0' || c > '7') {
+            break;
+        } else {
+            value <<= 3;
+            value  |= c - '0';
+        }
+        pos0 = pos1;
+    }
+    ctx->pos = pos0;
+    return value;
 }
 
 // Tokenize string or character constant.
@@ -194,23 +233,47 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
             } else if (c >= '4' && c <= '7') {
                 // 1- or 2-digit octal.
                 c = c_str_octal(ctx, start_pos, c, 2);
-            }
-
-            switch (c) {
-                case '?': c = '?'; break;
-                case '\\': c = '\\'; break;
-                case '\'': c = '\''; break;
-                case '\"': c = '\"'; break;
-                case 'a': c = '\a'; break;
-                case 'b': c = '\b'; break;
-                case 'f': c = '\f'; break;
-                case 'n': c = '\n'; break;
-                case 'r': c = '\r'; break;
-                case 't': c = '\t'; break;
-                case 'v': c = '\v'; break;
-                default: /* TODO: report error */ break;
+            } else {
+                // Single-character escape sequences.
+                switch (c) {
+                    case '?': c = '?'; break;
+                    case '\\': c = '\\'; break;
+                    case '\'': c = '\''; break;
+                    case '\"': c = '\"'; break;
+                    case 'a': c = '\a'; break;
+                    case 'b': c = '\b'; break;
+                    case 'f': c = '\f'; break;
+                    case 'n': c = '\n'; break;
+                    case 'r': c = '\r'; break;
+                    case 't': c = '\t'; break;
+                    case 'v': c = '\v'; break;
+                    default: /* TODO: report error */ break;
+                }
             }
         }
+        if (!array_lencap_insert(&ptr, 1, &len, &cap, &c, len)) {
+            // TODO: Out of memory, abort.
+        }
+    }
+
+    if (is_char) {
+        uint64_t val = 0;
+        for (size_t i = 0; i < len; i++) {
+            val <<= 8;
+            val  |= ptr[i];
+        }
+        free(ptr);
+        return (token_t){
+            .pos  = pos_between(start_pos, ctx->pos),
+            .type = TOKENTYPE_CCONST,
+            .ival = val,
+        };
+    } else {
+        return (token_t){
+            .pos    = pos_between(start_pos, ctx->pos),
+            .type   = TOKENTYPE_SCONST,
+            .strval = rc_new_strong(ptr, free),
+        };
     }
 }
 

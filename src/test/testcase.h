@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifndef __FILE_NAME__
 #define __FILE_NAME__ __FILE__
@@ -54,6 +55,19 @@
         char val_tmp  = (val);                                                                                         \
         if (expr_tmp != val_tmp) {                                                                                     \
             char const *fmt = __FILE_NAME__ ":" STR_OF(__LINE__) ": " #expr " = '%c'; expected '%c'";                  \
+            size_t      len = snprintf(NULL, 0, fmt, expr_tmp, val_tmp) + 1;                                           \
+            char       *buf = malloc(len);                                                                             \
+            snprintf(buf, len, fmt, expr_tmp, val_tmp);                                                                \
+            return buf;                                                                                                \
+        }                                                                                                              \
+    } while (0)
+
+#define EXPECT_STR(expr, val)                                                                                          \
+    do {                                                                                                               \
+        char const *expr_tmp = (expr);                                                                                 \
+        char const *val_tmp  = (val);                                                                                  \
+        if (strcmp(expr_tmp, val_tmp)) {                                                                               \
+            char const *fmt = __FILE_NAME__ ":" STR_OF(__LINE__) ": " #expr " = \"%s\"; expected \"%s\"";              \
             size_t      len = snprintf(NULL, 0, fmt, expr_tmp, val_tmp) + 1;                                           \
             char       *buf = malloc(len);                                                                             \
             snprintf(buf, len, fmt, expr_tmp, val_tmp);                                                                \

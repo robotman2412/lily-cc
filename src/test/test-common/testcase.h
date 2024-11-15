@@ -4,17 +4,19 @@
 
 #pragma once
 
+#include "map.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
+
+
 #ifndef __FILE_NAME__
 #define __FILE_NAME__ __FILE__
 #endif
-
-
 
 #define TEST_OK          NULL
 #define TEST_FAIL        ((void *)-1)
@@ -25,7 +27,6 @@
 
 #define LILY_TEST_CASE(func)                                                                                           \
     __attribute__((constructor)) static void lily_testcase_##func() {                                                  \
-        void register_test_case(char const *(*)(), char const *);                                                      \
         register_test_case(func, #func);                                                                               \
     }
 
@@ -74,3 +75,16 @@
             return buf;                                                                                                \
         }                                                                                                              \
     } while (0)
+
+
+// Test case entry.
+typedef struct {
+    char const *(*function)();
+    char const *id;
+} testcase_t;
+
+// Map of all registered test cases.
+extern map_t testcases;
+
+// Register a new test case.
+void register_test_case(char const *(*function)(), char const *id);

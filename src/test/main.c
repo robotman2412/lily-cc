@@ -2,30 +2,15 @@
 // Copyright © 2024, Julian Scheffers
 // SPDX-License-Identifier: MIT
 
-#include "map.h"
 #include "testcase.h"
 
-#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef struct {
-    char const *(*function)();
-    char const *id;
-} testcase_t;
-
-map_t testcases = MAP_EMPTY;
 
 
-void register_test_case(char const *(*function)(), char const *id) {
-    testcase_t *ent = malloc(sizeof(testcase_t));
-    ent->function   = function;
-    ent->id         = id;
-    map_set(&testcases, id, ent);
-}
-
-bool run_test_case(testcase_t *testcase) {
+static bool run_testcase(testcase_t *testcase) {
     printf("Test %s...", testcase->id);
     fflush(stdout);
     char const *res = testcase->function();
@@ -43,13 +28,13 @@ int main(int argc, char **argv) {
         map_ent_t const *ent = map_next(&testcases, NULL);
         while (ent) {
             total++;
-            success += run_test_case(ent->value);
+            success += run_testcase(ent->value);
             ent      = map_next(&testcases, ent);
         }
     } else {
         for (int i = 1; i < argc; i++) {
             testcase_t *testcase  = map_get(&testcases, argv[i]);
-            success              += run_test_case(testcase);
+            success              += run_testcase(testcase);
             total++;
         }
     }

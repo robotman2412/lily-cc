@@ -12,4 +12,8 @@ build:
 
 .PHONY: test
 test: build
-	./build/lily-cc-test $(TEST)
+	./build/test/lily-cc-test $(TEST)
+
+.PHONY: clean
+clean:
+	rm -rf build

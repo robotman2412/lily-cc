@@ -12,42 +12,8 @@
 
 
 
-// Token type.
-typedef enum {
-    /* ==== Token types ==== */
-    // Keywords.
-    TOKENTYPE_KEYWORD,
-    // Identifier (variable/label/function/etc name).
-    TOKENTYPE_IDENT,
-    // Integer constant.
-    TOKENTYPE_ICONST,
-    // Character constant.
-    TOKENTYPE_CCONST,
-    // String constant.
-    TOKENTYPE_SCONST,
-    // Uncategorized legal characters (operators/brackets/etc).
-    TOKENTYPE_OTHER,
-    // Garbage (illegal characters).
-    TOKENTYPE_GARBAGE,
-    // End of line (for languages where that is important).
-    TOKENTYPE_EOL,
-    // End of file.
-    TOKENTYPE_EOF,
-    /* ==== AST node types ==== */
-    // Expression.
-    ASTTYPE_EXPR,
-    // Normal statement (assignment/funccall/etc).
-    ASTTYPE_STMT,
-    // Declaration / definition.
-    ASTTYPE_DECL,
-} tokentype_t;
-
-
-
 // Abstract tokenizer handle.
 typedef struct tokenizer tokenizer_t;
-// Token data.
-typedef struct token     token_t;
 
 
 // Abstract tokenizer handle.
@@ -58,25 +24,29 @@ struct tokenizer {
     srcfile_t *file;
     // Current file position.
     pos_t      pos;
+    // Has a buffered token.
+    bool       has_tkn_buffer;
+    // Buffered token.
+    token_t    tkn_buffer;
     // Function to call to get next token.
-    token_t (*next)(tokenizer_t *ctx);
-};
-
-// Token data.
-struct token {
-    // Token position.
-    pos_t       pos;
-    // Token type.
-    tokentype_t type;
-    // Language-specific subtype.
-    int         subtype;
-    // Identifier or string constant value.
-    char const *strval;
-    // Integer constant value.
-    uint64_t    ival;
+    token_t (*next)(tokenizer_t *tkn_ctx);
+    // Extra function to call to clean up tokenizer.
+    void (*cleanup)(tokenizer_t *tkn_ctx);
 };
 
 
+
+// Delete a tokenizer context.
+// Deletes the token in the buffer but not any tokens consumed.
+void tkn_ctx_delete(tokenizer_t *tkn_ctx);
+
+// Consume next token from the tokenizer.
+token_t tkn_next(tokenizer_t *tkn_ctx);
+// Peek at (do not consume) next token from the tokenizer.
+token_t tkn_peek(tokenizer_t *tkn_ctx);
+
+// Delete a token's dynamic memory (`strval` and `params`).
+void tkn_delete(token_t token);
 
 // Tests whether a character is a valid hexadecimal constant character ([0-9a-fA-F]).
 bool is_hex_char(int c);

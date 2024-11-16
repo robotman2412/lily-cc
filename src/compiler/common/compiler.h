@@ -20,6 +20,38 @@ typedef enum {
     DIAG_ERR,
 } diag_lvl_t;
 
+// Token type.
+typedef enum {
+    /* ==== Token types ==== */
+    // Keywords.
+    TOKENTYPE_KEYWORD,
+    // Identifier (variable/label/function/etc name).
+    TOKENTYPE_IDENT,
+    // Integer constant.
+    TOKENTYPE_ICONST,
+    // Character constant.
+    TOKENTYPE_CCONST,
+    // String constant.
+    TOKENTYPE_SCONST,
+    // Uncategorized legal characters (operators/brackets/etc).
+    TOKENTYPE_OTHER,
+    // Garbage (illegal characters).
+    TOKENTYPE_GARBAGE,
+    // End of line (for languages where that is important).
+    TOKENTYPE_EOL,
+    // End of file.
+    TOKENTYPE_EOF,
+    /* ==== AST node types ==== */
+    // Garbage (illegal combination of tokens).
+    ASTTYPE_GARBAGE,
+    // Expression.
+    ASTTYPE_EXPR,
+    // Normal statement (assignment/funccall/etc).
+    ASTTYPE_STMT,
+    // Declaration / definition.
+    ASTTYPE_DECL,
+} tokentype_t;
+
 
 // Source file.
 typedef struct srcfile    srcfile_t;
@@ -31,6 +63,8 @@ typedef struct incfile    incfile_t;
 typedef struct cctx       cctx_t;
 // Diagnostic message.
 typedef struct diagnostic diagnostic_t;
+// Token data.
+typedef struct token      token_t;
 
 
 // Source file.
@@ -99,6 +133,24 @@ struct diagnostic {
     diag_lvl_t   lvl;
     // Diagnostic message.
     char        *msg;
+};
+
+// Token data.
+struct token {
+    // Token position.
+    pos_t       pos;
+    // Token type.
+    tokentype_t type;
+    // Language-specific subtype.
+    int         subtype;
+    // Identifier or string constant value.
+    char       *strval;
+    // Integer constant value.
+    uint64_t    ival;
+    // Number of parameters for AST node.
+    size_t      params_len;
+    // Parameters for AST node.
+    token_t    *params;
 };
 
 

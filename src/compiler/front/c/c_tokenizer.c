@@ -15,9 +15,32 @@
 
 // List of keywords.
 char const *c_keywords[] = {
-#define C_KEYW_DEF(name) #name,
+#define C_KEYW_DEF(since, deprecated, name) #name,
 #include "c_keywords.inc"
 };
+
+// Token introduction dates.
+long c_keyw_since[] = {
+#define C_KEYW_DEF(since, deprecated, name) since,
+#include "c_keywords.inc"
+};
+
+// Token introduction dates.
+long c_keyw_deprecated[] = {
+#define C_KEYW_DEF(since, deprecated, name) deprecated,
+#include "c_keywords.inc"
+};
+
+
+// Create a new C tokenizer.
+tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std) {
+    c_tokenizer_t *tkn_ctx = strong_calloc(sizeof(c_tokenizer_t), 1);
+    tkn_ctx->base.cctx     = srcfile->ctx;
+    tkn_ctx->base.file     = srcfile;
+    tkn_ctx->base.next     = c_tkn_next;
+    tkn_ctx->c_std         = c_std;
+    return &tkn_ctx->base;
+}
 
 
 // Comparator function for searching for keywords.
@@ -123,10 +146,11 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
 
 // Tokenize identifier.
 static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
-    size_t cap = 32;
-    size_t len = 1;
-    char  *ptr = strong_malloc(cap);
-    ptr[0]     = first;
+    c_tokenizer_t *c_ctx = (c_tokenizer_t *)ctx;
+    size_t         cap   = 32;
+    size_t         len   = 1;
+    char          *ptr   = strong_malloc(cap);
+    ptr[0]               = first;
 
     pos_t pos0 = ctx->pos;
     pos_t pos1;
@@ -150,7 +174,18 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
 
     // Test for keywords.
     array_binsearch_t res = array_binsearch(c_keywords, sizeof(char *), C_N_KEYWS, ptr, keyw_comp);
+    if (res.found && c_keyw_since[res.index] > c_ctx->c_std) {
+        // Ignore keyword spellings not recognised by this C standard.
+        res.found = false;
+    }
     if (res.found) {
+        // Replace alternate spellings with main spellings, even if the main spelling is from a later C standard.
+#define C_ALT_KEYW_DEF(main_spelling, alt_spelling)                                                                    \
+    if (res.index == C_KEYW_##main_spelling) {                                                                         \
+        res.index = C_KEYW_##alt_spelling;                                                                             \
+    }
+#include "c_keywords.inc"
+        // Return keyword token with main spelling.
         return (token_t){
             .pos     = pos_between(start_pos, pos0),
             .type    = TOKENTYPE_KEYWORD,

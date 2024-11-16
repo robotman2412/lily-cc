@@ -1,21 +1,19 @@
 
 // Assignment operator test cases.
 
-#define auto int
-#define func int
-
 // Testing the basic syntax of assignment.
-func assignment_syntax_test() {
-	auto a, b;
-	a = b;
-	a += b;
-	a -= b;
-	a *= b;
-	a /= b;
-	a %= b;
-	a ^= b;
-	a |= b;
-	a &= b;
-	a >>= b;
-	a <<= b;
+char assignment_syntax_test() {
+    char a, b;
+    a   = b;
+    a  += b;
+    a  -= b;
+    a  *= b;
+    a  /= b;
+    a  %= b;
+    a  ^= b;
+    a  |= b;
+    a  &= b;
+    a >>= b;
+    a <<= b;
+    return a;
 }

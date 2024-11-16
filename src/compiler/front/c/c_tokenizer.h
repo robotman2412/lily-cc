@@ -6,10 +6,21 @@
 
 #include "tokenizer.h"
 
+#define C_STD_C95 199409L
+#define C_STD_C99 199901L
+#define C_STD_C11 201112L
+#define C_STD_C17 201710L
+#define C_STD_C23 202311L
+#define C_STD_min C_STD_C95
+#define C_STD_max C_STD_C23
+#define C_STD_inf 999999L
+#define C_STD_def C_STD_C23
+
+
 
 // C keywords.
 typedef enum {
-#define C_KEYW_DEF(name) C_KEYW_##name,
+#define C_KEYW_DEF(since, deprecated, name) C_KEYW_##name,
 #include "c_keywords.inc"
     C_N_KEYWS,
 } c_keyw_t;
@@ -70,16 +81,31 @@ typedef enum {
 } c_tokentype_t;
 
 
+// C tokenizer handle.
+typedef struct c_tokenizer c_tokenizer_t;
+
+
+// C tokenizer handle.
+struct c_tokenizer {
+    // Common tokenizer data.
+    tokenizer_t base;
+    // Current C standard.
+    int         c_std;
+};
+
+
 
 // List of keywords.
 extern char const *c_keywords[];
 
+// Create a new C tokenizer.
+tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std);
 // Test whether a character is legal as the first in a C identifier.
-bool    c_is_first_sym_char(int c);
+bool         c_is_first_sym_char(int c);
 // Test whether a character is legal in a C identifier.
-bool    c_is_sym_char(int c);
+bool         c_is_sym_char(int c);
 // Get next token from C tokenizer.
-token_t c_tkn_next(tokenizer_t *ctx);
+token_t      c_tkn_next(tokenizer_t *ctx);
 
 
 // Test if a token is a certain keyword.

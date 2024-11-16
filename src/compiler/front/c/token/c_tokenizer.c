@@ -161,7 +161,7 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
     return (token_t){
         .pos    = pos_between(start_pos, pos0),
         .type   = TOKENTYPE_IDENT,
-        .strval = rc_new_strong(ptr, free),
+        .strval = ptr,
     };
 }
 
@@ -297,7 +297,7 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
         return (token_t){
             .pos    = pos_between(start_pos, ctx->pos),
             .type   = TOKENTYPE_SCONST,
-            .strval = rc_new_strong(ptr, free),
+            .strval = ptr,
         };
     }
 }

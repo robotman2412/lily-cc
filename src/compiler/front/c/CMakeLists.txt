@@ -2,6 +2,7 @@
 cmake_minimum_required(VERSION 3.16.0)
 
 add_library(c-frontend STATIC
+    parse/c_parser.c
     token/c_tokenizer.c
 )
 target_include_directories(c-frontend PUBLIC .)

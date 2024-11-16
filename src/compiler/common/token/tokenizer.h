@@ -5,7 +5,6 @@
 #pragma once
 
 #include "frontend.h"
-#include "refcount.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -15,6 +14,7 @@
 
 // Token type.
 typedef enum {
+    /* ==== Token types ==== */
     // Keywords.
     TOKENTYPE_KEYWORD,
     // Identifier (variable/label/function/etc name).
@@ -33,6 +33,13 @@ typedef enum {
     TOKENTYPE_EOL,
     // End of file.
     TOKENTYPE_EOF,
+    /* ==== AST node types ==== */
+    // Expression.
+    ASTTYPE_EXPR,
+    // Normal statement (assignment/funccall/etc).
+    ASTTYPE_STMT,
+    // Declaration / definition.
+    ASTTYPE_DECL,
 } tokentype_t;
 
 
@@ -63,9 +70,9 @@ struct token {
     tokentype_t type;
     // Language-specific subtype.
     int         subtype;
-    // Refcount ptr of identifier/string/character value.
-    rc_t        strval;
-    // Integer value.
+    // Identifier or string constant value.
+    char const *strval;
+    // Integer constant value.
     uint64_t    ival;
 };
 

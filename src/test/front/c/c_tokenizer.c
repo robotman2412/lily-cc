@@ -78,21 +78,21 @@ static char const *tkn_basic() {
     EXPECT_INT(tkn.pos.col, 0);
     EXPECT_INT(tkn.pos.len, 13);
     EXPECT_INT(tkn.type, TOKENTYPE_IDENT);
-    EXPECT_STR(tkn.strval->data, "an_identifier");
+    EXPECT_STR(tkn.strval, "an_identifier");
 
     tkn = c_tkn_next(&tkn_ctx); // forauxiliary_identifier
     EXPECT_INT(tkn.pos.line, 7);
     EXPECT_INT(tkn.pos.col, 14);
     EXPECT_INT(tkn.pos.len, 23);
     EXPECT_INT(tkn.type, TOKENTYPE_IDENT);
-    EXPECT_STR(tkn.strval->data, "forauxiliary_identifier");
+    EXPECT_STR(tkn.strval, "forauxiliary_identifier");
 
     tkn = c_tkn_next(&tkn_ctx); // "\x00\000\x0\x0000\770\377\00\0"
     EXPECT_INT(tkn.pos.line, 8);
     EXPECT_INT(tkn.pos.col, 0);
     EXPECT_INT(tkn.pos.len, 32);
     EXPECT_INT(tkn.type, TOKENTYPE_SCONST);
-    EXPECT_STR(tkn.strval->data, "\x00\000\x0\x0000\0770\377\00\0");
+    EXPECT_STR(tkn.strval, "\x00\000\x0\x0000\0770\377\00\0");
 
     tkn = c_tkn_next(&tkn_ctx); // 'A'
     EXPECT_INT(tkn.pos.line, 9);
@@ -107,7 +107,7 @@ static char const *tkn_basic() {
     EXPECT_INT(tkn.pos.col, 0);
     EXPECT_INT(tkn.pos.len, 24);
     EXPECT_INT(tkn.type, TOKENTYPE_SCONST);
-    EXPECT_STR(tkn.strval->data, "\'\"\?\\\a\b\f\n\r\t\v");
+    EXPECT_STR(tkn.strval, "\'\"\?\\\a\b\f\n\r\t\v");
 
     return TEST_OK;
 }

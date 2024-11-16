@@ -2,7 +2,7 @@
 // Copyright © 2024, Julian Scheffers
 // SPDX-License-Identifier: MIT
 
-#include "token/c_tokenizer.h"
+#include "c_tokenizer.h"
 
 #include "testcase.h"
 
@@ -26,8 +26,8 @@ static char const *tkn_basic() {
     ;
     // clang-format on
 
-    front_ctx_t *fe_ctx = front_create();
-    srcfile_t   *src    = srcfile_create(fe_ctx, "<tkn_basic>", data, sizeof(data) - 1);
+    cctx_t    *cctx = cctx_create();
+    srcfile_t *src  = srcfile_create(cctx, "<tkn_basic>", data, sizeof(data) - 1);
 
     tokenizer_t tkn_ctx = {
         .file = src,
@@ -135,11 +135,11 @@ static char const *tkn_errors() {
     // clang-format on
 
 
-    front_ctx_t *fe_ctx = front_create();
-    srcfile_t   *src    = srcfile_create(fe_ctx, "<tkn_basic>", data, sizeof(data) - 1);
+    cctx_t    *cctx = cctx_create();
+    srcfile_t *src  = srcfile_create(cctx, "<tkn_basic>", data, sizeof(data) - 1);
 
     tokenizer_t tkn_ctx = {
-        .fe_ctx = fe_ctx,
+        .cctx = cctx,
         .file = src,
         .pos = {
             .srcfile = src,
@@ -151,7 +151,7 @@ static char const *tkn_errors() {
     } while (tkn.type != TOKENTYPE_EOF);
 
     // '
-    diagnostic_t *diag = (diagnostic_t *)fe_ctx->diagnostics.head;
+    diagnostic_t *diag = (diagnostic_t *)cctx->diagnostics.head;
     RETURN_ON_FALSE(diag);
     EXPECT_INT(diag->pos.line, 0);
     EXPECT_INT(diag->pos.col, 0);

@@ -2,7 +2,7 @@
 // Copyright © 2024, Julian Scheffers
 // SPDX-License-Identifier: MIT
 
-#include "frontend.h"
+#include "compiler.h"
 
 #include "arrays.h"
 
@@ -18,19 +18,19 @@ pos_t pos_between(pos_t start, pos_t end) {
 }
 
 
-// Create new frontend context.
-front_ctx_t *front_create() {
-    return calloc(1, sizeof(front_ctx_t));
+// Create new compiler context.
+cctx_t *cctx_create() {
+    return calloc(1, sizeof(cctx_t));
 }
 
-// Delete frontend context (and therefor all frondend resources).
-void front_delete(front_ctx_t *ctx) {
+// Delete compiler context (and therefor all compiler resources).
+void cctx_delete(cctx_t *ctx) {
     // TODO.
 }
 
 // Create a formatted diagnostic message.
 // Returns diagnostic created, or NULL on failure.
-diagnostic_t *front_diagnostic(front_ctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const *fmt, ...) {
+diagnostic_t *cctx_diagnostic(cctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const *fmt, ...) {
     // Measure how much space is needed for the message.
     va_list va;
     va_start(va, fmt);
@@ -60,8 +60,8 @@ diagnostic_t *front_diagnostic(front_ctx_t *ctx, pos_t pos, diag_lvl_t lvl, char
 }
 
 
-// Open or get a source file from frontend context.
-srcfile_t *srcfile_open(front_ctx_t *ctx, char const *path) {
+// Open or get a source file from compiler context.
+srcfile_t *srcfile_open(cctx_t *ctx, char const *path) {
     srcfile_t *file = calloc(1, sizeof(srcfile_t));
     if (!file)
         goto err0;
@@ -90,7 +90,7 @@ err0:
 }
 
 // Create a source file from binary data.
-srcfile_t *srcfile_create(front_ctx_t *ctx, char const *virt_path, void const *data, size_t len) {
+srcfile_t *srcfile_create(cctx_t *ctx, char const *virt_path, void const *data, size_t len) {
     if (len > __INT_MAX__)
         return NULL;
     srcfile_t *file = calloc(1, sizeof(srcfile_t));

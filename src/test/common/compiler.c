@@ -2,7 +2,7 @@
 // Copyright © 2024, Julian Scheffers
 // SPDX-License-Identifier: MIT
 
-#include "frontend.h"
+#include "compiler.h"
 
 #include "testcase.h"
 
@@ -20,8 +20,8 @@ static char const *srcfile_ram() {
     // clang-format on
     char const *data_exp = "012\nabc\nefg\nijk!";
 
-    front_ctx_t *fe_ctx = front_create();
-    srcfile_t   *src    = srcfile_create(fe_ctx, "<srcfile_ram>", data, sizeof(data) - 1);
+    cctx_t    *cctx = cctx_create();
+    srcfile_t *src  = srcfile_create(cctx, "<srcfile_ram>", data, sizeof(data) - 1);
 
 
     pos_t pos = {0};

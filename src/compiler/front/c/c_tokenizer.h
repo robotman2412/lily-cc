@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "token/tokenizer.h"
+#include "tokenizer.h"
 
 
 // C keywords.

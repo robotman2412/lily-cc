@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "frontend.h"
 #include "list.h"
 
 #include <stdbool.h>
@@ -28,8 +27,8 @@ typedef struct srcfile    srcfile_t;
 typedef struct pos        pos_t;
 // Include file instance.
 typedef struct incfile    incfile_t;
-// Frontend context.
-typedef struct front_ctx  front_ctx_t;
+// Compilation context.
+typedef struct cctx       cctx_t;
 // Diagnostic message.
 typedef struct diagnostic diagnostic_t;
 
@@ -37,21 +36,21 @@ typedef struct diagnostic diagnostic_t;
 // Source file.
 struct srcfile {
     // Associated frontend context.
-    front_ctx_t *ctx;
+    cctx_t  *ctx;
     // File path.
-    char        *path;
+    char    *path;
     // File name; view of name in file path.
-    char        *name;
+    char    *name;
     // Is this stored in RAM (as opposed to on disk)?
-    bool         is_ram_file;
+    bool     is_ram_file;
     // Current offset of file descriptor (for file on disk).
-    int          fd_off;
+    int      fd_off;
     // File descriptor (for files on disk).
-    FILE        *fd;
+    FILE    *fd;
     // File content size (for files in RAM).
-    int          content_len;
+    int      content_len;
     // File content pointer (for files in RAM).
-    uint8_t     *content;
+    uint8_t *content;
 };
 
 // Position in a source file.
@@ -78,8 +77,8 @@ struct incfile {
     pos_t      inc_from;
 };
 
-// Frontend context.
-struct front_ctx {
+// Compilation context.
+struct cctx {
     // Number of open source files.
     size_t      srcs_len;
     // Capacity for open source files.
@@ -107,18 +106,18 @@ struct diagnostic {
 // Get position from start to end (exclusive).
 pos_t pos_between(pos_t start, pos_t end);
 
-// Create new frontend context.
-front_ctx_t  *front_create();
-// Delete frontend context (and therefor all frondend resources).
-void          front_delete(front_ctx_t *ctx);
+// Create new compiler context.
+cctx_t       *cctx_create();
+// Delete compiler context (and therefor all compiler resources).
+void          cctx_delete(cctx_t *ctx);
 // Create a formatted diagnostic message.
 // Returns diagnostic created, or NULL on failure.
-diagnostic_t *front_diagnostic(front_ctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const *fmt, ...)
+diagnostic_t *cctx_diagnostic(cctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const *fmt, ...)
     __attribute__((format(printf, 4, 5)));
 
-// Open or get a source file from frontend context.
-srcfile_t *srcfile_open(front_ctx_t *ctx, char const *path);
+// Open or get a source file from compiler context.
+srcfile_t *srcfile_open(cctx_t *ctx, char const *path);
 // Create a source file from binary data.
-srcfile_t *srcfile_create(front_ctx_t *ctx, char const *virt_path, void const *data, size_t len);
+srcfile_t *srcfile_create(cctx_t *ctx, char const *virt_path, void const *data, size_t len);
 // Read a character from a source file and update position.
 int        srcfile_getc(srcfile_t *file, pos_t *pos);

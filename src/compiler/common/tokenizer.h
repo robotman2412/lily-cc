@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "frontend.h"
+#include "compiler.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -53,11 +53,11 @@ typedef struct token     token_t;
 // Abstract tokenizer handle.
 struct tokenizer {
     // Associated frontend context.
-    front_ctx_t *fe_ctx;
+    cctx_t    *cctx;
     // Current source file.
-    srcfile_t   *file;
+    srcfile_t *file;
     // Current file position.
-    pos_t        pos;
+    pos_t      pos;
     // Function to call to get next token.
     token_t (*next)(tokenizer_t *ctx);
 };

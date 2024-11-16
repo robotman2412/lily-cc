@@ -2,7 +2,7 @@
 // Copyright © 2024, Julian Scheffers
 // SPDX-License-Identifier: MIT
 
-#include "token/c_tokenizer.h"
+#include "c_tokenizer.h"
 
 #include "strong_malloc.h"
 
@@ -106,13 +106,13 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
             case 16: ctype = "hexadecimal"; break;
             default: __builtin_unreachable();
         }
-        front_diagnostic(ctx->fe_ctx, pos, DIAG_ERR, "Invalid %s constant", ctype);
+        cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Invalid %s constant", ctype);
         return (token_t){
             .type = TOKENTYPE_GARBAGE,
             .pos  = pos,
         };
     } else if (toolarge) {
-        front_diagnostic(ctx->fe_ctx, pos, DIAG_WARN, "Constant is too large and was truncated to %" PRId64, val);
+        cctx_diagnostic(ctx->cctx, pos, DIAG_WARN, "Constant is too large and was truncated to %" PRId64, val);
     }
     return (token_t){
         .type = TOKENTYPE_ICONST,
@@ -181,8 +181,8 @@ static int c_str_hex(tokenizer_t *ctx, pos_t start_pos, int min_w, int max_w) {
             value  |= (c | 0x20) - 'a' + 0xa;
         } else {
             if (i < min_w) {
-                front_diagnostic(
-                    ctx->fe_ctx,
+                cctx_diagnostic(
+                    ctx->cctx,
                     pos_between(start_pos, pos0),
                     DIAG_ERR,
                     "Invalid hexadecimal escape sequence"
@@ -226,8 +226,8 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
         pos_t pos0 = ctx->pos;
         int   c    = srcfile_getc(ctx->file, &ctx->pos);
         if (c == -1 || c == '\n') {
-            front_diagnostic(
-                ctx->fe_ctx,
+            cctx_diagnostic(
+                ctx->cctx,
                 pos_between(start_pos, pos0),
                 DIAG_ERR,
                 "%s constant spans end of %s",
@@ -272,7 +272,7 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
                     case 't': c = '\t'; break;
                     case 'v': c = '\v'; break;
                     default:
-                        front_diagnostic(ctx->fe_ctx, pos_between(pos0, ctx->pos), DIAG_ERR, "Invalid escape sequence");
+                        cctx_diagnostic(ctx->cctx, pos_between(pos0, ctx->pos), DIAG_ERR, "Invalid escape sequence");
                         break;
                 }
             }

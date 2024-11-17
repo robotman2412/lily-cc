@@ -59,6 +59,28 @@ diagnostic_t *cctx_diagnostic(cctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const
     return diag;
 }
 
+// Print a diagnostic.
+void print_diagnostic(diagnostic_t const *diag) {
+    char const *prefix[] = {
+        [DIAG_ERR]  = "\033[31merror",
+        [DIAG_WARN] = "\033[33mwarning",
+        [DIAG_INFO] = "\033[34minfo",
+        [DIAG_HINT] = "\033[35mhint",
+    };
+    if (diag->pos.srcfile) {
+        printf(
+            "\033[34;1m%s:%d:%d: %s: \033[0m%s\033[0m\n",
+            diag->pos.srcfile->path,
+            diag->pos.line + 1,
+            diag->pos.col + 1,
+            prefix[diag->lvl],
+            diag->msg
+        );
+    } else {
+        printf("\033[34;1m???:?:?: %s: \033[0m%s\033[0m\n", prefix[diag->lvl], diag->msg);
+    }
+}
+
 
 // Open or get a source file from compiler context.
 srcfile_t *srcfile_open(cctx_t *ctx, char const *path) {
@@ -104,6 +126,7 @@ srcfile_t *srcfile_create(cctx_t *ctx, char const *virt_path, void const *data, 
     file->is_ram_file = true;
     file->content     = malloc(len);
     file->content_len = len;
+    file->ctx         = ctx;
     if (!file->content)
         goto err2;
     memcpy(file->content, data, len);
@@ -163,4 +186,30 @@ int srcfile_getc(srcfile_t *file, pos_t *pos) {
         pos->col++;
         return c;
     }
+}
+
+
+
+// Create an AST token with a fixed number of param tokens.
+token_t ast_from_va(int subtype, size_t n_param, ...) {
+    token_t *params = strong_malloc(sizeof(token_t) * n_param);
+    va_list  va;
+    va_start(va, n_param);
+    for (size_t i = 0; i < n_param; i++) {
+        params[i] = va_arg(va, token_t);
+    }
+    va_end(va);
+    return ast_from(subtype, n_param, params);
+}
+
+// Create an AST token with a fixed number of param tokens.
+token_t ast_from(int subtype, size_t n_param, token_t *params) {
+    return (token_t){
+        .type       = TOKENTYPE_AST,
+        .subtype    = subtype,
+        .strval     = NULL,
+        .ival       = 0,
+        .params_len = n_param,
+        .params     = params,
+    };
 }

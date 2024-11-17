@@ -53,9 +53,12 @@ static int keyw_comp(void const *_a, void const *_b) {
 // Helper function to create tokens for better readability.
 token_t other_tkn(c_tokentype_t type, pos_t from, pos_t to) {
     return ((token_t){
-        .pos     = pos_between(from, to),
-        .type    = TOKENTYPE_OTHER,
-        .subtype = type,
+        .pos        = pos_between(from, to),
+        .type       = TOKENTYPE_OTHER,
+        .subtype    = type,
+        .strval     = NULL,
+        .params_len = 0,
+        .params     = NULL,
     });
 }
 
@@ -131,16 +134,25 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         }
         cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Invalid %s constant", ctype);
         return (token_t){
-            .type = TOKENTYPE_GARBAGE,
-            .pos  = pos,
+            .type       = TOKENTYPE_GARBAGE,
+            .pos        = pos,
+            .ival       = 0,
+            .subtype    = 0,
+            .strval     = NULL,
+            .params_len = 0,
+            .params     = NULL,
         };
     } else if (toolarge) {
         cctx_diagnostic(ctx->cctx, pos, DIAG_WARN, "Constant is too large and was truncated to %" PRId64, val);
     }
     return (token_t){
-        .type = TOKENTYPE_ICONST,
-        .pos  = pos,
-        .ival = val,
+        .type       = TOKENTYPE_ICONST,
+        .pos        = pos,
+        .ival       = val,
+        .subtype    = 0,
+        .strval     = NULL,
+        .params_len = 0,
+        .params     = NULL,
     };
 }
 
@@ -187,16 +199,22 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
 #include "c_keywords.inc"
         // Return keyword token with main spelling.
         return (token_t){
-            .pos     = pos_between(start_pos, pos0),
-            .type    = TOKENTYPE_KEYWORD,
-            .subtype = res.index,
+            .pos        = pos_between(start_pos, pos0),
+            .type       = TOKENTYPE_KEYWORD,
+            .subtype    = res.index,
+            .strval     = NULL,
+            .params_len = 0,
+            .params     = NULL,
         };
     }
 
     return (token_t){
-        .pos    = pos_between(start_pos, pos0),
-        .type   = TOKENTYPE_IDENT,
-        .strval = ptr,
+        .pos        = pos_between(start_pos, pos0),
+        .type       = TOKENTYPE_IDENT,
+        .strval     = ptr,
+        .subtype    = 0,
+        .params_len = 0,
+        .params     = NULL,
     };
 }
 
@@ -323,16 +341,22 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
         }
         free(ptr);
         return (token_t){
-            .pos  = pos_between(start_pos, ctx->pos),
-            .type = TOKENTYPE_CCONST,
-            .ival = val,
+            .pos        = pos_between(start_pos, ctx->pos),
+            .type       = TOKENTYPE_CCONST,
+            .ival       = val,
+            .strval     = NULL,
+            .params_len = 0,
+            .params     = NULL,
         };
     } else {
         array_lencap_insert_strong(&ptr, 1, &len, &cap, "", len);
         return (token_t){
-            .pos    = pos_between(start_pos, ctx->pos),
-            .type   = TOKENTYPE_SCONST,
-            .strval = ptr,
+            .pos        = pos_between(start_pos, ctx->pos),
+            .type       = TOKENTYPE_SCONST,
+            .strval     = ptr,
+            .ival       = 0,
+            .params_len = 0,
+            .params     = NULL,
         };
     }
 }
@@ -428,6 +452,7 @@ retry:
         case '(': return other_tkn(C_TKN_LPAR, pos0, pos1);
         case ')': return other_tkn(C_TKN_RPAR, pos0, pos1);
         case '.': return other_tkn(C_TKN_DOT, pos0, pos1);
+        case ',': return other_tkn(C_TKN_COMMA, pos0, pos1);
         case ':': return other_tkn(C_TKN_COLON, pos0, pos1);
         case ';': return other_tkn(C_TKN_SEMIC, pos0, pos1);
         case '?': return other_tkn(C_TKN_QUESTION, pos0, pos1);
@@ -572,8 +597,12 @@ retry:
 
     // At this point, it's garbage.
     return (token_t){
-        .pos  = pos2,
-        .type = TOKENTYPE_GARBAGE,
+        .pos        = pos2,
+        .type       = TOKENTYPE_GARBAGE,
+        .strval     = NULL,
+        .ival       = 0,
+        .params_len = 0,
+        .params     = NULL,
     };
 #undef pos1
 }

@@ -11,10 +11,10 @@
 
 
 static bool run_testcase(testcase_t *testcase) {
-    printf("Test %s...", testcase->id);
+    printf("Test %s", testcase->id);
     fflush(stdout);
     char const *res = testcase->function();
-    printf("\b\b\b %s\033[0m\n", !res ? "\033[32mOK" : "\033[31mFAILED");
+    printf(" %s\033[0m\n", !res ? "\033[32mOK" : "\033[31mFAILED");
     if (res && res != (void *)-1) {
         printf("    %s\n", res);
     }

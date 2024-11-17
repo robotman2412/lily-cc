@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 
 
@@ -22,7 +23,6 @@ typedef enum {
 
 // Token type.
 typedef enum {
-    /* ==== Token types ==== */
     // Keywords.
     TOKENTYPE_KEYWORD,
     // Identifier (variable/label/function/etc name).
@@ -41,15 +41,8 @@ typedef enum {
     TOKENTYPE_EOL,
     // End of file.
     TOKENTYPE_EOF,
-    /* ==== AST node types ==== */
-    // Garbage (illegal combination of tokens).
-    ASTTYPE_GARBAGE,
-    // Expression.
-    ASTTYPE_EXPR,
-    // Normal statement (assignment/funccall/etc).
-    ASTTYPE_STMT,
-    // Declaration / definition.
-    ASTTYPE_DECL,
+    // AST node.
+    TOKENTYPE_AST,
 } tokentype_t;
 
 
@@ -166,6 +159,8 @@ void          cctx_delete(cctx_t *ctx);
 // Returns diagnostic created, or NULL on failure.
 diagnostic_t *cctx_diagnostic(cctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const *fmt, ...)
     __attribute__((format(printf, 4, 5)));
+// Print a diagnostic.
+void print_diagnostic(diagnostic_t const *diag);
 
 // Open or get a source file from compiler context.
 srcfile_t *srcfile_open(cctx_t *ctx, char const *path);
@@ -173,3 +168,24 @@ srcfile_t *srcfile_open(cctx_t *ctx, char const *path);
 srcfile_t *srcfile_create(cctx_t *ctx, char const *virt_path, void const *data, size_t len);
 // Read a character from a source file and update position.
 int        srcfile_getc(srcfile_t *file, pos_t *pos);
+
+// Create an AST token with a fixed number of param tokens.
+token_t ast_from_va(int subtype, size_t n_param, ...);
+// Create an AST token with a fixed number of param tokens.
+token_t ast_from(int subtype, size_t n_param, token_t *params);
+
+
+// Set an AST node's strval.
+static inline token_t ast_with_strval(token_t ast, char *strval) {
+    if (ast.strval) {
+        free(ast.strval);
+    }
+    ast.strval = strval;
+    return ast;
+}
+
+// Set an AST node's ival.
+static inline token_t ast_with_ival(token_t ast, uint64_t ival) {
+    ast.ival = ival;
+    return ast;
+}

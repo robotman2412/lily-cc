@@ -44,9 +44,17 @@ void tkn_ctx_delete(tokenizer_t *tkn_ctx);
 token_t tkn_next(tokenizer_t *tkn_ctx);
 // Peek at (do not consume) next token from the tokenizer.
 token_t tkn_peek(tokenizer_t *tkn_ctx);
+// Opposite of tkn_next; stuff up to one token back into the buffer.
+// Will abort if there is already a token there.
+void    tkn_unget(tokenizer_t *tkn_ctx, token_t token);
 
 // Delete a token's dynamic memory (`strval` and `params`).
 void tkn_delete(token_t token);
+// Delete an array of tokens and each token within.
+void tkn_arr_delete(size_t tokens_len, token_t *tokens);
 
 // Tests whether a character is a valid hexadecimal constant character ([0-9a-fA-F]).
 bool is_hex_char(int c);
+
+// Print a token.
+void tkn_debug_print(token_t token);

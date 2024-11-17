@@ -9,7 +9,7 @@
 
 
 // Simple test of the various tokens.
-static char const *tkn_basic() {
+static char const *c_tkn_basic() {
     // clang-format off
     char const data[] =
     "for int\n"
@@ -27,7 +27,7 @@ static char const *tkn_basic() {
     // clang-format on
 
     cctx_t    *cctx = cctx_create();
-    srcfile_t *src  = srcfile_create(cctx, "<tkn_basic>", data, sizeof(data) - 1);
+    srcfile_t *src  = srcfile_create(cctx, "<c_tkn_basic>", data, sizeof(data) - 1);
 
     tokenizer_t tkn_ctx = {
         .file = src,
@@ -111,11 +111,11 @@ static char const *tkn_basic() {
 
     return TEST_OK;
 }
-LILY_TEST_CASE(tkn_basic)
+LILY_TEST_CASE(c_tkn_basic)
 
 
 // Test of various error messages.
-static char const *tkn_errors() {
+static char const *c_tkn_errors() {
     // clang-format off
     char const data[] =
     "\'\n"                                                                  // Character constant spans end of line
@@ -136,7 +136,7 @@ static char const *tkn_errors() {
 
 
     cctx_t    *cctx = cctx_create();
-    srcfile_t *src  = srcfile_create(cctx, "<tkn_basic>", data, sizeof(data) - 1);
+    srcfile_t *src  = srcfile_create(cctx, "<c_tkn_errors>", data, sizeof(data) - 1);
 
     tokenizer_t tkn_ctx = {
         .cctx = cctx,
@@ -233,4 +233,4 @@ static char const *tkn_errors() {
 
     return TEST_OK;
 }
-LILY_TEST_CASE(tkn_errors)
+LILY_TEST_CASE(c_tkn_errors)

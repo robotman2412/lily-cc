@@ -9,6 +9,27 @@
 
 
 
+// C AST subtypes.
+typedef enum {
+    // Garbage/malformed tokens and/or AST nodes.
+    // Args: One or more tokens and/or AST nodes.
+    C_AST_GARBAGE,
+    // One or more comma-separated expressions.
+    // Args: The expressions in question.
+    C_AST_EXPRS,
+    // An infix operator expression.
+    // Args: Operator token, LHS, RHS.
+    C_AST_EXPR_INFIX,
+    // A unary prefix operator expression.
+    // Args: Operator token, operand.
+    C_AST_EXPR_PREFIX,
+    // A unary suffix operator expression.
+    // Args: Operator token, operand.
+    C_AST_EXPR_SUFFIX,
+} c_asttype_t;
+
+
+
 // Parse a C compilation unit into an AST.
 token_t c_parse(tokenizer_t *tkn_ctx);
 

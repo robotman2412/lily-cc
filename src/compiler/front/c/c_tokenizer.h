@@ -27,16 +27,17 @@ typedef enum {
 
 // C token subtype.
 typedef enum {
+    C_TKN_SEMIC, // `;`
+    C_TKN_COMMA, // `,`
     C_TKN_LPAR,  // `(`
     C_TKN_RPAR,  // `)`
-    C_TKN_LBRAC, // `[`
-    C_TKN_RBRAC, // `]`
     C_TKN_LCURL, // `{`
     C_TKN_RCURL, // `}`
+    C_TKN_LBRAC, // `[`
+    C_TKN_RBRAC, // `]`
 
     C_TKN_QUESTION, // `?`
     C_TKN_COLON,    // `:`
-    C_TKN_SEMIC,    // `;`
 
     C_TKN_INC, // `++`
     C_TKN_DEC, // `--`

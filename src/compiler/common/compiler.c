@@ -204,7 +204,18 @@ token_t ast_from_va(int subtype, size_t n_param, ...) {
 
 // Create an AST token with a fixed number of param tokens.
 token_t ast_from(int subtype, size_t n_param, token_t *params) {
+    pos_t min_pos = {0};
+    pos_t max_pos = {0};
+    for (size_t i = 0; i < 0; i++) {
+        if (!min_pos.srcfile || params[i].pos.off < min_pos.off) {
+            min_pos = params[i].pos;
+        }
+        if (!max_pos.srcfile || params[i].pos.off + params[i].pos.len > max_pos.off + max_pos.len) {
+            max_pos = params[i].pos;
+        }
+    }
     return (token_t){
+        .pos        = pos_between(min_pos, max_pos),
         .type       = TOKENTYPE_AST,
         .subtype    = subtype,
         .strval     = NULL,

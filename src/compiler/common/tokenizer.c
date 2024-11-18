@@ -86,40 +86,46 @@ static void pindent(int indent) {
     while (indent-- > 0) fputs("  ", stdout);
 }
 
-static void tkn_debug_print_r(token_t tkn, int indent) {
-    if (tkn.pos.srcfile) {
+static void tkn_debug_print_r(
+    token_t token, char const *const keyw[], char const *const ast[], char const *const tkn[], int indent
+) {
+    if (token.pos.srcfile) {
         pindent(indent);
-        printf("pos:        %s:%d:%d\n", tkn.pos.srcfile->path, tkn.pos.line + 1, tkn.pos.col + 1);
+        printf("pos:        %s:%d:%d\n", token.pos.srcfile->path, token.pos.line + 1, token.pos.col + 1);
     }
-    if (tkn.type == TOKENTYPE_AST) {
+    if (token.type == TOKENTYPE_AST) {
         pindent(indent);
-        printf("asttype:    %d\n", tkn.subtype);
-        for (size_t i = 0; i < tkn.params_len; i++) {
+        printf("asttype:    %s\n", ast[token.subtype]);
+        for (size_t i = 0; i < token.params_len; i++) {
             pindent(indent);
-            printf("child %zu/%zu:\n", i + 1, tkn.params_len);
-            tkn_debug_print_r(tkn.params[i], indent + 1);
+            printf("child %zu/%zu:\n", i + 1, token.params_len);
+            tkn_debug_print_r(token.params[i], keyw, ast, tkn, indent + 1);
         }
     } else {
-        pindent(indent);
-        printf("type:       %d\n", tkn.type);
-        pindent(indent);
-        printf("subtype:    %d\n", tkn.subtype);
-        if (tkn.type == TOKENTYPE_SCONST) {
+        if (token.type == TOKENTYPE_OTHER) {
             pindent(indent);
-            printf("strval:     %s\n", tkn.strval);
-        } else if (tkn.type == TOKENTYPE_IDENT) {
+            printf("subtype:    %s\n", tkn[token.subtype]);
+        } else if (token.type == TOKENTYPE_KEYWORD) {
             pindent(indent);
-            printf("ident:      %s\n", tkn.strval);
-        }
-        if (tkn.type == TOKENTYPE_ICONST || tkn.type == TOKENTYPE_CCONST) {
+            printf("keyword:    %s\n", keyw[token.subtype]);
+        } else if (token.type == TOKENTYPE_SCONST) {
             pindent(indent);
-            printf("ival:       %" PRId64 "\n", tkn.ival);
+            printf("strval:     %s\n", token.strval);
+        } else if (token.type == TOKENTYPE_IDENT) {
+            pindent(indent);
+            printf("ident:      %s\n", token.strval);
+        } else if (token.type == TOKENTYPE_ICONST || token.type == TOKENTYPE_CCONST) {
+            pindent(indent);
+            printf("ival:       %" PRId64 "\n", token.ival);
+            if (token.type == TOKENTYPE_CCONST && token.ival >= 0x20 && token.ival <= 0x7e) {
+                printf("character:  %c\n", (char)token.ival);
+            }
         }
     }
 }
 
 // Print a token.
-void tkn_debug_print(token_t token) {
+void tkn_debug_print(token_t token, char const *const keyw[], char const *const ast[], char const *const tkn[]) {
     printf("Token:\n");
-    tkn_debug_print_r(token, 1);
+    tkn_debug_print_r(token, keyw, ast, tkn, 1);
 }

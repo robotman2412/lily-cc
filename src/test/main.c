@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
         printf("No test cases to run\n");
         return 0;
     } else {
-        printf("%d/%d test cases succeeded\n", success, total);
+        printf("%zu/%zu test cases succeeded\n", success, total);
         return success != total;
     }
 }

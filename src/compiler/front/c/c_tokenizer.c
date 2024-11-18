@@ -13,20 +13,34 @@
 
 
 
+#ifndef NDEBUG
+// Enum names of `c_keyw_t` values.
+char const *const c_keyw_name[] = {
+#define C_KEYW_DEF(since, deprecated, name) "C_KEYW_" #name,
+#include "c_keywords.inc"
+};
+
+// Enum names of `c_tokentype_t` values.
+char const *const c_tokentype_name[] = {
+#define C_TOKEN_DEF(id, name) "C_TKN_" #id,
+#include "c_tokens.inc"
+};
+#endif
+
 // List of keywords.
-char const *c_keywords[] = {
+char const *const c_keywords[] = {
 #define C_KEYW_DEF(since, deprecated, name) #name,
 #include "c_keywords.inc"
 };
 
 // Token introduction dates.
-long c_keyw_since[] = {
+static long c_keyw_since[] = {
 #define C_KEYW_DEF(since, deprecated, name) since,
 #include "c_keywords.inc"
 };
 
 // Token introduction dates.
-long c_keyw_deprecated[] = {
+static long c_keyw_deprecated[] = {
 #define C_KEYW_DEF(since, deprecated, name) deprecated,
 #include "c_keywords.inc"
 };
@@ -34,11 +48,12 @@ long c_keyw_deprecated[] = {
 
 // Create a new C tokenizer.
 tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std) {
-    c_tokenizer_t *tkn_ctx = strong_calloc(sizeof(c_tokenizer_t), 1);
-    tkn_ctx->base.cctx     = srcfile->ctx;
-    tkn_ctx->base.file     = srcfile;
-    tkn_ctx->base.next     = c_tkn_next;
-    tkn_ctx->c_std         = c_std;
+    c_tokenizer_t *tkn_ctx    = strong_calloc(sizeof(c_tokenizer_t), 1);
+    tkn_ctx->base.cctx        = srcfile->ctx;
+    tkn_ctx->base.pos.srcfile = srcfile;
+    tkn_ctx->base.file        = srcfile;
+    tkn_ctx->base.next        = c_tkn_next;
+    tkn_ctx->c_std            = c_std;
     return &tkn_ctx->base;
 }
 

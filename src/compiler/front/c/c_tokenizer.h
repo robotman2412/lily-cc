@@ -27,58 +27,9 @@ typedef enum {
 
 // C token subtype.
 typedef enum {
-    C_TKN_SEMIC, // `;`
-    C_TKN_COMMA, // `,`
-    C_TKN_LPAR,  // `(`
-    C_TKN_RPAR,  // `)`
-    C_TKN_LCURL, // `{`
-    C_TKN_RCURL, // `}`
-    C_TKN_LBRAC, // `[`
-    C_TKN_RBRAC, // `]`
-
-    C_TKN_QUESTION, // `?`
-    C_TKN_COLON,    // `:`
-
-    C_TKN_INC, // `++`
-    C_TKN_DEC, // `--`
-
-    C_TKN_NOT,  // `~`
-    C_TKN_LNOT, // `!`
-    C_TKN_LAND, // `&&`
-    C_TKN_LOR,  // `||`
-
-    C_TKN_ADD, // `+`
-    C_TKN_SUB, // `-`
-    C_TKN_MUL, // `*`
-    C_TKN_DIV, // `/`
-    C_TKN_MOD, // `%`
-    C_TKN_SHL, // `<<`
-    C_TKN_SHR, // `>>`
-    C_TKN_AND, // `&`
-    C_TKN_OR,  // `|`
-    C_TKN_XOR, // `^`
-
-    C_TKN_ADD_S, // `+=`
-    C_TKN_SUB_S, // `-=`
-    C_TKN_MUL_S, // `*=`
-    C_TKN_DIV_S, // `/=`
-    C_TKN_MOD_S, // `%=`
-    C_TKN_SHL_S, // `<<=`
-    C_TKN_SHR_S, // `>>=`
-    C_TKN_AND_S, // `&=`
-    C_TKN_OR_S,  // `|=`
-    C_TKN_XOR_S, // `^=`
-
-    C_TKN_EQ, // `==`
-    C_TKN_NE, // `!=`
-    C_TKN_LT, // `<'
-    C_TKN_LE, // `<='
-    C_TKN_GT, // `>'
-    C_TKN_GE, // `>='
-
-    C_TKN_DOT,    // `.`
-    C_TKN_ARROW,  // `->`
-    C_TKN_ASSIGN, // `=`
+#define C_TOKEN_DEF(id, name) C_TKN_##id,
+#include "c_tokens.inc"
+    C_N_TKNS,
 } c_tokentype_t;
 
 
@@ -96,8 +47,16 @@ struct c_tokenizer {
 
 
 
+#ifndef NDEBUG
+// Enum names of `c_keyw_t` values.
+extern char const *const c_keyw_name[];
+// Enum names of `c_tokentype_t` values.
+extern char const *const c_tokentype_name[];
+#endif
+
 // List of keywords.
-extern char const *c_keywords[];
+extern char const *const c_keywords[];
+
 
 // Create a new C tokenizer.
 tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std);

@@ -189,3 +189,9 @@ static inline token_t ast_with_ival(token_t ast, uint64_t ival) {
     ast.ival = ival;
     return ast;
 }
+
+// Set a token's pos.
+static inline token_t tkn_with_pos(token_t tkn, pos_t pos) {
+    tkn.pos = pos;
+    return tkn;
+}

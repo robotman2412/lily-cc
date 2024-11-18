@@ -8,6 +8,7 @@
 - Symbol tokens ✓
 - Strings and chars ✓
 - Numberic constants
+    - Floating-point
     - Hexadecimal ✓
     - Decimal ✓
     - Octal ✓
@@ -52,9 +53,12 @@
     - Switch case
     - Inline assembly
 - Expressions
-    - Assignments
-    - Operators
-    - Function call
+    - Assignments ✓
+    - Compound literals
+    - Casts
+    - `sizeof` and `alignof`
+    - Operators ✓
+    - Function calls ✓
 
 
 ## Generic codegen

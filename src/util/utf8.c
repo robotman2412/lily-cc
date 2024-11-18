@@ -14,6 +14,8 @@ int utf8_next(char const *str, size_t *pos) {
     if (!(str[*pos] & 0x80)) {
         return str[*pos++];
     }
+    // TODO.
+    return 0;
 }
 
 /// Go back through a UTF-8 string.

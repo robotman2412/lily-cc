@@ -34,7 +34,7 @@
     - `__LINE__` - line number string literal
     - `__STDC__` - int literal `1`
     - `__STDC_HOSTED__` - `0` with freestanding, `1` with hosted
-    - `__STDC_VERSION__` `yyyymmL` (literal L) format C standard version
+    - `__STDC_VERSION__` `yyyymmL` (e.g. `202311L`) format C standard version
     - `__TIME__` - `"hh:mm:ss"` format compile time
 
 ### C parser and AST builder

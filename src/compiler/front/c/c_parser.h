@@ -29,8 +29,8 @@ typedef enum {
     // An array indexing expression.
     // Args: Array, index.
     C_AST_EXPR_INDEX,
-    // A function invocation.
-    // Args: Function, args.
+    // A function invocation or cast.
+    // Args: Function/type, args.
     C_AST_EXPR_CALL,
 } c_asttype_t;
 
@@ -44,10 +44,6 @@ extern char const *const c_asttype_name[];
 // Parse a C compilation unit into an AST.
 token_t c_parse(tokenizer_t *tkn_ctx);
 
-// Parse a function call expression.
-token_t c_parse_funccall(tokenizer_t *tkn_ctx, token_t funcname);
-// Parse one or more expressions or a type.
-token_t c_parse_exprs_or_type(tokenizer_t *tkn_ctx);
 // Parse one or more C expressions separated by commas.
 token_t c_parse_exprs(tokenizer_t *tkn_ctx);
 // Parse a C expression.

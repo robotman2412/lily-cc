@@ -148,9 +148,35 @@ char const *c_expr_deref() {
         return TEST_FAIL;
     }
 
+    // printf("\n");
+    // c_tkn_debug_print(expr);
+
+    return TEST_OK;
+}
+LILY_TEST_CASE(c_expr_deref)
+
+
+char const *c_expr_cast() {
+    char const   source[] = "(ident0 *) (ident1)";
+    cctx_t      *cctx     = cctx_create();
+    srcfile_t   *src      = srcfile_create(cctx, "<c_expr_cast>", source, sizeof(source) - 1);
+    tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
+
+    token_t expr = c_parse_expr(tctx);
+
+    if (cctx->diagnostics.len) {
+        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
+        printf("\n");
+        while (diag) {
+            print_diagnostic(diag);
+            diag = (diagnostic_t const *)diag->node.next;
+        }
+        return TEST_FAIL;
+    }
+
     printf("\n");
     c_tkn_debug_print(expr);
 
     return TEST_OK;
 }
-LILY_TEST_CASE(c_expr_deref)
+LILY_TEST_CASE(c_expr_cast)

@@ -14,24 +14,27 @@ typedef enum {
     // Garbage/malformed tokens and/or AST nodes.
     // Args: One or more tokens and/or AST nodes.
     C_AST_GARBAGE,
-    // One or more comma-separated expressions.
+    // One or more comma-separated expressions (e.g. `(expr, expr)` or `(expr)`).
     // Args: The expressions in question.
     C_AST_EXPRS,
-    // An infix operator expression.
+    // An infix operator expression (e.g. `expr + expr`).
     // Args: Operator token, LHS, RHS.
     C_AST_EXPR_INFIX,
-    // A unary prefix operator expression.
+    // A unary prefix operator expression (e.g. `~expr`).
     // Args: Operator token, operand.
     C_AST_EXPR_PREFIX,
-    // A unary suffix operator expression.
+    // A unary suffix operator expression (e.g. `expr++`).
     // Args: Operator token, operand.
     C_AST_EXPR_SUFFIX,
-    // An array indexing expression.
+    // An array indexing expression (e.g. `expr[expr]`).
     // Args: Array, index.
     C_AST_EXPR_INDEX,
-    // A function invocation or cast.
+    // A function invocation or cast (e.g. `identifier(exprs)`, `(typename) expr` or `(exprs)(exprs)`).
     // Args: Function/type, args.
     C_AST_EXPR_CALL,
+    // Type qualifier node (e.g. the `const` in `const int` or `void *const`).
+    // Args: Thing to qualify, qualifier token.
+    C_AST_TYPE_QUAL,
 } c_asttype_t;
 
 

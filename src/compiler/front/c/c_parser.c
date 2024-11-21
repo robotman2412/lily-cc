@@ -177,6 +177,38 @@ static bool is_suffix_oper_tkn(token_t token) {
     }
 }
 
+// Is this a valid type qualifier token?
+static bool is_type_qualifier(token_t token) {
+    if (token.type != TOKENTYPE_KEYWORD) {
+        return false;
+    }
+    switch (token.subtype) {
+        case C_KEYW__Atomic:
+        case C_KEYW_restrict:
+        case C_KEYW_const:
+        case C_KEYW_volatile: return true;
+        default: return false;
+    }
+}
+
+// Is this a valid type specifier token?
+static bool is_type_specifier(token_t token) {
+    if (token.type != TOKENTYPE_KEYWORD) {
+        return false;
+    }
+    switch (token.subtype) {
+        case C_KEYW_void:
+        case C_KEYW_char:
+        case C_KEYW_short:
+        case C_KEYW_long:
+        case C_KEYW_int:
+        case C_KEYW_signed:
+        case C_KEYW_unsigned:
+        case C_KEYW_bool: return true;
+        default: return false;
+    }
+}
+
 
 
 // Parse a C compilation unit into an AST.
@@ -251,10 +283,9 @@ static token_t c_parse_expr_or_type(tokenizer_t *tkn_ctx, bool *allow_expr, bool
             tkn_next(tkn_ctx);
             push(ast_from_va(C_AST_EXPR_INDEX, 2, arr, idx));
 
-        } else if (*allow_expr && is_tkn(0, C_TKN_LPAR)) {
+        } else if (is_tkn(0, C_TKN_LPAR)) {
             // Recursively parse exprs or type.
-            *allow_type = false;
-            if (is_operand(1) && peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_RPAR) {
+            if (*allow_expr && is_operand(1) && peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_RPAR) {
                 // Function call may have zero params.
                 push(tkn_with_pos(ast_from_va(C_AST_EXPRS, 0), pos_between(pop().pos, peek.pos)));
             } else {

@@ -10,9 +10,13 @@
 
 
 // Parse a C expression or type.
-static token_t c_parse_expr_or_type(tokenizer_t *tkn_ctx, bool *allow_expr, bool *allow_type, bool *allow_ddecl);
+static token_t c_parse_expr_or_type(
+    tokenizer_t *tkn_ctx, bool *restrict allow_expr, bool *restrict allow_type, bool *restrict allow_ddecl
+);
 // Parse one or more C expressions separated by commas or a type.
-static token_t c_parse_exprs_or_type(tokenizer_t *tkn_ctx, bool *allow_expr, bool *allow_type);
+static token_t c_parse_exprs_or_type(
+    tokenizer_t *tkn_ctx, bool *restrict allow_expr, bool *restrict allow_type, bool *restrict allow_ddecl
+);
 
 
 
@@ -28,6 +32,7 @@ char const *const c_asttype_name[] = {
     [C_AST_EXPR_CALL]   = "C_AST_EXPR_CALL",
     [C_AST_TYPE_QUAL]   = "C_AST_TYPE_QUAL",
     [C_AST_TYPE_PTR]    = "C_AST_TYPE_PTR",
+    [C_AST_TYPE_NAME]   = "C_AST_TYPE_NAME",
 };
 #endif
 
@@ -221,9 +226,10 @@ token_t c_parse(tokenizer_t *tkn_ctx);
 
 // Parse one or more C expressions separated by commas.
 token_t c_parse_exprs(tokenizer_t *tkn_ctx) {
-    bool allow_expr = true;
-    bool allow_type = false;
-    return c_parse_exprs_or_type(tkn_ctx, &allow_expr, &allow_type);
+    bool allow_expr  = true;
+    bool allow_type  = false;
+    bool allow_ddecl = false;
+    return c_parse_exprs_or_type(tkn_ctx, &allow_expr, &allow_type, &allow_ddecl);
 }
 
 // Parse a C expression.
@@ -235,7 +241,9 @@ token_t c_parse_expr(tokenizer_t *tkn_ctx) {
 }
 
 // Parse a C expression or type.
-static token_t c_parse_expr_or_type(tokenizer_t *tkn_ctx, bool *allow_expr, bool *allow_type, bool *allow_ddecl) {
+static token_t c_parse_expr_or_type(
+    tokenizer_t *tkn_ctx, bool *restrict allow_expr, bool *restrict allow_type, bool *restrict allow_ddecl
+) {
     // Assert that it starts with a token valid for the beginning of an expr.
     if (!is_first_expr_tkn(tkn_peek(tkn_ctx))) {
         cctx_diagnostic(tkn_ctx->cctx, tkn_peek(tkn_ctx).pos, DIAG_ERR, "Expected expression");
@@ -249,15 +257,15 @@ static token_t c_parse_expr_or_type(tokenizer_t *tkn_ctx, bool *allow_expr, bool
     // Push a node/token to the stack.
 #define push(thing)                                                                                                    \
     do {                                                                                                               \
-        token_t tmp = thing;                                                                                           \
-        array_lencap_insert_strong(&stack, sizeof(token_t), &stack_len, &stack_cap, &tmp, stack_len);                  \
+        token_t push_temporary_value = thing;                                                                          \
+        array_lencap_insert_strong(&stack, sizeof(token_t), &stack_len, &stack_cap, &push_temporary_value, stack_len); \
     } while (0)
     // Pop a node/token from the stack.
 #define pop()                                                                                                          \
     ({                                                                                                                 \
-        token_t tmp = stack[stack_len - 1];                                                                            \
+        token_t pop_temporary_value = stack[stack_len - 1];                                                            \
         stack_len--;                                                                                                   \
-        tmp;                                                                                                           \
+        pop_temporary_value;                                                                                           \
     })
     // Is this a specific type of token?
 #define is_tkn(depth, _subtype)                                                                                        \
@@ -278,30 +286,48 @@ static token_t c_parse_expr_or_type(tokenizer_t *tkn_ctx, bool *allow_expr, bool
 
         if (is_tkn(0, C_TKN_LBRAC)) {
             // Recursively parse indexing.
-            pop();
-            token_t arr = pop();
             token_t idx = c_parse_expr(tkn_ctx);
+            if (idx.type == TOKENTYPE_AST && idx.subtype == C_AST_GARBAGE) {
+                push(idx);
+                goto err;
+            }
             token_t tmp = tkn_peek(tkn_ctx);
             if (tmp.type != TOKENTYPE_OTHER || tmp.subtype != C_TKN_RBRAC) {
                 cctx_diagnostic(tkn_ctx->cctx, tmp.pos, DIAG_ERR, "Expected ]");
-                tkn_delete(arr);
-                tkn_delete(idx);
+                push(idx);
                 goto err;
             }
             tkn_next(tkn_ctx);
+            tkn_delete(pop());
+            token_t arr = pop();
             push(ast_from_va(C_AST_EXPR_INDEX, 2, arr, idx));
 
         } else if (is_tkn(0, C_TKN_LPAR)) {
             // Recursively parse exprs or type.
             if (*allow_expr && is_operand(1) && peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_RPAR) {
                 // Function call may have zero params.
-                push(tkn_with_pos(ast_from_va(C_AST_EXPRS, 0), pos_between(pop().pos, peek.pos)));
+                token_t lpar = pop();
+                push(tkn_with_pos(ast_from_va(C_AST_EXPRS, 0), pos_between(lpar.pos, peek.pos)));
+                tkn_delete(lpar);
             } else {
                 // If not a function call, then it must have something in the parentheses.
-                pop();
-                bool is_expr = true;
-                bool is_type = true;
-                push(c_parse_exprs_or_type(tkn_ctx, &is_expr, &is_type));
+                bool    is_expr  = *allow_expr;
+                bool    is_type  = *allow_expr && !*allow_type;
+                bool    is_ddecl = *allow_type || *allow_ddecl;
+                token_t tmp      = c_parse_exprs_or_type(tkn_ctx, &is_expr, &is_type, &is_ddecl);
+                if (tmp.type == TOKENTYPE_AST && tmp.subtype == C_AST_GARBAGE) {
+                    push(tmp);
+                    goto err;
+                }
+                if (!is_ddecl) {
+                    *allow_ddecl = false;
+                    *allow_type  = false;
+                }
+                if (!is_expr && is_ddecl) {
+                    *allow_expr = false;
+                }
+                tkn_delete(pop());
+                push(tmp);
             }
             token_t tmp = tkn_peek(tkn_ctx);
             if (tmp.type != TOKENTYPE_OTHER || tmp.subtype != C_TKN_RPAR) {
@@ -313,40 +339,44 @@ static token_t c_parse_expr_or_type(tokenizer_t *tkn_ctx, bool *allow_expr, bool
         } else if (*allow_expr && is_operand(1) && is_ast(0, C_AST_EXPRS)) {
             // Reduce call.
             *allow_type    = false;
+            *allow_ddecl   = false;
             token_t params = pop();
             token_t func   = pop();
             push(ast_from_va(C_AST_EXPR_CALL, 2, func, params));
 
         } else if (*allow_expr && is_operand(1) && (is_tkn(0, C_TKN_INC) || is_tkn(0, C_TKN_DEC))) {
             // Reduce suffix.
-            *allow_type = false;
-            token_t op  = pop();
-            token_t val = pop();
+            *allow_type  = false;
+            *allow_ddecl = false;
+            token_t op   = pop();
+            token_t val  = pop();
             push(ast_from_va(C_AST_EXPR_SUFFIX, 2, op, val));
 
         } else if (*allow_expr && !is_operand(2) && is_operand(0) && stack_len >= 2
                    && is_prefix_oper_tkn(stack[stack_len - 2])
                    && oper_precedence(stack[stack_len - 2], true) >= oper_precedence(peek, false)) {
             // Reduce prefix.
-            *allow_type = false;
-            token_t val = pop();
-            token_t op  = pop();
+            *allow_type  = false;
+            *allow_ddecl = false;
+            token_t val  = pop();
+            token_t op   = pop();
             push(ast_from_va(C_AST_EXPR_PREFIX, 2, op, val));
 
         } else if (*allow_expr && is_operand(2) && is_operand(0) && oper_precedence(stack[stack_len - 2], false) >= 0
                    && (!can_push || oper_precedence(stack[stack_len - 2], false) >= oper_precedence(peek, false))) {
             // Reduce infix.
-            *allow_type = false;
-            token_t rhs = pop();
-            token_t op  = pop();
-            token_t lhs = pop();
+            *allow_type  = false;
+            *allow_ddecl = false;
+            token_t rhs  = pop();
+            token_t op   = pop();
+            token_t lhs  = pop();
             push(ast_from_va(C_AST_EXPR_INFIX, 3, op, lhs, rhs));
 
         } else if (can_push) {
             // Push next token.
             push(tkn_next(tkn_ctx));
 
-        } else if ((*allow_ddecl || *allow_expr) && is_tkn(1, C_TKN_MUL)
+        } else if ((*allow_ddecl || *allow_type) && is_tkn(1, C_TKN_MUL)
                    && (is_ast(0, C_AST_TYPE_PTR) || is_ast(0, C_AST_EXPR_INDEX))) {
             // Reduce ptr type.
             *allow_expr  = false;
@@ -354,12 +384,18 @@ static token_t c_parse_expr_or_type(tokenizer_t *tkn_ctx, bool *allow_expr, bool
             token_t ptr  = pop();
             push(tkn_with_pos(ast_from_va(C_AST_TYPE_PTR, 1, type), pos_between(ptr.pos, type.pos)));
 
-        } else if ((*allow_ddecl || *allow_expr) && is_tkn(0, C_TKN_MUL)) {
+        } else if ((*allow_ddecl || *allow_type) && is_tkn(0, C_TKN_MUL)) {
             // Reduce inner-most ptr.
             *allow_expr = false;
-            push(tkn_with_pos(ast_from_va(C_AST_TYPE_PTR, 0), pop().pos));
+            token_t tmp = pop();
+            push(tkn_with_pos(ast_from_va(C_AST_TYPE_PTR, 0), tmp.pos));
+            tkn_delete(tmp);
 
-        } else if (*allow_type && (is_ast(0, C_AST_TYPE_PTR) || is_ast(0, C_AST_EXPR_INDEX))) {
+        } else if (*allow_type && stack_len == 2 && (is_ast(0, C_AST_TYPE_PTR) || is_ast(0, C_AST_EXPR_INDEX))) {
+            // Reduce type name.
+            token_t ptrs = pop();
+            token_t spec = pop();
+            push(ast_from_va(C_AST_TYPE_NAME, 2, spec, ptrs));
 
         } else {
             // Can't reduce anything.
@@ -376,7 +412,6 @@ static token_t c_parse_expr_or_type(tokenizer_t *tkn_ctx, bool *allow_expr, bool
         // Invalid expression.
         cctx_diagnostic(tkn_ctx->cctx, stack[1].pos, DIAG_ERR, "Expected end of expression or operator");
     err:
-        tkn_arr_delete(stack_len, stack);
         return ast_from(C_AST_GARBAGE, stack_len, stack);
     } else {
         // Valid expression.
@@ -387,12 +422,13 @@ static token_t c_parse_expr_or_type(tokenizer_t *tkn_ctx, bool *allow_expr, bool
 }
 
 // Parse one or more C expressions separated by commas or a type.
-static token_t c_parse_exprs_or_type(tokenizer_t *tkn_ctx, bool *allow_expr, bool *allow_type) {
-    size_t   exprs_len   = 1;
-    size_t   exprs_cap   = 1;
-    token_t *exprs       = strong_malloc(exprs_cap * sizeof(token_t));
-    bool     allow_ddecl = false;
-    *exprs               = c_parse_expr_or_type(tkn_ctx, allow_expr, allow_type, &allow_ddecl);
+static token_t c_parse_exprs_or_type(
+    tokenizer_t *tkn_ctx, bool *restrict allow_expr, bool *restrict allow_type, bool *restrict allow_ddecl
+) {
+    size_t   exprs_len = 1;
+    size_t   exprs_cap = 1;
+    token_t *exprs     = strong_malloc(exprs_cap * sizeof(token_t));
+    *exprs             = c_parse_expr_or_type(tkn_ctx, allow_expr, allow_type, allow_ddecl);
 
     // If this is unambiguously a type, don't bother trying to parse multiple exprs.
     token_t tkn = tkn_peek(tkn_ctx);

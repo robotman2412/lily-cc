@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "c_parser.h"
-
 #include "testcase.h"
 
 
@@ -119,11 +118,9 @@ char const *c_expr_call() {
             print_diagnostic(diag);
             diag = (diagnostic_t const *)diag->node.next;
         }
+        c_tkn_debug_print(expr);
         return TEST_FAIL;
     }
-
-    // printf("\n");
-    // c_tkn_debug_print(expr);
 
     return TEST_OK;
 }
@@ -157,7 +154,7 @@ LILY_TEST_CASE(c_expr_deref)
 
 
 char const *c_expr_cast() {
-    char const   source[] = "(ident0 *) (ident1)";
+    char const   source[] = "(ident0 *(*)[2]) (ident1)";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_expr_cast>", source, sizeof(source) - 1);
     tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
@@ -171,6 +168,7 @@ char const *c_expr_cast() {
             print_diagnostic(diag);
             diag = (diagnostic_t const *)diag->node.next;
         }
+        c_tkn_debug_print(expr);
         return TEST_FAIL;
     }
 

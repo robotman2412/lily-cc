@@ -38,6 +38,9 @@ typedef enum {
     // Type pointer node (e.g. the `*` in `int *[2]` or `int (*)[2]`).
     // Args: Type that the pointer points to.
     C_AST_TYPE_PTR,
+    // Type name node (e.g. `typedefname_t` or `int *[2][3]`).
+    // Args: Type specifier/qualifier list, pointer/index node.
+    C_AST_TYPE_NAME,
 } c_asttype_t;
 
 

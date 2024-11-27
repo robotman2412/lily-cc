@@ -206,7 +206,7 @@ token_t ast_from_va(int subtype, size_t n_param, ...) {
 token_t ast_from(int subtype, size_t n_param, token_t *params) {
     pos_t min_pos = {0};
     pos_t max_pos = {0};
-    for (size_t i = 0; i < 0; i++) {
+    for (size_t i = 0; i < n_param; i++) {
         if (!min_pos.srcfile || params[i].pos.off < min_pos.off) {
             min_pos = params[i].pos;
         }

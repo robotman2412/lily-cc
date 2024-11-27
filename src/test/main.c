@@ -33,8 +33,12 @@ int main(int argc, char **argv) {
         }
     } else {
         for (int i = 1; i < argc; i++) {
-            testcase_t *testcase  = map_get(&testcases, argv[i]);
-            success              += run_testcase(testcase);
+            testcase_t *testcase = map_get(&testcases, argv[i]);
+            if (!testcase) {
+                printf("No such testcase %s\n", argv[i]);
+                continue;
+            }
+            success += run_testcase(testcase);
             total++;
         }
     }

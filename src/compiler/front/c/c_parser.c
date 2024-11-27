@@ -263,6 +263,10 @@ static token_t c_parse_expr_or_type(tokenizer_t *tkn_ctx, bool *allow_expr, bool
 #define is_tkn(depth, _subtype)                                                                                        \
     (stack_len > depth && stack[stack_len - depth - 1].type == TOKENTYPE_OTHER                                         \
      && stack[stack_len - depth - 1].subtype == _subtype)
+    // Is this a specific type of AST node?
+#define is_ast(depth, _subtype)                                                                                        \
+    (stack_len > depth && stack[stack_len - depth - 1].type == TOKENTYPE_AST                                           \
+     && stack[stack_len - depth - 1].subtype == _subtype)
     // Is this eligible as an operand?
 #define is_operand(depth) (stack_len > depth && is_operand_tkn(stack[stack_len - depth - 1]))
 
@@ -306,8 +310,7 @@ static token_t c_parse_expr_or_type(tokenizer_t *tkn_ctx, bool *allow_expr, bool
             }
             tkn_next(tkn_ctx);
 
-        } else if (*allow_expr && is_operand(1) && stack[stack_len - 1].type == TOKENTYPE_AST
-                   && stack[stack_len - 1].subtype == C_AST_EXPRS) {
+        } else if (*allow_expr && is_operand(1) && is_ast(0, C_AST_EXPRS)) {
             // Reduce call.
             *allow_type    = false;
             token_t params = pop();
@@ -342,6 +345,21 @@ static token_t c_parse_expr_or_type(tokenizer_t *tkn_ctx, bool *allow_expr, bool
         } else if (can_push) {
             // Push next token.
             push(tkn_next(tkn_ctx));
+
+        } else if ((*allow_ddecl || *allow_expr) && is_tkn(1, C_TKN_MUL)
+                   && (is_ast(0, C_AST_TYPE_PTR) || is_ast(0, C_AST_EXPR_INDEX))) {
+            // Reduce ptr type.
+            *allow_expr  = false;
+            token_t type = pop();
+            token_t ptr  = pop();
+            push(tkn_with_pos(ast_from_va(C_AST_TYPE_PTR, 1, type), pos_between(ptr.pos, type.pos)));
+
+        } else if ((*allow_ddecl || *allow_expr) && is_tkn(0, C_TKN_MUL)) {
+            // Reduce inner-most ptr.
+            *allow_expr = false;
+            push(tkn_with_pos(ast_from_va(C_AST_TYPE_PTR, 0), pop().pos));
+
+        } else if (*allow_type && (is_ast(0, C_AST_TYPE_PTR) || is_ast(0, C_AST_EXPR_INDEX))) {
 
         } else {
             // Can't reduce anything.

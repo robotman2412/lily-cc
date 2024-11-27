@@ -16,6 +16,7 @@ static token_t c_parse_exprs_or_type(tokenizer_t *tkn_ctx, bool *allow_expr, boo
 
 
 
+#ifndef NDEBUG
 // Get enum name of `c_asttype_t` value.
 char const *const c_asttype_name[] = {
     [C_AST_GARBAGE]     = "C_AST_GARBAGE",
@@ -25,7 +26,10 @@ char const *const c_asttype_name[] = {
     [C_AST_EXPR_SUFFIX] = "C_AST_EXPR_SUFFIX",
     [C_AST_EXPR_INDEX]  = "C_AST_EXPR_INDEX",
     [C_AST_EXPR_CALL]   = "C_AST_EXPR_CALL",
+    [C_AST_TYPE_QUAL]   = "C_AST_TYPE_QUAL",
+    [C_AST_TYPE_PTR]    = "C_AST_TYPE_PTR",
 };
+#endif
 
 
 // Is this a valid token for the start of an expression?

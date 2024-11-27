@@ -35,6 +35,9 @@ typedef enum {
     // Type qualifier node (e.g. the `const` in `const int` or `void *const`).
     // Args: Thing to qualify, qualifier token.
     C_AST_TYPE_QUAL,
+    // Type pointer node (e.g. the `*` in `int *[2]` or `int (*)[2]`).
+    // Args: Type that the pointer points to.
+    C_AST_TYPE_PTR,
 } c_asttype_t;
 
 

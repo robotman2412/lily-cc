@@ -302,33 +302,50 @@ static token_t c_parse_expr_or_type(
     // Is this eligible as an operand?
 #define is_operand(depth) (stack_len > depth && is_operand_tkn(stack[stack_len - depth - 1]))
 
-    // Start by pushing the first token onto the stack.
-    push(tkn_next(tkn_ctx));
     while (1) {
         peek          = tkn_peek(tkn_ctx);
         bool can_push = is_pushable_expr_tkn(peek)
                         || (*allow_type || *allow_ddecl) && (is_type_specifier(peek) || is_type_qualifier(peek));
 
-        if (is_tkn(0, C_TKN_LBRAC)) {
-            // Recursively parse indexing.
-            token_t idx = c_parse_expr(tkn_ctx);
+        if (is_tkn(0, C_TKN_LBRAC)) { // Recursively parse indexing.
+            token_t tmp = tkn_peek(tkn_ctx);
+            if (tmp.type == TOKENTYPE_OTHER && tmp.subtype == C_TKN_RBRAC && *allow_type || *allow_ddecl) {
+                // Types can have empty array indices.
+                tkn_delete(tkn_next(tkn_ctx));
+                tkn_delete(pop());
+                token_t arr = pop();
+                push(ast_from_va(C_AST_EXPR_INDEX, 1, arr));
+                continue;
+            }
+            bool    is_expr  = true;
+            bool    is_type  = false;
+            bool    is_ddecl = *allow_type || *allow_ddecl;
+            token_t idx      = c_parse_expr_or_type(tkn_ctx, &is_expr, &is_type, &is_ddecl);
             if (idx.type == TOKENTYPE_AST && idx.subtype == C_AST_GARBAGE) {
                 push(idx);
                 goto err;
             }
-            token_t tmp = tkn_peek(tkn_ctx);
+            if (is_ddecl && (idx.type != TOKENTYPE_AST || idx.subtype != C_AST_TYPE_PTR_TO)) {
+                cctx_diagnostic(tkn_ctx->cctx, idx.pos, DIAG_ERR, "Expected * or ] or expression");
+                push(idx);
+                goto err;
+            }
+            if (idx.type == TOKENTYPE_AST && idx.subtype == C_AST_GARBAGE) {
+                push(idx);
+                goto err;
+            }
+            tmp = tkn_peek(tkn_ctx);
             if (tmp.type != TOKENTYPE_OTHER || tmp.subtype != C_TKN_RBRAC) {
                 cctx_diagnostic(tkn_ctx->cctx, tmp.pos, DIAG_ERR, "Expected ]");
                 push(idx);
                 goto err;
             }
-            tkn_next(tkn_ctx);
+            tkn_delete(tkn_next(tkn_ctx));
             tkn_delete(pop());
             token_t arr = pop();
             push(ast_from_va(C_AST_EXPR_INDEX, 2, arr, idx));
 
-        } else if (is_tkn(0, C_TKN_LPAR)) {
-            // Recursively parse exprs or type.
+        } else if (is_tkn(0, C_TKN_LPAR)) { // Recursively parse exprs or type.
             if (*allow_expr && is_operand(1) && peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_RPAR) {
                 // Function call may have zero params.
                 token_t lpar = pop();
@@ -361,16 +378,14 @@ static token_t c_parse_expr_or_type(
             }
             tkn_next(tkn_ctx);
 
-        } else if (*allow_expr && is_operand(1) && is_ast(0, C_AST_EXPRS)) {
-            // Reduce call.
+        } else if (*allow_expr && is_operand(1) && is_ast(0, C_AST_EXPRS)) { // Reduce call.
             *allow_type    = false;
             *allow_ddecl   = false;
             token_t params = pop();
             token_t func   = pop();
             push(ast_from_va(C_AST_EXPR_CALL, 2, func, params));
 
-        } else if (*allow_expr && is_operand(1) && (is_tkn(0, C_TKN_INC) || is_tkn(0, C_TKN_DEC))) {
-            // Reduce suffix.
+        } else if (*allow_expr && is_operand(1) && (is_tkn(0, C_TKN_INC) || is_tkn(0, C_TKN_DEC))) { // Reduce suffix.
             *allow_type  = false;
             *allow_ddecl = false;
             token_t op   = pop();
@@ -379,8 +394,7 @@ static token_t c_parse_expr_or_type(
 
         } else if (*allow_expr && !is_operand(2) && is_operand(0) && stack_len >= 2
                    && is_prefix_oper_tkn(stack[stack_len - 2])
-                   && oper_precedence(stack[stack_len - 2], true) >= oper_precedence(peek, false)) {
-            // Reduce prefix.
+                   && oper_precedence(stack[stack_len - 2], true) >= oper_precedence(peek, false)) { // Reduce prefix.
             *allow_type  = false;
             *allow_ddecl = false;
             token_t val  = pop();
@@ -388,8 +402,8 @@ static token_t c_parse_expr_or_type(
             push(ast_from_va(C_AST_EXPR_PREFIX, 2, op, val));
 
         } else if (*allow_expr && is_operand(2) && is_operand(0) && oper_precedence(stack[stack_len - 2], false) >= 0
-                   && (!can_push || oper_precedence(stack[stack_len - 2], false) >= oper_precedence(peek, false))) {
-            // Reduce infix.
+                   && (!can_push || oper_precedence(stack[stack_len - 2], false) >= oper_precedence(peek, false)
+                   )) { // Reduce infix.
             *allow_type  = false;
             *allow_ddecl = false;
             token_t rhs  = pop();
@@ -398,8 +412,7 @@ static token_t c_parse_expr_or_type(
             push(ast_from_va(C_AST_EXPR_INFIX, 3, op, lhs, rhs));
 
         } else if ((*allow_ddecl || *allow_type) && (is_tkn(1, C_TKN_MUL) || is_ast(1, C_AST_TYPE_PTR_QUAL))
-                   && is_type_qualifier(stack[stack_len - 1])) {
-            // Reduce qualified pointer.
+                   && is_type_qualifier(stack[stack_len - 1])) { // Reduce qualified pointer.
             *allow_expr  = false;
             token_t qual = pop();
             if (stack[stack_len - 1].type == TOKENTYPE_OTHER) {
@@ -413,32 +426,42 @@ static token_t c_parse_expr_or_type(
             }
 
         } else if (*allow_type && stack_len >= 2 && is_spec_qual_list_tkn(stack[stack_len - 2])
-                   && is_spec_qual_list_tkn(stack[stack_len - 1])) {
-            // Reduce specifier/qualifier list.
+                   && is_spec_qual_list_tkn(stack[stack_len - 1])) { // Reduce specifier/qualifier list.
             *allow_expr  = false;
             token_t tkn1 = pop();
             token_t tkn0 = pop();
             push(ast_from_va(C_AST_SPEC_QUAL_LIST, 2, tkn0, tkn1));
 
-        } else if (*allow_type && is_ast(1, C_AST_SPEC_QUAL_LIST) && is_spec_qual_list_tkn(stack[stack_len - 1])) {
-            // Reduce specifier/qualifier list.
+        } else if (*allow_type && is_ast(1, C_AST_SPEC_QUAL_LIST)
+                   && is_spec_qual_list_tkn(stack[stack_len - 1])) { // Reduce specifier/qualifier list.
             *allow_expr = false;
             ast_append_param(stack + stack_len - 2, pop());
 
-        } else if (can_push) {
-            // Push next token.
-            push(tkn_next(tkn_ctx));
+        } else if (can_push) { // Push next token.
+            token_t next = tkn_next(tkn_ctx);
+            push(next);
+            if (!*allow_ddecl && !*allow_type) {
+                continue;
+            }
+            if (next.type == TOKENTYPE_ICONST || next.type == TOKENTYPE_CCONST || next.type == TOKENTYPE_SCONST) {
+                *allow_ddecl = false;
+                *allow_type  = false;
+            } else if (next.type == TOKENTYPE_OTHER && next.subtype != C_TKN_MUL && next.subtype != C_TKN_LBRAC
+                       && next.subtype != C_TKN_LPAR) {
+                *allow_ddecl = false;
+                *allow_type  = false;
+            } else if (next.type == TOKENTYPE_IDENT) {
+                *allow_ddecl = false;
+            }
 
         } else if ((*allow_ddecl || *allow_type) && (is_tkn(1, C_TKN_MUL) || is_ast(1, C_AST_TYPE_PTR_QUAL))
-                   && (is_ast(0, C_AST_TYPE_PTR_TO) || is_ast(0, C_AST_EXPR_INDEX))) {
-            // Reduce ptr type.
+                   && (is_ast(0, C_AST_TYPE_PTR_TO) || is_ast(0, C_AST_EXPR_INDEX))) { // Reduce ptr type.
             *allow_expr  = false;
             token_t type = pop();
             token_t ptr  = pop();
             push(ast_from_va(C_AST_TYPE_PTR_TO, 2, ptr, type));
 
-        } else if ((*allow_ddecl || *allow_type) && is_tkn(0, C_TKN_MUL)) {
-            // Reduce inner-most ptr.
+        } else if ((*allow_ddecl || *allow_type) && is_tkn(0, C_TKN_MUL)) { // Reduce inner-most ptr.
             *allow_expr = false;
             token_t tmp = pop();
             push(ast_from_va(C_AST_TYPE_PTR_TO, 1, tmp));
@@ -446,14 +469,12 @@ static token_t c_parse_expr_or_type(
 
         } else if (*allow_type && stack_len == 2
                    && (is_ast(1, C_AST_SPEC_QUAL_LIST) || is_spec_qual_list_tkn(stack[stack_len - 2]))
-                   && (is_ast(0, C_AST_TYPE_PTR_TO) || is_ast(0, C_AST_EXPR_INDEX))) {
-            // Reduce type name.
+                   && (is_ast(0, C_AST_TYPE_PTR_TO) || is_ast(0, C_AST_EXPR_INDEX))) { // Reduce type name.
             token_t ptrs = pop();
             token_t spec = pop();
             push(ast_from_va(C_AST_TYPE_NAME, 2, spec, ptrs));
 
-        } else {
-            // Can't reduce anything.
+        } else { // Can't reduce anything.
             break;
         }
     }
@@ -484,6 +505,7 @@ static token_t c_parse_exprs_or_type(
     size_t   exprs_cap = 1;
     token_t *exprs     = strong_malloc(exprs_cap * sizeof(token_t));
     *exprs             = c_parse_expr_or_type(tkn_ctx, allow_expr, allow_type, allow_ddecl);
+    bool is_garbage    = exprs->type == TOKENTYPE_AST && exprs->subtype == C_AST_GARBAGE;
 
     // If this is unambiguously a type, don't bother trying to parse multiple exprs.
     token_t tkn = tkn_peek(tkn_ctx);
@@ -498,12 +520,15 @@ static token_t c_parse_exprs_or_type(
     while (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_COMMA) {
         tkn_next(tkn_ctx);
         token_t expr = c_parse_expr(tkn_ctx);
+        if (expr.type == TOKENTYPE_AST && expr.subtype == C_AST_GARBAGE) {
+            is_garbage = true;
+        }
         array_lencap_insert_strong(&exprs, sizeof(token_t), &exprs_len, &exprs_cap, &expr, exprs_len);
         tkn = tkn_peek(tkn_ctx);
     }
 
     // When the next token is not a comma, there are no more expressions to parse.
-    return ast_from(C_AST_EXPRS, exprs_len, exprs);
+    return ast_from(is_garbage ? C_AST_GARBAGE : C_AST_EXPRS, exprs_len, exprs);
 }
 
 // Parse a type specifier/qualifier list.

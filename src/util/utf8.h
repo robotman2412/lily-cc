@@ -12,19 +12,22 @@
 
 /// Get the next UTF-8 character from a string.
 /// @param str UTF-8 string to read
+/// @param size Size in bytes
 /// @param pos Current byte offset in the string
 /// @return Character code point or -1 if end of string
-int utf8_next(char const *str, size_t *pos);
+int utf8_next(char const *str, size_t size, size_t *pos);
 
 /// Go back through a UTF-8 string.
 /// @param str UTF-8 string to read
+/// @param size Size in bytes
 /// @param pos Current byte offset in the string
-void utf8_prev(char const *str, size_t *pos);
+void utf8_prev(char const *str, size_t size, size_t *pos);
 
 /// Count how many UTF-8 characters are in a string.
 /// @param str UTF-8 string to read
+/// @param size Size in bytes
 /// @return Length in UTF-8 characters
-size_t utf8_strlen(char const *str);
+size_t utf8_strlen(char const *str, size_t size);
 
 /// UTF-8 encode a single character.
 /// Does not write anything if the buffer is too small or if `val` is not encodeable in UTF-8.

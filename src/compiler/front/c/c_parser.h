@@ -32,15 +32,21 @@ typedef enum {
     // A function invocation or cast (e.g. `identifier(exprs)`, `(typename) expr` or `(exprs)(exprs)`).
     // Args: Function/type, args.
     C_AST_EXPR_CALL,
-    // Type qualifier node (e.g. the `const` in `const int` or `void *const`).
-    // Args: Thing to qualify, qualifier token.
-    C_AST_TYPE_QUAL,
+    // Type pointer with qualifier node (e.g. the `*const` in `int *const`).
+    // Args: List of qualifier tokens.
+    C_AST_TYPE_PTR_QUAL,
     // Type pointer node (e.g. the `*` in `int *[2]` or `int (*)[2]`).
-    // Args: Type that the pointer points to.
-    C_AST_TYPE_PTR,
-    // Type name node (e.g. `typedefname_t` or `int *[2][3]`).
+    // Args: Pointer node/token, type that the pointer points to.
+    C_AST_TYPE_PTR_TO,
+    // Struct/union/enum name/definition/declaration node.
+    // Args: Keyword, name and/or definition.
+    C_AST_STRUCT,
+    // Type name node (e.g. `mytype_t` or `int *[2][3]`).
     // Args: Type specifier/qualifier list, pointer/index node.
     C_AST_TYPE_NAME,
+    // Type specifier/qualifier list (e.g. `const int` or `extern size_t`).
+    // Args: List of type specifier and/or qualifier tokens.
+    C_AST_SPEC_QUAL_LIST,
 } c_asttype_t;
 
 
@@ -57,18 +63,18 @@ token_t c_parse(tokenizer_t *tkn_ctx);
 token_t c_parse_exprs(tokenizer_t *tkn_ctx);
 // Parse a C expression.
 token_t c_parse_expr(tokenizer_t *tkn_ctx);
-// Try to parse a C statement.
-bool    c_parse_stmt(tokenizer_t *tkn_ctx, token_t *tkn_out);
-// Try to parse a C variable declaration.
-bool    c_parse_vardecl(tokenizer_t *tkn_ctx, token_t *tkn_out);
-// Try to parse a C if statement.
-bool    c_parse_if_stmt(tokenizer_t *tkn_ctx, token_t *tkn_out);
-// Try to parse a C for loop.
-bool    c_parse_for_loop(tokenizer_t *tkn_ctx, token_t *tkn_out);
-// Try to parse a C while loop.
-bool    c_parse_while_loop(tokenizer_t *tkn_ctx, token_t *tkn_out);
+// Parse a type name.
+token_t c_parse_type_name(tokenizer_t *tkn_ctx);
+// Parse a type specifier/qualifier list.
+token_t c_parse_spec_qual_list(tokenizer_t *tkn_ctx);
+// Parse a struct or union specifier/definition.
+token_t c_parse_struct_spec(tokenizer_t *tkn_ctx);
+// Parse an enum specifier/definition.
+token_t c_parse_enum_spec(tokenizer_t *tkn_ctx);
 
 #ifndef NDEBUG
 // Print a token.
 void c_tkn_debug_print(token_t token);
+// Build a test case that asserts an exact value for a token.
+void c_tkn_debug_testcase(token_t token);
 #endif

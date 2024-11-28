@@ -16,7 +16,12 @@ static bool run_testcase(testcase_t *testcase) {
     char const *res = testcase->function();
     printf(" %s\033[0m\n", !res ? "\033[32mOK" : "\033[31mFAILED");
     if (res && res != (void *)-1) {
-        printf("    %s\n", res);
+        if (res[0] == 0xff) {
+            printf("    %s\n", res + 1);
+        } else {
+            printf("    %s\n", res);
+            free(res);
+        }
     }
     return !res;
 }

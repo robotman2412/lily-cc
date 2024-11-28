@@ -1,6 +1,9 @@
 
 #include "tokenizer.h"
 
+#include "char_repr.h"
+#include "strong_malloc.h"
+
 #include <inttypes.h>
 #include <stdlib.h>
 
@@ -82,10 +85,14 @@ bool is_hex_char(int c) {
 }
 
 
+
+#ifndef NDEBUG
 static void pindent(int indent) {
-    while (indent-- > 0) fputs("  ", stdout);
+    while (indent-- > 0) fputs("    ", stdout);
 }
 
+
+// Print a token.
 static void tkn_debug_print_r(
     token_t token, char const *const keyw[], char const *const ast[], char const *const tkn[], int indent
 ) {
@@ -101,26 +108,26 @@ static void tkn_debug_print_r(
             printf("child %zu/%zu:\n", i + 1, token.params_len);
             tkn_debug_print_r(token.params[i], keyw, ast, tkn, indent + 1);
         }
-    } else {
-        if (token.type == TOKENTYPE_OTHER) {
-            pindent(indent);
-            printf("subtype:    %s\n", tkn[token.subtype]);
-        } else if (token.type == TOKENTYPE_KEYWORD) {
-            pindent(indent);
-            printf("keyword:    %s\n", keyw[token.subtype]);
-        } else if (token.type == TOKENTYPE_SCONST) {
-            pindent(indent);
-            printf("strval:     %s\n", token.strval);
-        } else if (token.type == TOKENTYPE_IDENT) {
-            pindent(indent);
-            printf("ident:      %s\n", token.strval);
-        } else if (token.type == TOKENTYPE_ICONST || token.type == TOKENTYPE_CCONST) {
-            pindent(indent);
-            printf("ival:       %" PRId64 "\n", token.ival);
-            if (token.type == TOKENTYPE_CCONST && token.ival >= 0x20 && token.ival <= 0x7e) {
-                printf("character:  %c\n", (char)token.ival);
-            }
-        }
+    } else if (token.type == TOKENTYPE_OTHER) {
+        pindent(indent);
+        printf("subtype:    %s\n", tkn[token.subtype]);
+    } else if (token.type == TOKENTYPE_KEYWORD) {
+        pindent(indent);
+        printf("keyword:    %s\n", keyw[token.subtype]);
+    } else if (token.type == TOKENTYPE_SCONST) {
+        pindent(indent);
+        printf("strval:     %s\n", token.strval);
+    } else if (token.type == TOKENTYPE_IDENT) {
+        pindent(indent);
+        printf("ident:      %s\n", token.strval);
+    } else if (token.type == TOKENTYPE_ICONST) {
+        pindent(indent);
+        printf("ival:       %" PRId64 "\n", token.ival);
+    } else if (token.type == TOKENTYPE_CCONST) {
+        pindent(indent);
+        printf("character:  ");
+        print_char_repr(token.ival, stdout);
+        printf("\n");
     }
 }
 
@@ -129,3 +136,68 @@ void tkn_debug_print(token_t token, char const *const keyw[], char const *const 
     printf("Token:\n");
     tkn_debug_print_r(token, keyw, ast, tkn, 1);
 }
+
+
+// Build a test case that asserts an exact value for a token.
+void tkn_debug_testcase_r(
+    token_t           token,
+    char const *const keyw[],
+    char const *const ast[],
+    char const *const tkn[],
+    char const       *access,
+    int               indent
+) {
+    pindent(indent);
+    printf("EXPECT_INT(%s.pos.line, %d);\n", access, token.pos.line);
+    pindent(indent);
+    printf("EXPECT_INT(%s.pos.col, %d);\n", access, token.pos.col);
+    pindent(indent);
+    printf("EXPECT_INT(%s.pos.len, %d);\n", access, token.pos.len);
+    pindent(indent);
+    printf("EXPECT_INT(%s.type, %s);\n", access, tokentype_names[token.type]);
+    if (token.type == TOKENTYPE_AST) {
+        pindent(indent);
+        printf("EXPECT_INT(%s.subtype, %s);\n", access, ast[token.subtype]);
+        pindent(indent);
+        printf("EXPECT_INT(%s.params_len, %zu);\n", access, token.params_len);
+        if (token.params_len) {
+            pindent(indent);
+            printf("{");
+            for (size_t i = 0; i < token.params_len; i++) {
+                printf("\n");
+                pindent(indent + 1);
+                printf("token_t %s_%zu = %s.params[%zu];\n", access, i, access, i);
+                char const fmt[] = "%s_%zu";
+                size_t     len   = snprintf(NULL, 0, fmt, access, i);
+                char      *mem   = strong_malloc(len + 1);
+                snprintf(mem, len + 1, fmt, access, i);
+                tkn_debug_testcase_r(token.params[i], keyw, ast, tkn, mem, indent + 1);
+                free(mem);
+            }
+            pindent(indent);
+            printf("}\n");
+        }
+    } else if (token.type == TOKENTYPE_OTHER || token.type == TOKENTYPE_KEYWORD) {
+        pindent(indent);
+        printf("EXPECT_INT(%s.subtype, %s);\n", access, keyw[token.subtype]);
+    } else if (token.type == TOKENTYPE_SCONST || token.type == TOKENTYPE_IDENT) {
+        pindent(indent);
+        printf("EXPECT_STR_L(%s.strval, %s.strval_len, \"", access, access);
+        print_cstr_repr(token.strval, token.strval_len, stdout);
+        printf("\", %zu);\n", token.strval_len);
+    } else if (token.type == TOKENTYPE_ICONST) {
+        pindent(indent);
+        printf("EXPECT_INT(%s.ival, %" PRId64 ");\n", access, token.ival);
+    } else if (token.type == TOKENTYPE_CCONST) {
+        pindent(indent);
+        printf("EXPECT_INT(%s.ival, '", access);
+        print_char_repr(token.ival, stdout);
+        printf("');\n");
+    }
+}
+
+// Build a test case that asserts an exact value for a token.
+void tkn_debug_testcase(token_t token, char const *const keyw[], char const *const ast[], char const *const tkn[]) {
+    tkn_debug_testcase_r(token, keyw, ast, tkn, "token", 0);
+}
+#endif

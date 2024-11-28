@@ -5,6 +5,7 @@
 #include "c_parser.h"
 
 #include "arrays.h"
+#include "char_repr.h"
 #include "strong_malloc.h"
 
 
@@ -23,16 +24,18 @@ static token_t c_parse_exprs_or_type(
 #ifndef NDEBUG
 // Get enum name of `c_asttype_t` value.
 char const *const c_asttype_name[] = {
-    [C_AST_GARBAGE]     = "C_AST_GARBAGE",
-    [C_AST_EXPRS]       = "C_AST_EXPRS",
-    [C_AST_EXPR_INFIX]  = "C_AST_EXPR_INFIX",
-    [C_AST_EXPR_PREFIX] = "C_AST_EXPR_PREFIX",
-    [C_AST_EXPR_SUFFIX] = "C_AST_EXPR_SUFFIX",
-    [C_AST_EXPR_INDEX]  = "C_AST_EXPR_INDEX",
-    [C_AST_EXPR_CALL]   = "C_AST_EXPR_CALL",
-    [C_AST_TYPE_QUAL]   = "C_AST_TYPE_QUAL",
-    [C_AST_TYPE_PTR]    = "C_AST_TYPE_PTR",
-    [C_AST_TYPE_NAME]   = "C_AST_TYPE_NAME",
+    [C_AST_GARBAGE]        = "C_AST_GARBAGE",
+    [C_AST_EXPRS]          = "C_AST_EXPRS",
+    [C_AST_EXPR_INFIX]     = "C_AST_EXPR_INFIX",
+    [C_AST_EXPR_PREFIX]    = "C_AST_EXPR_PREFIX",
+    [C_AST_EXPR_SUFFIX]    = "C_AST_EXPR_SUFFIX",
+    [C_AST_EXPR_INDEX]     = "C_AST_EXPR_INDEX",
+    [C_AST_EXPR_CALL]      = "C_AST_EXPR_CALL",
+    [C_AST_TYPE_PTR_QUAL]  = "C_AST_TYPE_PTR_QUAL",
+    [C_AST_TYPE_PTR_TO]    = "C_AST_TYPE_PTR_TO",
+    [C_AST_STRUCT]         = "C_AST_STRUCT",
+    [C_AST_TYPE_NAME]      = "C_AST_TYPE_NAME",
+    [C_AST_SPEC_QUAL_LIST] = "C_AST_SPEC_QUAL_LIST",
 };
 #endif
 
@@ -240,13 +243,22 @@ token_t c_parse_expr(tokenizer_t *tkn_ctx) {
     return c_parse_expr_or_type(tkn_ctx, &allow_expr, &allow_type, &allow_ddecl);
 }
 
+// Parse a type name.
+token_t c_parse_type_name(tokenizer_t *tkn_ctx) {
+    bool allow_expr  = false;
+    bool allow_type  = true;
+    bool allow_ddecl = false;
+    return c_parse_expr_or_type(tkn_ctx, &allow_expr, &allow_type, &allow_ddecl);
+}
+
 // Parse a C expression or type.
 static token_t c_parse_expr_or_type(
     tokenizer_t *tkn_ctx, bool *restrict allow_expr, bool *restrict allow_type, bool *restrict allow_ddecl
 ) {
     // Assert that it starts with a token valid for the beginning of an expr.
-    if (!is_first_expr_tkn(tkn_peek(tkn_ctx))) {
-        cctx_diagnostic(tkn_ctx->cctx, tkn_peek(tkn_ctx).pos, DIAG_ERR, "Expected expression");
+    token_t peek = tkn_peek(tkn_ctx);
+    if (!is_first_expr_tkn(peek) && (!*allow_expr || !is_type_qualifier(peek) && !is_type_specifier(peek))) {
+        cctx_diagnostic(tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected expression");
         return ast_from_va(C_AST_GARBAGE, 1, tkn_next(tkn_ctx));
     }
 
@@ -281,8 +293,9 @@ static token_t c_parse_expr_or_type(
     // Start by pushing the first token onto the stack.
     push(tkn_next(tkn_ctx));
     while (1) {
-        token_t peek     = tkn_peek(tkn_ctx);
-        bool    can_push = is_pushable_expr_tkn(peek);
+        peek          = tkn_peek(tkn_ctx);
+        bool can_push = is_pushable_expr_tkn(peek)
+                        || (*allow_type || *allow_ddecl) && (is_type_specifier(peek) || is_type_qualifier(peek));
 
         if (is_tkn(0, C_TKN_LBRAC)) {
             // Recursively parse indexing.
@@ -372,26 +385,45 @@ static token_t c_parse_expr_or_type(
             token_t lhs  = pop();
             push(ast_from_va(C_AST_EXPR_INFIX, 3, op, lhs, rhs));
 
+        } else if ((*allow_ddecl || *allow_type) && (is_tkn(1, C_TKN_MUL) || is_ast(1, C_AST_TYPE_PTR_QUAL))
+                   && is_type_qualifier(stack[stack_len - 1])) {
+            // Reduce qualified pointer.
+            *allow_expr  = false;
+            token_t qual = pop();
+            if (stack[stack_len - 1].type == TOKENTYPE_OTHER) {
+                // There is one asterisk, create new list.
+                token_t ptr = pop();
+                push(tkn_with_pos(ast_from_va(C_AST_TYPE_PTR_QUAL, 1, qual), pos_between(ptr.pos, qual.pos)));
+
+            } else {
+                // Add item to existing list.
+#define ptr stack[stack_len - 1]
+                ptr.params_len++;
+                ptr.params                     = strong_realloc(ptr.params, sizeof(token_t) * ptr.params_len);
+                ptr.params[ptr.params_len - 1] = qual;
+#undef ptr
+            }
+
         } else if (can_push) {
             // Push next token.
             push(tkn_next(tkn_ctx));
 
-        } else if ((*allow_ddecl || *allow_type) && is_tkn(1, C_TKN_MUL)
-                   && (is_ast(0, C_AST_TYPE_PTR) || is_ast(0, C_AST_EXPR_INDEX))) {
+        } else if ((*allow_ddecl || *allow_type) && (is_tkn(1, C_TKN_MUL) || is_ast(1, C_AST_TYPE_PTR_QUAL))
+                   && (is_ast(0, C_AST_TYPE_PTR_TO) || is_ast(0, C_AST_EXPR_INDEX))) {
             // Reduce ptr type.
             *allow_expr  = false;
             token_t type = pop();
             token_t ptr  = pop();
-            push(tkn_with_pos(ast_from_va(C_AST_TYPE_PTR, 1, type), pos_between(ptr.pos, type.pos)));
+            push(ast_from_va(C_AST_TYPE_PTR_TO, 2, ptr, type));
 
         } else if ((*allow_ddecl || *allow_type) && is_tkn(0, C_TKN_MUL)) {
             // Reduce inner-most ptr.
             *allow_expr = false;
             token_t tmp = pop();
-            push(tkn_with_pos(ast_from_va(C_AST_TYPE_PTR, 0), tmp.pos));
+            push(ast_from_va(C_AST_TYPE_PTR_TO, 1, tmp));
             tkn_delete(tmp);
 
-        } else if (*allow_type && stack_len == 2 && (is_ast(0, C_AST_TYPE_PTR) || is_ast(0, C_AST_EXPR_INDEX))) {
+        } else if (*allow_type && stack_len == 2 && (is_ast(0, C_AST_TYPE_PTR_TO) || is_ast(0, C_AST_EXPR_INDEX))) {
             // Reduce type name.
             token_t ptrs = pop();
             token_t spec = pop();
@@ -451,23 +483,45 @@ static token_t c_parse_exprs_or_type(
     return ast_from(C_AST_EXPRS, exprs_len, exprs);
 }
 
-// Try to parse a C statement.
-bool c_parse_stmt(tokenizer_t *tkn_ctx, token_t *tkn_out);
+// Parse a type specifier/qualifier list.
+token_t c_parse_spec_qual_list(tokenizer_t *tkn_ctx) {
+    size_t   len  = 0;
+    size_t   cap  = 0;
+    token_t *list = NULL;
 
-// Try to parse a C variable declaration.
-bool c_parse_vardecl(tokenizer_t *tkn_ctx, token_t *tkn_out);
+    token_t peek = tkn_peek(tkn_ctx);
+    while (1) {
+        if (is_type_specifier(peek) || is_type_qualifier(peek) || peek.type == TOKENTYPE_IDENT) {
+            // Token added verbatim.
+            array_lencap_insert_strong(&list, sizeof(token_t), &len, &cap, &peek, len - 1);
+            tkn_next(tkn_ctx);
 
-// Try to parse a C if statement.
-bool c_parse_if_stmt(tokenizer_t *tkn_ctx, token_t *tkn_out);
+        } else if (peek.type == TOKENTYPE_KEYWORD && (peek.subtype == C_KEYW_struct || peek.subtype == C_KEYW_union)) {
+            // TODO: Parse a struct/union specifier.
+            break;
 
-// Try to parse a C for loop.
-bool c_parse_for_loop(tokenizer_t *tkn_ctx, token_t *tkn_out);
+        } else if (peek.type == TOKENTYPE_KEYWORD && (peek.subtype == C_KEYW_enum)) {
+            // TODO: Parse an enum specifier.
+            break;
 
-// Try to parse a C while loop.
-bool c_parse_while_loop(tokenizer_t *tkn_ctx, token_t *tkn_out);
+        } else {
+            // Not valid in a specifier/qualifier list.
+            break;
+        }
+    }
+
+    return ast_from(C_AST_SPEC_QUAL_LIST, len, list);
+}
 
 
+#ifndef NDEBUG
 // Print a token.
 void c_tkn_debug_print(token_t token) {
     tkn_debug_print(token, c_keyw_name, c_asttype_name, c_tokentype_name);
 }
+
+// Build a test case that asserts an exact value for a token.
+void c_tkn_debug_testcase(token_t token) {
+    tkn_debug_testcase(token, c_keyw_name, c_asttype_name, c_tokentype_name);
+}
+#endif

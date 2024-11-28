@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "c_tokenizer.h"
-
 #include "testcase.h"
 
 
@@ -29,72 +28,67 @@ static char const *c_tkn_basic() {
     cctx_t    *cctx = cctx_create();
     srcfile_t *src  = srcfile_create(cctx, "<c_tkn_basic>", data, sizeof(data) - 1);
 
-    tokenizer_t tkn_ctx = {
-        .file = src,
-        .pos = {
-            .srcfile = src,
-        },
-    };
-    token_t tkn;
+    tokenizer_t *tkn_ctx = c_tkn_create(src, C_STD_max);
+    token_t      tkn;
 
 
-    tkn = c_tkn_next(&tkn_ctx); // for
+    tkn = c_tkn_next(tkn_ctx); // for
     EXPECT_INT(tkn.pos.line, 0);
     EXPECT_INT(tkn.pos.col, 0);
     EXPECT_INT(tkn.pos.len, 3);
     EXPECT_INT(tkn.type, TOKENTYPE_KEYWORD);
     EXPECT_INT(tkn.subtype, C_KEYW_for);
 
-    tkn = c_tkn_next(&tkn_ctx); // int
+    tkn = c_tkn_next(tkn_ctx); // int
     EXPECT_INT(tkn.pos.line, 0);
     EXPECT_INT(tkn.pos.col, 4);
     EXPECT_INT(tkn.pos.len, 3);
     EXPECT_INT(tkn.type, TOKENTYPE_KEYWORD);
     EXPECT_INT(tkn.subtype, C_KEYW_int);
 
-    tkn = c_tkn_next(&tkn_ctx); // 0x1000
+    tkn = c_tkn_next(tkn_ctx); // 0x1000
     EXPECT_INT(tkn.pos.line, 1);
     EXPECT_INT(tkn.pos.col, 0);
     EXPECT_INT(tkn.pos.len, 6);
     EXPECT_INT(tkn.type, TOKENTYPE_ICONST);
     EXPECT_INT(tkn.ival, 0x1000);
 
-    tkn = c_tkn_next(&tkn_ctx); // ++
+    tkn = c_tkn_next(tkn_ctx); // ++
     EXPECT_INT(tkn.pos.line, 2);
     EXPECT_INT(tkn.pos.col, 0);
     EXPECT_INT(tkn.pos.len, 2);
     EXPECT_INT(tkn.type, TOKENTYPE_OTHER);
     EXPECT_INT(tkn.subtype, C_TKN_INC);
 
-    tkn = c_tkn_next(&tkn_ctx); // --
+    tkn = c_tkn_next(tkn_ctx); // --
     EXPECT_INT(tkn.pos.line, 2);
     EXPECT_INT(tkn.pos.col, 3);
     EXPECT_INT(tkn.pos.len, 2);
     EXPECT_INT(tkn.type, TOKENTYPE_OTHER);
     EXPECT_INT(tkn.subtype, C_TKN_DEC);
 
-    tkn = c_tkn_next(&tkn_ctx); // an_identifier
+    tkn = c_tkn_next(tkn_ctx); // an_identifier
     EXPECT_INT(tkn.pos.line, 7);
     EXPECT_INT(tkn.pos.col, 0);
     EXPECT_INT(tkn.pos.len, 13);
     EXPECT_INT(tkn.type, TOKENTYPE_IDENT);
     EXPECT_STR(tkn.strval, "an_identifier");
 
-    tkn = c_tkn_next(&tkn_ctx); // forauxiliary_identifier
+    tkn = c_tkn_next(tkn_ctx); // forauxiliary_identifier
     EXPECT_INT(tkn.pos.line, 7);
     EXPECT_INT(tkn.pos.col, 14);
     EXPECT_INT(tkn.pos.len, 23);
     EXPECT_INT(tkn.type, TOKENTYPE_IDENT);
     EXPECT_STR(tkn.strval, "forauxiliary_identifier");
 
-    tkn = c_tkn_next(&tkn_ctx); // "\x00\000\x0\x0000\770\377\00\0"
+    tkn = c_tkn_next(tkn_ctx); // "\x00\000\x0\x0000\770\377\00\0"
     EXPECT_INT(tkn.pos.line, 8);
     EXPECT_INT(tkn.pos.col, 0);
     EXPECT_INT(tkn.pos.len, 32);
     EXPECT_INT(tkn.type, TOKENTYPE_SCONST);
-    EXPECT_STR(tkn.strval, "\x00\000\x0\x0000\0770\377\00\0");
+    EXPECT_STR_L(tkn.strval, tkn.strval_len, "\x00\000\x0\x0000\0770\377\00\0", 9);
 
-    tkn = c_tkn_next(&tkn_ctx); // 'A'
+    tkn = c_tkn_next(tkn_ctx); // 'A'
     EXPECT_INT(tkn.pos.line, 9);
     EXPECT_INT(tkn.pos.col, 0);
     EXPECT_INT(tkn.pos.len, 3);
@@ -102,7 +96,7 @@ static char const *c_tkn_basic() {
     EXPECT_CHAR(tkn.ival, 'A');
 
 
-    tkn = c_tkn_next(&tkn_ctx); // "\'\"\?\\\a\b\f\n\r\t\v"
+    tkn = c_tkn_next(tkn_ctx); // "\'\"\?\\\a\b\f\n\r\t\v"
     EXPECT_INT(tkn.pos.line, 10);
     EXPECT_INT(tkn.pos.col, 0);
     EXPECT_INT(tkn.pos.len, 24);
@@ -138,16 +132,10 @@ static char const *c_tkn_errors() {
     cctx_t    *cctx = cctx_create();
     srcfile_t *src  = srcfile_create(cctx, "<c_tkn_errors>", data, sizeof(data) - 1);
 
-    tokenizer_t tkn_ctx = {
-        .cctx = cctx,
-        .file = src,
-        .pos = {
-            .srcfile = src,
-        },
-    };
-    token_t tkn;
+    tokenizer_t *tkn_ctx = c_tkn_create(src, C_STD_max);
+    token_t      tkn;
     do {
-        tkn = c_tkn_next(&tkn_ctx);
+        tkn = c_tkn_next(tkn_ctx);
     } while (tkn.type != TOKENTYPE_EOF);
 
     // '

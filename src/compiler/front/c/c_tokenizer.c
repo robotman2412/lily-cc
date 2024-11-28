@@ -72,6 +72,7 @@ token_t other_tkn(c_tokentype_t type, pos_t from, pos_t to) {
         .type       = TOKENTYPE_OTHER,
         .subtype    = type,
         .strval     = NULL,
+        .strval_len = 0,
         .params_len = 0,
         .params     = NULL,
     });
@@ -154,6 +155,7 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
             .ival       = 0,
             .subtype    = 0,
             .strval     = NULL,
+            .strval_len = 0,
             .params_len = 0,
             .params     = NULL,
         };
@@ -166,6 +168,7 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         .ival       = val,
         .subtype    = 0,
         .strval     = NULL,
+        .strval_len = 0,
         .params_len = 0,
         .params     = NULL,
     };
@@ -218,6 +221,7 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
             .type       = TOKENTYPE_KEYWORD,
             .subtype    = res.index,
             .strval     = NULL,
+            .strval_len = 0,
             .params_len = 0,
             .params     = NULL,
         };
@@ -227,6 +231,7 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
         .pos        = pos_between(start_pos, pos0),
         .type       = TOKENTYPE_IDENT,
         .strval     = ptr,
+        .strval_len = len,
         .subtype    = 0,
         .params_len = 0,
         .params     = NULL,
@@ -269,7 +274,7 @@ static int c_str_octal(tokenizer_t *ctx, pos_t start_pos, int first, int max_w) 
     int   value = first - '0';
     pos_t pos0  = ctx->pos;
     pos_t pos1;
-    for (int i = 0; i < max_w; i++) {
+    for (int i = 1; i < max_w; i++) {
         pos1  = pos0;
         int c = srcfile_getc(ctx->file, &pos1);
         if (c < '0' || c > '7') {
@@ -360,6 +365,7 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
             .type       = TOKENTYPE_CCONST,
             .ival       = val,
             .strval     = NULL,
+            .strval_len = 0,
             .params_len = 0,
             .params     = NULL,
         };
@@ -369,6 +375,7 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
             .pos        = pos_between(start_pos, ctx->pos),
             .type       = TOKENTYPE_SCONST,
             .strval     = ptr,
+            .strval_len = len - 1,
             .ival       = 0,
             .params_len = 0,
             .params     = NULL,

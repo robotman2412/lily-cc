@@ -154,12 +154,12 @@ LILY_TEST_CASE(c_expr_deref)
 
 
 char const *c_expr_cast() {
-    char const   source[] = "(ident0 *(*)[2]) (ident1)";
+    char const   source[] = "(ident0 *(*const volatile)[2]) (ident1)";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_expr_cast>", source, sizeof(source) - 1);
     tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
 
-    token_t expr = c_parse_expr(tctx);
+    token_t token = c_parse_expr(tctx);
 
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
@@ -168,12 +168,124 @@ char const *c_expr_cast() {
             print_diagnostic(diag);
             diag = (diagnostic_t const *)diag->node.next;
         }
-        c_tkn_debug_print(expr);
+        c_tkn_debug_print(token);
         return TEST_FAIL;
     }
 
-    printf("\n");
-    c_tkn_debug_print(expr);
+#pragma region generated_test
+    EXPECT_INT(token.pos.line, 0);
+    EXPECT_INT(token.pos.col, 1);
+    EXPECT_INT(token.pos.len, 31);
+    EXPECT_INT(token.type, TOKENTYPE_AST);
+    EXPECT_INT(token.subtype, C_AST_EXPR_CALL);
+    EXPECT_INT(token.params_len, 2);
+    {
+        token_t token_0 = token.params[0];
+        EXPECT_INT(token_0.pos.line, 0);
+        EXPECT_INT(token_0.pos.col, 1);
+        EXPECT_INT(token_0.pos.len, 0);
+        EXPECT_INT(token_0.type, TOKENTYPE_AST);
+        EXPECT_INT(token_0.subtype, C_AST_EXPRS);
+        EXPECT_INT(token_0.params_len, 1);
+        {
+            token_t token_0_0 = token_0.params[0];
+            EXPECT_INT(token_0_0.pos.line, 0);
+            EXPECT_INT(token_0_0.pos.col, 1);
+            EXPECT_INT(token_0_0.pos.len, 7);
+            EXPECT_INT(token_0_0.type, TOKENTYPE_AST);
+            EXPECT_INT(token_0_0.subtype, C_AST_TYPE_NAME);
+            EXPECT_INT(token_0_0.params_len, 2);
+            {
+                token_t token_0_0_0 = token_0_0.params[0];
+                EXPECT_INT(token_0_0_0.pos.line, 0);
+                EXPECT_INT(token_0_0_0.pos.col, 1);
+                EXPECT_INT(token_0_0_0.pos.len, 6);
+                EXPECT_INT(token_0_0_0.type, TOKENTYPE_IDENT);
+                EXPECT_STR_L(token_0_0_0.strval, token_0_0_0.strval_len, "ident0", 6);
+
+                token_t token_0_0_1 = token_0_0.params[1];
+                EXPECT_INT(token_0_0_1.pos.line, 0);
+                EXPECT_INT(token_0_0_1.pos.col, 8);
+                EXPECT_INT(token_0_0_1.pos.len, 2);
+                EXPECT_INT(token_0_0_1.type, TOKENTYPE_AST);
+                EXPECT_INT(token_0_0_1.subtype, C_AST_TYPE_PTR_TO);
+                EXPECT_INT(token_0_0_1.params_len, 2);
+                {
+                    token_t token_0_0_1_0 = token_0_0_1.params[0];
+                    EXPECT_INT(token_0_0_1_0.pos.line, 0);
+                    EXPECT_INT(token_0_0_1_0.pos.col, 8);
+                    EXPECT_INT(token_0_0_1_0.pos.len, 1);
+                    EXPECT_INT(token_0_0_1_0.type, TOKENTYPE_OTHER);
+                    EXPECT_INT(token_0_0_1_0.subtype, C_KEYW_bool);
+
+                    token_t token_0_0_1_1 = token_0_0_1.params[1];
+                    EXPECT_INT(token_0_0_1_1.pos.line, 0);
+                    EXPECT_INT(token_0_0_1_1.pos.col, 10);
+                    EXPECT_INT(token_0_0_1_1.pos.len, 17);
+                    EXPECT_INT(token_0_0_1_1.type, TOKENTYPE_AST);
+                    EXPECT_INT(token_0_0_1_1.subtype, C_AST_EXPR_INDEX);
+                    EXPECT_INT(token_0_0_1_1.params_len, 2);
+                    {
+                        token_t token_0_0_1_1_0 = token_0_0_1_1.params[0];
+                        EXPECT_INT(token_0_0_1_1_0.pos.line, 0);
+                        EXPECT_INT(token_0_0_1_1_0.pos.col, 10);
+                        EXPECT_INT(token_0_0_1_1_0.pos.len, 0);
+                        EXPECT_INT(token_0_0_1_1_0.type, TOKENTYPE_AST);
+                        EXPECT_INT(token_0_0_1_1_0.subtype, C_AST_EXPRS);
+                        EXPECT_INT(token_0_0_1_1_0.params_len, 1);
+                        {
+                            token_t token_0_0_1_1_0_0 = token_0_0_1_1_0.params[0];
+                            EXPECT_INT(token_0_0_1_1_0_0.pos.line, 0);
+                            EXPECT_INT(token_0_0_1_1_0_0.pos.col, 10);
+                            EXPECT_INT(token_0_0_1_1_0_0.pos.len, 1);
+                            EXPECT_INT(token_0_0_1_1_0_0.type, TOKENTYPE_AST);
+                            EXPECT_INT(token_0_0_1_1_0_0.subtype, C_AST_TYPE_PTR_QUAL);
+                            EXPECT_INT(token_0_0_1_1_0_0.params_len, 2);
+                            {
+                                token_t token_0_0_1_1_0_0_0 = token_0_0_1_1_0_0.params[0];
+                                EXPECT_INT(token_0_0_1_1_0_0_0.pos.line, 0);
+                                EXPECT_INT(token_0_0_1_1_0_0_0.pos.col, 11);
+                                EXPECT_INT(token_0_0_1_1_0_0_0.pos.len, 5);
+                                EXPECT_INT(token_0_0_1_1_0_0_0.type, TOKENTYPE_KEYWORD);
+                                EXPECT_INT(token_0_0_1_1_0_0_0.subtype, C_KEYW_const);
+
+                                token_t token_0_0_1_1_0_0_1 = token_0_0_1_1_0_0.params[1];
+                                EXPECT_INT(token_0_0_1_1_0_0_1.pos.line, 0);
+                                EXPECT_INT(token_0_0_1_1_0_0_1.pos.col, 17);
+                                EXPECT_INT(token_0_0_1_1_0_0_1.pos.len, 8);
+                                EXPECT_INT(token_0_0_1_1_0_0_1.type, TOKENTYPE_KEYWORD);
+                                EXPECT_INT(token_0_0_1_1_0_0_1.subtype, C_KEYW_volatile);
+                            }
+                        }
+
+                        token_t token_0_0_1_1_1 = token_0_0_1_1.params[1];
+                        EXPECT_INT(token_0_0_1_1_1.pos.line, 0);
+                        EXPECT_INT(token_0_0_1_1_1.pos.col, 27);
+                        EXPECT_INT(token_0_0_1_1_1.pos.len, 1);
+                        EXPECT_INT(token_0_0_1_1_1.type, TOKENTYPE_ICONST);
+                        EXPECT_INT(token_0_0_1_1_1.ival, 2);
+                    }
+                }
+            }
+        }
+
+        token_t token_1 = token.params[1];
+        EXPECT_INT(token_1.pos.line, 0);
+        EXPECT_INT(token_1.pos.col, 32);
+        EXPECT_INT(token_1.pos.len, 0);
+        EXPECT_INT(token_1.type, TOKENTYPE_AST);
+        EXPECT_INT(token_1.subtype, C_AST_EXPRS);
+        EXPECT_INT(token_1.params_len, 1);
+        {
+            token_t token_1_0 = token_1.params[0];
+            EXPECT_INT(token_1_0.pos.line, 0);
+            EXPECT_INT(token_1_0.pos.col, 32);
+            EXPECT_INT(token_1_0.pos.len, 6);
+            EXPECT_INT(token_1_0.type, TOKENTYPE_IDENT);
+            EXPECT_STR_L(token_1_0.strval, token_1_0.strval_len, "ident1", 6);
+        }
+    }
+#pragma endregion generated_test
 
     return TEST_OK;
 }

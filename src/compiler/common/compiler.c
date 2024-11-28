@@ -11,6 +11,22 @@
 
 
 
+#ifndef NDEBUG
+// Enum names of `tokentype_t` values.
+extern char const *const tokentype_names[] = {
+    "TOKENTYPE_KEYWORD",
+    "TOKENTYPE_IDENT",
+    "TOKENTYPE_ICONST",
+    "TOKENTYPE_CCONST",
+    "TOKENTYPE_SCONST",
+    "TOKENTYPE_OTHER",
+    "TOKENTYPE_GARBAGE",
+    "TOKENTYPE_EOL",
+    "TOKENTYPE_EOF",
+    "TOKENTYPE_AST",
+};
+#endif
+
 // Get position from start to end (exclusive).
 pos_t pos_between(pos_t start, pos_t end) {
     start.len = end.off - start.off;

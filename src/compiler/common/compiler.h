@@ -45,6 +45,11 @@ typedef enum {
     TOKENTYPE_AST,
 } tokentype_t;
 
+#ifndef NDEBUG
+// Enum names of `tokentype_t` values.
+extern char const *const tokentype_names[];
+#endif
+
 
 // Source file.
 typedef struct srcfile    srcfile_t;
@@ -138,6 +143,8 @@ struct token {
     int         subtype;
     // Identifier or string constant value.
     char       *strval;
+    // Length of string constant value.
+    size_t      strval_len;
     // Integer constant value.
     uint64_t    ival;
     // Number of parameters for AST node.

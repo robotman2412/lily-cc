@@ -59,4 +59,6 @@ bool is_hex_char(int c);
 #ifndef NDEBUG
 // Print a token.
 void tkn_debug_print(token_t token, char const *const keyw[], char const *const ast[], char const *const tkn[]);
+// Build a test case that asserts an exact value for a token.
+void tkn_debug_testcase(token_t token, char const *const keyw[], char const *const ast[], char const *const tkn[]);
 #endif

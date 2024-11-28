@@ -181,6 +181,13 @@ token_t ast_from_va(int subtype, size_t n_param, ...);
 // Create an AST token with a fixed number of param tokens.
 token_t ast_from(int subtype, size_t n_param, token_t *params);
 
+// Append one parameter to an AST node.
+void ast_append_param(token_t *ast, token_t param);
+// Append one or more parameters to an AST node.
+void ast_append_params_va(token_t *ast, size_t n_param, ...);
+// Append one or more parameters to an AST node.
+void ast_append_params(token_t *ast, size_t n_param, token_t *params);
+
 
 // Set an AST node's strval.
 static inline token_t ast_with_strval(token_t ast, char *strval) {

@@ -221,6 +221,18 @@ static bool is_type_specifier(token_t token) {
     }
 }
 
+// Is this a valid token for a specifier/qualifier list?
+static bool is_spec_qual_list_tkn(token_t token) {
+    if (token.type == TOKENTYPE_IDENT) {
+        return true;
+    } else if (token.type == TOKENTYPE_AST && token.subtype == C_AST_STRUCT) {
+        return true;
+    } else if (token.type != TOKENTYPE_KEYWORD) {
+        return false;
+    }
+    return is_type_specifier(token) || is_type_qualifier(token);
+}
+
 
 
 // Parse a C compilation unit into an AST.
@@ -397,12 +409,21 @@ static token_t c_parse_expr_or_type(
 
             } else {
                 // Add item to existing list.
-#define ptr stack[stack_len - 1]
-                ptr.params_len++;
-                ptr.params                     = strong_realloc(ptr.params, sizeof(token_t) * ptr.params_len);
-                ptr.params[ptr.params_len - 1] = qual;
-#undef ptr
+                ast_append_param(&stack[stack_len - 1], qual);
             }
+
+        } else if (*allow_type && stack_len >= 2 && is_spec_qual_list_tkn(stack[stack_len - 2])
+                   && is_spec_qual_list_tkn(stack[stack_len - 1])) {
+            // Reduce specifier/qualifier list.
+            *allow_expr  = false;
+            token_t tkn1 = pop();
+            token_t tkn0 = pop();
+            push(ast_from_va(C_AST_SPEC_QUAL_LIST, 2, tkn0, tkn1));
+
+        } else if (*allow_type && is_ast(1, C_AST_SPEC_QUAL_LIST) && is_spec_qual_list_tkn(stack[stack_len - 1])) {
+            // Reduce specifier/qualifier list.
+            *allow_expr = false;
+            ast_append_param(stack + stack_len - 2, pop());
 
         } else if (can_push) {
             // Push next token.
@@ -423,7 +444,9 @@ static token_t c_parse_expr_or_type(
             push(ast_from_va(C_AST_TYPE_PTR_TO, 1, tmp));
             tkn_delete(tmp);
 
-        } else if (*allow_type && stack_len == 2 && (is_ast(0, C_AST_TYPE_PTR_TO) || is_ast(0, C_AST_EXPR_INDEX))) {
+        } else if (*allow_type && stack_len == 2
+                   && (is_ast(1, C_AST_SPEC_QUAL_LIST) || is_spec_qual_list_tkn(stack[stack_len - 2]))
+                   && (is_ast(0, C_AST_TYPE_PTR_TO) || is_ast(0, C_AST_EXPR_INDEX))) {
             // Reduce type name.
             token_t ptrs = pop();
             token_t spec = pop();

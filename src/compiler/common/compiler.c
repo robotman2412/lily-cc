@@ -240,3 +240,26 @@ token_t ast_from(int subtype, size_t n_param, token_t *params) {
         .params     = params,
     };
 }
+
+
+// Append one parameter to an AST node.
+void ast_append_param(token_t *ast, token_t param) {
+    array_len_insert_strong(&ast->params, sizeof(token_t), &ast->params_len, &param, ast->params_len);
+}
+
+// Append one or more parameters to an AST node.
+void ast_append_params_va(token_t *ast, size_t n_param, ...) {
+    size_t offset = ast->params_len;
+    array_len_resize_strong(&ast->params, sizeof(token_t), &ast->params_len, ast->params_len + n_param);
+    va_list va;
+    va_start(va, n_param);
+    for (size_t i = 0; i < n_param; i++) {
+        ast->params[offset + i] = va_arg(va, token_t);
+    }
+    va_end(va);
+}
+
+// Append one or more parameters to an AST node.
+void ast_append_params(token_t *ast, size_t n_param, token_t *params) {
+    array_len_insert_n_strong(&ast->params, sizeof(token_t), &ast->params_len, params, ast->params_len, n_param);
+}

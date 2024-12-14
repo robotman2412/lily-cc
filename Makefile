@@ -1,5 +1,5 @@
 
-MAKEFLAGS += --silent --no-print-directory
+MAKEFLAGS += --silent --no-print-directory -j$(shell nproc)
 TEST      ?=
 
 .PHONY: all

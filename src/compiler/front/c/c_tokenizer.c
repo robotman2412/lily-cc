@@ -204,7 +204,7 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
 
     // Test for keywords.
     c_keyw_t keyw = c_keyw_get(ctx, ptr);
-    if (keyw < C_N_KEYWS) {
+    if (keyw < C_N_KEYWS && !c_ctx->preproc_mode) {
         // Replace alternate spellings with main spellings, even if the main spelling is from a later C standard.
 #define C_ALT_KEYW_DEF(main_spelling, alt_spelling)                                                                    \
     if (keyw == C_KEYW_##main_spelling) {                                                                              \
@@ -405,6 +405,8 @@ static void c_block_comment(tokenizer_t *ctx) {
 
 // Get next token from C tokenizer.
 token_t c_tkn_next(tokenizer_t *ctx) {
+    c_tokenizer_t *c_ctx = (c_tokenizer_t *)ctx;
+
 retry:
     pos_t pos0 = ctx->pos;
     int   c    = srcfile_getc(ctx->file, &ctx->pos);
@@ -469,7 +471,6 @@ retry:
     switch (c) {
         case '(': return other_tkn(C_TKN_LPAR, pos0, pos1);
         case ')': return other_tkn(C_TKN_RPAR, pos0, pos1);
-        case '.': return other_tkn(C_TKN_DOT, pos0, pos1);
         case ',': return other_tkn(C_TKN_COMMA, pos0, pos1);
         case ':': return other_tkn(C_TKN_COLON, pos0, pos1);
         case ';': return other_tkn(C_TKN_SEMIC, pos0, pos1);
@@ -484,7 +485,27 @@ retry:
     // Possibly multi-character tokens.
     pos_t pos2 = ctx->pos;
     int   c2   = srcfile_getc(ctx->file, &pos2);
-    if (c == '!') {
+    if (c == '#' && c_ctx->preproc_mode) {
+        if (c2 == '#') {
+            ctx->pos = pos2;
+            return other_tkn(C_TKN_PASTE, pos0, pos2);
+        } else {
+            return other_tkn(C_TKN_HASH, pos0, pos1);
+        }
+    } else if (c == '.') {
+        if (c2 == '.') {
+            pos_t pos3 = pos2;
+            int   c3   = srcfile_getc(ctx->file, &pos3);
+            if (c3 == '.') {
+                ctx->pos = pos3;
+                return other_tkn(C_TKN_VARARG, pos0, pos3);
+            } else {
+                return other_tkn(C_TKN_DOT, pos0, pos1);
+            }
+        } else {
+            return other_tkn(C_TKN_DOT, pos0, pos1);
+        }
+    } else if (c == '!') {
         if (c2 == '=') {
             ctx->pos = pos2;
             return other_tkn(C_TKN_NE, pos0, pos2);

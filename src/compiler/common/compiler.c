@@ -13,7 +13,7 @@
 
 #ifndef NDEBUG
 // Enum names of `tokentype_t` values.
-extern char const *const tokentype_names[] = {
+char const *const tokentype_names[] = {
     "TOKENTYPE_KEYWORD",
     "TOKENTYPE_IDENT",
     "TOKENTYPE_ICONST",

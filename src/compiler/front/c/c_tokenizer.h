@@ -43,6 +43,8 @@ struct c_tokenizer {
     tokenizer_t base;
     // Current C standard.
     int         c_std;
+    // Preprocessor tokenizer mode; keywords are left as idents.
+    bool        preproc_mode;
 };
 
 

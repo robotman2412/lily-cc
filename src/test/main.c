@@ -13,7 +13,7 @@
 static bool run_testcase(testcase_t *testcase) {
     printf("Test %s", testcase->id);
     fflush(stdout);
-    char const *res = testcase->function();
+    char *res = testcase->function();
     printf(" %s\033[0m\n", !res ? "\033[32mOK" : "\033[31mFAILED");
     if (res && res != (void *)-1) {
         if (res[0] == 0xff) {

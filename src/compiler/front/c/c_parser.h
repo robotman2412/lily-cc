@@ -67,6 +67,8 @@ token_t c_parse_expr(tokenizer_t *tkn_ctx);
 token_t c_parse_type_name(tokenizer_t *tkn_ctx);
 // Parse a type specifier/qualifier list.
 token_t c_parse_spec_qual_list(tokenizer_t *tkn_ctx);
+// Parse a variable/function declaration/definition.
+token_t c_parse_decls(tokenizer_t *tkn_ctx);
 // Parse a struct or union specifier/definition.
 token_t c_parse_struct_spec(tokenizer_t *tkn_ctx);
 // Parse an enum specifier/definition.

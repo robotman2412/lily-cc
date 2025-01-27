@@ -59,7 +59,7 @@ char *str_testcase_failed(char const *loc, char const *value, size_t value_len, 
 }
 
 // Register a new test case.
-void register_test_case(char const *(*function)(), char const *id) {
+void register_test_case(char *(*function)(), char const *id) {
     testcase_t *ent = malloc(sizeof(testcase_t));
     ent->function   = function;
     ent->id         = id;

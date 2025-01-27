@@ -16,7 +16,11 @@ static token_t c_parse_expr_or_type(
 );
 // Parse one or more C expressions separated by commas or a type.
 static token_t c_parse_exprs_or_type(
-    tokenizer_t *tkn_ctx, bool *restrict allow_expr, bool *restrict allow_type, bool *restrict allow_ddecl
+    tokenizer_t *tkn_ctx,
+    bool *restrict allow_expr,
+    bool *restrict allow_type,
+    bool *restrict allow_ddecl,
+    bool *restrict allow_type_list
 );
 
 
@@ -241,10 +245,11 @@ token_t c_parse(tokenizer_t *tkn_ctx);
 
 // Parse one or more C expressions separated by commas.
 token_t c_parse_exprs(tokenizer_t *tkn_ctx) {
-    bool allow_expr  = true;
-    bool allow_type  = false;
-    bool allow_ddecl = false;
-    return c_parse_exprs_or_type(tkn_ctx, &allow_expr, &allow_type, &allow_ddecl);
+    bool allow_expr      = true;
+    bool allow_type      = false;
+    bool allow_ddecl     = false;
+    bool allow_type_list = false;
+    return c_parse_exprs_or_type(tkn_ctx, &allow_expr, &allow_type, &allow_ddecl, &allow_type_list);
 }
 
 // Parse a C expression.
@@ -353,10 +358,13 @@ static token_t c_parse_expr_or_type(
                 tkn_delete(lpar);
             } else {
                 // If not a function call, then it must have something in the parentheses.
-                bool    is_expr  = *allow_expr;
-                bool    is_type  = *allow_expr && !*allow_type;
-                bool    is_ddecl = *allow_type || *allow_ddecl;
-                token_t tmp      = c_parse_exprs_or_type(tkn_ctx, &is_expr, &is_type, &is_ddecl);
+                bool    is_expr      = *allow_expr;
+                bool    is_type      = *allow_expr && !*allow_type;
+                bool    is_ddecl     = *allow_type || *allow_ddecl;
+                // TODO: This may not be the correct way to go about function types but I don't know what the correct
+                // way could be.
+                bool    is_type_list = *allow_type;
+                token_t tmp          = c_parse_exprs_or_type(tkn_ctx, &is_expr, &is_type, &is_ddecl, &is_type_list);
                 if (tmp.type == TOKENTYPE_AST && tmp.subtype == C_AST_GARBAGE) {
                     push(tmp);
                     goto err;
@@ -499,7 +507,11 @@ static token_t c_parse_expr_or_type(
 
 // Parse one or more C expressions separated by commas or a type.
 static token_t c_parse_exprs_or_type(
-    tokenizer_t *tkn_ctx, bool *restrict allow_expr, bool *restrict allow_type, bool *restrict allow_ddecl
+    tokenizer_t *tkn_ctx,
+    bool *restrict allow_expr,
+    bool *restrict allow_type,
+    bool *restrict allow_ddecl,
+    bool *restrict allow_type_list
 ) {
     size_t   exprs_len = 1;
     size_t   exprs_cap = 1;
@@ -509,7 +521,7 @@ static token_t c_parse_exprs_or_type(
 
     // If this is unambiguously a type, don't bother trying to parse multiple exprs.
     token_t tkn = tkn_peek(tkn_ctx);
-    if (!*allow_expr && tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_COMMA) {
+    if (!*allow_expr && !*allow_type_list && tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_COMMA) {
         cctx_diagnostic(tkn_ctx->cctx, tkn.pos, DIAG_ERR, "Expected )");
         token_t tmp = *exprs;
         free(exprs);
@@ -519,12 +531,20 @@ static token_t c_parse_exprs_or_type(
     // While the next token is a comma, more expressions can be parsed.
     while (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_COMMA) {
         tkn_next(tkn_ctx);
-        token_t expr = c_parse_expr(tkn_ctx);
+        bool    is_expr  = *allow_expr;
+        bool    is_type  = *allow_type_list;
+        bool    is_ddecl = false;
+        token_t expr     = c_parse_expr_or_type(tkn_ctx, &is_expr, &is_type, &is_ddecl);
         if (expr.type == TOKENTYPE_AST && expr.subtype == C_AST_GARBAGE) {
             is_garbage = true;
         }
         array_lencap_insert_strong(&exprs, sizeof(token_t), &exprs_len, &exprs_cap, &expr, exprs_len);
         tkn = tkn_peek(tkn_ctx);
+        if (is_expr && !is_type) {
+            *allow_type_list = false;
+        } else if (!is_expr && is_type) {
+            *allow_expr = false;
+        }
     }
 
     // When the next token is not a comma, there are no more expressions to parse.

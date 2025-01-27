@@ -3,13 +3,12 @@
 // SPDX-License-Identifier: MIT
 
 #include "compiler.h"
-
 #include "testcase.h"
 
 
 
 // Simple test of the various tokens.
-static char const *srcfile_ram() {
+static char *srcfile_ram() {
     // clang-format off
     char const data[] =
     "012\n"

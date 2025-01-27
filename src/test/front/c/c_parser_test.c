@@ -7,7 +7,7 @@
 
 
 
-char const *c_expr_basic() {
+static char *c_expr_basic() {
     char const   source[] = "1 + 2 * 3 - 4 % 5 / 6";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_expr_basic>", source, sizeof(source) - 1);
@@ -103,7 +103,7 @@ char const *c_expr_basic() {
 LILY_TEST_CASE(c_expr_basic)
 
 
-char const *c_expr_call() {
+static char *c_expr_call() {
     char const   source[] = "foobar() + (1) - beer(2, 3)";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_expr_call>", source, sizeof(source) - 1);
@@ -127,7 +127,7 @@ char const *c_expr_call() {
 LILY_TEST_CASE(c_expr_call)
 
 
-char const *c_expr_deref() {
+static char *c_expr_deref() {
     char const   source[] = "*foo.bar->baz[1](2)";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_expr_deref>", source, sizeof(source) - 1);
@@ -153,7 +153,7 @@ char const *c_expr_deref() {
 LILY_TEST_CASE(c_expr_deref)
 
 
-char const *c_expr_cast() {
+static char *c_expr_cast() {
     char const   source[] = "(ident0 *(*const volatile)[2]) (ident1)";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_expr_cast>", source, sizeof(source) - 1);

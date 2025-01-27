@@ -8,7 +8,7 @@
 
 
 // Simple test of the various tokens.
-static char const *c_tkn_basic() {
+static char *c_tkn_basic() {
     // clang-format off
     char const data[] =
     "for int\n"
@@ -109,7 +109,7 @@ LILY_TEST_CASE(c_tkn_basic)
 
 
 // Test of various error messages.
-static char const *c_tkn_errors() {
+static char *c_tkn_errors() {
     // clang-format off
     char const data[] =
     "\'\n"                                                                  // Character constant spans end of line

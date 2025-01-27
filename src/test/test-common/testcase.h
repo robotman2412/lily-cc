@@ -87,7 +87,7 @@ char *str_testcase_failed(char const *loc, char const *value, size_t value_len, 
 
 // Test case entry.
 typedef struct {
-    char const *(*function)();
+    char *(*function)();
     char const *id;
 } testcase_t;
 
@@ -95,4 +95,4 @@ typedef struct {
 extern map_t testcases;
 
 // Register a new test case.
-void register_test_case(char const *(*function)(), char const *id);
+void register_test_case(char *(*function)(), char const *id);

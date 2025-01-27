@@ -66,6 +66,9 @@ bool         c_is_first_sym_char(int c);
 bool         c_is_sym_char(int c);
 // Get next token from C tokenizer.
 token_t      c_tkn_next(tokenizer_t *ctx);
+// Try to find the matching C keyword.
+// Returns -1 if not a keyword in the current C standard.
+c_keyw_t     c_keyw_get(tokenizer_t const *ctx, char const *name);
 
 
 // Test if a token is a certain keyword.

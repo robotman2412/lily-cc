@@ -203,23 +203,19 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
     ctx->pos = pos0;
 
     // Test for keywords.
-    array_binsearch_t res = array_binsearch(c_keywords, sizeof(char *), C_N_KEYWS, ptr, keyw_comp);
-    if (res.found && c_keyw_since[res.index] > c_ctx->c_std) {
-        // Ignore keyword spellings not recognised by this C standard.
-        res.found = false;
-    }
-    if (res.found) {
+    c_keyw_t keyw = c_keyw_get(ctx, ptr);
+    if (keyw < C_N_KEYWS) {
         // Replace alternate spellings with main spellings, even if the main spelling is from a later C standard.
 #define C_ALT_KEYW_DEF(main_spelling, alt_spelling)                                                                    \
-    if (res.index == C_KEYW_##main_spelling) {                                                                         \
-        res.index = C_KEYW_##alt_spelling;                                                                             \
+    if (keyw == C_KEYW_##main_spelling) {                                                                              \
+        keyw = C_KEYW_##alt_spelling;                                                                                  \
     }
 #include "c_keywords.inc"
         // Return keyword token with main spelling.
         return (token_t){
             .pos        = pos_between(start_pos, pos0),
             .type       = TOKENTYPE_KEYWORD,
-            .subtype    = res.index,
+            .subtype    = keyw,
             .strval     = NULL,
             .strval_len = 0,
             .params_len = 0,
@@ -627,4 +623,17 @@ retry:
         .params     = NULL,
     };
 #undef pos1
+}
+
+// Try to find the matching C keyword.
+// Returns C_N_KEYWS if not a keyword in the current C standard.
+c_keyw_t c_keyw_get(tokenizer_t const *ctx, char const *name) {
+    c_tokenizer_t *c_ctx = (c_tokenizer_t *)ctx;
+
+    array_binsearch_t res = array_binsearch(c_keywords, sizeof(char *), C_N_KEYWS, name, keyw_comp);
+    if (res.found && c_keyw_since[res.index] <= c_ctx->c_std) {
+        return res.index;
+    }
+
+    return C_N_KEYWS;
 }

@@ -7,6 +7,7 @@
 
 #include "c_tokenizer.h"
 #include "compiler.h"
+#include "set.h"
 
 
 
@@ -39,6 +40,9 @@ typedef enum {
     // Type pointer node (e.g. the `*` in `int *[2]` or `int (*)[2]`).
     // Args: Pointer node/token, type that the pointer points to.
     C_AST_TYPE_PTR_TO,
+    // Type of a function; separate node to distinguish between calls and types.
+    // Args: Return type, zero or more argument types.
+    C_AST_TYPE_FUNC,
     // Struct/union/enum name/definition/declaration node.
     // Args: Keyword, name and/or definition.
     C_AST_STRUCT,
@@ -48,7 +52,18 @@ typedef enum {
     // Type specifier/qualifier list (e.g. `const int` or `extern size_t`).
     // Args: List of type specifier and/or qualifier tokens.
     C_AST_SPEC_QUAL_LIST,
+    // Declaration list.
+    // Args: Type specifier/qualifier list, (assignment) declarators.
+    C_AST_DECLS,
 } c_asttype_t;
+
+// C parser context.
+typedef struct {
+    // Tokenizer to use.
+    tokenizer_t *tkn_ctx;
+    // Set of type names; this makes parsing a great deal easier.
+    set_t        type_names;
+} c_parser_t;
 
 
 #ifndef NDEBUG
@@ -58,22 +73,22 @@ extern char const *const c_asttype_name[];
 
 
 // Parse a C compilation unit into an AST.
-token_t c_parse(tokenizer_t *tkn_ctx);
+token_t c_parse(c_parser_t *ctx);
 
 // Parse one or more C expressions separated by commas.
-token_t c_parse_exprs(tokenizer_t *tkn_ctx);
+token_t c_parse_exprs(c_parser_t *ctx);
 // Parse a C expression.
-token_t c_parse_expr(tokenizer_t *tkn_ctx);
+token_t c_parse_expr(c_parser_t *ctx);
 // Parse a type name.
-token_t c_parse_type_name(tokenizer_t *tkn_ctx);
+token_t c_parse_type_name(c_parser_t *ctx);
 // Parse a type specifier/qualifier list.
-token_t c_parse_spec_qual_list(tokenizer_t *tkn_ctx);
+token_t c_parse_spec_qual_list(c_parser_t *ctx);
 // Parse a variable/function declaration/definition.
-token_t c_parse_decls(tokenizer_t *tkn_ctx);
+token_t c_parse_decls(c_parser_t *ctx);
 // Parse a struct or union specifier/definition.
-token_t c_parse_struct_spec(tokenizer_t *tkn_ctx);
+token_t c_parse_struct_spec(c_parser_t *ctx);
 // Parse an enum specifier/definition.
-token_t c_parse_enum_spec(tokenizer_t *tkn_ctx);
+token_t c_parse_enum_spec(c_parser_t *ctx);
 
 #ifndef NDEBUG
 // Print a token.

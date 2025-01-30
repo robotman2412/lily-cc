@@ -158,6 +158,8 @@ struct token {
 
 // Get position from start to end (exclusive).
 pos_t pos_between(pos_t start, pos_t end);
+// Get position from start to end (inclusive).
+pos_t pos_including(pos_t start, pos_t end);
 
 // Create new compiler context.
 cctx_t       *cctx_create();

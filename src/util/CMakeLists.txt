@@ -9,6 +9,7 @@ add_library(util STATIC
     list.c
     map.c
     refcount.c
+    set.c
     strong_malloc.c
     utf8.c
 )

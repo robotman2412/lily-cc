@@ -34,6 +34,11 @@ pos_t pos_between(pos_t start, pos_t end) {
     return start;
 }
 
+// Get position from start to end (inclusive).
+pos_t pos_including(pos_t start, pos_t end) {
+    start.len = end.off - start.off + end.len;
+    return start;
+}
 
 // Create new compiler context.
 cctx_t *cctx_create() {
@@ -232,7 +237,7 @@ token_t ast_from(int subtype, size_t n_param, token_t *params) {
         }
     }
     return (token_t){
-        .pos        = pos_between(min_pos, max_pos),
+        .pos        = pos_including(min_pos, max_pos),
         .type       = TOKENTYPE_AST,
         .subtype    = subtype,
         .strval     = NULL,

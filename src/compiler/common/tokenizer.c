@@ -102,7 +102,13 @@ static void tkn_debug_print_r(
 ) {
     if (token.pos.srcfile) {
         pindent(indent);
-        printf("pos:        %s:%d:%d\n", token.pos.srcfile->path, token.pos.line + 1, token.pos.col + 1);
+        printf(
+            "pos:        %s:%d:%d (len %d)\n",
+            token.pos.srcfile->path,
+            token.pos.line + 1,
+            token.pos.col + 1,
+            token.pos.len
+        );
     }
     if (token.type == TOKENTYPE_AST) {
         pindent(indent);

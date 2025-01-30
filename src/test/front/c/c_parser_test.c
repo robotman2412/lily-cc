@@ -1,5 +1,6 @@
 
-// Copyright © 2024, Julian Scheffers
+// SPDX-FileCopyrightText: 2024-2025 Julian Scheffers <julian@scheffers.net>
+// SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
 #include "c_parser.h"
@@ -290,3 +291,27 @@ static char *c_expr_cast() {
     return TEST_OK;
 }
 LILY_TEST_CASE(c_expr_cast)
+
+
+static char *c_stmt_decl() {
+    char const   source[] = "typename ident(), *ident2[];";
+    cctx_t      *cctx     = cctx_create();
+    srcfile_t   *src      = srcfile_create(cctx, "<c_stmt_decl>", source, sizeof(source) - 1);
+    tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
+
+    token_t decl = c_parse_decls(tctx);
+
+    if (cctx->diagnostics.len) {
+        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
+        printf("\n");
+        while (diag) {
+            print_diagnostic(diag);
+            diag = (diagnostic_t const *)diag->node.next;
+        }
+        c_tkn_debug_print(decl);
+        return TEST_FAIL;
+    }
+
+    return TEST_OK;
+}
+LILY_TEST_CASE(c_stmt_decl)

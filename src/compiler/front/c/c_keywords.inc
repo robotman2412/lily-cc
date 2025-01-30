@@ -1,6 +1,8 @@
 
-// Copyright © 2024, Julian Scheffers
+// SPDX-FileCopyrightText: 2024-2025 Julian Scheffers <julian@scheffers.net>
+// SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
+// clang-format off
 
 
 

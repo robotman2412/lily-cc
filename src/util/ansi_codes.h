@@ -1,4 +1,8 @@
 
+// SPDX-FileCopyrightText: 2024-2025 Julian Scheffers <julian@scheffers.net>
+// SPDX-FileType: SOURCE
+// SPDX-License-Identifier: MIT
+
 #ifndef ANSI_CODES_H
 #define ANSI_CODES_H
 
@@ -42,4 +46,4 @@
 #define ANSI_CYAN_BG         "\033[106m"
 #define ANSI_WHITE_BG        "\033[107m"
 
-#endif //ANSI_CODES_H
+#endif // ANSI_CODES_H

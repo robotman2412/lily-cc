@@ -1,6 +1,6 @@
 
-// Copyright © 2024, Badge.Team
-// https://github.com/badgeteam/badgelib
+// SPDX-FileCopyrightText: 2024-2025 Julian Scheffers <julian@scheffers.net>
+// SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
 #include "list.h"

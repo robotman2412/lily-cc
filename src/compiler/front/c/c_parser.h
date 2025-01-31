@@ -34,11 +34,8 @@ typedef enum {
     // A function invocation or cast (e.g. `identifier(exprs)`, `(typename) expr` or `(exprs)(exprs)`).
     // Args: Function/type, args.
     C_AST_EXPR_CALL,
-    // Type pointer with qualifier node (e.g. the `*const` in `int *const`).
-    // Args: List of qualifier tokens.
-    C_AST_TYPE_PTR_QUAL,
     // Type pointer node (e.g. the `*` in `int *[2]` or `int (*)[2]`).
-    // Args: Pointer node/token, type that the pointer points to.
+    // Args: Pointer node/token, type spec list (optional), thing that the pointer binds to (optional).
     C_AST_TYPE_PTR_TO,
     // Type of a function; separate node to distinguish between calls and types.
     // Args: Return type, zero or more argument types.
@@ -49,7 +46,7 @@ typedef enum {
     // Type name node (e.g. `mytype_t` or `int *[2][3]`).
     // Args: Type specifier/qualifier list, pointer/index node.
     C_AST_TYPE_NAME,
-    // Type specifier/qualifier list (e.g. `const int` or `extern size_t`).
+    // Type specifier/qualifier list (e.g. `const int` or `extern size_t`). Re-used for subsets of this list.
     // Args: List of type specifier and/or qualifier tokens.
     C_AST_SPEC_QUAL_LIST,
     // Declaration list.

@@ -421,6 +421,32 @@ token_t c_parse_type_name(c_parser_t *ctx) {
 
 // Parse a direct (abstract) declaration.
 static token_t c_parse_ddecl(c_parser_t *ctx, bool requires_name) {
+    token_t peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LPAR) {
+        // `( declarator )` or `direct-declarator_opt (parameter-type-list_opt)`
+        token_t lpar = peek;
+        tkn_next(ctx->tkn_ctx);
+        peek = tkn_peek(ctx->tkn_ctx);
+
+        if (peek.type == TOKENTYPE_OTHER
+            && (peek.subtype == C_TKN_MUL || peek.subtype == C_TKN_LPAR || peek.subtype == C_TKN_LBRAC)) {
+            // `( declarator )`
+            token_t decl = c_parse_decl(ctx, requires_name);
+            if (decl.type == TOKENTYPE_AST && decl.subtype == C_AST_GARBAGE) {
+                return decl;
+            }
+            peek = tkn_peek(ctx->tkn_ctx);
+            if (peek.type != TOKENTYPE_OTHER || peek.type != C_TKN_RPAR) {
+                cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected )");
+                return ast_from_va(C_AST_GARBAGE, 2, lpar, decl);
+            }
+            tkn_next(ctx->tkn_ctx);
+            decl.pos = pos_including(lpar.pos, peek.pos);
+            return decl;
+        } else {
+            // `direct-declarator_opt (parameter-type-list_opt)`
+        }
+    }
 }
 
 // Parse an (abstract) declaration.

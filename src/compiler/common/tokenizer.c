@@ -10,14 +10,15 @@
 
 #include <inttypes.h>
 #include <stdlib.h>
+#include <string.h>
 
 
 
 // Delete a tokenizer context.
 // Deletes the token in the buffer but not any tokens consumed.
 void tkn_ctx_delete(tokenizer_t *tkn_ctx) {
-    if (tkn_ctx->has_tkn_buffer) {
-        tkn_delete(tkn_ctx->tkn_buffer);
+    for (int i = 0; i < tkn_ctx->tkn_buffer_len; i++) {
+        tkn_delete(tkn_ctx->tkn_buffer[i]);
     }
     if (tkn_ctx->cleanup) {
         tkn_ctx->cleanup(tkn_ctx);
@@ -28,9 +29,11 @@ void tkn_ctx_delete(tokenizer_t *tkn_ctx) {
 
 // Consume next token from the tokenizer.
 token_t tkn_next(tokenizer_t *tkn_ctx) {
-    if (tkn_ctx->has_tkn_buffer) {
-        tkn_ctx->has_tkn_buffer = false;
-        return tkn_ctx->tkn_buffer;
+    if (tkn_ctx->tkn_buffer_len) {
+        tkn_ctx->tkn_buffer_len--;
+        token_t tmp = tkn_ctx->tkn_buffer[0];
+        memcpy(tkn_ctx->tkn_buffer, tkn_ctx->tkn_buffer + 1, tkn_ctx->tkn_buffer_len * sizeof(token_t));
+        return tmp;
     } else {
         return tkn_ctx->next(tkn_ctx);
     }
@@ -38,22 +41,34 @@ token_t tkn_next(tokenizer_t *tkn_ctx) {
 
 // Peek at (do not consume) next token from the tokenizer.
 token_t tkn_peek(tokenizer_t *tkn_ctx) {
-    if (!tkn_ctx->has_tkn_buffer) {
-        tkn_ctx->has_tkn_buffer = true;
-        tkn_ctx->tkn_buffer     = tkn_ctx->next(tkn_ctx);
+    return tkn_peek_n(tkn_ctx, 0);
+}
+
+// Peek at (do not consume) next token from the tokenizer.
+// Depth 0 is one ahead, depth 1 is two ahead, etc.
+token_t tkn_peek_n(tokenizer_t *tkn_ctx, int depth) {
+    if (depth > TKN_PEEK_MAX) {
+        fprintf(stderr, "[BUG] tkn_peek_n() with depth too high\n");
+        abort();
     }
-    return tkn_ctx->tkn_buffer;
+    while (tkn_ctx->tkn_buffer_len <= depth) {
+        token_t tmp = tkn_ctx->next(tkn_ctx);
+        if (tmp.type == TOKENTYPE_EOF) {
+            return tmp;
+        }
+        tkn_ctx->tkn_buffer[tkn_ctx->tkn_buffer_len++] = tmp;
+    }
+    return tkn_ctx->tkn_buffer[depth];
 }
 
 // Opposite of tkn_next; stuff up to one token back into the buffer.
 // Will abort if there is already a token there.
 void tkn_unget(tokenizer_t *tkn_ctx, token_t token) {
-    if (tkn_ctx->has_tkn_buffer) {
-        fprintf(stderr, "[BUG] tkn_unget() with token already in buffer\n");
+    if (tkn_ctx->tkn_buffer_len > TKN_PEEK_MAX) {
+        fprintf(stderr, "[BUG] tkn_unget() with buffer already full\n");
         abort();
     }
-    tkn_ctx->has_tkn_buffer = true;
-    tkn_ctx->tkn_buffer     = token;
+    tkn_ctx->tkn_buffer[tkn_ctx->tkn_buffer_len++] = token;
 }
 
 

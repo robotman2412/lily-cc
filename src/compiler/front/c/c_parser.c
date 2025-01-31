@@ -11,6 +11,8 @@
 
 
 
+// Parse a function or array direct (abstract) declaration.
+static token_t c_parse_ddecl2(c_parser_t *ctx, token_t inner);
 // Parse a direct (abstract) declaration.
 static token_t c_parse_ddecl(c_parser_t *ctx, bool requires_name);
 // Parse an (abstract) declaration.
@@ -419,33 +421,41 @@ token_t c_parse_expr(c_parser_t *ctx) {
 token_t c_parse_type_name(c_parser_t *ctx) {
 }
 
+// Parse a function or array direct (abstract) declaration.
+static token_t c_parse_ddecl2(c_parser_t *ctx, token_t inner) {
+}
+
 // Parse a direct (abstract) declaration.
 static token_t c_parse_ddecl(c_parser_t *ctx, bool requires_name) {
-    token_t peek = tkn_peek(ctx->tkn_ctx);
-    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LPAR) {
-        // `( declarator )` or `direct-declarator_opt (parameter-type-list_opt)`
+    token_t peek  = tkn_peek(ctx->tkn_ctx);
+    token_t peek1 = tkn_peek_n(ctx->tkn_ctx, 1);
+    token_t inner;
+
+    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LPAR && peek1.type == TOKENTYPE_OTHER
+        && (peek1.subtype == C_TKN_MUL || peek1.subtype == C_TKN_LPAR || peek1.subtype == C_TKN_LBRAC)) {
+        // Parenthesized declarator.
         token_t lpar = peek;
         tkn_next(ctx->tkn_ctx);
-        peek = tkn_peek(ctx->tkn_ctx);
 
-        if (peek.type == TOKENTYPE_OTHER
-            && (peek.subtype == C_TKN_MUL || peek.subtype == C_TKN_LPAR || peek.subtype == C_TKN_LBRAC)) {
-            // `( declarator )`
-            token_t decl = c_parse_decl(ctx, requires_name);
-            if (decl.type == TOKENTYPE_AST && decl.subtype == C_AST_GARBAGE) {
-                return decl;
-            }
-            peek = tkn_peek(ctx->tkn_ctx);
-            if (peek.type != TOKENTYPE_OTHER || peek.type != C_TKN_RPAR) {
-                cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected )");
-                return ast_from_va(C_AST_GARBAGE, 2, lpar, decl);
-            }
-            tkn_next(ctx->tkn_ctx);
-            decl.pos = pos_including(lpar.pos, peek.pos);
-            return decl;
-        } else {
-            // `direct-declarator_opt (parameter-type-list_opt)`
+        inner = c_parse_decl(ctx, requires_name);
+        if (inner.type == TOKENTYPE_AST && inner.subtype == C_AST_GARBAGE) {
+            return inner;
         }
+        peek = tkn_peek(ctx->tkn_ctx);
+        if (peek.type != TOKENTYPE_OTHER || peek.type != C_TKN_RPAR) {
+            cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected )");
+            return ast_from_va(C_AST_GARBAGE, 2, lpar, inner);
+        }
+        tkn_next(ctx->tkn_ctx);
+        inner.pos = pos_including(lpar.pos, peek.pos);
+
+    } else if (peek.type == TOKENTYPE_IDENT && requires_name) {
+        // Identifier.
+        tkn_next(ctx->tkn_ctx);
+        inner = peek;
+
+    } else {
+        // TODO: Handle dis.
     }
 }
 

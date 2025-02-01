@@ -210,6 +210,70 @@ static char *c_type_funcptr() {
 LILY_TEST_CASE(c_type_funcptr)
 
 
+static char *c_type_struct() {
+    // clang-format off
+    char const   source[] =
+    "typedef struct thing {\n"
+    "  int a;\n"
+    "  int b;\n"
+    "} thing_t;\n"
+    ;
+    // clang-format on
+    cctx_t      *cctx = cctx_create();
+    srcfile_t   *src  = srcfile_create(cctx, "<c_type_struct>", source, sizeof(source) - 1);
+    tokenizer_t *tctx = c_tkn_create(src, C_STD_def);
+    c_parser_t   pctx = {.tkn_ctx = tctx, .type_names = SET_EMPTY};
+
+    token_t token = c_parse_decls(&pctx, false);
+
+    if (cctx->diagnostics.len) {
+        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
+        printf("\n");
+        while (diag) {
+            print_diagnostic(diag);
+            diag = (diagnostic_t const *)diag->node.next;
+        }
+        c_tkn_debug_print(token);
+        return TEST_FAIL;
+    }
+
+    return TEST_OK;
+}
+LILY_TEST_CASE(c_type_struct)
+
+
+static char *c_type_enum() {
+    // clang-format off
+    char const   source[] =
+    "typedef enum thing {\n"
+    "  thing_first,\n"
+    "  thing_second\n"
+    "} thing_t;\n"
+    ;
+    // clang-format on
+    cctx_t      *cctx = cctx_create();
+    srcfile_t   *src  = srcfile_create(cctx, "<c_type_enum>", source, sizeof(source) - 1);
+    tokenizer_t *tctx = c_tkn_create(src, C_STD_def);
+    c_parser_t   pctx = {.tkn_ctx = tctx, .type_names = SET_EMPTY};
+
+    token_t token = c_parse_decls(&pctx, false);
+
+    if (cctx->diagnostics.len) {
+        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
+        printf("\n");
+        while (diag) {
+            print_diagnostic(diag);
+            diag = (diagnostic_t const *)diag->node.next;
+        }
+        c_tkn_debug_print(token);
+        return TEST_FAIL;
+    }
+
+    return TEST_OK;
+}
+LILY_TEST_CASE(c_type_enum)
+
+
 static char *c_stmt_decl() {
     char const   source[] = "typename ident, *ident2[];";
     cctx_t      *cctx     = cctx_create();

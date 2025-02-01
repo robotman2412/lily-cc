@@ -57,7 +57,8 @@ char const *const c_asttype_name[] = {
     [C_AST_TYPE_ARRAY]     = "C_AST_TYPE_ARRAY",
     [C_AST_TYPE_PTR_TO]    = "C_AST_TYPE_PTR_TO",
     [C_AST_TYPE_FUNC]      = "C_AST_TYPE_FUNC",
-    [C_AST_STRUCT]         = "C_AST_STRUCT",
+    [C_AST_NAMED_STRUCT]   = "C_AST_NAMED_STRUCT",
+    [C_AST_ANON_STRUCT]    = "C_AST_ANON_STRUCT",
     [C_AST_TYPE_NAME]      = "C_AST_TYPE_NAME",
     [C_AST_SPEC_QUAL_LIST] = "C_AST_SPEC_QUAL_LIST",
     [C_AST_DECLS]          = "C_AST_DECLS",
@@ -267,7 +268,8 @@ static bool is_spec_qual_list_tkn(c_parser_t *ctx, token_t token) {
     if (token.type == TOKENTYPE_IDENT) {
         return set_contains(&ctx->type_names, token.strval)
                || (ctx->func_body && set_contains(&ctx->local_type_names, token.strval));
-    } else if (token.type == TOKENTYPE_AST && token.subtype == C_AST_STRUCT) {
+    } else if (token.type == TOKENTYPE_AST
+               && (token.subtype == C_AST_NAMED_STRUCT || token.subtype == C_AST_ANON_STRUCT)) {
         return true;
     } else if (token.type != TOKENTYPE_KEYWORD) {
         return false;
@@ -553,7 +555,7 @@ static token_t c_parse_ddecl(c_parser_t *ctx, bool requires_name, bool allows_na
             peek              = tkn_peek(ctx->tkn_ctx);
             size_t   args_len = 1;
             size_t   args_cap = 2;
-            token_t *args     = malloc(args_cap * sizeof(token_t));
+            token_t *args     = strong_malloc(args_cap * sizeof(token_t));
             *args             = inner;
 
             if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RPAR) {
@@ -635,7 +637,7 @@ static token_t c_parse_decl(c_parser_t *ctx, bool requires_name, bool allows_nam
 static token_t c_parse_type_qual_list(c_parser_t *ctx) {
     size_t   args_len = 0;
     size_t   args_cap = 2;
-    token_t *args     = malloc(args_cap * sizeof(token_t));
+    token_t *args     = strong_malloc(args_cap * sizeof(token_t));
 
     token_t peek = tkn_peek(ctx->tkn_ctx);
     while (is_type_qualifier(peek)) {
@@ -694,14 +696,14 @@ token_t c_parse_spec_qual_list(c_parser_t *ctx, bool *is_typedef_out) {
             tkn_next(tkn_ctx);
 
         } else if (peek.type == TOKENTYPE_KEYWORD && (peek.subtype == C_KEYW_struct || peek.subtype == C_KEYW_union)) {
-            // TODO: Parse a struct/union specifier.
-            cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Structs, and unions currently unsupported");
-            break;
+            // Parse a struct/union specifier.
+            token_t struct_spec = c_parse_struct_spec(ctx);
+            array_lencap_insert_strong(&list, sizeof(token_t), &len, &cap, &struct_spec, len);
 
         } else if (peek.type == TOKENTYPE_KEYWORD && (peek.subtype == C_KEYW_enum)) {
-            // TODO: Parse an enum specifier.
-            cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Enums currently unsupported");
-            break;
+            // Parse an enum specifier.
+            token_t enum_spec = c_parse_enum_spec(ctx);
+            array_lencap_insert_strong(&list, sizeof(token_t), &len, &cap, &enum_spec, len);
 
         } else {
             // Not valid in a specifier/qualifier list.
@@ -716,7 +718,7 @@ token_t c_parse_spec_qual_list(c_parser_t *ctx, bool *is_typedef_out) {
 token_t c_parse_decls(c_parser_t *ctx, bool allow_func_body) {
     size_t   args_len = 1;
     size_t   args_cap = 2;
-    token_t *args     = malloc(args_cap * sizeof(token_t));
+    token_t *args     = strong_malloc(args_cap * sizeof(token_t));
     bool     is_typedef;
     *args = c_parse_spec_qual_list(ctx, &is_typedef);
 
@@ -771,6 +773,108 @@ token_t c_parse_decls(c_parser_t *ctx, bool allow_func_body) {
     }
 
     return ast_from(C_AST_DECLS, args_len, args);
+}
+
+// Parse a struct or union specifier/definition.
+token_t c_parse_struct_spec(c_parser_t *ctx) {
+    size_t   args_len = 1;
+    size_t   args_cap = 2;
+    token_t *args     = strong_malloc(sizeof(token_t) * args_cap);
+    *args             = tkn_next(ctx->tkn_ctx);
+    token_t peek      = tkn_peek(ctx->tkn_ctx);
+    bool    named     = false;
+
+    if (peek.type == TOKENTYPE_IDENT) {
+        array_lencap_insert_strong(&args, sizeof(token_t), &args_len, &args_cap, &peek, args_len);
+        tkn_next(ctx->tkn_ctx);
+        peek  = tkn_peek(ctx->tkn_ctx);
+        named = true;
+
+        if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_LCURL) {
+            // Just a struct/enum name; don't parse args.
+            return ast_from(C_AST_NAMED_STRUCT, args_len, args);
+        }
+    }
+
+    if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_LCURL) {
+        // There should be a decl here since it's anonymous.
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected {");
+        return ast_from(C_AST_GARBAGE, args_len, args);
+    }
+    tkn_next(ctx->tkn_ctx);
+
+    peek = tkn_peek(ctx->tkn_ctx);
+    while (peek.type != TOKENTYPE_EOF && (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RCURL)) {
+        token_t decl = c_parse_decls(ctx, false);
+        array_lencap_insert_strong(&args, sizeof(token_t), &args_len, &args_cap, &decl, args_len);
+        peek = tkn_peek(ctx->tkn_ctx);
+    }
+
+    if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RCURL) {
+        // There should be a decl here since it's anonymous.
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected }");
+        return ast_from(C_AST_GARBAGE, args_len, args);
+    }
+    tkn_next(ctx->tkn_ctx);
+
+    return ast_from(named ? C_AST_NAMED_STRUCT : C_AST_ANON_STRUCT, args_len, args);
+}
+
+// Parse an enum specifier/definition.
+token_t c_parse_enum_spec(c_parser_t *ctx) {
+    size_t   args_len = 1;
+    size_t   args_cap = 2;
+    token_t *args     = strong_malloc(sizeof(token_t) * args_cap);
+    *args             = tkn_next(ctx->tkn_ctx);
+    token_t peek      = tkn_peek(ctx->tkn_ctx);
+    bool    named     = false;
+
+    if (peek.type == TOKENTYPE_IDENT) {
+        array_lencap_insert_strong(&args, sizeof(token_t), &args_len, &args_cap, &peek, args_len);
+        tkn_next(ctx->tkn_ctx);
+        peek  = tkn_peek(ctx->tkn_ctx);
+        named = true;
+
+        if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_LCURL) {
+            // Just a struct/enum name; don't parse args.
+            return ast_from(C_AST_NAMED_STRUCT, args_len, args);
+        }
+    }
+
+    if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_LCURL) {
+        // There should be a decl here since it's anonymous.
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected {");
+        return ast_from(C_AST_GARBAGE, args_len, args);
+    }
+    tkn_next(ctx->tkn_ctx);
+
+    while (1) {
+        peek = tkn_peek(ctx->tkn_ctx);
+        if (peek.type == TOKENTYPE_EOF || (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_RCURL)) {
+            break;
+        } else if (peek.type != TOKENTYPE_IDENT) {
+            cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected identifier or }");
+            break;
+        } else {
+            tkn_next(ctx->tkn_ctx);
+            array_lencap_insert_strong(&args, sizeof(token_t), &args_len, &args_cap, &peek, args_len);
+            peek = tkn_peek(ctx->tkn_ctx);
+            if (peek.type != TOKENTYPE_OTHER || (peek.subtype != C_TKN_COMMA && peek.subtype != C_TKN_RCURL)) {
+                cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ,");
+            } else if (peek.subtype == C_TKN_COMMA) {
+                tkn_next(ctx->tkn_ctx);
+            }
+        }
+    }
+
+    if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RCURL) {
+        // There should be a decl here since it's anonymous.
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected }");
+        return ast_from(C_AST_GARBAGE, args_len, args);
+    }
+    tkn_next(ctx->tkn_ctx);
+
+    return ast_from(named ? C_AST_NAMED_STRUCT : C_AST_ANON_STRUCT, args_len, args);
 }
 
 // Parse a switch statement.

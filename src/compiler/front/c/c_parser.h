@@ -44,8 +44,11 @@ typedef enum {
     // Args: Return type, zero or more argument types.
     C_AST_TYPE_FUNC,
     // Struct/union/enum name/definition/declaration node.
-    // Args: Keyword, name and/or definition.
-    C_AST_STRUCT,
+    // Args: Keyword, name, definition (optional).
+    C_AST_NAMED_STRUCT,
+    // Struct/union/enum reference.
+    // Args: Keyword, definition.
+    C_AST_ANON_STRUCT,
     // Type name node (e.g. `mytype_t` or `int *[2][3]`).
     // Args: Type specifier/qualifier list, pointer/index node.
     C_AST_TYPE_NAME,

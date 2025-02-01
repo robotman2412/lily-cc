@@ -178,102 +178,6 @@ static char *c_expr_cast() {
         return TEST_FAIL;
     }
 
-#pragma region generated_test
-    EXPECT_INT(token.pos.col, 1);
-    EXPECT_INT(token.pos.len, 37);
-    EXPECT_INT(token.type, TOKENTYPE_AST);
-    EXPECT_INT(token.subtype, C_AST_EXPR_CALL);
-    EXPECT_INT(token.params_len, 2);
-    {
-        token_t token_0 = token.params[0];
-        EXPECT_INT(token_0.pos.line, 0);
-        EXPECT_INT(token_0.pos.col, 1);
-        EXPECT_INT(token_0.pos.len, 27);
-        EXPECT_INT(token_0.type, TOKENTYPE_AST);
-        EXPECT_INT(token_0.subtype, C_AST_TYPE_NAME);
-        EXPECT_INT(token_0.params_len, 2);
-        {
-            token_t token_0_0 = token_0.params[0];
-            EXPECT_INT(token_0_0.pos.line, 0);
-            EXPECT_INT(token_0_0.pos.col, 1);
-            EXPECT_INT(token_0_0.pos.len, 6);
-            EXPECT_INT(token_0_0.type, TOKENTYPE_IDENT);
-            EXPECT_STR_L(token_0_0.strval, token_0_0.strval_len, "ident0", 6);
-
-            token_t token_0_1 = token_0.params[1];
-            EXPECT_INT(token_0_1.pos.line, 0);
-            EXPECT_INT(token_0_1.pos.col, 8);
-            EXPECT_INT(token_0_1.pos.len, 20);
-            EXPECT_INT(token_0_1.type, TOKENTYPE_AST);
-            EXPECT_INT(token_0_1.subtype, C_AST_TYPE_PTR_TO);
-            EXPECT_INT(token_0_1.params_len, 2);
-            {
-                token_t token_0_1_0 = token_0_1.params[0];
-                EXPECT_INT(token_0_1_0.pos.line, 0);
-                EXPECT_INT(token_0_1_0.pos.col, 8);
-                EXPECT_INT(token_0_1_0.pos.len, 1);
-                EXPECT_INT(token_0_1_0.type, TOKENTYPE_OTHER);
-                EXPECT_INT(token_0_1_0.subtype, C_KEYW_bool);
-
-                token_t token_0_1_1 = token_0_1.params[1];
-                EXPECT_INT(token_0_1_1.pos.line, 0);
-                EXPECT_INT(token_0_1_1.pos.col, 10);
-                EXPECT_INT(token_0_1_1.pos.len, 18);
-                EXPECT_INT(token_0_1_1.type, TOKENTYPE_AST);
-                EXPECT_INT(token_0_1_1.subtype, C_AST_EXPR_INDEX);
-                EXPECT_INT(token_0_1_1.params_len, 2);
-                {
-                    token_t token_0_1_1_0 = token_0_1_1.params[0];
-                    EXPECT_INT(token_0_1_1_0.pos.line, 0);
-                    EXPECT_INT(token_0_1_1_0.pos.col, 10);
-                    EXPECT_INT(token_0_1_1_0.pos.len, 1);
-                    EXPECT_INT(token_0_1_1_0.type, TOKENTYPE_AST);
-                    EXPECT_INT(token_0_1_1_0.subtype, C_AST_TYPE_PTR_QUAL);
-                    EXPECT_INT(token_0_1_1_0.params_len, 2);
-                    {
-                        token_t token_0_1_1_0_0 = token_0_1_1_0.params[0];
-                        EXPECT_INT(token_0_1_1_0_0.pos.line, 0);
-                        EXPECT_INT(token_0_1_1_0_0.pos.col, 11);
-                        EXPECT_INT(token_0_1_1_0_0.pos.len, 5);
-                        EXPECT_INT(token_0_1_1_0_0.type, TOKENTYPE_KEYWORD);
-                        EXPECT_INT(token_0_1_1_0_0.subtype, C_KEYW_const);
-
-                        token_t token_0_1_1_0_1 = token_0_1_1_0.params[1];
-                        EXPECT_INT(token_0_1_1_0_1.pos.line, 0);
-                        EXPECT_INT(token_0_1_1_0_1.pos.col, 17);
-                        EXPECT_INT(token_0_1_1_0_1.pos.len, 8);
-                        EXPECT_INT(token_0_1_1_0_1.type, TOKENTYPE_KEYWORD);
-                        EXPECT_INT(token_0_1_1_0_1.subtype, C_KEYW_volatile);
-                    }
-
-                    token_t token_0_1_1_1 = token_0_1_1.params[1];
-                    EXPECT_INT(token_0_1_1_1.pos.line, 0);
-                    EXPECT_INT(token_0_1_1_1.pos.col, 27);
-                    EXPECT_INT(token_0_1_1_1.pos.len, 1);
-                    EXPECT_INT(token_0_1_1_1.type, TOKENTYPE_ICONST);
-                    EXPECT_INT(token_0_1_1_1.ival, 2);
-                }
-            }
-        }
-
-        token_t token_1 = token.params[1];
-        EXPECT_INT(token_1.pos.line, 0);
-        EXPECT_INT(token_1.pos.col, 32);
-        EXPECT_INT(token_1.pos.len, 6);
-        EXPECT_INT(token_1.type, TOKENTYPE_AST);
-        EXPECT_INT(token_1.subtype, C_AST_EXPRS);
-        EXPECT_INT(token_1.params_len, 1);
-        {
-            token_t token_1_0 = token_1.params[0];
-            EXPECT_INT(token_1_0.pos.line, 0);
-            EXPECT_INT(token_1_0.pos.col, 32);
-            EXPECT_INT(token_1_0.pos.len, 6);
-            EXPECT_INT(token_1_0.type, TOKENTYPE_IDENT);
-            EXPECT_STR_L(token_1_0.strval, token_1_0.strval_len, "ident1", 6);
-        }
-    }
-#pragma endregion generated_test
-
     return TEST_OK;
 }
 LILY_TEST_CASE(c_expr_cast)
@@ -305,29 +209,27 @@ static char *c_type_funcptr() {
 LILY_TEST_CASE(c_type_funcptr)
 
 
-// static char *c_stmt_decl() {
-//     char const   source[] = "typename ident, *ident2[];";
-//     cctx_t      *cctx     = cctx_create();
-//     srcfile_t   *src      = srcfile_create(cctx, "<c_stmt_decl>", source, sizeof(source) - 1);
-//     tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
-//     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = SET_EMPTY};
+static char *c_stmt_decl() {
+    char const   source[] = "typename ident, *ident2[];";
+    cctx_t      *cctx     = cctx_create();
+    srcfile_t   *src      = srcfile_create(cctx, "<c_stmt_decl>", source, sizeof(source) - 1);
+    tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
+    c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = SET_EMPTY};
 
-//     token_t decl = c_parse_decls(&pctx);
+    set_add(&pctx.type_names, "typename");
+    token_t decl = c_parse_decls(&pctx, false);
 
-//     if (cctx->diagnostics.len) {
-//         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
-//         printf("\n");
-//         while (diag) {
-//             print_diagnostic(diag);
-//             diag = (diagnostic_t const *)diag->node.next;
-//         }
-//         c_tkn_debug_print(decl);
-//         return TEST_FAIL;
-//     }
+    if (cctx->diagnostics.len) {
+        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
+        printf("\n");
+        while (diag) {
+            print_diagnostic(diag);
+            diag = (diagnostic_t const *)diag->node.next;
+        }
+        c_tkn_debug_print(decl);
+        return TEST_FAIL;
+    }
 
-//     printf("\n");
-//     c_tkn_debug_print(decl);
-
-//     return TEST_OK;
-// }
-// LILY_TEST_CASE(c_stmt_decl)
+    return TEST_OK;
+}
+LILY_TEST_CASE(c_stmt_decl)

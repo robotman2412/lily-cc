@@ -212,6 +212,19 @@ int srcfile_getc(srcfile_t *file, pos_t *pos) {
 
 
 
+// Create an empty AST token with a position.
+token_t ast_empty(int subtype, pos_t pos) {
+    return (token_t){
+        .pos        = pos,
+        .type       = TOKENTYPE_AST,
+        .subtype    = subtype,
+        .strval     = NULL,
+        .ival       = 0,
+        .params_len = 0,
+        .params     = NULL,
+    };
+}
+
 // Create an AST token with a fixed number of param tokens.
 token_t ast_from_va(int subtype, size_t n_param, ...) {
     token_t *params = strong_malloc(sizeof(token_t) * n_param);

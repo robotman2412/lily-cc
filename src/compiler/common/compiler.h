@@ -179,6 +179,8 @@ srcfile_t *srcfile_create(cctx_t *ctx, char const *virt_path, void const *data, 
 // Read a character from a source file and update position.
 int        srcfile_getc(srcfile_t *file, pos_t *pos);
 
+// Create an empty AST token with a position.
+token_t ast_empty(int subtype, pos_t pos);
 // Create an AST token with a fixed number of param tokens.
 token_t ast_from_va(int subtype, size_t n_param, ...);
 // Create an AST token with a fixed number of param tokens.

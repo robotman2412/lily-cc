@@ -55,6 +55,9 @@ typedef enum {
     // Declaration list.
     // Args: Type specifier/qualifier list, (assignment) declarators.
     C_AST_DECLS,
+    // Assignment declarator.
+    // Args: Declarator, expression.
+    C_AST_ASSIGN_DECL,
     // Function definition.
     // Args: Type specifier/qualifier list, declarator, body.
     C_AST_FUNC_DEF,
@@ -88,6 +91,9 @@ typedef enum {
     // Goto statement.
     // Args: Ident.
     C_AST_GOTO,
+    // Empty expression or statement.
+    // Args: Node.
+    C_AST_NOP,
 } c_asttype_t;
 
 // C parser context.

@@ -191,6 +191,7 @@ static char *c_type_funcptr() {
     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = SET_EMPTY};
 
     set_add(&pctx.type_names, "ident0");
+    set_add(&pctx.type_names, "ident1");
     token_t token = c_parse_type_name(&pctx);
 
     if (cctx->diagnostics.len) {
@@ -233,3 +234,75 @@ static char *c_stmt_decl() {
     return TEST_OK;
 }
 LILY_TEST_CASE(c_stmt_decl)
+
+
+static char *c_stmt_ctrl() {
+    // clang-format off
+    char const   source[] =
+    "if (1) {\n"
+    "  c(a * b);\n"
+    "}\n"
+    "while (c(a, 2), d()) {\n"
+    "  e();\n"
+    "}\n"
+    "for (int i = 0; i < 10; i++) {\n"
+    "  printf(\"Hello, World!\\n\");\n"
+    "}\n"
+    "return 13;\n"
+    "return;\n"
+    ;
+    // clang-format on
+    cctx_t      *cctx = cctx_create();
+    srcfile_t   *src  = srcfile_create(cctx, "<c_stmt_ctrl>", source, sizeof(source) - 1);
+    tokenizer_t *tctx = c_tkn_create(src, C_STD_def);
+    c_parser_t   pctx = {.tkn_ctx = tctx, .type_names = SET_EMPTY};
+
+    set_add(&pctx.type_names, "typename");
+    token_t decl = c_parse_stmts(&pctx);
+
+    if (cctx->diagnostics.len) {
+        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
+        printf("\n");
+        while (diag) {
+            print_diagnostic(diag);
+            diag = (diagnostic_t const *)diag->node.next;
+        }
+        c_tkn_debug_print(decl);
+        return TEST_FAIL;
+    }
+
+    return TEST_OK;
+}
+LILY_TEST_CASE(c_stmt_ctrl)
+
+
+static char *c_function() {
+    // clang-format off
+    char const   source[] =
+    "void funcname() {\n"
+    "  foo();\n"
+    "}\n"
+    ;
+    // clang-format on
+    cctx_t      *cctx = cctx_create();
+    srcfile_t   *src  = srcfile_create(cctx, "<c_function>", source, sizeof(source) - 1);
+    tokenizer_t *tctx = c_tkn_create(src, C_STD_def);
+    c_parser_t   pctx = {.tkn_ctx = tctx, .type_names = SET_EMPTY};
+
+    set_add(&pctx.type_names, "typename");
+    token_t decl = c_parse_decls(&pctx, true);
+
+    if (cctx->diagnostics.len) {
+        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
+        printf("\n");
+        while (diag) {
+            print_diagnostic(diag);
+            diag = (diagnostic_t const *)diag->node.next;
+        }
+        c_tkn_debug_print(decl);
+        return TEST_FAIL;
+    }
+
+    return TEST_OK;
+}
+LILY_TEST_CASE(c_function)

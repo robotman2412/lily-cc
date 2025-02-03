@@ -99,8 +99,11 @@ struct c_var {
 
 // C scope.
 struct c_scope {
-    // Is thie the global scope?
-    bool       is_global;
+    // Scope depth; 0 is global.
+    int        depth;
+    // Disallow variable decls that exist in a parent scope.
+    // Used specifically for for loops.
+    bool       local_exclusive;
     // Parent scope, if any.
     c_scope_t *parent;
     // Local variable map (entry type is `c_var_t`).
@@ -129,6 +132,8 @@ struct c_type {
             size_t args_len;
             // Argument types.
             rc_t  *args;
+            // Argument names.
+            char **arg_names;
         } func;
     };
 };
@@ -185,8 +190,13 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t list);
 // Takes ownership of the `spec_qual_type` share passed.
 rc_t c_compile_decl(c_compiler_t *ctx, token_t decl, rc_t spec_qual_type, char const **name_out);
 
+// Create a new scope.
+c_scope_t *c_scope_create(c_scope_t *parent);
+// Clean up a scope.
+void       c_scope_destroy(c_scope_t *scope);
 // Look up a variable in scope.
-c_var_t      *c_scope_lookup(c_scope_t *scope, char const *ident);
+c_var_t   *c_scope_lookup(c_scope_t *scope, char const *ident);
+
 // Determine type promotion to apply in an infix context.
 rc_t          c_type_promote(c_tokentype_t oper, rc_t a, rc_t b);
 // Convert C binary operator to IR binary operator.

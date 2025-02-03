@@ -17,9 +17,6 @@ static char *ir_append() {
 
     ir_add_expr1(cur, var1, IR_OP1_SNEZ, (ir_operand_t){.is_const = false, .var = func->args[0]});
 
-    printf("\n");
-    ir_func_serialize(func, stdout);
-
     return TEST_OK;
 }
 LILY_TEST_CASE(ir_append)

@@ -17,6 +17,7 @@ ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_
     ir_func_t *func = strong_malloc(sizeof(ir_func_t));
     func->name      = strong_strdup(name);
     func->args      = strong_malloc(sizeof(ir_var_t *) * args_len);
+    func->args_len  = args_len;
     for (size_t i = 0; i < args_len; i++) {
         func->args[i]
             = ir_var_create(func, IR_PRIM_S32, args_name && args_name[i] ? strong_strdup(args_name[i]) : NULL);
@@ -178,6 +179,7 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
                     } break;
                     case IR_FLOW_RETURN: {
                         if (flow->f_return.has_value) {
+                            fputc(' ', to);
                             ir_operand_serialize(flow->f_return.value, to);
                         }
                         fputc('\n', to);
@@ -217,6 +219,7 @@ ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
 // For this reason, avoid explicitly passing names that are just a decimal number.
 ir_code_t *ir_code_create(ir_func_t *func, char const *name) {
     ir_code_t *code = calloc(1, sizeof(ir_code_t));
+    code->func      = func;
     if (name) {
         code->name = strong_strdup(name);
     } else {
@@ -239,7 +242,7 @@ void ir_add_combinator(ir_code_t *code, ir_var_t *dest, size_t from_len, ir_comb
     expr->e_combinator.from_len = from_len;
     expr->e_combinator.from     = from;
     expr->dest                  = dest;
-    if (dest->is_assigned) {
+    if (dest->is_assigned && code->func->enforce_ssa) {
         fprintf(stderr, "[BUG] IR variable %%%s assigned twice\n", dest->name);
         abort();
     }
@@ -257,7 +260,7 @@ void ir_add_expr1(ir_code_t *code, ir_var_t *dest, ir_op1_type_t oper, ir_operan
     expr->e_unary.oper  = oper;
     expr->e_unary.value = operand;
     expr->dest          = dest;
-    if (dest->is_assigned) {
+    if (dest->is_assigned && code->func->enforce_ssa) {
         fprintf(stderr, "[BUG] IR variable %%%s assigned twice\n", dest->name);
         abort();
     }
@@ -276,7 +279,7 @@ void ir_add_expr2(ir_code_t *code, ir_var_t *dest, ir_op2_type_t oper, ir_operan
     expr->e_binary.lhs  = lhs;
     expr->e_binary.rhs  = rhs;
     expr->dest          = dest;
-    if (dest->is_assigned) {
+    if (dest->is_assigned && code->func->enforce_ssa) {
         fprintf(stderr, "[BUG] IR variable %%%s assigned twice\n", dest->name);
         abort();
     }

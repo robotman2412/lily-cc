@@ -40,9 +40,6 @@ static char *test_c_compile_type() {
         return TEST_FAIL;
     }
 
-    printf("\n");
-    c_tkn_debug_print(decl);
-
     rc_t inner = c_compile_spec_qual_list(&cc, decl.params[0]);
 
     if (cctx->diagnostics.len) {
@@ -75,9 +72,6 @@ static char *test_c_compile_type() {
         }
         return TEST_FAIL;
     }
-
-    c_type_explain(full->data, stdout);
-    printf("\n");
 
     return TEST_OK;
 }
@@ -115,14 +109,12 @@ static char *test_c_compile_expr() {
         return TEST_FAIL;
     }
 
-    printf("\n");
-    c_tkn_debug_print(expr_tok);
-
     ir_func_t *func = ir_func_create("c_compile_expr", NULL, 0, NULL);
     c_compile_expr(cc, func, (ir_code_t *)func->code_list.head, NULL, expr_tok, NULL);
 
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
+        printf("\n");
         while (diag) {
             print_diagnostic(diag);
             diag = (diagnostic_t const *)diag->node.next;
@@ -130,8 +122,6 @@ static char *test_c_compile_expr() {
         ir_func_serialize(func, stdout);
         return TEST_FAIL;
     }
-
-    ir_func_serialize(func, stdout);
 
     return TEST_OK;
 }
@@ -143,8 +133,13 @@ static char *test_c_compile_func() {
     char const source[] =
     "int foobar(int);\n"
     "void functest() {\n"
-    "    int a = 3;\n"
-    "    int b = foobar(a * 8);\n"
+    "    int a;\n"
+    "    a = 3;\n"
+    "    if (a != 0) {\n"
+    "        a = 1;\n"
+    "    } else {\n"
+    "        a = 2;\n"
+    "    }\n"
     "}\n"
     ;
     // clang-format on
@@ -209,4 +204,4 @@ static char *test_c_compile_func() {
 
     return TEST_OK;
 }
-// LILY_TEST_CASE(test_c_compile_func)
+LILY_TEST_CASE(test_c_compile_func)

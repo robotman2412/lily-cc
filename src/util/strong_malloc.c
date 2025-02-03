@@ -6,6 +6,7 @@
 #include "strong_malloc.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 
 
@@ -33,6 +34,17 @@ void *strong_calloc(size_t size, size_t count) {
 void *strong_realloc(void *ptr, size_t size) {
     void *mem = realloc(ptr, size);
     if (!mem && size) {
+        fprintf(stderr, "Out of memory (allocating %zu byte%s)", size, size == 1 ? "" : "s");
+        abort();
+    }
+    return mem;
+}
+
+// Strong stdup; abort if out of memory.
+char *strong_strdup(char const *str) {
+    char *mem = strdup(str);
+    if (!mem) {
+        size_t size = strlen(str) + 1;
         fprintf(stderr, "Out of memory (allocating %zu byte%s)", size, size == 1 ? "" : "s");
         abort();
     }

@@ -14,3 +14,4 @@ add_compile_options(-std=gnu17 -Og -ggdb -Werror=format -Werror=return-type -lbs
 add_subdirectory(util)
 add_subdirectory(compiler)
 add_subdirectory(test)
+add_subdirectory(main)

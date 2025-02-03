@@ -15,3 +15,5 @@ void *strong_malloc(size_t size);
 void *strong_calloc(size_t size, size_t count);
 // Strong realloc; abort if out of memory.
 void *strong_realloc(void *ptr, size_t size);
+// Strong stdup; abort if out of memory.
+char *strong_strdup(char const *str);

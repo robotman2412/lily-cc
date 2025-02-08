@@ -6,6 +6,7 @@
 #pragma once
 
 #include "list.h"
+#include "set.h"
 
 
 
@@ -173,10 +174,8 @@ struct ir_var {
     ir_func_t   *func;
     // Variable type.
     ir_prim_t    prim_type;
-    // Has a value been assigned yet.
-    bool         is_assigned;
-    // Expression that assigns this variable, or NULL if a parameter or not assigned.
-    ir_expr_t   *assigned_at;
+    // Expressions that assign this variable.
+    dlist_t      assigned_at;
 };
 
 // IR expression operand.
@@ -220,6 +219,8 @@ struct ir_expr {
     ir_insn_t      base;
     // Expression type.
     ir_expr_type_t type;
+    // Linked list node for variable assignments.
+    dlist_node_t   dest_node;
     // Destination variable.
     ir_var_t      *dest;
     union {
@@ -291,12 +292,25 @@ struct ir_flow {
 struct ir_code {
     // Function's code list node.
     dlist_node_t node;
+    // Set of successors.
+    set_t        succ;
+    // Set of predecessors.
+    set_t        pred;
     // Code block name.
     char        *name;
     // Parent function.
     ir_func_t   *func;
     // Instructions in program order.
     dlist_t      insns;
+    // Whether this node was visited by the depth-first search.
+    // Used while converting into SSA form.
+    bool         visited;
+    // Whether this node writes to the target variable.
+    // Used while converting into SSA form.
+    bool         writes_var;
+    // Node index in depth-first search tree.
+    // Used while converting into SSA form.
+    size_t       dfs_index;
 };
 
 // IR function.

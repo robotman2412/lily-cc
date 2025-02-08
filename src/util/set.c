@@ -10,26 +10,13 @@
 
 
 
-// Get the hash of a value.
-uint32_t set_hash_value(char const *value) {
-    // This isn't much of a well-designed hash function but at least it works.
-    uint32_t hash = 0xa81f208a;
-    while (*value) {
-        hash *= 1346882387;
-        hash += *value * 2281519393;
-        value++;
-    }
-    return hash;
-}
-
-
 // Remove all entries from a set.
 void set_clear(set_t *set) {
     for (size_t i = 0; i < SET_BUCKETS; i++) {
         dlist_node_t *node = dlist_pop_front(&set->buckets[i]);
         while (node) {
             set_ent_t *ent = (set_ent_t *)node;
-            free(ent->value);
+            set->val_del(ent->value);
             free(ent);
             node = dlist_pop_front(&set->buckets[i]);
         }
@@ -37,9 +24,9 @@ void set_clear(set_t *set) {
 }
 
 // Get an item from the set.
-bool set_contains(set_t const *set, char const *value) {
+bool set_contains(set_t const *set, void const *value) {
     // Figure out which bucket the value is in.
-    uint32_t hash   = set_hash_value(value);
+    uint32_t hash   = set->val_hash(value);
     size_t   bucket = hash % SET_BUCKETS;
 
     // Walk the list of items in this bucket.
@@ -47,7 +34,7 @@ bool set_contains(set_t const *set, char const *value) {
     while (node) {
         set_ent_t *ent = (set_ent_t *)node;
         // Both hash and string compare must be equal.
-        if (ent->hash == hash && !strcmp(ent->value, value)) {
+        if (ent->hash == hash && !set->val_cmp(ent->value, value)) {
             return true;
         }
         // Go to the next item in the bucket.
@@ -59,9 +46,9 @@ bool set_contains(set_t const *set, char const *value) {
 }
 
 // Insert an item into the set.
-bool set_add(set_t *set, char const *value) {
+bool set_add(set_t *set, void const *value) {
     // Figure out which bucket the value is in.
-    uint32_t hash   = set_hash_value(value);
+    uint32_t hash   = set->val_hash(value);
     size_t   bucket = hash % SET_BUCKETS;
 
     // Walk the list of items in this bucket.
@@ -69,7 +56,7 @@ bool set_add(set_t *set, char const *value) {
     while (node) {
         set_ent_t *ent = (set_ent_t *)node;
         // Both hash and string compare must be equal.
-        if (ent->hash == hash && !strcmp(ent->value, value)) {
+        if (ent->hash == hash && !set->val_cmp(ent->value, value)) {
             // There is an existing value.
             return false;
         }
@@ -81,13 +68,12 @@ bool set_add(set_t *set, char const *value) {
     if (!ent) {
         return false;
     }
-    ent->value = strdup(value);
+    ent->value = set->val_dup(value);
     if (!ent->value) {
         free(ent);
         return false;
     }
-    ent->value = value;
-    ent->hash  = hash;
+    ent->hash = hash;
 
     // Add the new item to the bucket.
     dlist_append(&set->buckets[bucket], &ent->node);
@@ -96,9 +82,9 @@ bool set_add(set_t *set, char const *value) {
 }
 
 // Remove an item from the set.
-bool set_remove(set_t *set, char const *value) {
+bool set_remove(set_t *set, void const *value) {
     // Figure out which bucket the value is in.
-    uint32_t hash   = set_hash_value(value);
+    uint32_t hash   = set->val_hash(value);
     size_t   bucket = hash % SET_BUCKETS;
 
     // Walk the list of items in this bucket.
@@ -106,10 +92,10 @@ bool set_remove(set_t *set, char const *value) {
     while (node) {
         set_ent_t *ent = (set_ent_t *)node;
         // Both hash and string compare must be equal.
-        if (ent->hash == hash && !strcmp(ent->value, value)) {
+        if (ent->hash == hash && !set->val_cmp(ent->value, value)) {
             // There is an existing value; remove it.
             dlist_remove(&set->buckets[bucket], node);
-            free(ent->value);
+            set->val_del(ent->value);
             free(ent);
             return true;
         }

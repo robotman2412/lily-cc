@@ -14,7 +14,7 @@
 
 
 // Map of all registered test cases.
-map_t testcases = MAP_EMPTY;
+map_t testcases = STR_MAP_EMPTY;
 
 
 static char *heap_sprintf(char const *fmt, ...) {

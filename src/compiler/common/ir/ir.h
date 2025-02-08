@@ -19,6 +19,9 @@ void       ir_func_destroy(ir_func_t *func);
 // Serialize an IR function.
 void       ir_func_serialize(ir_func_t *func, FILE *to);
 
+// Convert non-SSA to SSA form.
+void ir_func_to_ssa(ir_func_t *func);
+
 // Create a new variable.
 // If `name` is `NULL`, its name will be a decimal number.
 // For this reason, avoid explicitly passing names that are just a decimal number.

@@ -10,26 +10,13 @@
 
 
 
-// Get the hash of a key.
-uint32_t map_hash_key(char const *key) {
-    // This isn't much of a well-designed hash function but at least it works.
-    uint32_t hash = 0xa81f208a;
-    while (*key) {
-        hash *= 1346882387;
-        hash += *key * 2281519393;
-        key++;
-    }
-    return hash;
-}
-
-
 // Remove all entries from a map.
 void map_clear(map_t *map) {
     for (size_t i = 0; i < MAP_BUCKETS; i++) {
         dlist_node_t *node = dlist_pop_front(&map->buckets[i]);
         while (node) {
             map_ent_t *ent = (map_ent_t *)node;
-            free(ent->key);
+            map->key_del(ent->key);
             free(ent);
             node = dlist_pop_front(&map->buckets[i]);
         }
@@ -37,9 +24,9 @@ void map_clear(map_t *map) {
 }
 
 // Get an item from the map.
-void *map_get(map_t const *map, char const *key) {
+void *map_get(map_t const *map, void const *key) {
     // Figure out which bucket the key is in.
-    uint32_t hash   = map_hash_key(key);
+    uint32_t hash   = map->key_hash(key);
     size_t   bucket = hash % MAP_BUCKETS;
 
     // Walk the list of items in this bucket.
@@ -47,7 +34,7 @@ void *map_get(map_t const *map, char const *key) {
     while (node) {
         map_ent_t *ent = (map_ent_t *)node;
         // Both hash and string compare must be equal.
-        if (ent->hash == hash && !strcmp(ent->key, key)) {
+        if (ent->hash == hash && !map->key_cmp(ent->key, key)) {
             return ent->value;
         }
         // Go to the next item in the bucket.
@@ -59,9 +46,9 @@ void *map_get(map_t const *map, char const *key) {
 }
 
 // Insert an item into the map.
-bool map_set(map_t *map, char const *key, void *value) {
+bool map_set(map_t *map, void const *key, void *value) {
     // Figure out which bucket the key is in.
-    uint32_t hash   = map_hash_key(key);
+    uint32_t hash   = map->key_hash(key);
     size_t   bucket = hash % MAP_BUCKETS;
 
     // Walk the list of items in this bucket.
@@ -69,14 +56,14 @@ bool map_set(map_t *map, char const *key, void *value) {
     while (node) {
         map_ent_t *ent = (map_ent_t *)node;
         // Both hash and string compare must be equal.
-        if (ent->hash == hash && !strcmp(ent->key, key)) {
+        if (ent->hash == hash && !map->key_cmp(ent->key, key)) {
             if (value) {
                 // Overwrite existing value.
                 ent->value = value;
             } else {
                 // Remove existing value.
                 dlist_remove(&map->buckets[bucket], node);
-                free(ent->key);
+                map->key_del(ent->key);
                 free(ent);
                 map->len--;
             }
@@ -96,7 +83,7 @@ bool map_set(map_t *map, char const *key, void *value) {
     if (!ent) {
         return false;
     }
-    ent->key = strdup(key);
+    ent->key = map->key_dup(key);
     if (!ent->key) {
         free(ent);
         return false;
@@ -111,7 +98,7 @@ bool map_set(map_t *map, char const *key, void *value) {
 }
 
 // Remove an item from the map.
-bool map_remove(map_t *map, char const *key) {
+bool map_remove(map_t *map, void const *key) {
     return map_set(map, key, NULL);
 }
 

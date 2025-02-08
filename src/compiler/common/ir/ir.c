@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+
+
 // Create a new IR function.
 // Function argument types are IR_PRIM_S32 by default.
 ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_len, char const *const *args_name) {
@@ -194,6 +196,140 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
 }
 
 
+// Extra temporary data used while building dominance tree.
+typedef struct {
+    // Pointer to the code that this concerns.
+    ir_code_t *code;
+    // Parent in the depth-first search tree.
+    size_t     parent;
+    // ?
+    size_t     ancestor;
+    // Semidominator.
+    size_t     semi;
+    // Immediate dominator.
+    size_t     idom;
+    // Best link.
+    size_t     best;
+    // Set of nodes whose semidominator this is.
+    set_t      bucket;
+} dom_node_t;
+
+// Depth-first search function.
+static void dom_node_dfs(ir_code_t *code, dom_node_t *nodes, ir_func_t *func, size_t *ctr, size_t parent) {
+    if (code->visited) {
+        return;
+    }
+    code->visited      = true;
+    code->dfs_index    = *ctr;
+    nodes[*ctr].code   = code;
+    nodes[*ctr].parent = parent;
+    parent             = *ctr;
+    ++*ctr;
+    set_foreach(ir_code_t, succ, &code->succ) {
+        dom_node_dfs(code, nodes, func, ctr, parent);
+    }
+}
+
+// Compression function for the algorithm of Lengauer and Tarjan.
+static void dom_node_compress(dom_node_t *nodes, size_t v) {
+    size_t a = nodes[v].ancestor;
+
+    if (a == (size_t)-1) {
+        return v;
+    }
+
+    dom_node_compress(nodes, a);
+
+    if (nodes[nodes[v].best].semi > nodes[nodes[a].best].semi) {
+        nodes[v].best = nodes[a].best;
+    }
+
+    nodes[v].ancestor = nodes[a].ancestor;
+}
+
+// Evaluation function for the algorithm of Lengauer and Tarjan.
+static size_t dom_node_eval(dom_node_t *nodes, size_t v) {
+    if (nodes[v].ancestor == (size_t)-1) {
+        return v;
+    } else {
+        dom_node_compress(nodes, v);
+        return nodes[v].best;
+    }
+}
+
+// Insert combinator functions where appropriate.
+static void insert_combinators(ir_func_t *func, ir_var_t *var) {
+    // Clear visited flag.
+    dlist_foreach_node(ir_code_t, code, &func->code_list) {
+        code->visited = false;
+    }
+
+    // Mark the nodes where the variable is written.
+    dlist_foreach(ir_expr_t, expr, dest_node, &var->assigned_at) {
+        expr->base.parent->writes_var = true;
+    }
+
+    // Do a depth-first search.
+    size_t      nodes_len = func->code_list.len;
+    dom_node_t *nodes     = calloc(sizeof(dom_node_t), nodes_len);
+    for (size_t i = 0; i < nodes_len; i++) {
+        nodes[i].semi     = i;
+        nodes[i].best     = i;
+        nodes[i].bucket   = PTR_SET_EMPTY;
+        nodes[i].ancestor = -1;
+    }
+    {
+        size_t ctr = 0;
+        dom_node_dfs(container_of(func->code_list.head, ir_code_t, node), nodes, func, &ctr, -1);
+    }
+
+    for (size_t w = nodes_len - 1; w >= 1; w--) {
+        size_t p = nodes[w].parent;
+
+        set_foreach(ir_code_t, pred, &nodes[w].code->pred) {
+            size_t v = pred->dfs_index;
+            size_t u = dom_node_eval(nodes, v);
+            if (nodes[w].semi > nodes[u].semi) {
+                nodes[w].semi = nodes[u].semi;
+            }
+            set_add(&nodes[nodes[w].semi].bucket, (void *)w);
+            // Called link in the algorithm:
+            nodes[w].ancestor = p;
+        }
+
+        set_foreach(void, _v, &nodes[p].bucket) {
+            size_t v      = (size_t)_v;
+            size_t u      = dom_node_eval(nodes, v);
+            nodes[v].idom = nodes[u].semi < nodes[v].semi ? u : nodes[w].parent;
+        }
+    }
+
+    for (size_t w = 1; w < nodes_len; w++) {
+        if (nodes[w].idom != nodes[w].semi) {
+            nodes[w].idom = nodes[nodes[w].idom].idom;
+        }
+    }
+    nodes[0].idom = -1;
+}
+
+// Rename variables assigned more than once.
+static void rename_assignments(ir_func_t *func, ir_var_t *var) {
+    clear_visited(func);
+}
+
+// Convert non-SSA to SSA form.
+void ir_func_to_ssa(ir_func_t *func) {
+    size_t    limit = func->vars_list.len;
+    ir_var_t *var   = (ir_var_t *)func->vars_list.head;
+    for (size_t i = 0; i < limit; i++) {
+        insert_combinators(func, var);
+        rename_assignments(func, var);
+        var = (ir_var_t *)var->node.next;
+    }
+}
+
+
+
 // Create a new variable.
 // If `name` is `NULL`, its name will be a decimal number.
 // For this reason, avoid explicitly passing names that are just a decimal number.
@@ -214,12 +350,15 @@ ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
 }
 
 
+
 // Create a new IR code block.
 // If `name` is `NULL`, its name will be a decimal number.
 // For this reason, avoid explicitly passing names that are just a decimal number.
 ir_code_t *ir_code_create(ir_func_t *func, char const *name) {
     ir_code_t *code = calloc(1, sizeof(ir_code_t));
     code->func      = func;
+    code->pred      = PTR_SET_EMPTY;
+    code->succ      = PTR_SET_EMPTY;
     if (name) {
         code->name = strong_strdup(name);
     } else {
@@ -242,12 +381,11 @@ void ir_add_combinator(ir_code_t *code, ir_var_t *dest, size_t from_len, ir_comb
     expr->e_combinator.from_len = from_len;
     expr->e_combinator.from     = from;
     expr->dest                  = dest;
-    if (dest->is_assigned && code->func->enforce_ssa) {
-        fprintf(stderr, "[BUG] IR variable %%%s assigned twice\n", dest->name);
+    if (dest->assigned_at.len && code->func->enforce_ssa) {
+        fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
         abort();
     }
-    dest->assigned_at = expr;
-    dest->is_assigned = true;
+    dlist_append(&dest->assigned_at, &expr->dest_node);
     dlist_append(&code->insns, &expr->base.node);
 }
 
@@ -260,12 +398,11 @@ void ir_add_expr1(ir_code_t *code, ir_var_t *dest, ir_op1_type_t oper, ir_operan
     expr->e_unary.oper  = oper;
     expr->e_unary.value = operand;
     expr->dest          = dest;
-    if (dest->is_assigned && code->func->enforce_ssa) {
-        fprintf(stderr, "[BUG] IR variable %%%s assigned twice\n", dest->name);
+    if (dest->assigned_at.len && code->func->enforce_ssa) {
+        fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
         abort();
     }
-    dest->assigned_at = expr;
-    dest->is_assigned = true;
+    dlist_append(&dest->assigned_at, &expr->dest_node);
     dlist_append(&code->insns, &expr->base.node);
 }
 
@@ -279,12 +416,11 @@ void ir_add_expr2(ir_code_t *code, ir_var_t *dest, ir_op2_type_t oper, ir_operan
     expr->e_binary.lhs  = lhs;
     expr->e_binary.rhs  = rhs;
     expr->dest          = dest;
-    if (dest->is_assigned && code->func->enforce_ssa) {
-        fprintf(stderr, "[BUG] IR variable %%%s assigned twice\n", dest->name);
+    if (dest->assigned_at.len && code->func->enforce_ssa) {
+        fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
         abort();
     }
-    dest->assigned_at = expr;
-    dest->is_assigned = true;
+    dlist_append(&dest->assigned_at, &expr->dest_node);
     dlist_append(&code->insns, &expr->base.node);
 }
 
@@ -295,12 +431,11 @@ void ir_add_undefined(ir_code_t *code, ir_var_t *dest) {
     expr->base.parent  = code;
     expr->type         = IR_EXPR_UNDEFINED;
     expr->dest         = dest;
-    if (dest->is_assigned) {
-        fprintf(stderr, "[BUG] IR variable %%%s assigned twice\n", dest->name);
+    if (dest->assigned_at.len && code->func->enforce_ssa) {
+        fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
         abort();
     }
-    dest->assigned_at = expr;
-    dest->is_assigned = true;
+    dlist_append(&dest->assigned_at, &expr->dest_node);
     dlist_append(&code->insns, &expr->base.node);
 }
 
@@ -334,6 +469,8 @@ void ir_add_jump(ir_code_t *from, ir_code_t *to) {
     flow->base.parent   = from;
     flow->type          = IR_FLOW_JUMP;
     flow->f_jump.target = to;
+    set_add(&from->succ, to);
+    set_add(&to->pred, from);
     dlist_append(&from->insns, &flow->base.node);
 }
 
@@ -344,6 +481,8 @@ void ir_add_branch(ir_code_t *from, ir_var_t *cond, ir_code_t *to) {
     flow->type            = IR_FLOW_BRANCH;
     flow->f_branch.cond   = cond;
     flow->f_branch.target = to;
+    set_add(&from->succ, to);
+    set_add(&to->pred, from);
     dlist_append(&from->insns, &flow->base.node);
 }
 

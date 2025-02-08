@@ -6,6 +6,7 @@
 add_library(util STATIC
     arrays.c
     char_repr.c
+    hash.c
     list.c
     map.c
     refcount.c

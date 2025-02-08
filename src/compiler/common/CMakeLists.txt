@@ -6,9 +6,9 @@
 add_library(compiler-common STATIC
     backend.c
     compiler.c
-    ir_types.c
-    ir.c
+    ir/ir_types.c
+    ir/ir.c
     tokenizer.c
 )
-target_include_directories(compiler-common PUBLIC .)
+target_include_directories(compiler-common PUBLIC . ir)
 target_link_libraries(compiler-common PUBLIC util)

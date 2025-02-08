@@ -19,7 +19,7 @@ static void compile(char const *path) {
         return;
     }
     tokenizer_t  *tctx = c_tkn_create(src, C_STD_def);
-    c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = SET_EMPTY};
+    c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
     c_compiler_t *cc   = c_compiler_create(
         cctx,
         (c_options_t){

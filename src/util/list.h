@@ -35,6 +35,19 @@ typedef struct dlist_t {
 // Initializer value for a list node. Convenience macro for zero-initialization.
 #define DLIST_NODE_EMPTY ((dlist_node_t){.next = NULL, .previous = NULL})
 
+#ifndef container_of
+#define container_of(ptr, type, member) ((type *)((size_t)ptr - offsetof(type, member)))
+#endif
+
+// Generate a foreach loop for a dlist.
+#define dlist_foreach(type, varname, nodename, list)                                                                   \
+    for (type *varname = container_of((list)->head, type, nodename); &varname->nodename;                               \
+         varname       = container_of(varname->nodename.next, type, nodename))
+
+// Generate a foreach loop for a dlist where the node name is `node`.
+#define dlist_foreach_node(type, varname, list) dlist_foreach(type, varname, node, list)
+
+
 // Concatenates the elements from dlist `back` on dlist `front`, clearing `back` in the process.
 // Both lists must be non-NULL.
 void dlist_concat(dlist_t *front, dlist_t *back);

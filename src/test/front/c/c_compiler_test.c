@@ -13,7 +13,7 @@ static char *test_c_compile_type() {
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_compile_type>", source, sizeof(source) - 1);
     tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
-    c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = SET_EMPTY};
+    c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
     c_compiler_t cc       = {
         .cctx = cctx,
         .options = {
@@ -24,7 +24,7 @@ static char *test_c_compile_type() {
             .long64         = true,
             .size_type      = C_PRIM_ULONG,
         },
-        .typedefs = MAP_EMPTY,
+        .typedefs = STR_MAP_EMPTY,
     };
 
     token_t decl = c_parse_decls(&pctx, false);
@@ -83,7 +83,7 @@ static char *test_c_compile_expr() {
     cctx_t       *cctx     = cctx_create();
     srcfile_t    *src      = srcfile_create(cctx, "<c_compile_expr>", source, sizeof(source) - 1);
     tokenizer_t  *tctx     = c_tkn_create(src, C_STD_def);
-    c_parser_t    pctx     = {.tkn_ctx = tctx, .type_names = SET_EMPTY};
+    c_parser_t    pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
     c_compiler_t *cc       = c_compiler_create(
         cctx,
         (c_options_t){
@@ -146,7 +146,7 @@ static char *test_c_compile_func() {
     cctx_t       *cctx = cctx_create();
     srcfile_t    *src  = srcfile_create(cctx, "<c_compile_func>", source, sizeof(source) - 1);
     tokenizer_t  *tctx = c_tkn_create(src, C_STD_def);
-    c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = SET_EMPTY};
+    c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
     c_compiler_t *cc   = c_compiler_create(
         cctx,
         (c_options_t){

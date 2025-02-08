@@ -23,9 +23,10 @@ __attribute__((constructor)) static void fill_primitives_cache() {
 
 // Create a new C compiler context.
 c_compiler_t *c_compiler_create(cctx_t *cctx, c_options_t options) {
-    c_compiler_t *cc = strong_calloc(1, sizeof(c_compiler_t));
-    cc->cctx         = cctx;
-    cc->options      = options;
+    c_compiler_t *cc        = strong_calloc(1, sizeof(c_compiler_t));
+    cc->cctx                = cctx;
+    cc->options             = options;
+    cc->global_scope.locals = STR_MAP_EMPTY;
     return cc;
 }
 
@@ -302,6 +303,7 @@ c_scope_t *c_scope_create(c_scope_t *parent) {
     c_scope_t *new_scope = strong_calloc(1, sizeof(c_scope_t));
     new_scope->parent    = parent;
     new_scope->depth     = parent->depth + 1;
+    new_scope->locals    = STR_MAP_EMPTY;
     return new_scope;
 }
 

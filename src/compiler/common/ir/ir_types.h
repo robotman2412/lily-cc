@@ -117,10 +117,6 @@ typedef enum __attribute__((packed)) {
     /* ==== Bitwise operators ==== */
     // Bitwise negation.
     IR_OP1_BNEG,
-
-    /* ==== Logical operators ==== */
-    // Logical negation.
-    IR_OP1_LNOT,
 } ir_op1_type_t;
 
 // IR control flow types.
@@ -180,10 +176,16 @@ struct ir_var {
 struct ir_const {
     // Constant type.
     ir_prim_t prim_type;
-    // Low 64 bits of constant.
-    uint64_t  constl;
+    union {
+        // 32-bit float constant.
+        float    constf32;
+        // 64-bit float constant.
+        double   constf64;
+        // Low 64 bits of constant.
+        uint64_t constl;
+    };
     // High 64 bits of constant.
-    uint64_t  consth;
+    uint64_t consth;
 };
 
 // IR expression operand.

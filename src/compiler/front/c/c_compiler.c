@@ -389,7 +389,7 @@ ir_op1_type_t c_op1_to_ir_op1(c_tokentype_t subtype) {
     switch (subtype) {
         case C_TKN_SUB: return IR_OP1_NEG;
         case C_TKN_NOT: return IR_OP1_BNEG;
-        case C_TKN_LNOT: return IR_OP1_LNOT;
+        case C_TKN_LNOT: return IR_OP1_BNEG;
         default:
             printf("[BUG] C token %d cannot be converted to IR op1\n", subtype);
             abort();

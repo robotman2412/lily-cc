@@ -130,6 +130,7 @@ bool set_remove(set_t *set, void const *value) {
             dlist_remove(&set->buckets[bucket], node);
             set->val_del(ent->value);
             free(ent);
+            set->len--;
             return true;
         }
         node = node->next;

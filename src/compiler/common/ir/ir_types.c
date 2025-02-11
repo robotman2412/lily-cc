@@ -60,7 +60,6 @@ char const *const ir_op1_names[] = {
     [IR_OP1_SNEZ] = "snez",
     [IR_OP1_NEG]  = "neg",
     [IR_OP1_BNEG] = "bneg",
-    [IR_OP1_LNOT] = "lnot",
 };
 
 char const *const ir_flow_names[] = {

@@ -205,6 +205,8 @@ ir_op2_type_t c_op2_to_ir_op2(c_tokentype_t subtype);
 ir_op1_type_t c_op1_to_ir_op1(c_tokentype_t subtype);
 // Convert C primitive or pointer type to IR primitive type.
 ir_prim_t     c_type_to_ir_type(c_compiler_t *ctx, c_type_t *type);
+// Cast one IR type to another according to the C rules for doing so.
+ir_var_t     *c_cast_ir_var(ir_code_t *code, ir_var_t *var, ir_prim_t type);
 
 // Compile an expression into IR.
 // If `assign` is `NULL`, then the expression is read; otherwise, it is written, and the expression must be an lvalue.

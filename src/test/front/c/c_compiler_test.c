@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "c_parser.h"
+#include "ir/opt.h"
 #include "testcase.h"
 
 
@@ -140,6 +141,7 @@ static char *test_c_compile_func() {
     "    } else {\n"
     "        a = 2;\n"
     "    }\n"
+    "    return a;\n"
     "}\n"
     ;
     // clang-format on
@@ -200,6 +202,17 @@ static char *test_c_compile_func() {
     }
 
     printf("\n");
+    ir_func_serialize(func, stdout);
+    ir_func_to_ssa(func);
+    ir_func_serialize(func, stdout);
+
+    bool loop;
+    do {
+        loop  = false;
+        // loop |= opt_const_prop(func);
+        // loop |= opt_dead_code(func);
+        loop |= opt_unused_vars(func);
+    } while (loop);
     ir_func_serialize(func, stdout);
 
     return TEST_OK;

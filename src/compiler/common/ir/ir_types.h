@@ -71,7 +71,7 @@ typedef enum __attribute__((packed)) {
     IR_OP2_SNE,
     // Addition carry out is set.
     IR_OP2_SCS,
-    // Addition carry out if clear.
+    // Addition carry out is clear.
     IR_OP2_SCC,
 
     /* ==== Arithmetic operators ==== */
@@ -97,12 +97,6 @@ typedef enum __attribute__((packed)) {
     IR_OP2_BOR,
     // Bitwise XOR.
     IR_OP2_BXOR,
-
-    /* ==== Logical operators ==== */
-    // Logical AND.
-    IR_OP2_LAND,
-    // Logical OR.
-    IR_OP2_LOR,
 } ir_op2_type_t;
 
 // Unary IR operators.
@@ -147,6 +141,8 @@ typedef enum __attribute__((packed)) {
 
 // IR variable.
 typedef struct ir_var        ir_var_t;
+// IR constant.
+typedef struct ir_const      ir_const_t;
 // IR expression operand.
 typedef struct ir_operand    ir_operand_t;
 // IR combinator code block -> variable map.
@@ -176,6 +172,18 @@ struct ir_var {
     ir_prim_t    prim_type;
     // Expressions that assign this variable.
     dlist_t      assigned_at;
+    // instructions that read this variable.
+    set_t        used_at;
+};
+
+// IR constant.
+struct ir_const {
+    // Constant type.
+    ir_prim_t prim_type;
+    // Low 64 bits of constant.
+    uint64_t  constl;
+    // High 64 bits of constant.
+    uint64_t  consth;
 };
 
 // IR expression operand.
@@ -183,25 +191,19 @@ struct ir_operand {
     // Is this a constant?
     bool is_const;
     union {
-        struct {
-            // Constant type.
-            ir_prim_t prim_type;
-            // Low 64 bits of constant.
-            uint64_t  iconst;
-            // High 64 bits of constant.
-            uint64_t  iconsth;
-        };
+        // Constant.
+        ir_const_t iconst;
         // Variable.
-        ir_var_t *var;
+        ir_var_t  *var;
     };
 };
 
 // IR combinator code block -> variable map.
 struct ir_combinator {
     // Previous code block.
-    ir_code_t *prev;
-    // Variable to bind.
-    ir_var_t  *bind;
+    ir_code_t   *prev;
+    // Variable or constant to bind.
+    ir_operand_t bind;
 };
 
 // IR instruction.
@@ -258,10 +260,10 @@ struct ir_flow {
             ir_code_t *target;
         } f_jump;
         struct {
-            // Branch condition.
-            ir_var_t  *cond;
             // Branch target if condition is satisfied.
-            ir_code_t *target;
+            ir_code_t   *target;
+            // Branch condition.
+            ir_operand_t cond;
         } f_branch;
         struct {
             // Number of arguments.
@@ -277,7 +279,7 @@ struct ir_flow {
             // Function call arguments.
             ir_operand_t *args;
             // Destination address.
-            ir_var_t     *addr;
+            ir_operand_t  addr;
         } f_call_ptr;
         struct {
             // Has a return value.
@@ -305,9 +307,6 @@ struct ir_code {
     // Whether this node was visited by the depth-first search.
     // Used while converting into SSA form.
     bool         visited;
-    // Whether this node writes to the target variable.
-    // Used while converting into SSA form.
-    bool         writes_var;
     // Node index in depth-first search tree.
     // Used while converting into SSA form.
     size_t       dfs_index;

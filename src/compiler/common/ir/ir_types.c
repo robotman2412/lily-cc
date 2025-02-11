@@ -34,10 +34,24 @@ char const *const ir_prim_names[] = {
 };
 
 char const *const ir_op2_names[] = {
-    [IR_OP2_SGT] = "sgt",   [IR_OP2_SLE] = "sle", [IR_OP2_SLT] = "slt",   [IR_OP2_SGE] = "sge",   [IR_OP2_SEQ] = "seq",
-    [IR_OP2_SNE] = "sne",   [IR_OP2_SCS] = "scs", [IR_OP2_SCC] = "scc",   [IR_OP2_ADD] = "add",   [IR_OP2_SUB] = "sub",
-    [IR_OP2_MUL] = "mul",   [IR_OP2_DIV] = "div", [IR_OP2_MOD] = "mod",   [IR_OP2_SHL] = "shl",   [IR_OP2_SHR] = "shr",
-    [IR_OP2_BAND] = "band", [IR_OP2_BOR] = "bor", [IR_OP2_BXOR] = "bxor", [IR_OP2_LAND] = "land", [IR_OP2_LOR] = "lor",
+    [IR_OP2_SGT]  = "sgt",
+    [IR_OP2_SLE]  = "sle",
+    [IR_OP2_SLT]  = "slt",
+    [IR_OP2_SGE]  = "sge",
+    [IR_OP2_SEQ]  = "seq",
+    [IR_OP2_SNE]  = "sne",
+    [IR_OP2_SCS]  = "scs",
+    [IR_OP2_SCC]  = "scc",
+    [IR_OP2_ADD]  = "add",
+    [IR_OP2_SUB]  = "sub",
+    [IR_OP2_MUL]  = "mul",
+    [IR_OP2_DIV]  = "div",
+    [IR_OP2_MOD]  = "mod",
+    [IR_OP2_SHL]  = "shl",
+    [IR_OP2_SHR]  = "shr",
+    [IR_OP2_BAND] = "band",
+    [IR_OP2_BOR]  = "bor",
+    [IR_OP2_BXOR] = "bxor",
 };
 
 char const *const ir_op1_names[] = {

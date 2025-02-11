@@ -8,6 +8,7 @@ add_library(compiler-common STATIC
     compiler.c
     ir/ir_types.c
     ir/ir.c
+    ir/opt.c
     tokenizer.c
 )
 target_include_directories(compiler-common PUBLIC . ir)

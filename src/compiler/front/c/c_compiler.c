@@ -361,8 +361,6 @@ rc_t c_type_promote(c_tokentype_t oper, rc_t a_rc, rc_t b_rc) {
 // Convert C binary operator to IR binary operator.
 ir_op2_type_t c_op2_to_ir_op2(c_tokentype_t subtype) {
     switch (subtype) {
-        case C_TKN_LAND: return IR_OP2_LAND;
-        case C_TKN_LOR: return IR_OP2_LOR;
         case C_TKN_ADD: return IR_OP2_ADD;
         case C_TKN_SUB: return IR_OP2_SUB;
         case C_TKN_MUL: return IR_OP2_MUL;
@@ -424,6 +422,21 @@ ir_prim_t c_type_to_ir_type(c_compiler_t *ctx, c_type_t *type) {
     }
 }
 
+// Cast one IR type to another according to the C rules for doing so.
+ir_var_t *c_cast_ir_var(ir_code_t *code, ir_var_t *var, ir_prim_t type) {
+    if (var->prim_type == type) {
+        return var;
+    }
+    ir_var_t *dest = ir_var_create(code->func, type, NULL);
+    ir_add_expr1(
+        code,
+        dest,
+        type == IR_PRIM_BOOL ? IR_OP1_SNEZ : IR_OP1_MOV,
+        (ir_operand_t){.is_const = false, .var = var}
+    );
+    return dest;
+}
+
 
 
 // Compile an expression into IR.
@@ -465,7 +478,7 @@ c_compile_expr_t c_compile_expr(
             code,
             var,
             IR_OP1_MOV,
-            (ir_operand_t){.is_const = true, .prim_type = var->prim_type, .iconst = expr.ival}
+            (ir_operand_t){.is_const = true, .iconst = {.prim_type = var->prim_type, .constl = expr.ival}}
         );
         return (c_compile_expr_t){
             .code = code,
@@ -596,6 +609,14 @@ c_compile_expr_t c_compile_expr(
         printf("TODO: Dot operator\n");
         abort();
 
+    } else if (expr.subtype == C_AST_EXPR_INFIX && expr.params[0].subtype == C_TKN_LOR) {
+        printf("TODO: Logical OR operator\n");
+        abort();
+
+    } else if (expr.subtype == C_AST_EXPR_INFIX && expr.params[0].subtype == C_TKN_LAND) {
+        printf("TODO: Logical AND operator\n");
+        abort();
+
     } else if (expr.subtype == C_AST_EXPR_INFIX) {
         if (assign) {
             cctx_diagnostic(ctx->cctx, expr.pos, DIAG_ERR, "Expression must be a modifiable lvalue");
@@ -650,8 +671,18 @@ c_compile_expr_t c_compile_expr(
             rc_delete(type0);
             rc_delete(type1);
 
+            // Cast the variables if needed.
+            ir_prim_t ir_prim;
+            if (op2 >= C_TKN_EQ && op2 <= C_TKN_GE) {
+                ir_prim = IR_PRIM_BOOL;
+            } else {
+                ir_prim = c_type_to_ir_type(ctx, type->data);
+            }
+            var0 = c_cast_ir_var(code, var0, ir_prim);
+            var1 = c_cast_ir_var(code, var1, ir_prim);
+
             // Add math instruction.
-            ir_var_t *tmpvar = ir_var_create(func, c_type_to_ir_type(ctx, type->data), NULL);
+            ir_var_t *tmpvar = ir_var_create(func, ir_prim, NULL);
             ir_add_expr2(
                 code,
                 tmpvar,
@@ -694,7 +725,7 @@ c_compile_expr_t c_compile_expr(
                 tmpvar,
                 is_inc ? IR_OP2_ADD : IR_OP2_SUB,
                 (ir_operand_t){.is_const = false, .var = res.var},
-                (ir_operand_t){.is_const = true, .iconst = 1, .iconsth = 0}
+                (ir_operand_t){.is_const = true, .iconst = {.prim_type = tmpvar->prim_type, .constl = 1, .consth = 0}}
             );
 
             // After modifying, write back and return value.
@@ -714,7 +745,13 @@ c_compile_expr_t c_compile_expr(
             code = res.code;
 
             // Apply unary operator.
-            ir_var_t *tmpvar = ir_var_create(func, c_type_to_ir_type(ctx, res.type->data), NULL);
+            ir_prim_t ir_prim;
+            if (expr.params[0].subtype == C_TKN_LNOT) {
+                ir_prim = IR_PRIM_BOOL;
+            } else {
+                ir_prim = c_type_to_ir_type(ctx, res.type->data);
+            }
+            ir_var_t *tmpvar = ir_var_create(func, ir_prim, NULL);
             ir_add_expr1(
                 code,
                 tmpvar,
@@ -754,7 +791,7 @@ c_compile_expr_t c_compile_expr(
             tmpvar,
             is_inc ? IR_OP2_ADD : IR_OP2_SUB,
             (ir_operand_t){.is_const = false, .var = res.var},
-            (ir_operand_t){.is_const = true, .iconst = 1, .iconsth = 0}
+            (ir_operand_t){.is_const = true, .iconst = {.prim_type = tmpvar->prim_type, .constl = 1, .consth = 0}}
         );
 
         // After modifying, write back.
@@ -812,7 +849,11 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c
         c_compile_expr_t expr = c_compile_expr(ctx, func, cond_body, scope, stmt.params[0], NULL);
         cond_body             = expr.code;
         if (expr.var) {
-            ir_add_branch(cond_body, expr.var, loop_body);
+            ir_add_branch(
+                cond_body,
+                (ir_operand_t){.is_const = false, .var = c_cast_ir_var(cond_body, expr.var, IR_PRIM_BOOL)},
+                loop_body
+            );
         }
         ir_add_jump(cond_body, after);
 
@@ -842,7 +883,11 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c
         c_compile_stmt(ctx, func, if_body, scope, stmt.params[1]);
         ir_add_jump(if_body, after);
         if (expr.var) {
-            ir_add_branch(code, expr.var, if_body);
+            ir_add_branch(
+                code,
+                (ir_operand_t){.is_const = false, .var = c_cast_ir_var(code, expr.var, IR_PRIM_BOOL)},
+                if_body
+            );
         }
         if (stmt.params_len == 3) {
             // If...else statement.

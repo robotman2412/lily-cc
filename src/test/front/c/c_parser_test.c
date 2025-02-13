@@ -8,7 +8,7 @@
 
 
 
-static char *c_expr_basic() {
+static char *test_c_expr_basic() {
     char const   source[] = "1 + 2 * 3 - 4 % 5 / 6";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_expr_basic>", source, sizeof(source) - 1);
@@ -100,12 +100,15 @@ static char *c_expr_basic() {
         }
     }
 
+    tkn_delete(expr);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
     return TEST_OK;
 }
-LILY_TEST_CASE(c_expr_basic)
+LILY_TEST_CASE(test_c_expr_basic)
 
 
-static char *c_expr_call() {
+static char *test_c_expr_call() {
     char const   source[] = "foobar() + (1) - beer(2, 3)";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_expr_call>", source, sizeof(source) - 1);
@@ -125,12 +128,15 @@ static char *c_expr_call() {
         return TEST_FAIL;
     }
 
+    tkn_delete(expr);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
     return TEST_OK;
 }
-LILY_TEST_CASE(c_expr_call)
+LILY_TEST_CASE(test_c_expr_call)
 
 
-static char *c_expr_deref() {
+static char *test_c_expr_deref() {
     char const   source[] = "*foo.bar->baz[1](2)";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_expr_deref>", source, sizeof(source) - 1);
@@ -149,15 +155,15 @@ static char *c_expr_deref() {
         return TEST_FAIL;
     }
 
-    // printf("\n");
-    // c_tkn_debug_print(expr);
-
+    tkn_delete(expr);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
     return TEST_OK;
 }
-LILY_TEST_CASE(c_expr_deref)
+LILY_TEST_CASE(test_c_expr_deref)
 
 
-static char *c_expr_cast() {
+static char *test_c_expr_cast() {
     char const   source[] = "(ident0 *(*const volatile)[2]) (ident1)";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_expr_cast>", source, sizeof(source) - 1);
@@ -178,12 +184,16 @@ static char *c_expr_cast() {
         return TEST_FAIL;
     }
 
+    set_clear(&pctx.type_names);
+    tkn_delete(token);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
     return TEST_OK;
 }
-LILY_TEST_CASE(c_expr_cast)
+LILY_TEST_CASE(test_c_expr_cast)
 
 
-static char *c_type_funcptr() {
+static char *test_c_type_funcptr() {
     char const   source[] = "ident0 (*)(ident1)";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_type_funcptr>", source, sizeof(source) - 1);
@@ -205,12 +215,16 @@ static char *c_type_funcptr() {
         return TEST_FAIL;
     }
 
+    set_clear(&pctx.type_names);
+    tkn_delete(token);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
     return TEST_OK;
 }
-LILY_TEST_CASE(c_type_funcptr)
+LILY_TEST_CASE(test_c_type_funcptr)
 
 
-static char *c_type_struct() {
+static char *test_c_type_struct() {
     // clang-format off
     char const   source[] =
     "typedef struct thing {\n"
@@ -237,12 +251,17 @@ static char *c_type_struct() {
         return TEST_FAIL;
     }
 
+    set_clear(&pctx.type_names);
+    set_clear(&pctx.local_type_names);
+    tkn_delete(token);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
     return TEST_OK;
 }
-LILY_TEST_CASE(c_type_struct)
+LILY_TEST_CASE(test_c_type_struct)
 
 
-static char *c_type_enum() {
+static char *test_c_type_enum() {
     // clang-format off
     char const   source[] =
     "typedef enum thing {\n"
@@ -269,12 +288,17 @@ static char *c_type_enum() {
         return TEST_FAIL;
     }
 
+    set_clear(&pctx.type_names);
+    set_clear(&pctx.local_type_names);
+    tkn_delete(token);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
     return TEST_OK;
 }
-LILY_TEST_CASE(c_type_enum)
+LILY_TEST_CASE(test_c_type_enum)
 
 
-static char *c_stmt_decl() {
+static char *test_c_stmt_decl() {
     char const   source[] = "typename ident, *ident2[];";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_stmt_decl>", source, sizeof(source) - 1);
@@ -295,12 +319,16 @@ static char *c_stmt_decl() {
         return TEST_FAIL;
     }
 
+    set_clear(&pctx.type_names);
+    tkn_delete(decl);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
     return TEST_OK;
 }
-LILY_TEST_CASE(c_stmt_decl)
+LILY_TEST_CASE(test_c_stmt_decl)
 
 
-static char *c_stmt_ctrl() {
+static char *test_c_stmt_ctrl() {
     // clang-format off
     char const   source[] =
     "if (1) {\n"
@@ -335,12 +363,16 @@ static char *c_stmt_ctrl() {
         return TEST_FAIL;
     }
 
+    set_clear(&pctx.type_names);
+    tkn_delete(decl);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
     return TEST_OK;
 }
-LILY_TEST_CASE(c_stmt_ctrl)
+LILY_TEST_CASE(test_c_stmt_ctrl)
 
 
-static char *c_function() {
+static char *test_c_function() {
     // clang-format off
     char const   source[] =
     "void funcname() {\n"
@@ -367,6 +399,10 @@ static char *c_function() {
         return TEST_FAIL;
     }
 
+    set_clear(&pctx.type_names);
+    tkn_delete(decl);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
     return TEST_OK;
 }
-LILY_TEST_CASE(c_function)
+LILY_TEST_CASE(test_c_function)

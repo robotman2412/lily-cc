@@ -45,9 +45,31 @@ cctx_t *cctx_create() {
     return calloc(1, sizeof(cctx_t));
 }
 
+// Close a source file.
+static void srcfile_close(srcfile_t *file) {
+    if (file->is_ram_file) {
+        free(file->content);
+    } else {
+        fclose(file->fd);
+    }
+    free(file->path);
+    free(file);
+}
+
 // Delete compiler context (and therefor all compiler resources).
 void cctx_delete(cctx_t *ctx) {
-    // TODO.
+    for (size_t i = 0; i < ctx->srcs_len; i++) {
+        srcfile_close(ctx->srcs[i]);
+    }
+    free(ctx->srcs);
+
+    while (ctx->diagnostics.len) {
+        diagnostic_t *diag = (diagnostic_t *)dlist_pop_front(&ctx->diagnostics);
+        free(diag->msg);
+        free(diag);
+    }
+
+    free(ctx);
 }
 
 // Create a formatted diagnostic message.
@@ -146,7 +168,7 @@ srcfile_t *srcfile_create(cctx_t *ctx, char const *virt_path, void const *data, 
         goto err1;
 
     file->is_ram_file = true;
-    file->content     = malloc(len);
+    file->content     = strong_malloc(len);
     file->content_len = len;
     file->ctx         = ctx;
     if (!file->content)

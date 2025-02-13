@@ -6,6 +6,7 @@
 cmake_minimum_required(VERSION 3.16.0)
 
 add_library(compiler-common-test STATIC
+    arith128_test.c
     compiler_test.c
     ir_test.c
 )

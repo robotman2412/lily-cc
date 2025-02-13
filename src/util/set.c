@@ -23,6 +23,7 @@ void set_clear(set_t *set) {
             node = dlist_pop_front(&set->buckets[i]);
         }
     }
+    set->len = 0;
 }
 
 // Get an item from the set.

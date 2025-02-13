@@ -36,7 +36,11 @@ typedef struct dlist_t {
 #define DLIST_NODE_EMPTY ((dlist_node_t){.next = NULL, .previous = NULL})
 
 #ifndef container_of
-#define container_of(ptr, type, member) ((type *)((size_t)ptr - offsetof(type, member)))
+#define container_of(ptr, type, member)                                                                                \
+    ({                                                                                                                 \
+        _Static_assert(sizeof(((type *)0)->member) == sizeof(*(ptr)));                                                 \
+        (type *)((size_t)ptr - offsetof(type, member));                                                                \
+    })
 #endif
 
 // Generate a foreach loop for a dlist.

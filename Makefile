@@ -1,6 +1,7 @@
 
 MAKEFLAGS += --silent --no-print-directory -j$(shell nproc)
 TEST      ?=
+VGFLAGS   ?=
 
 .PHONY: all
 all: build
@@ -12,7 +13,7 @@ build:
 
 .PHONY: test
 test: build
-	./build/test/lily-cc-test $(TEST)
+	valgrind $(VGFLAGS) ./build/test/lily-test $(TEST)
 
 .PHONY: clean
 clean:

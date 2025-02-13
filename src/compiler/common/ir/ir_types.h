@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "arith128.h"
 #include "list.h"
 #include "set.h"
 
@@ -69,10 +70,6 @@ typedef enum __attribute__((packed)) {
     IR_OP2_SEQ,
     // Not equal.
     IR_OP2_SNE,
-    // Addition carry out is set.
-    IR_OP2_SCS,
-    // Addition carry out is clear.
-    IR_OP2_SCC,
 
     /* ==== Arithmetic operators ==== */
     // Addition.
@@ -178,14 +175,18 @@ struct ir_const {
     ir_prim_t prim_type;
     union {
         // 32-bit float constant.
-        float    constf32;
+        float  constf32;
         // 64-bit float constant.
-        double   constf64;
-        // Low 64 bits of constant.
-        uint64_t constl;
+        double constf64;
+        struct {
+            // Low 64 bits of constant.
+            uint64_t constl;
+            // High 64 bits of constant.
+            uint64_t consth;
+        };
+        // 128-bit constant.
+        i128_t const128;
     };
-    // High 64 bits of constant.
-    uint64_t consth;
 };
 
 // IR expression operand.

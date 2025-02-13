@@ -9,7 +9,7 @@
 
 
 // Simple test of the various tokens.
-static char *srcfile_ram() {
+static char *test_srcfile_ram() {
     // clang-format off
     char const data[] =
     "012\n"
@@ -40,6 +40,7 @@ static char *srcfile_ram() {
     }
 
 
+    cctx_delete(cctx);
     return TEST_OK;
 }
-LILY_TEST_CASE(srcfile_ram)
+LILY_TEST_CASE(test_srcfile_ram)

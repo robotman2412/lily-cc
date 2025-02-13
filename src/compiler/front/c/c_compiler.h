@@ -182,6 +182,8 @@ struct c_compile_expr {
 
 // Create a new C compiler context.
 c_compiler_t *c_compiler_create(cctx_t *cctx, c_options_t options);
+// Destroy a C compiler context.
+void          c_compiler_destroy(c_compiler_t *cc);
 
 // Create a C type from a specifier-qualifer list.
 // Returns a refcount pointer of `c_type_t`.

@@ -74,6 +74,10 @@ static char *test_c_compile_type() {
         return TEST_FAIL;
     }
 
+    tkn_delete(decl);
+    rc_delete(full);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
     return TEST_OK;
 }
 LILY_TEST_CASE(test_c_compile_type)
@@ -124,6 +128,13 @@ static char *test_c_compile_expr() {
         return TEST_FAIL;
     }
 
+
+    ir_func_destroy(func);
+    tkn_delete(expr_tok);
+
+    c_compiler_destroy(cc);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
     return TEST_OK;
 }
 LILY_TEST_CASE(test_c_compile_expr)
@@ -201,20 +212,13 @@ static char *test_c_compile_func() {
         return TEST_FAIL;
     }
 
-    printf("\n");
-    ir_func_serialize(func, stdout);
-    ir_func_to_ssa(func);
-    ir_func_serialize(func, stdout);
+    ir_func_destroy(func);
+    tkn_delete(functest_tok);
+    tkn_delete(foobar_tok);
 
-    bool loop;
-    do {
-        loop  = false;
-        // loop |= opt_const_prop(func);
-        // loop |= opt_dead_code(func);
-        loop |= opt_unused_vars(func);
-    } while (loop);
-    ir_func_serialize(func, stdout);
-
+    c_compiler_destroy(cc);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
     return TEST_OK;
 }
 LILY_TEST_CASE(test_c_compile_func)

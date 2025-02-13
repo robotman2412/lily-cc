@@ -21,7 +21,7 @@
 - `#define` and `#undef`
 - `#pragma` and `_Pragma` operator
 - `#error` and `#warning`
-- `#(el)?if(n?def)`, `#else` and `#endif`
+- `#(el)?if(n?def)?`, `#else` and `#endif`
 - `#line`
 - Macro expansion
     - `__VA_ARGS__` and `__VA_OPT__(x)`
@@ -30,7 +30,8 @@
     - Pasting (`a ## b`)
 - Predefined macros
     - `__DATE__` - `"Mmm dd yyyy"` format compile date
-    - `__FILE__` - string literal filename
+    - `__FILE__` - string literal file path
+    - `__FILE_NAME__` - GNU extension; file name only
     - `__LINE__` - line number string literal
     - `__STDC__` - int literal `1`
     - `__STDC_HOSTED__` - `0` with freestanding, `1` with hosted
@@ -40,22 +41,22 @@
 ### C parser and AST builder
 - Research C syntax
     - GCC extension `__attribute__`
-    - Pointers of arrays and arrays of pointers
-- Design clean, generic struct for building the AST
-- Global variable declaration
-- Global variable definition
-- Function declaration
-- Function definition
+    - Pointers of arrays and arrays of pointers ✓
+- Design clean, generic struct for building the AST ✓
+- Global variable declaration ✓
+- Global variable definition ✓
+- Function declaration ✓
+- Function definition ✓
 - Statements
-    - For loop
-    - While loop
-    - If statement
+    - For loop ✓
+    - While loop ✓
+    - If statement ✓
     - Switch case
     - Inline assembly
 - Expressions
     - Assignments ✓
     - Compound literals
-    - Casts
+    - Casts ✓
     - `sizeof` and `alignof`
     - Operators ✓
     - Function calls ✓
@@ -63,7 +64,7 @@
 
 ## Generic codegen
 - Generic optimizations
-    - Known-value optimizations
+    - Known-value optimizations ✓
     - Loop unrolling
 - Generic instruction selection code
 

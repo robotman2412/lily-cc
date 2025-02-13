@@ -122,6 +122,7 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         } else if (c == '_') {
             // Invalid character.
             invalid = true;
+            digit   = 0;
         } else {
             // End of constant.
             break;
@@ -147,7 +148,7 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
             case 8: ctype = "octal"; break;
             case 10: ctype = "decimal"; break;
             case 16: ctype = "hexadecimal"; break;
-            default: __builtin_unreachable();
+            default: abort();
         }
         cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Invalid %s constant", ctype);
         return (token_t){
@@ -212,6 +213,7 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
         keyw = C_KEYW_##alt_spelling;                                                                                  \
     }
 #include "c_keywords.inc"
+        free(ptr);
         // Return keyword token with main spelling.
         return (token_t){
             .pos        = pos_between(start_pos, pos0),

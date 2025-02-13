@@ -40,7 +40,7 @@ int cmp_ptr(void const *a, void const *b) {
 
 // No-op duplicate function; simply returns argument.
 void *dup_nop(void const *a) {
-    return a;
+    return (void *)a;
 }
 
 

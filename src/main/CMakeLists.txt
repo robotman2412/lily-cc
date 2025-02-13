@@ -6,8 +6,8 @@
 cmake_minimum_required(VERSION 3.16.0)
 
 # The part of Lily-CC that parses arguments, opens source files and hands them over to the compiler.
-add_executable(lily-cc
+add_executable(lilycc
     main.c
 )
-target_include_directories(lily-cc PUBLIC main)
-target_link_libraries(lily-cc PUBLIC lily-cc-lib)
+target_include_directories(lilycc PUBLIC main)
+target_link_libraries(lilycc PUBLIC lilycc-lib)

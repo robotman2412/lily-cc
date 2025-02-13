@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: MIT
 
 add_library(util STATIC
+    arith128.c
     arrays.c
     char_repr.c
     hash.c

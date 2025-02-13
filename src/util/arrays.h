@@ -64,7 +64,7 @@ static inline void
     if (removed)
         array_copy(removed, array, ent_size, 0, index, remove_count);
     // Copy the remainder of the array backward.
-    array_copy(array, array, ent_size, index, index + remove_count, ent_count - index);
+    array_copy(array, array, ent_size, index, index + remove_count, ent_count - index - remove_count);
 }
 
 // Insert an element into an array.

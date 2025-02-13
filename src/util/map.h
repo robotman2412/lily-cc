@@ -20,6 +20,10 @@
 // Whatever is being pointer to is expected to live at least as long as the map.
 #define PTR_MAP_EMPTY ((map_t){{0}, 0, hash_ptr, cmp_ptr, dup_nop, del_nop})
 
+// Iterate over all entries in the map.
+#define map_foreach(varname, set)                                                                                      \
+    for (map_ent_t const *varname = map_next(set, NULL); varname; varname = map_next(set, ent))
+
 
 
 // Hash map.

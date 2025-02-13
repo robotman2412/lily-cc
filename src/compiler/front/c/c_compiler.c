@@ -30,9 +30,20 @@ c_compiler_t *c_compiler_create(cctx_t *cctx, c_options_t options) {
     return cc;
 }
 
+// Destroy a C compiler context.
+void c_compiler_destroy(c_compiler_t *cc) {
+    map_foreach(ent, &cc->global_scope.locals) {
+        c_var_t *local = ent->value;
+        rc_delete(local->type);
+        free(local);
+    }
+    map_clear(&cc->global_scope.locals);
+    free(cc);
+}
 
 
-// Clear up a `c_type_t`.
+
+// Clean up a `c_type_t`.
 static void c_type_free(c_type_t *type) {
     if (type->primitive == C_COMP_FUNCTION) {
         rc_delete(type->func.return_type);
@@ -40,6 +51,8 @@ static void c_type_free(c_type_t *type) {
             rc_delete(type->func.args[i]);
             free(type->func.arg_names[i]);
         }
+        free(type->func.args);
+        free(type->func.arg_names);
     } else if (type->primitive == C_COMP_ARRAY) {
         // TODO: An array size could be here.
         rc_delete(type->inner);
@@ -219,8 +232,10 @@ rc_t c_compile_decl(c_compiler_t *ctx, token_t decl, rc_t spec_qual_type, char c
             func_type->primitive = C_COMP_FUNCTION;
             func_type->func.return_type = cur;
             func_type->func.args_len    = decl.params_len - 1;
-            func_type->func.args        = strong_malloc(sizeof(rc_t) * (decl.params_len - 1));
-            func_type->func.arg_names   = strong_malloc(sizeof(void *) * (decl.params_len - 1));
+            if (decl.params_len > 1) {
+                func_type->func.args      = strong_malloc(sizeof(rc_t) * (decl.params_len - 1));
+                func_type->func.arg_names = strong_malloc(sizeof(void *) * (decl.params_len - 1));
+            }
 
             for (size_t i = 0; i < decl.params_len - 1; i++) {
                 token_t param = decl.params[i + 1];
@@ -633,6 +648,7 @@ c_compile_expr_t c_compile_expr(
                 };
             }
             code = res.code;
+            rc_delete(res.type);
             return c_compile_expr(ctx, func, code, scope, expr.params[1], res.var);
 
         } else {
@@ -693,6 +709,7 @@ c_compile_expr_t c_compile_expr(
 
             if (is_assign) {
                 // Write back.
+                rc_delete(type);
                 return c_compile_expr(ctx, func, code, scope, expr.params[1], tmpvar);
             } else {
                 return (c_compile_expr_t){
@@ -727,6 +744,7 @@ c_compile_expr_t c_compile_expr(
                 (ir_operand_t){.is_const = false, .var = res.var},
                 (ir_operand_t){.is_const = true, .iconst = {.prim_type = tmpvar->prim_type, .constl = 1, .consth = 0}}
             );
+            rc_delete(res.type);
 
             // After modifying, write back and return value.
             return c_compile_expr(ctx, func, code, scope, expr.params[1], tmpvar);
@@ -795,6 +813,7 @@ c_compile_expr_t c_compile_expr(
         );
 
         // After modifying, write back.
+        rc_delete(res.type);
         res = c_compile_expr(ctx, func, code, scope, expr.params[1], tmpvar);
         if (!res.var) {
             return (c_compile_expr_t){
@@ -832,7 +851,11 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c
 
     } else if (stmt.subtype == C_AST_EXPRS) {
         // Expression statement.
-        code = c_compile_expr(ctx, func, code, scope, stmt, NULL).code;
+        c_compile_expr_t expr = c_compile_expr(ctx, func, code, scope, stmt, NULL);
+        code                  = expr.code;
+        if (expr.type) {
+            rc_delete(expr.type);
+        }
 
     } else if (stmt.subtype == C_AST_DECLS) {
         // Local declarations.
@@ -848,6 +871,9 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c
         // Compile expression.
         c_compile_expr_t expr = c_compile_expr(ctx, func, cond_body, scope, stmt.params[0], NULL);
         cond_body             = expr.code;
+        if (expr.type) {
+            rc_delete(expr.type);
+        }
         if (expr.var) {
             ir_add_branch(
                 cond_body,
@@ -980,12 +1006,17 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t def) {
 
     // Add implicit empty return statement.
     ir_add_return0(code);
-    rc_delete(func_type_rc);
+
+    // Add function into global scope.
+    c_var_t *var   = calloc(1, sizeof(c_var_t));
+    var->is_global = true;
+    var->type      = func_type_rc;
+    map_set(&ctx->global_scope.locals, name, var);
 
     return func;
 }
 
-// Compila a declaration statement.
+// Compile a declaration statement.
 void c_compile_decls(c_compiler_t *ctx, ir_func_t *func, c_scope_t *scope, token_t decls) {
     // TODO: Typedef support.
     rc_t inner_type = c_compile_spec_qual_list(ctx, decls.params[0]);
@@ -1014,7 +1045,7 @@ void c_compile_decls(c_compiler_t *ctx, ir_func_t *func, c_scope_t *scope, token
 
 
 // Explain a C type.
-void c_type_explain(c_type_t *type, FILE *to) {
+static void c_type_explain_impl(c_type_t *type, FILE *to) {
 start:
     if (type->primitive == C_COMP_FUNCTION) {
         fputs("function(", to);
@@ -1022,7 +1053,7 @@ start:
             if (i) {
                 fputs(", ", to);
             }
-            c_type_explain(type->func.args[i]->data, to);
+            c_type_explain_impl(type->func.args[i]->data, to);
         }
         fputs(") -> ", to);
         type = (c_type_t *)type->func.return_type->data;
@@ -1075,4 +1106,10 @@ start:
     if (type->is_volatile) {
         fputs(" volatile", to);
     }
+}
+
+// Explain a C type.
+void c_type_explain(c_type_t *type, FILE *to) {
+    c_type_explain_impl(type, to);
+    fputc('\n', to);
 }

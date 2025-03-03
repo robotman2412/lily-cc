@@ -11,9 +11,13 @@ build:
 	cmake -B build src
 	cmake --build build
 
+.PHONY: valgrind
+valgrind: build
+	valgrind $(VGFLAGS) ./build/test/lily-test $(TEST)
+
 .PHONY: test
 test: build
-	valgrind $(VGFLAGS) ./build/test/lily-test $(TEST)
+	./build/test/lily-test $(TEST)
 
 .PHONY: clean
 clean:

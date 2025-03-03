@@ -29,13 +29,14 @@
     - Stringification (`#thing`)
     - Pasting (`a ## b`)
 - Predefined macros
+    - Integer types and limits (e.g. `__SIZE_MAX__` and `__UINT32_TYPE__`)
     - `__DATE__` - `"Mmm dd yyyy"` format compile date
     - `__FILE__` - string literal file path
     - `__FILE_NAME__` - GNU extension; file name only
     - `__LINE__` - line number string literal
     - `__STDC__` - int literal `1`
     - `__STDC_HOSTED__` - `0` with freestanding, `1` with hosted
-    - `__STDC_VERSION__` `yyyymmL` (e.g. `202311L`) format C standard version
+    - `__STDC_VERSION__` - `yyyymmL` (e.g. `202311L`) format C standard version
     - `__TIME__` - `"hh:mm:ss"` format compile time
 
 ### C parser and AST builder
@@ -66,7 +67,13 @@
 - Generic optimizations
     - Known-value optimizations ✓
     - Loop unrolling
+- IR support for memory
+    - Concept of stack frame
+    - Concept of stack variable within such a frame
+    - Instruction to get stack variable pointer
+    - Memory load/store
 - Generic instruction selection code
+
 
 ## Backends
 - Research compiler backend design

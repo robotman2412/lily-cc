@@ -4,10 +4,11 @@
 # SPDX-License-Identifier: MIT
 
 add_library(compiler-common STATIC
-    ir/interp.c
+    ir/ir_interpreter.c
+    ir/ir_optimizer.c
+    ir/ir_serialization.c
     ir/ir_types.c
     ir/ir.c
-    ir/opt.c
     backend.c
     compiler.c
     tokenizer.c

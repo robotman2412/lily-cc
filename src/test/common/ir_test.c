@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "ir.h"
-#include "ir/opt.h"
+#include "ir/ir_optimizer.h"
 #include "testcase.h"
 
 
@@ -67,7 +67,7 @@ static char *test_ir_to_ssa() {
     ir_add_return1(code3, (ir_operand_t){.is_const = false, .var = var0});
 
     ir_func_to_ssa(func);
-    optimize(func);
+    ir_optimize(func);
 
     ir_func_destroy(func);
     return TEST_OK;

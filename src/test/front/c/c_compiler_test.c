@@ -4,7 +4,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "c_parser.h"
-#include "ir/opt.h"
 #include "testcase.h"
 
 

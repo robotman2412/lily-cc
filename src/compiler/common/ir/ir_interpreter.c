@@ -3,7 +3,7 @@
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
-#include "interp.h"
+#include "ir/ir_interpreter.h"
 
 #include <stdlib.h>
 

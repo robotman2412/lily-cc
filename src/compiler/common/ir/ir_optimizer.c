@@ -3,15 +3,15 @@
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
-#include "ir/opt.h"
+#include "ir/ir_optimizer.h"
 
-#include "ir/interp.h"
+#include "ir/ir_interpreter.h"
 
 
 
 // Run optimizations on some IR.
 // Returns whether any code was changed.
-bool optimize(ir_func_t *func) {
+bool ir_optimize(ir_func_t *func) {
     bool changed = false, loop;
     do {
         loop     = false;

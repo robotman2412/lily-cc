@@ -11,7 +11,7 @@
 
 // Run optimizations on some IR.
 // Returns whether any code was changed.
-bool optimize(ir_func_t *func);
+bool ir_optimize(ir_func_t *func);
 
 // Optimization: Delete all variables and assignments to them whose value is never read.
 // Returns whether any variables were deleted.

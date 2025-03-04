@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "ir_serialization.h"
 #include "ir_types.h"
 
 #include <stdio.h>
@@ -16,8 +17,6 @@
 ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_len, char const *const *args_name);
 // Delete an IR function.
 void       ir_func_destroy(ir_func_t *func);
-// Serialize an IR function.
-void       ir_func_serialize(ir_func_t *func, FILE *to);
 
 // Convert non-SSA to SSA form.
 void ir_func_to_ssa(ir_func_t *func);

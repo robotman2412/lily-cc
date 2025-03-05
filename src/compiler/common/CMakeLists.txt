@@ -7,6 +7,7 @@ add_library(compiler-common STATIC
     ir/ir_interpreter.c
     ir/ir_optimizer.c
     ir/ir_serialization.c
+    ir/ir_tokenizer.c
     ir/ir_types.c
     ir/ir.c
     backend.c

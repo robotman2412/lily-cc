@@ -5,43 +5,17 @@
 
 #pragma once
 
+// IR primitive types.
+// Must be before <stdbool.h> because it contains the identifier `bool`.
+typedef enum __attribute__((packed)) {
+#define IR_PRIM_DEF(name) IR_PRIM_##name,
+#include "defs/ir_primitives.inc"
+    IR_N_PRIM,
+} ir_prim_t;
+
 #include "arith128.h"
 #include "list.h"
 #include "set.h"
-
-
-
-// IR primitive types.
-typedef enum __attribute__((packed)) {
-    // 8-bit signed integer.
-    IR_PRIM_S8,
-    // 8-bit unsigned integer.
-    IR_PRIM_U8,
-    // 16-bit signed integer.
-    IR_PRIM_S16,
-    // 16-bit unsigned integer.
-    IR_PRIM_U16,
-    // 32-bit signed integer.
-    IR_PRIM_S32,
-    // 32-bit unsigned integer.
-    IR_PRIM_U32,
-    // 64-bit signed integer.
-    IR_PRIM_S64,
-    // 64-bit unsigned integer.
-    IR_PRIM_U64,
-    // 128-bit signed integer.
-    IR_PRIM_S128,
-    // 128-bit unsigned integer.
-    IR_PRIM_U128,
-
-    // Boolean value; result from logical operators.
-    IR_PRIM_BOOL,
-
-    // IEEE754 binary32 floating-point.
-    IR_PRIM_F32,
-    // IEEE754 binary64 floating-point.
-    IR_PRIM_F64,
-} ir_prim_t;
 
 // IR expression types.
 typedef enum __attribute__((packed)) {
@@ -57,63 +31,16 @@ typedef enum __attribute__((packed)) {
 
 // Binary IR operators.
 typedef enum __attribute__((packed)) {
-    /* ==== Comparison operators ==== */
-    // Greater than.
-    IR_OP2_SGT,
-    // Less than or equal.
-    IR_OP2_SLE,
-    // Less than.
-    IR_OP2_SLT,
-    // Greater than or equal.
-    IR_OP2_SGE,
-    // Equal.
-    IR_OP2_SEQ,
-    // Not equal.
-    IR_OP2_SNE,
-
-    /* ==== Arithmetic operators ==== */
-    // Addition.
-    IR_OP2_ADD,
-    // Subtraction.
-    IR_OP2_SUB,
-    // Multiplication.
-    IR_OP2_MUL,
-    // Division.
-    IR_OP2_DIV,
-    // Modulo.
-    IR_OP2_MOD,
-
-    /* ==== Bitwise operators ==== */
-    // Bitwise shift left.
-    IR_OP2_SHL,
-    // Bitwise shift right.
-    IR_OP2_SHR,
-    // Bitwise AND.
-    IR_OP2_BAND,
-    // Bitwise OR.
-    IR_OP2_BOR,
-    // Bitwise XOR.
-    IR_OP2_BXOR,
+#define IR_OP2_DEF(name) IR_OP2_##name,
+#include "defs/ir_op2.inc"
+    IR_N_OP2,
 } ir_op2_type_t;
 
 // Unary IR operators.
 typedef enum __attribute__((packed)) {
-    // Assign directly.
-    IR_OP1_MOV,
-
-    /* ==== Comparison operators ==== */
-    // Equal to zero.
-    IR_OP1_SEQZ,
-    // Not equal to zero.
-    IR_OP1_SNEZ,
-
-    /* ==== Arithmetic operators ==== */
-    // Arithmetic negation.
-    IR_OP1_NEG,
-
-    /* ==== Bitwise operators ==== */
-    // Bitwise negation.
-    IR_OP1_BNEG,
+#define IR_OP1_DEF(name) IR_OP1_##name,
+#include "defs/ir_op1.inc"
+    IR_N_OP1,
 } ir_op1_type_t;
 
 // IR control flow types.
@@ -132,6 +59,8 @@ typedef enum __attribute__((packed)) {
 
 
 
+// IR stack frame.
+typedef struct ir_frame      ir_frame_t;
 // IR variable.
 typedef struct ir_var        ir_var_t;
 // IR constant.
@@ -152,6 +81,16 @@ typedef struct ir_code       ir_code_t;
 typedef struct ir_func       ir_func_t;
 
 
+
+// IR stack frame.
+struct ir_frame {
+    // Function's frames list node.
+    dlist_node_t node;
+    // Frame name.
+    char        *name;
+    // Frame size.
+    uint64_t     size;
+};
 
 // IR variable.
 struct ir_var {

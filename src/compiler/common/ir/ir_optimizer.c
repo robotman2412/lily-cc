@@ -132,7 +132,7 @@ bool opt_dead_code(ir_func_t *func) {
 static bool const_prop_expr(ir_expr_t *expr) {
     if (expr->type == IR_EXPR_UNARY && expr->e_unary.value.is_const) {
         ir_const_t iconst;
-        if (expr->e_unary.oper == IR_OP1_MOV) {
+        if (expr->e_unary.oper == IR_OP1_mov) {
             iconst = ir_cast(expr->dest->prim_type, expr->e_unary.value.iconst);
         } else {
             iconst = ir_calc1(expr->e_unary.oper, expr->e_unary.value.iconst);

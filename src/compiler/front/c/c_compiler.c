@@ -376,22 +376,22 @@ rc_t c_type_promote(c_tokentype_t oper, rc_t a_rc, rc_t b_rc) {
 // Convert C binary operator to IR binary operator.
 ir_op2_type_t c_op2_to_ir_op2(c_tokentype_t subtype) {
     switch (subtype) {
-        case C_TKN_ADD: return IR_OP2_ADD;
-        case C_TKN_SUB: return IR_OP2_SUB;
-        case C_TKN_MUL: return IR_OP2_MUL;
-        case C_TKN_DIV: return IR_OP2_DIV;
-        case C_TKN_MOD: return IR_OP2_MOD;
-        case C_TKN_SHL: return IR_OP2_SHL;
-        case C_TKN_SHR: return IR_OP2_SHR;
-        case C_TKN_AND: return IR_OP2_BAND;
-        case C_TKN_OR: return IR_OP2_BOR;
-        case C_TKN_XOR: return IR_OP2_BXOR;
-        case C_TKN_EQ: return IR_OP2_SEQ;
-        case C_TKN_NE: return IR_OP2_SNE;
-        case C_TKN_LT: return IR_OP2_SLT;
-        case C_TKN_LE: return IR_OP2_SLE;
-        case C_TKN_GT: return IR_OP2_SGT;
-        case C_TKN_GE: return IR_OP2_SGE;
+        case C_TKN_ADD: return IR_OP2_add;
+        case C_TKN_SUB: return IR_OP2_sub;
+        case C_TKN_MUL: return IR_OP2_mul;
+        case C_TKN_DIV: return IR_OP2_div;
+        case C_TKN_MOD: return IR_OP2_mod;
+        case C_TKN_SHL: return IR_OP2_shl;
+        case C_TKN_SHR: return IR_OP2_shr;
+        case C_TKN_AND: return IR_OP2_band;
+        case C_TKN_OR: return IR_OP2_bor;
+        case C_TKN_XOR: return IR_OP2_bxor;
+        case C_TKN_EQ: return IR_OP2_seq;
+        case C_TKN_NE: return IR_OP2_sne;
+        case C_TKN_LT: return IR_OP2_slt;
+        case C_TKN_LE: return IR_OP2_sle;
+        case C_TKN_GT: return IR_OP2_sgt;
+        case C_TKN_GE: return IR_OP2_sge;
         default:
             printf("[BUG] C token %d cannot be converted to IR op2\n", subtype);
             abort();
@@ -402,9 +402,9 @@ ir_op2_type_t c_op2_to_ir_op2(c_tokentype_t subtype) {
 // Convert C unary operator to IR unary operator.
 ir_op1_type_t c_op1_to_ir_op1(c_tokentype_t subtype) {
     switch (subtype) {
-        case C_TKN_SUB: return IR_OP1_NEG;
-        case C_TKN_NOT: return IR_OP1_BNEG;
-        case C_TKN_LNOT: return IR_OP1_BNEG;
+        case C_TKN_SUB: return IR_OP1_neg;
+        case C_TKN_NOT: return IR_OP1_bneg;
+        case C_TKN_LNOT: return IR_OP1_bneg;
         default:
             printf("[BUG] C token %d cannot be converted to IR op1\n", subtype);
             abort();
@@ -419,20 +419,20 @@ ir_prim_t c_type_to_ir_type(c_compiler_t *ctx, c_type_t *type) {
         c_prim = ctx->options.size_type;
     }
     switch (c_prim) {
-        case C_PRIM_BOOL: return IR_PRIM_BOOL;
-        case C_PRIM_UCHAR: return IR_PRIM_U8;
-        case C_PRIM_SCHAR: return IR_PRIM_S8;
-        case C_PRIM_USHORT: return !ctx->options.short16 ? IR_PRIM_U8 : IR_PRIM_U16;
-        case C_PRIM_SSHORT: return !ctx->options.short16 ? IR_PRIM_S8 : IR_PRIM_S16;
-        case C_PRIM_UINT: return !ctx->options.int32 ? IR_PRIM_U16 : IR_PRIM_U32;
-        case C_PRIM_SINT: return !ctx->options.int32 ? IR_PRIM_S16 : IR_PRIM_S32;
-        case C_PRIM_ULONG: return !ctx->options.long64 ? IR_PRIM_U32 : IR_PRIM_U64;
-        case C_PRIM_SLONG: return !ctx->options.long64 ? IR_PRIM_S32 : IR_PRIM_S64;
-        case C_PRIM_ULLONG: return IR_PRIM_U64;
-        case C_PRIM_SLLONG: return IR_PRIM_S64;
-        case C_PRIM_FLOAT: return IR_PRIM_F32;
-        case C_PRIM_DOUBLE: return IR_PRIM_F64;
-        case C_PRIM_LDOUBLE: return IR_PRIM_F64;
+        case C_PRIM_BOOL: return IR_PRIM_bool;
+        case C_PRIM_UCHAR: return IR_PRIM_u8;
+        case C_PRIM_SCHAR: return IR_PRIM_s8;
+        case C_PRIM_USHORT: return !ctx->options.short16 ? IR_PRIM_u8 : IR_PRIM_u16;
+        case C_PRIM_SSHORT: return !ctx->options.short16 ? IR_PRIM_s8 : IR_PRIM_s16;
+        case C_PRIM_UINT: return !ctx->options.int32 ? IR_PRIM_u16 : IR_PRIM_u32;
+        case C_PRIM_SINT: return !ctx->options.int32 ? IR_PRIM_s16 : IR_PRIM_s32;
+        case C_PRIM_ULONG: return !ctx->options.long64 ? IR_PRIM_u32 : IR_PRIM_u64;
+        case C_PRIM_SLONG: return !ctx->options.long64 ? IR_PRIM_s32 : IR_PRIM_s64;
+        case C_PRIM_ULLONG: return IR_PRIM_u64;
+        case C_PRIM_SLLONG: return IR_PRIM_s64;
+        case C_PRIM_FLOAT: return IR_PRIM_f32;
+        case C_PRIM_DOUBLE: return IR_PRIM_f64;
+        case C_PRIM_LDOUBLE: return IR_PRIM_f64;
         default: __builtin_trap();
     }
 }
@@ -446,7 +446,7 @@ ir_var_t *c_cast_ir_var(ir_code_t *code, ir_var_t *var, ir_prim_t type) {
     ir_add_expr1(
         code,
         dest,
-        type == IR_PRIM_BOOL ? IR_OP1_SNEZ : IR_OP1_MOV,
+        type == IR_PRIM_bool ? IR_OP1_snez : IR_OP1_mov,
         (ir_operand_t){.is_const = false, .var = var}
     );
     return dest;
@@ -473,7 +473,7 @@ c_compile_expr_t c_compile_expr(
         if (assign && ((c_type_t *)c_var->type->data)->is_const) {
             cctx_diagnostic(ctx->cctx, expr.pos, DIAG_ERR, "Expression must be a modifiable lvalue");
         } else if (assign) {
-            ir_add_expr1(code, c_var->ir_var, IR_OP1_MOV, (ir_operand_t){.is_const = false, .var = assign});
+            ir_add_expr1(code, c_var->ir_var, IR_OP1_mov, (ir_operand_t){.is_const = false, .var = assign});
         }
         return (c_compile_expr_t){
             .code = code,
@@ -488,11 +488,11 @@ c_compile_expr_t c_compile_expr(
         }
 
         // TODO: Typed literals.
-        ir_var_t *var = ir_var_create(func, ctx->options.int32 ? IR_PRIM_S32 : IR_PRIM_S16, NULL);
+        ir_var_t *var = ir_var_create(func, ctx->options.int32 ? IR_PRIM_s32 : IR_PRIM_s16, NULL);
         ir_add_expr1(
             code,
             var,
-            IR_OP1_MOV,
+            IR_OP1_mov,
             (ir_operand_t){.is_const = true, .iconst = {.prim_type = var->prim_type, .constl = expr.ival}}
         );
         return (c_compile_expr_t){
@@ -690,7 +690,7 @@ c_compile_expr_t c_compile_expr(
             // Cast the variables if needed.
             ir_prim_t ir_prim;
             if (op2 >= C_TKN_EQ && op2 <= C_TKN_GE) {
-                ir_prim = IR_PRIM_BOOL;
+                ir_prim = IR_PRIM_bool;
             } else {
                 ir_prim = c_type_to_ir_type(ctx, type->data);
             }
@@ -740,7 +740,7 @@ c_compile_expr_t c_compile_expr(
             ir_add_expr2(
                 code,
                 tmpvar,
-                is_inc ? IR_OP2_ADD : IR_OP2_SUB,
+                is_inc ? IR_OP2_add : IR_OP2_sub,
                 (ir_operand_t){.is_const = false, .var = res.var},
                 (ir_operand_t){.is_const = true, .iconst = {.prim_type = tmpvar->prim_type, .constl = 1, .consth = 0}}
             );
@@ -765,7 +765,7 @@ c_compile_expr_t c_compile_expr(
             // Apply unary operator.
             ir_prim_t ir_prim;
             if (expr.params[0].subtype == C_TKN_LNOT) {
-                ir_prim = IR_PRIM_BOOL;
+                ir_prim = IR_PRIM_bool;
             } else {
                 ir_prim = c_type_to_ir_type(ctx, res.type->data);
             }
@@ -800,14 +800,14 @@ c_compile_expr_t c_compile_expr(
 
         // Save value for later use.
         ir_var_t *oldvar = ir_var_create(func, c_type_to_ir_type(ctx, res.type->data), NULL);
-        ir_add_expr1(code, oldvar, IR_OP1_MOV, (ir_operand_t){.is_const = false, .var = res.var});
+        ir_add_expr1(code, oldvar, IR_OP1_mov, (ir_operand_t){.is_const = false, .var = res.var});
 
         // Add or subtract one.
         ir_var_t *tmpvar = ir_var_create(func, c_type_to_ir_type(ctx, res.type->data), NULL);
         ir_add_expr2(
             code,
             tmpvar,
-            is_inc ? IR_OP2_ADD : IR_OP2_SUB,
+            is_inc ? IR_OP2_add : IR_OP2_sub,
             (ir_operand_t){.is_const = false, .var = res.var},
             (ir_operand_t){.is_const = true, .iconst = {.prim_type = tmpvar->prim_type, .constl = 1, .consth = 0}}
         );
@@ -877,7 +877,7 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c
         if (expr.var) {
             ir_add_branch(
                 cond_body,
-                (ir_operand_t){.is_const = false, .var = c_cast_ir_var(cond_body, expr.var, IR_PRIM_BOOL)},
+                (ir_operand_t){.is_const = false, .var = c_cast_ir_var(cond_body, expr.var, IR_PRIM_bool)},
                 loop_body
             );
         }
@@ -911,7 +911,7 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c
         if (expr.var) {
             ir_add_branch(
                 code,
-                (ir_operand_t){.is_const = false, .var = c_cast_ir_var(code, expr.var, IR_PRIM_BOOL)},
+                (ir_operand_t){.is_const = false, .var = c_cast_ir_var(code, expr.var, IR_PRIM_bool)},
                 if_body
             );
         }

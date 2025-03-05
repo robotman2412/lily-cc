@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "ir_tokenizer.h"
 #include "ir_types.h"
 
 #include <stdio.h>
@@ -14,4 +15,4 @@ void ir_func_serialize(ir_func_t *func, FILE *to);
 
 // Deserialize a single IR function from the file.
 // Call multiple times on a single file if you want all the functions.
-ir_func_t *ir_func_deserialize(FILE *from);
+ir_func_t *ir_func_deserialize(tokenizer_t *from);

@@ -24,8 +24,7 @@ void ir_func_to_ssa(ir_func_t *func);
 void ir_func_recalc_flow(ir_func_t *func);
 
 // Create a new variable.
-// If `name` is `NULL`, its name will be a decimal number.
-// For this reason, avoid explicitly passing names that are just a decimal number.
+// If `name` is `NULL`, its name will be `var%zu` where `%zu` is a number.
 ir_var_t  *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name);
 // Delete an IR variable, removing all assignments and references in the process.
 void       ir_var_delete(ir_var_t *var);
@@ -33,8 +32,7 @@ void       ir_var_delete(ir_var_t *var);
 // Does not replace assignments, nor does it delete the variable.
 void       ir_var_replace(ir_var_t *var, ir_operand_t value);
 // Create a new IR code block.
-// If `name` is `NULL`, its name will be a decimal number.
-// For this reason, avoid explicitly passing names that are just a decimal number.
+// If `name` is `NULL`, its name will be `code%zu` where `%zu` is a number.
 ir_code_t *ir_code_create(ir_func_t *func, char const *name);
 // Delete an IR code block and all contained instructions.
 void       ir_code_delete(ir_code_t *code);

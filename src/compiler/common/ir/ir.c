@@ -15,14 +15,14 @@
 
 
 // Create a new IR function.
-// Function argument types are IR_PRIM_S32 by default.
+// Function argument types are IR_PRIM_s32 by default.
 ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_len, char const *const *args_name) {
     ir_func_t *func = strong_calloc(1, sizeof(ir_func_t));
     func->name      = strong_strdup(name);
     func->args      = strong_calloc(1, sizeof(ir_var_t *) * args_len);
     func->args_len  = args_len;
     for (size_t i = 0; i < args_len; i++) {
-        func->args[i] = ir_var_create(func, IR_PRIM_S32, args_name ? args_name[i] : NULL);
+        func->args[i] = ir_var_create(func, IR_PRIM_s32, args_name ? args_name[i] : NULL);
     }
     func->entry = ir_code_create(func, entry_name);
     return func;
@@ -431,14 +431,13 @@ void ir_func_recalc_flow(ir_func_t *func) {
 
 
 // Create a new variable.
-// If `name` is `NULL`, its name will be a decimal number.
-// For this reason, avoid explicitly passing names that are just a decimal number.
+// If `name` is `NULL`, its name will be `var%zu` where `%zu` is a number.
 ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
     ir_var_t *var = calloc(1, sizeof(ir_var_t));
     if (name) {
         var->name = strong_strdup(name);
     } else {
-        char const *fmt = "%zu";
+        char const *fmt = "var%zu";
         size_t      len = snprintf(NULL, 0, fmt, func->vars_list.len);
         var->name       = calloc(1, len + 1);
         snprintf(var->name, len + 1, fmt, func->vars_list.len);
@@ -545,8 +544,7 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
 }
 
 // Create a new IR code block.
-// If `name` is `NULL`, its name will be a decimal number.
-// For this reason, avoid explicitly passing names that are just a decimal number.
+// If `name` is `NULL`, its name will be `code%zu` where `%zu` is a number.
 ir_code_t *ir_code_create(ir_func_t *func, char const *name) {
     ir_code_t *code = strong_calloc(1, sizeof(ir_code_t));
     code->func      = func;
@@ -556,7 +554,7 @@ ir_code_t *ir_code_create(ir_func_t *func, char const *name) {
     if (name) {
         code->name = strong_strdup(name);
     } else {
-        char const *fmt = "%zu";
+        char const *fmt = "label%zu";
         size_t      len = snprintf(NULL, 0, fmt, func->code_list.len);
         code->name      = calloc(1, len + 1);
         snprintf(code->name, len + 1, fmt, func->code_list.len);
@@ -741,12 +739,12 @@ void ir_add_expr1(ir_code_t *code, ir_var_t *dest, ir_op1_type_t oper, ir_operan
     if (!operand.is_const) {
         set_add(&operand.var->used_at, expr);
     }
-    if (oper == IR_OP1_SNEZ || oper == IR_OP1_SEQZ) {
-        if (dest->prim_type != IR_PRIM_BOOL) {
+    if (oper == IR_OP1_snez || oper == IR_OP1_seqz) {
+        if (dest->prim_type != IR_PRIM_bool) {
             fprintf(stderr, "[BUG] IR %s must return a boolean\n", ir_op1_names[oper]);
             abort();
         }
-    } else if (oper != IR_OP1_MOV) {
+    } else if (oper != IR_OP1_mov) {
         ir_prim_t operand_prim = operand.is_const ? operand.iconst.prim_type : operand.var->prim_type;
         if (operand_prim != dest->prim_type) {
             fprintf(stderr, "[BUG] IR expr1 has conflicting operand and return types\n");
@@ -906,7 +904,7 @@ void ir_add_branch(ir_code_t *from, ir_operand_t cond, ir_code_t *to) {
     flow->f_branch.cond   = cond;
     flow->f_branch.target = to;
     ir_prim_t cond_prim   = cond.is_const ? cond.iconst.prim_type : cond.var->prim_type;
-    if (cond_prim != IR_PRIM_BOOL) {
+    if (cond_prim != IR_PRIM_bool) {
         fprintf(stderr, "[BUG] IR branch requires a boolean condition\n");
         abort();
     }

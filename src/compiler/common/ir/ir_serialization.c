@@ -12,7 +12,7 @@
 // Serialize an IR operand.
 static void ir_operand_serialize(ir_operand_t operand, FILE *to) {
     if (operand.is_const) {
-        if (operand.iconst.prim_type == IR_PRIM_BOOL) {
+        if (operand.iconst.prim_type == IR_PRIM_bool) {
             fputs(operand.iconst.constl ? "true" : "false", to);
         } else {
             fputs(ir_prim_names[operand.iconst.prim_type], to);
@@ -23,11 +23,11 @@ static void ir_operand_serialize(ir_operand_t operand, FILE *to) {
             } else {
                 fprintf(to, "%0*" PRIX64, (int)size * 2, operand.iconst.constl);
             }
-            if (operand.iconst.prim_type == IR_PRIM_F32) {
+            if (operand.iconst.prim_type == IR_PRIM_f32) {
                 float fval;
                 memcpy(&fval, &operand.iconst, sizeof(float));
                 fprintf(to, " /* %f */", fval);
-            } else if (operand.iconst.prim_type == IR_PRIM_F64) {
+            } else if (operand.iconst.prim_type == IR_PRIM_f64) {
                 double dval;
                 memcpy(&dval, &operand.iconst, sizeof(double));
                 fprintf(to, " /* %lf */", dval);
@@ -42,9 +42,9 @@ static void ir_operand_serialize(ir_operand_t operand, FILE *to) {
 // Serialize an IR function.
 void ir_func_serialize(ir_func_t *func, FILE *to) {
     if (func->enforce_ssa) {
-        fputs("ssa ", to);
+        fputs("ssa_", to);
     }
-    fprintf(to, "function %%%s\n", func->name);
+    fprintf(to, "function <%s>\n", func->name);
 
     ir_var_t *var = (ir_var_t *)func->vars_list.head;
     while (var) {
@@ -58,7 +58,7 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
 
     ir_code_t *code = (ir_code_t *)func->code_list.head;
     while (code) {
-        fprintf(to, "code <%s>\n", code->name);
+        fprintf(to, "code %%%s\n", code->name);
 
         ir_insn_t *insn = (ir_insn_t *)code->insns.head;
         while (insn) {
@@ -69,7 +69,7 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
                     case IR_EXPR_COMBINATOR: {
                         fprintf(to, "phi %%%s", expr->dest->name);
                         for (size_t i = 0; i < expr->e_combinator.from_len; i++) {
-                            fprintf(to, ", <%s> ", expr->e_combinator.from[i].prev->name);
+                            fprintf(to, ", %%%s ", expr->e_combinator.from[i].prev->name);
                             ir_operand_serialize(expr->e_combinator.from[i].bind, to);
                         }
                         fputc('\n', to);
@@ -95,15 +95,15 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
                 fputs(ir_flow_names[flow->type], to);
                 switch (flow->type) {
                     case IR_FLOW_JUMP: {
-                        fprintf(to, " <%s>\n", flow->f_jump.target->name);
+                        fprintf(to, " %%%s\n", flow->f_jump.target->name);
                     } break;
                     case IR_FLOW_BRANCH: {
                         fputc(' ', to);
                         ir_operand_serialize(flow->f_branch.cond, to);
-                        fprintf(to, ", <%s>\n", flow->f_branch.target->name);
+                        fprintf(to, ", %%%s\n", flow->f_branch.target->name);
                     } break;
                     case IR_FLOW_CALL_DIRECT: {
-                        fprintf(to, " <%s>", flow->f_call_direct.label);
+                        fprintf(to, " %%%s", flow->f_call_direct.label);
                         for (size_t i = 0; i < flow->f_call_direct.args_len; i++) {
                             fputs(", ", to);
                             ir_operand_serialize(flow->f_call_direct.args[i], to);
@@ -133,4 +133,12 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
 
         code = (ir_code_t *)code->node.next;
     }
+}
+
+
+
+// Deserialize a single IR function from the file.
+// Call multiple times on a single file if you want all the functions.
+ir_func_t *ir_func_deserialize(tokenizer_t *from) {
+    abort();
 }

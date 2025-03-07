@@ -57,13 +57,7 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
     }
 
     dlist_foreach_node(ir_frame_t, frame, &func->frames_list) {
-        fprintf(
-            to,
-            "    frame %%%s /* size: */ %" PRId64 " /* align: */ %" PRId64 "\n",
-            frame->name,
-            frame->size,
-            frame->align
-        );
+        fprintf(to, "    frame %%%s u64'%" PRId64 " u64'%" PRId64 "\n", frame->name, frame->size, frame->align);
     }
 
     ir_code_t *code = (ir_code_t *)func->code_list.head;

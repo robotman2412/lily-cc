@@ -62,6 +62,23 @@
     - Operators ✓
     - Function calls ✓
 
+### C compiler
+- Types in expressions
+    - Primitive types ✓
+    - Pointers
+    - Arrays
+    - Structs
+    - Unions
+    - Enums
+    - Function pointers
+- Expression operators
+    - Arithmetic ✓
+    - Addrof
+    - Dereference
+    - Index
+- Modifiable l-value check
+    - *Note: The current system can't tell the difference between writing to a temporary and a modifiable l-value.*
+
 
 ## Generic codegen
 - Generic optimizations

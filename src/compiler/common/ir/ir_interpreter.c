@@ -293,7 +293,7 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
             default: abort();
         }
         return out;
-    } else if (lhs.prim_type & 1) {
+    } else {
         lhs = ir_trim_const(lhs);
         rhs = ir_trim_const(rhs);
         switch (oper) {

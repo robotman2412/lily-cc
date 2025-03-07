@@ -101,14 +101,16 @@ typedef struct c_compile_expr c_compile_expr_t;
 // C variable.
 struct c_var {
     // Is a global variable?
-    bool      is_global;
+    bool        is_global;
     // Has a pointer been taken?
     // Should always be true for globals.
-    bool      pointer_taken;
+    bool        pointer_taken;
     // Variable type (refcount ptr of `c_var_t`).
-    rc_t      type;
+    rc_t        type;
     // Matching IR variable.
-    ir_var_t *ir_var;
+    ir_var_t   *ir_var;
+    // Variable's stack frame.
+    ir_frame_t *ir_frame;
 };
 
 // C scope.
@@ -128,6 +130,8 @@ struct c_scope {
 struct c_type {
     // Primitive type.
     c_prim_t primitive;
+    // Size of this type; 0 for incomplete types.
+    uint64_t size;
     // Is volatile?
     bool     is_volatile;
     // Is const?
@@ -217,11 +221,11 @@ struct c_compiler {
 // Used for compiling expressions.
 struct c_compile_expr {
     // Result of expression.
-    ir_var_t  *var;
+    ir_operand_t res;
     // Type of expression result (refcount ptr of `c_type_t`).
-    rc_t       type;
+    rc_t         type;
     // Code path linearly after the expression.
-    ir_code_t *code;
+    ir_code_t   *code;
 };
 
 
@@ -254,7 +258,7 @@ ir_op1_type_t c_op1_to_ir_op1(c_tokentype_t subtype);
 // Convert C primitive or pointer type to IR primitive type.
 ir_prim_t     c_type_to_ir_type(c_compiler_t *ctx, c_type_t *type);
 // Cast one IR type to another according to the C rules for doing so.
-ir_var_t     *c_cast_ir_var(ir_code_t *code, ir_var_t *var, ir_prim_t type);
+ir_operand_t  c_cast_ir_operand(ir_code_t *code, ir_operand_t operand, ir_prim_t type);
 
 // Clear up an lvalue or rvalue.
 void         c_value_destroy(c_value_t *value);
@@ -266,7 +270,7 @@ ir_operand_t c_value_read(ir_code_t *code, c_value_t *value);
 // Compile an expression into IR.
 // If `assign` is `NULL`, then the expression is read; otherwise, it is written, and the expression must be an lvalue.
 c_compile_expr_t c_compile_expr(
-    c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c_scope_t *scope, token_t expr, ir_var_t *assign
+    c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c_scope_t *scope, token_t expr, ir_operand_t *assign
 );
 // Compile a statement node into IR.
 // Returns the code path linearly after this.

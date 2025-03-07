@@ -89,7 +89,7 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t list) {
             switch (param.subtype) {
                 case C_KEYW__Atomic: type->is_atomic = true; break;
                 case C_KEYW_volatile: type->is_volatile = true; break;
-                case C_KEYW_const: type->is_atomic = true; break;
+                case C_KEYW_const: type->is_const = true; break;
                 case C_KEYW_int: has_int = true; break;
                 case C_KEYW_short: has_short = true; break;
                 case C_KEYW_long: n_long++; break;
@@ -224,6 +224,9 @@ rc_t c_compile_decl(c_compiler_t *ctx, token_t decl, rc_t spec_qual_type, char c
             if (name_out) {
                 *name_out = decl.strval;
             }
+            return cur;
+
+        } else if (decl.type == TOKENTYPE_AST && decl.subtype == C_AST_NOP) {
             return cur;
 
         } else if (decl.type == TOKENTYPE_AST && decl.subtype == C_AST_TYPE_FUNC) {
@@ -1055,7 +1058,7 @@ start:
             }
             c_type_explain_impl(type->func.args[i]->data, to);
         }
-        fputs(") -> ", to);
+        fputs(") returning ", to);
         type = (c_type_t *)type->func.return_type->data;
         goto start;
     } else if (type->primitive == C_COMP_ARRAY) {
@@ -1071,6 +1074,9 @@ start:
         }
         if (type->is_volatile) {
             fputs("volatile ", to);
+        }
+        if (type->is_restrict) {
+            fputs("restrict ", to);
         }
         fputs("pointer to ", to);
         type = (c_type_t *)type->inner->data;

@@ -464,8 +464,16 @@ token_t c_parse_type_name(c_parser_t *ctx) {
     if (is_typedef) {
         cctx_diagnostic(ctx->tkn_ctx->cctx, spec_qual.pos, DIAG_ERR, "`typedef` not allowed here");
     }
-    token_t decl = c_parse_decl(ctx, false, false, false);
-    return ast_from_va(C_AST_TYPE_NAME, 2, spec_qual, decl);
+    token_t peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type == TOKENTYPE_OTHER
+            && (peek.subtype == C_TKN_MUL || peek.subtype == C_TKN_LBRAC || peek.subtype == C_TKN_LPAR)
+        || peek.subtype == TOKENTYPE_IDENT) {
+        token_t decl       = c_parse_decl(ctx, false, false, false);
+        bool    is_garbage = spec_qual.subtype == C_AST_GARBAGE || decl.subtype == C_AST_GARBAGE;
+        return ast_from_va(is_garbage ? C_AST_GARBAGE : C_AST_TYPE_NAME, 2, spec_qual, decl);
+    } else {
+        return spec_qual;
+    }
 }
 
 // Parse a direct (abstract) declaration.
@@ -474,6 +482,7 @@ static token_t c_parse_ddecl(c_parser_t *ctx, bool requires_name, bool allows_na
     token_t peek   = tkn_peek(ctx->tkn_ctx);
     token_t peek1  = tkn_peek_n(ctx->tkn_ctx, 1);
     token_t inner;
+    bool    has_inner;
 
     if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LPAR && peek1.type == TOKENTYPE_OTHER
         && (peek1.subtype == C_TKN_MUL || peek1.subtype == C_TKN_LPAR || peek1.subtype == C_TKN_LBRAC)) {
@@ -505,7 +514,7 @@ static token_t c_parse_ddecl(c_parser_t *ctx, bool requires_name, bool allows_na
             }
         }
 
-    } else {
+    } else if (peek.type != TOKENTYPE_OTHER || (peek.subtype != C_TKN_LBRAC && peek.subtype != C_TKN_LPAR)) {
         // Garbaj.
         cctx_diagnostic(
             ctx->tkn_ctx->cctx,
@@ -517,6 +526,8 @@ static token_t c_parse_ddecl(c_parser_t *ctx, bool requires_name, bool allows_na
         pos_t pos = peek.pos;
         pos.len   = 0;
         return ast_empty(C_AST_GARBAGE, pos);
+    } else {
+        inner = ast_empty(C_AST_NOP, peek.pos);
     }
 
     peek = tkn_peek(ctx->tkn_ctx);

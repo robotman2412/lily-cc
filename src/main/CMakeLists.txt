@@ -11,3 +11,8 @@ add_executable(lilycc
 )
 target_include_directories(lilycc PUBLIC main)
 target_link_libraries(lilycc PUBLIC lilycc-lib)
+
+add_executable(lily-explainer
+    explainer.c
+)
+target_link_libraries(lily-explainer PUBLIC c-frontend)

@@ -40,6 +40,12 @@ void ir_func_destroy(ir_func_t *func) {
         ir_var_delete(var);
     }
 
+    while (func->frames_list.len) {
+        ir_frame_t *frame = (ir_frame_t *)dlist_pop_front(&func->frames_list);
+        free(frame->name);
+        free(frame);
+    }
+
     free(func->args);
     free(func->name);
     free(func);
@@ -177,7 +183,7 @@ static void compute_dominance(ir_func_t *func, size_t nodes_len, dom_node_t *nod
 // Insert a combinator function for `var` into the beginning of `code`.
 static void create_combinator(ir_code_t *code, ir_var_t *dest) {
     ir_expr_t *expr             = calloc(1, sizeof(ir_expr_t));
-    expr->base.is_expr          = true;
+    expr->base.type             = IR_INSN_EXPR;
     expr->base.parent           = code;
     expr->type                  = IR_EXPR_COMBINATOR;
     expr->e_combinator.from_len = code->pred.len;
@@ -236,6 +242,7 @@ static void insert_combinators(ir_func_t *func, ir_var_t *var, size_t nodes_len,
     }
     dlist_foreach(ir_expr_t, expr, dest_node, &var->assigned_at) {
         // The search starts at each definition so that anything before won't be marked as using it.
+        // Even though it can be assigned both by memory insns and exprs, this is okay to do.
         nodes[expr->base.parent->dfs_index].uses_var = true;
         var_usage_dfs(expr->base.parent, nodes);
     }
@@ -245,6 +252,7 @@ static void insert_combinators(ir_func_t *func, ir_var_t *var, size_t nodes_len,
         code->visited = false;
     }
     dlist_foreach(ir_expr_t, expr, dest_node, &var->assigned_at) {
+        // Same thing; could actually be a mem insn but this works for that too.
         set_addall(&frontier, &nodes[expr->base.parent->dfs_index].frontier);
     }
 
@@ -269,7 +277,7 @@ static void insert_combinators(ir_func_t *func, ir_var_t *var, size_t nodes_len,
 // Replace variables in an instruction unless it is a phi instruction.
 static void replace_insn_var(ir_insn_t *insn, ir_var_t *from, ir_var_t *to) {
     set_remove(&from->used_at, insn);
-    if (insn->is_expr) {
+    if (insn->type == IR_INSN_EXPR) {
         ir_expr_t *expr = (void *)insn;
         if (expr->type == IR_EXPR_BINARY) {
             if (!expr->e_binary.lhs.is_const && expr->e_binary.lhs.var == from) {
@@ -284,6 +292,23 @@ static void replace_insn_var(ir_insn_t *insn, ir_var_t *from, ir_var_t *to) {
             if (!expr->e_unary.value.is_const && expr->e_unary.value.var == from) {
                 set_add(&to->used_at, insn);
                 expr->e_unary.value.var = to;
+            }
+        }
+    } else if (insn->type == IR_INSN_MEM) {
+        ir_mem_t *mem = (void *)insn;
+        if (mem->type == IR_MEM_LOAD) {
+            if (!mem->m_load.addr.is_const && mem->m_load.addr.var == from) {
+                set_add(&to->used_at, insn);
+                mem->m_load.addr.var = to;
+            }
+        } else if (mem->type == IR_MEM_STORE) {
+            if (!mem->m_store.addr.is_const && mem->m_store.addr.var == from) {
+                set_add(&to->used_at, insn);
+                mem->m_store.addr.var = to;
+            }
+            if (!mem->m_store.src.is_const && mem->m_store.src.var == from) {
+                set_add(&to->used_at, insn);
+                mem->m_store.src.var = to;
             }
         }
     } else {
@@ -318,7 +343,7 @@ static void replace_insn_var(ir_insn_t *insn, ir_var_t *from, ir_var_t *to) {
 // Replace variables in the phi instructions.
 static void replace_phi_vars(ir_code_t *pred, ir_code_t *code, set_t *from, ir_var_t *to) {
     dlist_foreach_node(ir_insn_t, insn, &code->insns) {
-        if (!insn->is_expr) {
+        if (insn->type != IR_INSN_EXPR) {
             return;
         }
         ir_expr_t *expr = (void *)insn;
@@ -346,7 +371,7 @@ static void rename_assignments(ir_func_t *func, ir_code_t *code, ir_var_t *from,
 
     dlist_foreach_node(ir_insn_t, insn, &code->insns) {
         replace_insn_var(insn, from, to);
-        if (insn->is_expr) {
+        if (insn->type == IR_INSN_EXPR) {
             ir_expr_t *expr = (void *)insn;
             if (expr->dest == from) {
                 // If the instruction assigns the variable, rename the assignment.
@@ -357,6 +382,16 @@ static void rename_assignments(ir_func_t *func, ir_code_t *code, ir_var_t *from,
                 if (expr->type == IR_EXPR_COMBINATOR) {
                     set_add(phi_from, to);
                 }
+            }
+        } else if (insn->type == IR_INSN_MEM) {
+            ir_mem_t *mem = (void *)insn;
+            // Note: The `dest` for `lea` and `load` are in the same place.
+            if (mem->type != IR_MEM_STORE && mem->m_load.dest == from) {
+                // If the instruction assigns the variable, rename the assignment.
+                dlist_remove(&from->assigned_at, &mem->dest_node);
+                to               = ir_var_create(func, from->prim_type, NULL);
+                mem->m_load.dest = to;
+                dlist_append(&to->assigned_at, &mem->dest_node);
             }
         }
     }
@@ -416,7 +451,7 @@ void ir_func_recalc_flow(ir_func_t *func) {
     }
     dlist_foreach_node(ir_code_t, code, &func->code_list) {
         dlist_foreach_node(ir_insn_t, insn, &code->insns) {
-            if (insn->is_expr) {
+            if (insn->type == IR_INSN_EXPR) {
                 continue;
             }
             ir_flow_t *flow = (void *)insn;
@@ -426,6 +461,36 @@ void ir_func_recalc_flow(ir_func_t *func) {
             }
         }
     }
+}
+
+
+
+// Create a new stack frame.
+// If `name` is `NULL`, its name will be `frame%zu` where `%zu` is a number.
+ir_frame_t *ir_frame_create(ir_func_t *func, uint64_t size, uint64_t align, char const *name) {
+    if (!align || align & (align - 1)) {
+        fprintf(stderr, "[BUG] Stack frame does not have power-of-2 alignment\n");
+        abort();
+    }
+    if (size & (align - 1)) {
+        fprintf(stderr, "[BUG] Stack frame size is not an integer multiple of alignment\n");
+        abort();
+    }
+    ir_frame_t *frame = calloc(1, sizeof(ir_frame_t));
+    if (name) {
+        frame->name = strong_strdup(name);
+    } else {
+        char const *fmt = "frame%zu";
+        size_t      len = snprintf(NULL, 0, fmt, func->frames_list.len);
+        frame->name     = calloc(1, len + 1);
+        snprintf(frame->name, len + 1, fmt, func->frames_list.len);
+    }
+    frame->func  = func;
+    frame->size  = size;
+    frame->align = align;
+    frame->node  = DLIST_NODE_EMPTY;
+    dlist_append(&func->frames_list, &frame->node);
+    return frame;
 }
 
 
@@ -475,7 +540,7 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
         abort();
     }
     set_foreach(ir_insn_t, insn, &var->used_at) {
-        if (insn->is_expr) {
+        if (insn->type == IR_INSN_EXPR) {
             ir_expr_t *expr = (void *)insn;
             if (expr->type == IR_EXPR_UNARY) {
                 expr->e_unary.value = value;
@@ -590,7 +655,7 @@ void ir_code_delete(ir_code_t *code) {
         ir_insn_t *insn = container_of(pred->insns.head, ir_insn_t, node);
         while (insn) {
             ir_insn_t *next = container_of(insn->node.next, ir_insn_t, node);
-            if (!insn->is_expr) {
+            if (insn->type == IR_INSN_FLOW) {
                 ir_flow_t *flow = (void *)insn;
                 if ((flow->type == IR_FLOW_JUMP || flow->type == IR_FLOW_BRANCH) && flow->f_jump.target == code) {
                     ir_insn_delete(insn);
@@ -605,7 +670,7 @@ void ir_code_delete(ir_code_t *code) {
         ir_insn_t *insn = container_of(succ->insns.head, ir_insn_t, node);
         while (insn) {
             ir_insn_t *next = container_of(insn->node.next, ir_insn_t, node);
-            if (insn->is_expr) {
+            if (insn->type == IR_INSN_EXPR) {
                 ir_expr_t *expr = (void *)insn;
                 if (expr->type == IR_EXPR_COMBINATOR) {
                     remove_combinator_path(expr, code);
@@ -628,7 +693,7 @@ void ir_code_delete(ir_code_t *code) {
 
 // Delete an instruction from the code.
 void ir_insn_delete(ir_insn_t *insn) {
-    if (insn->is_expr) {
+    if (insn->type == IR_INSN_EXPR) {
         ir_expr_t *expr = (void *)insn;
         dlist_remove(&expr->dest->assigned_at, &expr->dest_node);
         if (expr->type == IR_EXPR_UNARY) {
@@ -649,6 +714,26 @@ void ir_insn_delete(ir_insn_t *insn) {
                 }
             }
             free(expr->e_combinator.from);
+        }
+    } else if (insn->type == IR_INSN_MEM) {
+        ir_mem_t *mem = (void *)insn;
+        if (mem->type == IR_MEM_LEA_STACK) {
+            dlist_remove(&mem->m_lea_stack.dest->assigned_at, &mem->dest_node);
+        } else if (mem->type == IR_MEM_LEA_SYMBOL) {
+            dlist_remove(&mem->m_lea_symbol.dest->assigned_at, &mem->dest_node);
+            free(mem->m_lea_symbol.symbol);
+        } else if (mem->type == IR_MEM_LOAD) {
+            dlist_remove(&mem->m_load.dest->assigned_at, &mem->dest_node);
+            if (!mem->m_load.addr.is_const) {
+                dlist_remove(&mem->m_load.addr.var->assigned_at, &mem->dest_node);
+            }
+        } else if (mem->type == IR_MEM_STORE) {
+            if (!mem->m_store.src.is_const) {
+                dlist_remove(&mem->m_store.src.var->assigned_at, &mem->dest_node);
+            }
+            if (!mem->m_store.addr.is_const) {
+                dlist_remove(&mem->m_store.addr.var->assigned_at, &mem->dest_node);
+            }
         }
     } else {
         ir_flow_t *flow = (void *)insn;
@@ -683,7 +768,7 @@ void ir_insn_delete(ir_insn_t *insn) {
 // Takes ownership of the `from` array.
 void ir_add_combinator(ir_code_t *code, ir_var_t *dest, size_t from_len, ir_combinator_t *from) {
     ir_expr_t *expr             = calloc(1, sizeof(ir_expr_t));
-    expr->base.is_expr          = true;
+    expr->base.type             = IR_INSN_EXPR;
     expr->base.parent           = code;
     expr->type                  = IR_EXPR_COMBINATOR;
     expr->e_combinator.from_len = from_len;
@@ -691,7 +776,7 @@ void ir_add_combinator(ir_code_t *code, ir_var_t *dest, size_t from_len, ir_comb
     expr->dest                  = dest;
     if (code->insns.len) {
         ir_insn_t *last = container_of(code->insns.tail, ir_insn_t, node);
-        if (!last->is_expr) {
+        if (last->type == IR_INSN_FLOW) {
             ir_flow_t *flow = (void *)last;
             if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
                 fprintf(stderr, "[BUG] Cannot have expr after jump or branch\n");
@@ -720,7 +805,7 @@ void ir_add_combinator(ir_code_t *code, ir_var_t *dest, size_t from_len, ir_comb
 // Add an expression to a code block.
 void ir_add_expr1(ir_code_t *code, ir_var_t *dest, ir_op1_type_t oper, ir_operand_t operand) {
     ir_expr_t *expr     = calloc(1, sizeof(ir_expr_t));
-    expr->base.is_expr  = true;
+    expr->base.type     = IR_INSN_EXPR;
     expr->base.parent   = code;
     expr->type          = IR_EXPR_UNARY;
     expr->e_unary.oper  = oper;
@@ -728,7 +813,7 @@ void ir_add_expr1(ir_code_t *code, ir_var_t *dest, ir_op1_type_t oper, ir_operan
     expr->dest          = dest;
     if (code->insns.len) {
         ir_insn_t *last = container_of(code->insns.tail, ir_insn_t, node);
-        if (!last->is_expr) {
+        if (last->type == IR_INSN_FLOW) {
             ir_flow_t *flow = (void *)last;
             if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
                 fprintf(stderr, "[BUG] Cannot have expr after jump or branch\n");
@@ -762,7 +847,7 @@ void ir_add_expr1(ir_code_t *code, ir_var_t *dest, ir_op1_type_t oper, ir_operan
 // Add an expression to a code block.
 void ir_add_expr2(ir_code_t *code, ir_var_t *dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs) {
     ir_expr_t *expr     = calloc(1, sizeof(ir_expr_t));
-    expr->base.is_expr  = true;
+    expr->base.type     = IR_INSN_EXPR;
     expr->base.parent   = code;
     expr->type          = IR_EXPR_BINARY;
     expr->e_binary.oper = oper;
@@ -771,7 +856,7 @@ void ir_add_expr2(ir_code_t *code, ir_var_t *dest, ir_op2_type_t oper, ir_operan
     expr->dest          = dest;
     if (code->insns.len) {
         ir_insn_t *last = container_of(code->insns.tail, ir_insn_t, node);
-        if (!last->is_expr) {
+        if (last->type == IR_INSN_FLOW) {
             ir_flow_t *flow = (void *)last;
             if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
                 fprintf(stderr, "[BUG] Cannot have expr after jump or branch\n");
@@ -805,14 +890,14 @@ void ir_add_expr2(ir_code_t *code, ir_var_t *dest, ir_op2_type_t oper, ir_operan
 
 // Add an undefined variable.
 void ir_add_undefined(ir_code_t *code, ir_var_t *dest) {
-    ir_expr_t *expr    = calloc(1, sizeof(ir_expr_t));
-    expr->base.is_expr = true;
-    expr->base.parent  = code;
-    expr->type         = IR_EXPR_UNDEFINED;
-    expr->dest         = dest;
+    ir_expr_t *expr   = calloc(1, sizeof(ir_expr_t));
+    expr->base.type   = IR_INSN_EXPR;
+    expr->base.parent = code;
+    expr->type        = IR_EXPR_UNDEFINED;
+    expr->dest        = dest;
     if (code->insns.len) {
         ir_insn_t *last = container_of(code->insns.tail, ir_insn_t, node);
-        if (!last->is_expr) {
+        if (last->type == IR_INSN_FLOW) {
             ir_flow_t *flow = (void *)last;
             if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
                 fprintf(stderr, "[BUG] Cannot have expr after jump or branch\n");
@@ -839,7 +924,7 @@ void ir_add_call_direct(ir_code_t *from, char const *label, size_t params_len, i
     flow->f_call_direct.args     = params;
     if (from->insns.len) {
         ir_insn_t *last = container_of(from->insns.tail, ir_insn_t, node);
-        if (!last->is_expr) {
+        if (last->type == IR_INSN_FLOW) {
             ir_flow_t *flow = (void *)last;
             if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
                 fprintf(stderr, "[BUG] Cannot have call after jump or branch\n");
@@ -866,7 +951,7 @@ void ir_add_call_ptr(ir_code_t *from, ir_operand_t funcptr, size_t params_len, i
     flow->f_call_ptr.args     = params;
     if (from->insns.len) {
         ir_insn_t *last = container_of(from->insns.tail, ir_insn_t, node);
-        if (!last->is_expr) {
+        if (last->type == IR_INSN_FLOW) {
             ir_flow_t *flow = (void *)last;
             if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
                 fprintf(stderr, "[BUG] Cannot have call after jump or branch\n");
@@ -885,9 +970,122 @@ void ir_add_call_ptr(ir_code_t *from, ir_operand_t funcptr, size_t params_len, i
     dlist_append(&from->insns, &flow->base.node);
 }
 
+
+// Add a load effective address of a stack frame to a code block.
+void ir_add_lea_stack(ir_code_t *code, ir_var_t *dest, ir_frame_t *frame, uint64_t offset) {
+    ir_mem_t *mem           = calloc(1, sizeof(ir_mem_t));
+    mem->base.type          = IR_INSN_MEM;
+    mem->base.parent        = code;
+    mem->type               = IR_MEM_LEA_STACK;
+    mem->m_lea_stack.dest   = dest;
+    mem->m_lea_stack.frame  = frame;
+    mem->m_lea_stack.offset = offset;
+    if (dest->assigned_at.len && code->func->enforce_ssa) {
+        fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
+        abort();
+    }
+    if (code->insns.len) {
+        ir_insn_t *last = container_of(code->insns.tail, ir_insn_t, node);
+        if (last->type == IR_INSN_FLOW) {
+            ir_flow_t *flow = (void *)last;
+            if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
+                fprintf(stderr, "[BUG] Cannot have lea after jump or branch\n");
+                abort();
+            }
+        }
+    }
+    dlist_append(&dest->assigned_at, &mem->dest_node);
+    dlist_append(&code->insns, &mem->base.node);
+}
+
+// Add a load effective address of a symbol to a code block.
+void ir_add_lea_symbol(ir_code_t *code, ir_var_t *dest, char const *symbol, uint64_t offset) {
+    ir_mem_t *mem            = calloc(1, sizeof(ir_mem_t));
+    mem->base.type           = IR_INSN_MEM;
+    mem->base.parent         = code;
+    mem->type                = IR_MEM_LEA_SYMBOL;
+    mem->m_lea_symbol.dest   = dest;
+    mem->m_lea_symbol.symbol = strong_strdup(symbol);
+    mem->m_lea_symbol.offset = offset;
+    if (dest->assigned_at.len && code->func->enforce_ssa) {
+        fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
+        abort();
+    }
+    if (code->insns.len) {
+        ir_insn_t *last = container_of(code->insns.tail, ir_insn_t, node);
+        if (last->type == IR_INSN_FLOW) {
+            ir_flow_t *flow = (void *)last;
+            if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
+                fprintf(stderr, "[BUG] Cannot have lea after jump or branch\n");
+                abort();
+            }
+        }
+    }
+    dlist_append(&dest->assigned_at, &mem->dest_node);
+    dlist_append(&code->insns, &mem->base.node);
+}
+
+// Add a memory load to a code block.
+void ir_add_load(ir_code_t *code, ir_var_t *dest, ir_operand_t addr) {
+    ir_mem_t *mem    = calloc(1, sizeof(ir_mem_t));
+    mem->base.type   = IR_INSN_MEM;
+    mem->base.parent = code;
+    mem->type        = IR_FLOW_RETURN;
+    mem->m_load.dest = dest;
+    mem->m_load.addr = addr;
+    if (!addr.is_const) {
+        set_add(&addr.var->used_at, mem);
+    }
+    if (dest->assigned_at.len && code->func->enforce_ssa) {
+        fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
+        abort();
+    }
+    if (code->insns.len) {
+        ir_insn_t *last = container_of(code->insns.tail, ir_insn_t, node);
+        if (last->type == IR_INSN_FLOW) {
+            ir_flow_t *flow = (void *)last;
+            if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
+                fprintf(stderr, "[BUG] Cannot have load after jump or branch\n");
+                abort();
+            }
+        }
+    }
+    dlist_append(&dest->assigned_at, &mem->dest_node);
+    dlist_append(&code->insns, &mem->base.node);
+}
+
+// Add a memory store to a code block.
+void ir_add_store(ir_code_t *code, ir_operand_t src, ir_operand_t addr) {
+    ir_mem_t *mem     = calloc(1, sizeof(ir_mem_t));
+    mem->base.type    = IR_INSN_MEM;
+    mem->base.parent  = code;
+    mem->type         = IR_FLOW_RETURN;
+    mem->m_store.src  = src;
+    mem->m_store.addr = addr;
+    if (!src.is_const) {
+        set_add(&src.var->used_at, mem);
+    }
+    if (!addr.is_const) {
+        set_add(&addr.var->used_at, mem);
+    }
+    if (code->insns.len) {
+        ir_insn_t *last = container_of(code->insns.tail, ir_insn_t, node);
+        if (last->type == IR_INSN_FLOW) {
+            ir_flow_t *flow = (void *)last;
+            if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
+                fprintf(stderr, "[BUG] Cannot have store after jump or branch\n");
+                abort();
+            }
+        }
+    }
+    dlist_append(&code->insns, &mem->base.node);
+}
+
+
 // Add an unconditional jump.
 void ir_add_jump(ir_code_t *from, ir_code_t *to) {
     ir_flow_t *flow     = calloc(1, sizeof(ir_flow_t));
+    flow->base.type     = IR_INSN_FLOW;
     flow->base.parent   = from;
     flow->type          = IR_FLOW_JUMP;
     flow->f_jump.target = to;
@@ -899,6 +1097,7 @@ void ir_add_jump(ir_code_t *from, ir_code_t *to) {
 // Add a conditional branch.
 void ir_add_branch(ir_code_t *from, ir_operand_t cond, ir_code_t *to) {
     ir_flow_t *flow       = calloc(1, sizeof(ir_flow_t));
+    flow->base.type       = IR_INSN_FLOW;
     flow->base.parent     = from;
     flow->type            = IR_FLOW_BRANCH;
     flow->f_branch.cond   = cond;
@@ -919,11 +1118,12 @@ void ir_add_branch(ir_code_t *from, ir_operand_t cond, ir_code_t *to) {
 // Add a return without value.
 void ir_add_return0(ir_code_t *from) {
     ir_flow_t *flow   = calloc(1, sizeof(ir_flow_t));
+    flow->base.type   = IR_INSN_FLOW;
     flow->base.parent = from;
     flow->type        = IR_FLOW_RETURN;
     if (from->insns.len) {
         ir_insn_t *last = container_of(from->insns.tail, ir_insn_t, node);
-        if (!last->is_expr) {
+        if (last->type == IR_INSN_FLOW) {
             ir_flow_t *flow = (void *)last;
             if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
                 fprintf(stderr, "[BUG] Cannot have return after jump or branch\n");
@@ -937,13 +1137,14 @@ void ir_add_return0(ir_code_t *from) {
 // Add a return with value.
 void ir_add_return1(ir_code_t *from, ir_operand_t value) {
     ir_flow_t *flow          = calloc(1, sizeof(ir_flow_t));
+    flow->base.type          = IR_INSN_FLOW;
     flow->base.parent        = from;
     flow->type               = IR_FLOW_RETURN;
     flow->f_return.has_value = true;
     flow->f_return.value     = value;
     if (from->insns.len) {
         ir_insn_t *last = container_of(from->insns.tail, ir_insn_t, node);
-        if (!last->is_expr) {
+        if (last->type == IR_INSN_FLOW) {
             ir_flow_t *flow = (void *)last;
             if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
                 fprintf(stderr, "[BUG] Cannot have return after jump or branch\n");

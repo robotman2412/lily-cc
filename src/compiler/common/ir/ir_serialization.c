@@ -48,12 +48,22 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
 
     ir_var_t *var = (ir_var_t *)func->vars_list.head;
     while (var) {
-        fprintf(to, "    var %s %%%s\n", ir_prim_names[var->prim_type], var->name);
+        fprintf(to, "    var %%%s %s\n", var->name, ir_prim_names[var->prim_type]);
         var = (ir_var_t *)var->node.next;
     }
 
     for (size_t i = 0; i < func->args_len; i++) {
         fprintf(to, "    arg %%%s\n", func->args[i]->name);
+    }
+
+    dlist_foreach_node(ir_frame_t, frame, &func->frames_list) {
+        fprintf(
+            to,
+            "    frame %%%s /* size: */ %" PRId64 " /* align: */ %" PRId64 "\n",
+            frame->name,
+            frame->size,
+            frame->align
+        );
     }
 
     ir_code_t *code = (ir_code_t *)func->code_list.head;
@@ -63,7 +73,7 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
         ir_insn_t *insn = (ir_insn_t *)code->insns.head;
         while (insn) {
             fputs("    ", to);
-            if (insn->is_expr) {
+            if (insn->type == IR_INSN_EXPR) {
                 ir_expr_t *expr = (ir_expr_t *)insn;
                 switch (expr->type) {
                     case IR_EXPR_COMBINATOR: {
@@ -89,6 +99,35 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
                     case IR_EXPR_UNDEFINED: {
                         fprintf(to, "undef %%%s\n", expr->dest->name);
                     } break;
+                }
+            } else if (insn->type == IR_INSN_MEM) {
+                ir_mem_t *mem = (ir_mem_t *)insn;
+                if (mem->type == IR_MEM_LEA_STACK) {
+                    fprintf(
+                        to,
+                        "lea %%%s, %%%s+%" PRId64 "\n",
+                        mem->m_lea_stack.dest->name,
+                        mem->m_lea_stack.frame->name,
+                        mem->m_lea_stack.offset
+                    );
+                } else if (mem->type == IR_MEM_LEA_SYMBOL) {
+                    fprintf(
+                        to,
+                        "lea %%%s, <%s>+%" PRId64 "\n",
+                        mem->m_lea_symbol.dest->name,
+                        mem->m_lea_symbol.symbol,
+                        mem->m_lea_symbol.offset
+                    );
+                } else if (mem->type == IR_MEM_LOAD) {
+                    fprintf(to, "load %%%s, ", mem->m_load.dest->name);
+                    ir_operand_serialize(mem->m_load.addr, to);
+                    fputc('\n', to);
+                } else if (mem->type == IR_MEM_STORE) {
+                    fputs("store ", to);
+                    ir_operand_serialize(mem->m_store.src, to);
+                    fputs(", ", to);
+                    ir_operand_serialize(mem->m_store.addr, to);
+                    fputc('\n', to);
                 }
             } else {
                 ir_flow_t *flow = (ir_flow_t *)insn;

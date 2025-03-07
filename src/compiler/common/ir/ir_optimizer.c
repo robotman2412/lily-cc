@@ -65,7 +65,7 @@ static bool dead_code_dfs(ir_code_t *code) {
             // If we're in dead code, delete all instructions.
             changed = true;
             ir_insn_delete(insn);
-        } else if (!insn->is_expr) {
+        } else if (insn->type == IR_INSN_FLOW) {
             ir_flow_t *flow = (void *)insn;
             if (flow->type == IR_FLOW_JUMP) {
                 // If this is a jump, all following instructions will be dead.

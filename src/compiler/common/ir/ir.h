@@ -23,6 +23,10 @@ void ir_func_to_ssa(ir_func_t *func);
 // Recalculate the predecessors and successors for code blocks.
 void ir_func_recalc_flow(ir_func_t *func);
 
+// Create a new stack frame.
+// If `name` is `NULL`, its name will be `frame%zu` where `%zu` is a number.
+ir_frame_t *ir_frame_create(ir_func_t *func, uint64_t size, uint64_t align, char const *name);
+
 // Create a new variable.
 // If `name` is `NULL`, its name will be `var%zu` where `%zu` is a number.
 ir_var_t  *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name);
@@ -39,6 +43,7 @@ void       ir_code_delete(ir_code_t *code);
 // Delete an instruction from the code.
 void       ir_insn_delete(ir_insn_t *insn);
 
+
 // Add a combinator function to a code block.
 // Takes ownership of the `from` array.
 void ir_add_combinator(ir_code_t *code, ir_var_t *dest, size_t from_len, ir_combinator_t *from);
@@ -48,9 +53,19 @@ void ir_add_expr1(ir_code_t *code, ir_var_t *dest, ir_op1_type_t oper, ir_operan
 void ir_add_expr2(ir_code_t *code, ir_var_t *dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs);
 // Add an undefined variable.
 void ir_add_undefined(ir_code_t *code, ir_var_t *dest);
-// Add a direct (by label) function call.
+
+// Add a load effective address of a stack frame to a code block.
+void ir_add_lea_stack(ir_code_t *code, ir_var_t *dest, ir_frame_t *frame, uint64_t offset);
+// Add a load effective address of a symbol to a code block.
+void ir_add_lea_symbol(ir_code_t *code, ir_var_t *dest, char const *symbol, uint64_t offset);
+// Add a memory load to a code block.
+void ir_add_load(ir_code_t *code, ir_var_t *dest, ir_operand_t addr);
+// Add a memory store to a code block.
+void ir_add_store(ir_code_t *code, ir_operand_t src, ir_operand_t addr);
+
+// Add a direct (by symbol) function call.
 // Takes ownership of `params`.
-void ir_add_call_direct(ir_code_t *from, char const *label, size_t params_len, ir_operand_t *params);
+void ir_add_call_direct(ir_code_t *from, char const *symbol, size_t params_len, ir_operand_t *params);
 // Add an indirect (by pointer) function call.
 // Takes ownership of `params`.
 void ir_add_call_ptr(ir_code_t *from, ir_operand_t funcptr, size_t params_len, ir_operand_t *params);

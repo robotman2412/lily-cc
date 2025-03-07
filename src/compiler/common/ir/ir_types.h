@@ -57,6 +57,28 @@ typedef enum __attribute__((packed)) {
     IR_FLOW_RETURN,
 } ir_flow_type_t;
 
+// IR memory access types.
+typedef enum __attribute__((packed)) {
+    // Load effective address of stack frame.
+    IR_MEM_LEA_STACK,
+    // Load effective address of symbol.
+    IR_MEM_LEA_SYMBOL,
+    // Load from memory.
+    IR_MEM_LOAD,
+    // Store to memory.
+    IR_MEM_STORE,
+} ir_mem_type_t;
+
+// Type of IR instruction.
+typedef enum __attribute__((packed)) {
+    // Computation instructions (e.g. `mul` or `slt`).
+    IR_INSN_EXPR,
+    // Control-flow instructions (e.g. `jump` or `return`).
+    IR_INSN_FLOW,
+    // Memory instructions (e.g. `lea` or `store`).
+    IR_INSN_MEM,
+} ir_insn_type_t;
+
 
 
 // IR stack frame.
@@ -71,10 +93,12 @@ typedef struct ir_operand    ir_operand_t;
 typedef struct ir_combinator ir_combinator_t;
 // IR instruction.
 typedef struct ir_insn       ir_insn_t;
-// IR expression.
+// IR expression instruction.
 typedef struct ir_expr       ir_expr_t;
-// IR control flow.
+// IR control flow instruction.
 typedef struct ir_flow       ir_flow_t;
+// IR memory instruction.
+typedef struct ir_mem        ir_mem_t;
 // IR code block.
 typedef struct ir_code       ir_code_t;
 // IR function.
@@ -88,6 +112,10 @@ struct ir_frame {
     dlist_node_t node;
     // Frame name.
     char        *name;
+    // Parent function.
+    ir_func_t   *func;
+    // Frame alignment.
+    uint64_t     align;
     // Frame size.
     uint64_t     size;
 };
@@ -151,11 +179,11 @@ struct ir_combinator {
 // IR instruction.
 struct ir_insn {
     // Code block's instruction list node.
-    dlist_node_t node;
+    dlist_node_t   node;
     // Parent code block.
-    ir_code_t   *parent;
-    // If true, this is an `ir_expr_t`; otherwise, an `ir_flow_t`.
-    bool         is_expr;
+    ir_code_t     *parent;
+    // Distinguishes between the types of instruction.
+    ir_insn_type_t type;
 };
 
 // IR expression.
@@ -232,6 +260,45 @@ struct ir_flow {
     };
 };
 
+// IR memory instruction.
+struct ir_mem {
+    ir_insn_t     base;
+    // Memory instruction type.
+    ir_mem_type_t type;
+    // Linked list node for variable assignments.
+    dlist_node_t  dest_node;
+    union {
+        struct {
+            // Destination variable.
+            ir_var_t   *dest;
+            // Stack frame this is relative to.
+            ir_frame_t *frame;
+            // Offset from stack frame.
+            uint64_t    offset;
+        } m_lea_stack;
+        struct {
+            // Destination variable.
+            ir_var_t *dest;
+            // Symbol name this is relative to.
+            char     *symbol;
+            // Offset from stack frame.
+            uint64_t  offset;
+        } m_lea_symbol;
+        struct {
+            // Destination variable.
+            ir_var_t    *dest;
+            // Memory address.
+            ir_operand_t addr;
+        } m_load;
+        struct {
+            // Source operand.
+            ir_operand_t src;
+            // Memory address.
+            ir_operand_t addr;
+        } m_store;
+    };
+};
+
 // IR code block.
 struct ir_code {
     // Function's code list node.
@@ -268,6 +335,8 @@ struct ir_func {
     dlist_t    code_list;
     // Unordered list of variables.
     dlist_t    vars_list;
+    // Unordered list of stack frames.
+    dlist_t    frames_list;
     // Enforce the SSA form.
     bool       enforce_ssa;
 };

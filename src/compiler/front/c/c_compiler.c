@@ -489,9 +489,21 @@ ir_operand_t c_cast_ir_operand(ir_code_t *code, ir_operand_t operand, ir_prim_t 
 
 // Compile an expression into IR.
 // If `assign` is `NULL`, then the expression is read; otherwise, it is written, and the expression must be an lvalue.
+// If `addrof` is `true`, then the expression is evaluated as though wrapped in the address-of operator.
+// Not both `assign` and `addrof` may be specified at the same time.
 c_compile_expr_t c_compile_expr(
-    c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c_scope_t *scope, token_t expr, ir_operand_t *assign
+    c_compiler_t *ctx,
+    ir_func_t    *func,
+    ir_code_t    *code,
+    c_scope_t    *scope,
+    token_t       expr,
+    ir_operand_t *assign,
+    bool          addrof
 ) {
+    if (assign && addrof) {
+        fprintf(stderr, "[BUG] Both `assign` and `addrof` specified to `c_compile_expr`\n");
+        abort();
+    }
     if (expr.type == TOKENTYPE_IDENT) {
         // Look up variable in scope.
         // TODO: Implement enums here.
@@ -796,6 +808,43 @@ c_compile_expr_t c_compile_expr(
                 .var      = tmpvar,
             };
             return c_compile_expr(ctx, func, code, scope, expr.params[1], &operand);
+
+        } else if (expr.params[0].subtype == C_TKN_AND) {
+            // Address of operator.
+            return c_compile_expr(ctx, func, code, scope, expr.params[1], NULL, true);
+
+        } else if (expr.params[0].subtype == C_TKN_MUL) {
+            // Pointer dereference expression.
+            c_compile_expr_t res;
+            res = c_compile_expr(ctx, func, code, scope, expr.params[1], NULL, false);
+            if (!res.type) {
+                return (c_compile_expr_t){
+                    .code = code,
+                    .type = NULL,
+                    .res  = (ir_operand_t){0},
+                };
+            }
+            c_type_t *type = res.type->data;
+
+            // Enforce inner expression to be a pointer type.
+            if (type->primitive != C_COMP_POINTER && type->primitive != C_COMP_ARRAY) {
+                cctx_diagnostic(ctx->cctx, expr.pos, DIAG_ERR, "Expected a pointer or array type");
+                rc_delete(res.type);
+                return (c_compile_expr_t){
+                    .code = code,
+                    .type = NULL,
+                    .res  = (ir_operand_t){0},
+                };
+            }
+            code = res.code;
+
+            if (addrof) {
+                return res;
+            } else if (assign) {
+                // TODO: Assert pointer type be compatible with value to store.
+                // TODO: Support for structs.
+                ir_add_store(code, *assign, res.res);
+            }
 
         } else {
             // Normal unary operator.

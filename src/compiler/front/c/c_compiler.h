@@ -269,8 +269,16 @@ ir_operand_t c_value_read(ir_code_t *code, c_value_t *value);
 
 // Compile an expression into IR.
 // If `assign` is `NULL`, then the expression is read; otherwise, it is written, and the expression must be an lvalue.
+// If `addrof` is `true`, then the expression is evaluated as though wrapped in the address-of operator.
+// Not both `assign` and `addrof` may be specified at the same time.
 c_compile_expr_t c_compile_expr(
-    c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c_scope_t *scope, token_t expr, ir_operand_t *assign
+    c_compiler_t *ctx,
+    ir_func_t    *func,
+    ir_code_t    *code,
+    c_scope_t    *scope,
+    token_t       expr,
+    ir_operand_t *assign,
+    bool          addrof
 );
 // Compile a statement node into IR.
 // Returns the code path linearly after this.

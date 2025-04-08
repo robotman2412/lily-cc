@@ -67,6 +67,18 @@ typedef enum {
     C_COMP_FUNCTION,
 } c_prim_t;
 
+// Types of C value.
+typedef enum {
+    // Lvalue by pointer + offset.
+    C_LVALUE_PTR,
+    // Lvalue by symbol + offset.
+    C_LVALUE_SYMBOL,
+    // Lvalue by stack frame + offset.
+    C_LVALUE_STACK,
+    // Rvalue.
+    C_RVALUE,
+} c_value_type_t;
+
 
 
 // C variable.
@@ -75,6 +87,8 @@ typedef struct c_var          c_var_t;
 typedef struct c_scope        c_scope_t;
 // C type.
 typedef struct c_type         c_type_t;
+// C value.
+typedef struct c_value        c_value_t;
 // C compiler options.
 typedef struct c_options      c_options_t;
 // C compiler context.
@@ -135,6 +149,38 @@ struct c_type {
             // Argument names.
             char **arg_names;
         } func;
+    };
+};
+
+// C value.
+struct c_value {
+    // Type of value that this is.
+    c_value_type_t value_type;
+    // Refcount pointer of `c_type_t`; C type of this value.
+    rc_t           c_type;
+    // Offset into the pointer, symbol or stack frame.
+    uint64_t       offset;
+    union {
+        struct {
+            // Pointer to IR variable that holds or will hold the current value.
+            ir_var_t   **ir_var_ptr;
+            // The pointer at which the variable is to be stored.
+            ir_operand_t ptr;
+        } v_lvalue_ptr;
+        struct {
+            // Pointer to IR variable that holds or will hold the current value.
+            ir_var_t **ir_var_ptr;
+            // Symbol at which the value is stored.
+            char      *symbol;
+        } v_lvalue_symbol;
+        struct {
+            // IR variable that holds the current value.
+            ir_var_t   *ir_var;
+            // IR stack frame in which the value is stored.
+            ir_frame_t *frame;
+        } v_lvalue_stack;
+        // IR operand that holds the current rvalue.
+        ir_operand_t v_rvalue;
     };
 };
 
@@ -209,6 +255,13 @@ ir_op1_type_t c_op1_to_ir_op1(c_tokentype_t subtype);
 ir_prim_t     c_type_to_ir_type(c_compiler_t *ctx, c_type_t *type);
 // Cast one IR type to another according to the C rules for doing so.
 ir_var_t     *c_cast_ir_var(ir_code_t *code, ir_var_t *var, ir_prim_t type);
+
+// Clear up an lvalue or rvalue.
+void         c_value_destroy(c_value_t *value);
+// Write to an lvalue.
+void         c_value_write(ir_code_t *code, c_value_t *lvalue, c_value_t *rvalue);
+// Read a value for scalar arithmetic.
+ir_operand_t c_value_read(ir_code_t *code, c_value_t *value);
 
 // Compile an expression into IR.
 // If `assign` is `NULL`, then the expression is read; otherwise, it is written, and the expression must be an lvalue.

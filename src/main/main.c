@@ -47,6 +47,7 @@ static void compile(char const *path) {
             // Declarations.
             c_compile_decls(cc, NULL, &cc->global_scope, decls);
         }
+        tkn_delete(decls);
     }
 
     // Print diagnostics.
@@ -59,7 +60,12 @@ static void compile(char const *path) {
         }
     }
 
-    // TODO: Clean up.
+    // Clean up.
+    set_clear(&pctx.type_names);
+    set_clear(&pctx.local_type_names);
+    c_compiler_destroy(cc);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
 }
 
 int main(int argc, char **argv) {

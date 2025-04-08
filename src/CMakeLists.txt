@@ -8,7 +8,13 @@ cmake_minimum_required(VERSION 3.16.0)
 set(CMAKE_EXPORT_COMPILE_COMMANDS true)
 
 project(lily-cc)
-add_compile_options(-std=gnu17 -Og -ggdb -Werror=format -Werror=return-type -Werror=maybe-uninitialized -lbsd)
+add_compile_options(
+    -std=gnu17
+    -Og -ggdb
+    -Wall -Wno-parentheses -Wno-unused-function -Wno-missing-braces
+    -Werror=all -Werror=enum-conversion
+    -lbsd
+)
 
 
 add_subdirectory(util)

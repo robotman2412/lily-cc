@@ -293,8 +293,6 @@ token_t c_parse(c_parser_t *ctx);
 
 // Parse one or more C expressions separated by commas.
 token_t c_parse_exprs(c_parser_t *ctx) {
-    bool *allow_expr;
-
     size_t   exprs_len = 1;
     size_t   exprs_cap = 1;
     token_t *exprs     = strong_malloc(exprs_cap * sizeof(token_t));
@@ -381,7 +379,6 @@ token_t c_parse_expr(c_parser_t *ctx) {
             push(ast_from_va(C_AST_EXPR_INDEX, 2, arr, idx));
 
         } else if (is_tkn(0, C_TKN_LPAR)) { // Recursively parse exprs.
-            bool is_type = false;
             if (is_operand(1) && peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_RPAR) {
                 // Function call may have zero params.
                 token_t lpar = pop();
@@ -622,7 +619,7 @@ static token_t c_parse_decl(c_parser_t *ctx, bool requires_name, bool allows_nam
     peek            = tkn_peek(ctx->tkn_ctx);
     bool empty      = peek.type != TOKENTYPE_OTHER
                  || (peek.subtype != C_TKN_MUL && peek.subtype != C_TKN_LPAR && peek.subtype != C_TKN_LBRAC);
-    if (requires_name && peek.type == TOKENTYPE_IDENT) {
+    if (allows_name && peek.type == TOKENTYPE_IDENT) {
         // Non-abstract decls can have idents here too.
         empty = false;
     }

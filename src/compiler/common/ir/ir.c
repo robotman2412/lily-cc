@@ -31,12 +31,12 @@ ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_
 // Delete an IR function.
 void ir_func_destroy(ir_func_t *func) {
     while (func->code_list.len) {
-        ir_code_t *code = (ir_code_t *)dlist_pop_front(&func->code_list);
+        ir_code_t *code = (ir_code_t *)func->code_list.head;
         ir_code_delete(code);
     }
 
     while (func->vars_list.len) {
-        ir_var_t *var = (ir_var_t *)dlist_pop_front(&func->vars_list);
+        ir_var_t *var = (ir_var_t *)func->vars_list.head;
         ir_var_delete(var);
     }
 
@@ -714,6 +714,8 @@ void ir_insn_delete(ir_insn_t *insn) {
                 }
             }
             free(expr->e_combinator.from);
+        } else {
+            abort();
         }
     } else if (insn->type == IR_INSN_MEM) {
         ir_mem_t *mem = (void *)insn;
@@ -725,17 +727,19 @@ void ir_insn_delete(ir_insn_t *insn) {
         } else if (mem->type == IR_MEM_LOAD) {
             dlist_remove(&mem->m_load.dest->assigned_at, &mem->dest_node);
             if (!mem->m_load.addr.is_const) {
-                dlist_remove(&mem->m_load.addr.var->assigned_at, &mem->dest_node);
+                set_remove(&mem->m_load.addr.var->used_at, insn);
             }
         } else if (mem->type == IR_MEM_STORE) {
             if (!mem->m_store.src.is_const) {
-                dlist_remove(&mem->m_store.src.var->assigned_at, &mem->dest_node);
+                set_remove(&mem->m_store.src.var->used_at, insn);
             }
             if (!mem->m_store.addr.is_const) {
-                dlist_remove(&mem->m_store.addr.var->assigned_at, &mem->dest_node);
+                set_remove(&mem->m_store.addr.var->used_at, insn);
             }
+        } else {
+            abort();
         }
-    } else {
+    } else if (insn->type == IR_INSN_FLOW) {
         ir_flow_t *flow = (void *)insn;
         if (flow->type == IR_FLOW_BRANCH) {
             if (!flow->f_branch.cond.is_const) {
@@ -756,7 +760,13 @@ void ir_insn_delete(ir_insn_t *insn) {
                     set_remove(&flow->f_call_direct.args[i].var->used_at, insn);
                 }
             }
+        } else if (flow->type == IR_FLOW_JUMP) {
+            // Nothing to do.
+        } else {
+            abort();
         }
+    } else {
+        abort();
     }
     dlist_remove(&insn->parent->insns, &insn->node);
     free(insn);
@@ -1030,7 +1040,7 @@ void ir_add_load(ir_code_t *code, ir_var_t *dest, ir_operand_t addr) {
     ir_mem_t *mem    = calloc(1, sizeof(ir_mem_t));
     mem->base.type   = IR_INSN_MEM;
     mem->base.parent = code;
-    mem->type        = IR_FLOW_RETURN;
+    mem->type        = IR_MEM_LOAD;
     mem->m_load.dest = dest;
     mem->m_load.addr = addr;
     if (!addr.is_const) {
@@ -1059,7 +1069,7 @@ void ir_add_store(ir_code_t *code, ir_operand_t src, ir_operand_t addr) {
     ir_mem_t *mem     = calloc(1, sizeof(ir_mem_t));
     mem->base.type    = IR_INSN_MEM;
     mem->base.parent  = code;
-    mem->type         = IR_FLOW_RETURN;
+    mem->type         = IR_MEM_STORE;
     mem->m_store.src  = src;
     mem->m_store.addr = addr;
     if (!src.is_const) {

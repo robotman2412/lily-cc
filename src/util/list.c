@@ -182,7 +182,7 @@ bool dlist_contains(dlist_t const *const list, dlist_node_t const *const node) {
 // Removes `node` from `list`. `node` must be either an empty (non-inserted) node or must be contained in `list`.
 // Both `list` and `node` must be non-NULL.
 void dlist_remove(dlist_t *const list, dlist_node_t *const node) {
-    assert_dev_drop(dlist_contains(list, node) || ((node->next == NULL) && (node->previous == NULL)));
+    assert_dev_drop(dlist_contains(list, node));
 
     bool decrement = false;
     if (node->previous != NULL) {

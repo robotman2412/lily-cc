@@ -13,6 +13,7 @@
 /// @param pos Current byte offset in the string
 /// @return Character code point or -1 if end of string
 int utf8_next(char const *str, size_t size, size_t *pos) {
+    (void)size;
     if (!(str[*pos] & 0x80)) {
         return str[*pos++];
     }
@@ -25,6 +26,9 @@ int utf8_next(char const *str, size_t size, size_t *pos) {
 /// @param size Size in bytes
 /// @param pos Current byte offset in the string
 void utf8_prev(char const *str, size_t size, size_t *pos) {
+    (void)str;
+    (void)size;
+    (void)pos;
 }
 
 /// Count how many UTF-8 characters are in a string.

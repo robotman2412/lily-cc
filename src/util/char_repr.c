@@ -23,7 +23,7 @@ void print_char_repr(unsigned int value, FILE *fd) {
         case '\t': fputs("\\t", fd); break;
         case '\v': fputs("\\v", fd); break;
         default:
-            if (value < 0x20 || value >= 0x7f && value <= 0xff) {
+            if (value < 0x20 || (value >= 0x7f && value <= 0xff)) {
                 fprintf(fd, "\\%03o", value);
             } else if (value >= 0x0100 && value <= 0xffff) {
                 fprintf(fd, "\\u%04x", value);

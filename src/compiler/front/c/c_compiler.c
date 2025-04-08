@@ -29,6 +29,23 @@ c_compiler_t *c_compiler_create(cctx_t *cctx, c_options_t options) {
     cc->cctx                = cctx;
     cc->options             = options;
     cc->global_scope.locals = STR_MAP_EMPTY;
+
+    cc->prim_sizes[C_PRIM_BOOL]    = 1;
+    cc->prim_sizes[C_PRIM_UCHAR]   = 1;
+    cc->prim_sizes[C_PRIM_SCHAR]   = 1;
+    cc->prim_sizes[C_PRIM_USHORT]  = options.short16 ? 2 : 1;
+    cc->prim_sizes[C_PRIM_SSHORT]  = options.short16 ? 2 : 1;
+    cc->prim_sizes[C_PRIM_UINT]    = options.int32 ? 4 : 2;
+    cc->prim_sizes[C_PRIM_SINT]    = options.int32 ? 4 : 2;
+    cc->prim_sizes[C_PRIM_ULONG]   = options.long64 ? 8 : 4;
+    cc->prim_sizes[C_PRIM_SLONG]   = options.long64 ? 8 : 4;
+    cc->prim_sizes[C_PRIM_ULLONG]  = 8;
+    cc->prim_sizes[C_PRIM_SLLONG]  = 8;
+    cc->prim_sizes[C_PRIM_FLOAT]   = 4;
+    cc->prim_sizes[C_PRIM_DOUBLE]  = 8;
+    cc->prim_sizes[C_PRIM_LDOUBLE] = 8;
+    cc->prim_sizes[C_PRIM_VOID]    = 0;
+
     return cc;
 }
 
@@ -86,8 +103,6 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t list) {
     bool     has_bool     = false;
     bool     has_unsigned = false;
     bool     has_signed   = false;
-
-    int a = 2;
 
     rc_t      rc   = rc_new_strong(strong_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
     c_type_t *type = rc->data;
@@ -371,6 +386,15 @@ c_var_t *c_scope_lookup(c_scope_t *scope, char const *ident) {
 
 
 
+// Create a type that is a pointer to an existing type.
+rc_t c_type_pointer(c_compiler_t *ctx, rc_t inner) {
+    c_type_t *data  = strong_calloc(1, sizeof(c_type_t));
+    data->primitive = C_COMP_POINTER;
+    data->inner     = inner;
+    data->size      = ctx->prim_sizes[ctx->options.size_type];
+    return rc_new_strong(data, (void (*)(void *))c_type_free);
+}
+
 // Determine type promotion to apply in an infix context.
 rc_t c_type_promote(c_tokentype_t oper, rc_t a_rc, rc_t b_rc) {
     c_type_t *a = a_rc->data;
@@ -434,12 +458,8 @@ ir_op1_type_t c_op1_to_ir_op1(c_tokentype_t subtype) {
 }
 
 // Convert C primitive or pointer type to IR primitive type.
-ir_prim_t c_type_to_ir_type(c_compiler_t *ctx, c_type_t *type) {
-    c_prim_t c_prim = type->primitive;
-    if (c_prim == C_COMP_POINTER) {
-        c_prim = ctx->options.size_type;
-    }
-    switch (c_prim) {
+ir_prim_t c_prim_to_ir_type(c_compiler_t *ctx, c_prim_t prim) {
+    switch (prim) {
         case C_PRIM_BOOL: return IR_PRIM_bool;
         case C_PRIM_UCHAR: return IR_PRIM_u8;
         case C_PRIM_SCHAR: return IR_PRIM_s8;
@@ -456,6 +476,15 @@ ir_prim_t c_type_to_ir_type(c_compiler_t *ctx, c_type_t *type) {
         case C_PRIM_LDOUBLE: return IR_PRIM_f64;
         default: return IR_PRIM_u8;
     }
+}
+
+// Convert C primitive or pointer type to IR primitive type.
+ir_prim_t c_type_to_ir_type(c_compiler_t *ctx, c_type_t *type) {
+    c_prim_t c_prim = type->primitive;
+    if (c_prim == C_COMP_POINTER) {
+        c_prim = ctx->options.size_type;
+    }
+    return c_prim_to_ir_type(ctx, type->primitive);
 }
 
 // Cast one IR type to another according to the C rules for doing so.
@@ -516,11 +545,34 @@ c_compile_expr_t c_compile_expr(
                 .res  = (ir_operand_t){0},
             };
         }
+
+        if (addrof) {
+            // Address-of implementation.
+            ir_var_t *pointer = ir_var_create(func, c_prim_to_ir_type(ctx, ctx->options.size_type), NULL);
+            if (c_var->is_global) {
+                ir_add_lea_symbol(code, pointer, expr.strval, 0);
+            } else {
+                ir_add_lea_stack(code, pointer, c_var->ir_frame, 0);
+            }
+            return (c_compile_expr_t){
+                .code = code,
+                .type = c_type_pointer(ctx, rc_share(c_var->type)),
+                .res  = (ir_operand_t){
+                    .is_const = false,
+                    .var      = pointer,
+                },
+                .addrof_ok = true,
+            };
+        }
+
+        // Assignment implementation.
         if (assign && ((c_type_t *)c_var->type->data)->is_const) {
             cctx_diagnostic(ctx->cctx, expr.pos, DIAG_ERR, "Expression must be a modifiable lvalue");
         } else if (assign) {
             ir_add_expr1(code, c_var->ir_var, IR_OP1_mov, *assign);
         }
+
+        // Assignment and/or read implementation.
         return (c_compile_expr_t){
             .code = code,
             .type = rc_share(c_var->type),
@@ -555,7 +607,7 @@ c_compile_expr_t c_compile_expr(
         }
         for (size_t i = 0; i < expr.params_len - 1; i++) {
             c_compile_expr_t res;
-            res = c_compile_expr(ctx, func, code, scope, expr.params[i], NULL);
+            res = c_compile_expr(ctx, func, code, scope, expr.params[i], NULL, false);
             if (!res.type) {
                 return (c_compile_expr_t){
                     .code = code,
@@ -566,7 +618,7 @@ c_compile_expr_t c_compile_expr(
             code = res.code;
             rc_delete(res.type);
         }
-        return c_compile_expr(ctx, func, code, scope, expr.params[expr.params_len - 1], NULL);
+        return c_compile_expr(ctx, func, code, scope, expr.params[expr.params_len - 1], NULL, false);
 
     } else if (expr.subtype == C_AST_EXPR_CALL) {
         if (assign) {
@@ -577,7 +629,7 @@ c_compile_expr_t c_compile_expr(
         rc_t         functype_rc;
         if (expr.params[0].type != TOKENTYPE_IDENT) {
             // If not an ident, compile function addr expression.
-            c_compile_expr_t res = c_compile_expr(ctx, func, code, scope, expr.params[0], NULL);
+            c_compile_expr_t res = c_compile_expr(ctx, func, code, scope, expr.params[0], NULL, false);
             if (!res.type) {
                 return (c_compile_expr_t){
                     .code = code,
@@ -598,6 +650,7 @@ c_compile_expr_t c_compile_expr(
         if (functype->primitive == C_COMP_POINTER
             && ((c_type_t *)functype->inner->data)->primitive == C_COMP_FUNCTION) {
             // Function pointer type.
+            (void)funcptr;
             printf("TODO: Function pointer types\n");
             abort();
         }
@@ -631,7 +684,7 @@ c_compile_expr_t c_compile_expr(
 
         ir_operand_t *params = strong_calloc(sizeof(ir_operand_t), expr.params_len - 1);
         for (size_t i = 0; i < expr.params_len - 1; i++) {
-            c_compile_expr_t res = c_compile_expr(ctx, func, code, scope, expr.params[i + 1], NULL);
+            c_compile_expr_t res = c_compile_expr(ctx, func, code, scope, expr.params[i + 1], NULL, false);
             if (!res.type) {
                 rc_delete(functype_rc);
                 free(params);
@@ -681,7 +734,7 @@ c_compile_expr_t c_compile_expr(
         if (expr.params[0].subtype == C_TKN_ASSIGN) {
             // Simple assignment expression.
             c_compile_expr_t res;
-            res = c_compile_expr(ctx, func, code, scope, expr.params[2], NULL);
+            res = c_compile_expr(ctx, func, code, scope, expr.params[2], NULL, false);
             if (!res.type) {
                 return (c_compile_expr_t){
                     .code = code,
@@ -691,7 +744,7 @@ c_compile_expr_t c_compile_expr(
             }
             code = res.code;
             rc_delete(res.type);
-            return c_compile_expr(ctx, func, code, scope, expr.params[1], &res.res);
+            return c_compile_expr(ctx, func, code, scope, expr.params[1], &res.res, false);
 
         } else {
             // Other expressions.
@@ -699,7 +752,7 @@ c_compile_expr_t c_compile_expr(
             bool             is_assign = expr.params[0].subtype >= C_TKN_ADD_S && expr.params[0].subtype <= C_TKN_XOR_S;
 
             // Get operands.
-            res = c_compile_expr(ctx, func, code, scope, expr.params[1], NULL);
+            res = c_compile_expr(ctx, func, code, scope, expr.params[1], NULL, false);
             if (!res.type) {
                 return (c_compile_expr_t){
                     .code = code,
@@ -710,7 +763,7 @@ c_compile_expr_t c_compile_expr(
             rc_t         type0 = res.type;
             ir_operand_t var0  = res.res;
             code               = res.code;
-            res                = c_compile_expr(ctx, func, code, scope, expr.params[2], NULL);
+            res                = c_compile_expr(ctx, func, code, scope, expr.params[2], NULL, false);
             if (!res.type) {
                 rc_delete(type0);
                 return (c_compile_expr_t){
@@ -763,7 +816,7 @@ c_compile_expr_t c_compile_expr(
                     .is_const = false,
                     .var      = tmpvar,
                 };
-                return c_compile_expr(ctx, func, code, scope, expr.params[1], &operand);
+                return c_compile_expr(ctx, func, code, scope, expr.params[1], &operand, false);
             } else {
                 return (c_compile_expr_t){
                     .code = code,
@@ -778,10 +831,14 @@ c_compile_expr_t c_compile_expr(
 
     } else if (expr.subtype == C_AST_EXPR_PREFIX) {
         if (expr.params[0].subtype == C_TKN_INC || expr.params[0].subtype == C_TKN_DEC) {
+            if (addrof) {
+                cctx_diagnostic(ctx->cctx, expr.pos, DIAG_ERR, "This expression");
+            }
+
             // Pre-increment / pre-decrement.
             bool             is_inc = expr.params[0].subtype == C_TKN_INC;
             c_compile_expr_t res;
-            res = c_compile_expr(ctx, func, code, scope, expr.params[1], NULL);
+            res = c_compile_expr(ctx, func, code, scope, expr.params[1], NULL, false);
             if (!res.type) {
                 return (c_compile_expr_t){
                     .code = code,
@@ -807,11 +864,17 @@ c_compile_expr_t c_compile_expr(
                 .is_const = false,
                 .var      = tmpvar,
             };
-            return c_compile_expr(ctx, func, code, scope, expr.params[1], &operand);
+            return c_compile_expr(ctx, func, code, scope, expr.params[1], &operand, false);
 
         } else if (expr.params[0].subtype == C_TKN_AND) {
             // Address of operator.
-            return c_compile_expr(ctx, func, code, scope, expr.params[1], NULL, true);
+            c_compile_expr_t res = c_compile_expr(ctx, func, code, scope, expr.params[1], NULL, true);
+            if (!res.addrof_ok && res.type) {
+                cctx_diagnostic(ctx->cctx, expr.params[0].pos, DIAG_ERR, "Lvalue required as unary `&` operand");
+                rc_delete(res.type);
+                return (c_compile_expr_t){0};
+            }
+            return res;
 
         } else if (expr.params[0].subtype == C_TKN_MUL) {
             // Pointer dereference expression.
@@ -839,17 +902,45 @@ c_compile_expr_t c_compile_expr(
             code = res.code;
 
             if (addrof) {
+                // Address of dereference is just the pointer itself.
+                res.addrof_ok = true;
                 return res;
+
             } else if (assign) {
+                // Pointer store.
+
                 // TODO: Assert pointer type be compatible with value to store.
                 // TODO: Support for structs.
                 ir_add_store(code, *assign, res.res);
+                rc_delete(res.type);
+
+                return (c_compile_expr_t){
+                    .code = code,
+                    .type = rc_share(((c_type_t *)res.type->data)->inner),
+                    .res  = *assign,
+                };
+
+            } else {
+                // Pointer load.
+                ir_var_t *load
+                    = ir_var_create(func, c_type_to_ir_type(ctx, ((c_type_t *)res.type->data)->inner->data), NULL);
+                ir_add_load(code, load, res.res);
+                rc_delete(res.type);
+
+                return (c_compile_expr_t){
+                    .code = code,
+                    .type = rc_share(((c_type_t *)res.type->data)->inner),
+                    .res  = (ir_operand_t){
+                        .is_const = false,
+                        .var      = load,
+                    },
+                };
             }
 
         } else {
             // Normal unary operator.
             c_compile_expr_t res;
-            res = c_compile_expr(ctx, func, code, scope, expr.params[1], NULL);
+            res = c_compile_expr(ctx, func, code, scope, expr.params[1], NULL, false);
             if (!res.type) {
                 return (c_compile_expr_t){
                     .code = code,
@@ -883,7 +974,7 @@ c_compile_expr_t c_compile_expr(
         // Post-increment / post-decrement.
         bool             is_inc = expr.params[0].subtype == C_TKN_INC;
         c_compile_expr_t res;
-        res = c_compile_expr(ctx, func, code, scope, expr.params[1], NULL);
+        res = c_compile_expr(ctx, func, code, scope, expr.params[1], NULL, false);
         if (!res.type) {
             return (c_compile_expr_t){
                 .code = code,
@@ -913,7 +1004,7 @@ c_compile_expr_t c_compile_expr(
             .is_const = false,
             .var      = tmpvar,
         };
-        res = c_compile_expr(ctx, func, code, scope, expr.params[1], &operand);
+        res = c_compile_expr(ctx, func, code, scope, expr.params[1], &operand, false);
         if (!res.type) {
             return (c_compile_expr_t){
                 .code = code,
@@ -953,7 +1044,7 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c
 
     } else if (stmt.subtype == C_AST_EXPRS) {
         // Expression statement.
-        c_compile_expr_t expr = c_compile_expr(ctx, func, code, scope, stmt, NULL);
+        c_compile_expr_t expr = c_compile_expr(ctx, func, code, scope, stmt, NULL, false);
         code                  = expr.code;
         if (expr.type) {
             rc_delete(expr.type);
@@ -971,7 +1062,7 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c
         ir_code_t *after     = ir_code_create(func, NULL);
 
         // Compile expression.
-        c_compile_expr_t expr = c_compile_expr(ctx, func, cond_body, scope, stmt.params[0], NULL);
+        c_compile_expr_t expr = c_compile_expr(ctx, func, cond_body, scope, stmt.params[0], NULL, false);
         cond_body             = expr.code;
         if (expr.type) {
             rc_delete(expr.type);
@@ -996,7 +1087,7 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c
     } else if (stmt.subtype == C_AST_IF_ELSE) {
         // If or if...else statement.
         // Evaluate condition.
-        c_compile_expr_t expr = c_compile_expr(ctx, func, code, scope, stmt.params[0], NULL);
+        c_compile_expr_t expr = c_compile_expr(ctx, func, code, scope, stmt.params[0], NULL, false);
         code                  = expr.code;
 
         // Allocate code paths.
@@ -1035,12 +1126,16 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c
 
         ir_code_t *for_cond = ir_code_create(func, NULL);
         ir_code_t *for_body = ir_code_create(func, NULL);
+        (void)for_cond;
+        (void)for_body;
+        printf("TODO: for loops\n");
+        abort();
 
     } else if (stmt.subtype == C_AST_RETURN) {
         // Return statement.
         if (stmt.params_len) {
             // With value.
-            c_compile_expr_t expr = c_compile_expr(ctx, func, code, scope, stmt.params[0], NULL);
+            c_compile_expr_t expr = c_compile_expr(ctx, func, code, scope, stmt.params[0], NULL, false);
             code                  = expr.code;
             if (expr.type) {
                 ir_add_return1(code, expr.res);
@@ -1194,6 +1289,7 @@ start:
         case C_COMP_STRUCT: fputs("struct", to); break;
         case C_COMP_UNION: fputs("union", to); break;
         case C_COMP_ENUM: fputs("enum", to); break;
+        default: break;
     }
     if (type->is_const) {
         fputs(" const", to);

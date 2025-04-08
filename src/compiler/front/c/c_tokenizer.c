@@ -40,12 +40,6 @@ static long c_keyw_since[] = {
 #include "c_keywords.inc"
 };
 
-// Token introduction dates.
-static long c_keyw_deprecated[] = {
-#define C_KEYW_DEF(since, deprecated, name) deprecated,
-#include "c_keywords.inc"
-};
-
 
 // Create a new C tokenizer.
 tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std) {

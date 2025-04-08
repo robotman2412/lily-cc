@@ -210,6 +210,8 @@ struct c_options {
 struct c_compiler {
     // C compiler options.
     c_options_t options;
+    // C primitive sizes derived from options.
+    uint8_t     prim_sizes[C_N_PRIM];
     // Map of global typedefs (entry type is `c_type_t`).
     map_t       typedefs;
     // Global scope.
@@ -222,6 +224,8 @@ struct c_compiler {
 struct c_compile_expr {
     // Result of expression.
     ir_operand_t res;
+    // Whether the address-of operator succeeded; if `false`, the expression was not an lvalue.
+    bool         addrof_ok;
     // Type of expression result (refcount ptr of `c_type_t`).
     rc_t         type;
     // Code path linearly after the expression.
@@ -249,12 +253,16 @@ void       c_scope_destroy(c_scope_t *scope);
 // Look up a variable in scope.
 c_var_t   *c_scope_lookup(c_scope_t *scope, char const *ident);
 
+// Create a type that is a pointer to an existing type.
+rc_t          c_type_pointer(c_compiler_t *ctx, rc_t inner);
 // Determine type promotion to apply in an infix context.
 rc_t          c_type_promote(c_tokentype_t oper, rc_t a, rc_t b);
 // Convert C binary operator to IR binary operator.
 ir_op2_type_t c_op2_to_ir_op2(c_tokentype_t subtype);
 // Convert C unary operator to IR unary operator.
 ir_op1_type_t c_op1_to_ir_op1(c_tokentype_t subtype);
+// Convert C primitive or pointer type to IR primitive type.
+ir_prim_t     c_prim_to_ir_type(c_compiler_t *ctx, c_prim_t prim);
 // Convert C primitive or pointer type to IR primitive type.
 ir_prim_t     c_type_to_ir_type(c_compiler_t *ctx, c_type_t *type);
 // Cast one IR type to another according to the C rules for doing so.

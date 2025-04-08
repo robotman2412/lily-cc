@@ -114,7 +114,7 @@ static char *test_c_compile_expr() {
     }
 
     ir_func_t *func = ir_func_create("c_compile_expr", NULL, 0, NULL);
-    c_compile_expr(cc, func, (ir_code_t *)func->code_list.head, NULL, expr_tok, NULL);
+    c_compile_expr(cc, func, (ir_code_t *)func->code_list.head, NULL, expr_tok, NULL, false);
 
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;

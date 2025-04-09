@@ -516,6 +516,112 @@ ir_operand_t c_cast_ir_operand(ir_code_t *code, ir_operand_t operand, ir_prim_t 
 
 
 
+// Clean up an lvalue or rvalue.
+void c_value_destroy(c_value_t value) {
+    rc_delete(value.c_type);
+    if (value.value_type == C_LVALUE_SYMBOL) {
+        free(value.lvalue.symbol);
+    }
+}
+
+// Write to an lvalue.
+void c_value_write(c_compiler_t *ctx, ir_code_t *code, c_value_t const *lvalue, c_value_t const *rvalue) {
+    ir_operand_t tmp = c_value_read(ctx, code, rvalue);
+    if (lvalue->value_type == C_RVALUE) {
+        printf("[BUG] c_value_write called with an `rvalue` destination");
+        abort();
+    }
+
+    // If the variable has an associated register, write to the register too.
+    if (lvalue->lvalue.current) {
+        ir_add_expr1(code, lvalue->lvalue.current, IR_OP1_mov, tmp);
+    }
+
+    // Store the lvalue back to memory.
+    ir_add_store(code, tmp, c_value_addrof(ctx, code, lvalue));
+}
+
+// Get the address of an lvalue.
+ir_operand_t c_value_addrof(c_compiler_t *ctx, ir_code_t *code, c_value_t const *lvalue) {
+    if (lvalue->value_type == C_RVALUE) {
+        printf("[BUG] c_value_addrof called with an `rvalue`");
+        abort();
+    }
+
+    ir_prim_t    ptr_prim = c_prim_to_ir_type(ctx, ctx->options.size_type);
+    ir_operand_t addr;
+    if (lvalue->value_type == C_LVALUE_PTR && lvalue->lvalue.offset == 0) {
+        // No offset from pointer, constant or not.
+        addr = lvalue->lvalue.ptr;
+
+    } else if (lvalue->value_type == C_LVALUE_PTR && lvalue->lvalue.ptr.is_const) {
+        // Constant offset from constant pointer.
+        addr                = lvalue->lvalue.ptr;
+        addr.iconst.constl += lvalue->lvalue.offset;
+
+    } else if (lvalue->value_type == C_LVALUE_PTR) {
+        // Constant offset from variable pointer.
+        addr.is_const = true;
+        addr.var      = ir_var_create(code->func, ptr_prim, NULL);
+        ir_add_expr2(
+            code,
+            addr.var,
+            IR_OP2_add,
+            lvalue->lvalue.ptr,
+            (ir_operand_t){
+                .is_const = true,
+                .iconst = {
+                    .prim_type = ptr_prim,
+                    .constl    = lvalue->lvalue.offset,
+                },
+            }
+        );
+
+    } else if (lvalue->value_type == C_LVALUE_STACK) {
+        // Constant offset from stack frame.
+        addr.is_const = true;
+        addr.var      = ir_var_create(code->func, ptr_prim, NULL);
+        ir_add_lea_stack(code, addr.var, lvalue->lvalue.frame, lvalue->lvalue.offset);
+
+    } else if (lvalue->value_type == C_LVALUE_SYMBOL) {
+        // Constant offset from symbol.
+        addr.is_const = true;
+        addr.var      = ir_var_create(code->func, ptr_prim, NULL);
+        ir_add_lea_symbol(code, addr.var, lvalue->lvalue.symbol, lvalue->lvalue.offset);
+
+    } else {
+        abort();
+    }
+
+    return addr;
+}
+
+// Read a value for scalar arithmetic.
+ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value) {
+    if (value->value_type == C_RVALUE) {
+        // Rvalues don't need any reading because they're already in registers.
+        return value->rvalue;
+
+    } else if (value->lvalue.current) {
+        // If the lvalue has a dedicated register, use it.
+        return (ir_operand_t){
+            .is_const = false,
+            .var      = value->lvalue.current,
+        };
+
+    } else {
+        // Otherwise, the lvalue needs to be loaded from memory.
+        ir_var_t *tmp = ir_var_create(code->func, c_type_to_ir_type(ctx, value->c_type->data), NULL);
+        ir_add_load(code, tmp, c_value_addrof(ctx, code, value));
+        return (ir_operand_t){
+            .is_const = false,
+            .var      = tmp,
+        };
+    }
+}
+
+
+
 // Compile an expression into IR.
 // If `assign` is `NULL`, then the expression is read; otherwise, it is written, and the expression must be an lvalue.
 // If `addrof` is `true`, then the expression is evaluated as though wrapped in the address-of operator.

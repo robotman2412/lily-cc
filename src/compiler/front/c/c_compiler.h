@@ -176,6 +176,8 @@ struct c_value {
                 // The pointer at which the variable is to be stored.
                 ir_operand_t ptr;
             };
+            // IR variable that holds the current value, if any.
+            ir_var_t *current;
         } lvalue;
         // IR operand that holds the current rvalue.
         ir_operand_t rvalue;
@@ -265,11 +267,11 @@ ir_operand_t  c_cast_ir_operand(ir_code_t *code, ir_operand_t operand, ir_prim_t
 // Clean up an lvalue or rvalue.
 void         c_value_destroy(c_value_t value);
 // Write to an lvalue.
-void         c_value_write(ir_code_t *code, c_value_t const *lvalue, c_value_t const *rvalue);
-// Relax an lvalue into an rvalue.
-void         c_value_into_rvalue(ir_code_t *code, c_value_t *value);
+void         c_value_write(c_compiler_t *ctx, ir_code_t *code, c_value_t const *lvalue, c_value_t const *rvalue);
+// Get the address of an lvalue.
+ir_operand_t c_value_addrof(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
 // Read a value for scalar arithmetic.
-ir_operand_t c_value_read(ir_code_t *code, c_value_t const *value);
+ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
 
 // Compile an expression into IR.
 // If `assign` is `NULL`, then the expression is read; otherwise, it is written, and the expression must be an lvalue.

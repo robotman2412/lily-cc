@@ -479,7 +479,6 @@ static token_t c_parse_ddecl(c_parser_t *ctx, bool requires_name, bool allows_na
     token_t peek   = tkn_peek(ctx->tkn_ctx);
     token_t peek1  = tkn_peek_n(ctx->tkn_ctx, 1);
     token_t inner;
-    bool    has_inner;
 
     if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LPAR && peek1.type == TOKENTYPE_OTHER
         && (peek1.subtype == C_TKN_MUL || peek1.subtype == C_TKN_LPAR || peek1.subtype == C_TKN_LBRAC)) {

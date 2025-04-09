@@ -115,7 +115,8 @@ ir_const_t ir_cast(ir_prim_t type, ir_const_t value) {
 // Calculate the result of an expr1.
 ir_const_t ir_calc1(ir_op1_type_t oper, ir_const_t value) {
     if (oper == IR_OP1_mov) {
-        return value;
+        printf("[BUG] ir_calc1 on with IR_OP1_mov is invalid\n");
+        abort();
     } else if (oper == IR_OP1_snez || oper == IR_OP1_seqz) {
         bool eqz;
         if (value.prim_type == IR_PRIM_f64) {

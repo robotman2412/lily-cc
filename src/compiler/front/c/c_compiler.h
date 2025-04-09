@@ -69,6 +69,8 @@ typedef enum {
 
 // Types of C value.
 typedef enum {
+    // Represents a missing value caused by compilation error.
+    C_VALUE_ERROR,
     // Lvalue by pointer + offset.
     C_LVALUE_PTR,
     // Lvalue by symbol + offset.
@@ -132,6 +134,8 @@ struct c_type {
     c_prim_t primitive;
     // Size of this type; 0 for incomplete types.
     uint64_t size;
+    // Alignment of this type; must be a power of 2.
+    uint64_t align;
     // Is volatile?
     bool     is_volatile;
     // Is const?
@@ -206,8 +210,10 @@ struct c_options {
 struct c_compiler {
     // C compiler options.
     c_options_t options;
-    // C primitive sizes derived from options.
-    uint8_t     prim_sizes[C_N_PRIM];
+    // Actual primitive type definitions derived from options.
+    c_type_t    prim_types[C_N_PRIM];
+    // Fake refcount ptrs to `c_type_t` for all C primitive types.
+    struct rc_t prim_rcs[C_N_PRIM];
     // Map of global typedefs (entry type is `c_type_t`).
     map_t       typedefs;
     // Global scope.
@@ -219,13 +225,9 @@ struct c_compiler {
 // Used for compiling expressions.
 struct c_compile_expr {
     // Result of expression.
-    ir_operand_t res;
-    // Whether the address-of operator succeeded; if `false`, the expression was not an lvalue.
-    bool         addrof_ok;
-    // Type of expression result (refcount ptr of `c_type_t`).
-    rc_t         type;
+    c_value_t  res;
     // Code path linearly after the expression.
-    ir_code_t   *code;
+    ir_code_t *code;
 };
 
 
@@ -252,7 +254,9 @@ c_var_t   *c_scope_lookup(c_scope_t *scope, char const *ident);
 // Create a type that is a pointer to an existing type.
 rc_t          c_type_pointer(c_compiler_t *ctx, rc_t inner);
 // Determine type promotion to apply in an infix context.
-rc_t          c_type_promote(c_tokentype_t oper, rc_t a, rc_t b);
+// Note: This does not take ownership of the refcount ptr;
+// It will call `rc_share` on the callers behalf only if necessary.
+rc_t          c_type_promote(c_compiler_t *ctx, c_tokentype_t oper, rc_t a, rc_t b);
 // Convert C binary operator to IR binary operator.
 ir_op2_type_t c_op2_to_ir_op2(c_tokentype_t subtype);
 // Convert C unary operator to IR unary operator.
@@ -274,26 +278,15 @@ ir_operand_t c_value_addrof(c_compiler_t *ctx, ir_code_t *code, c_value_t const 
 ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
 
 // Compile an expression into IR.
-// If `assign` is `NULL`, then the expression is read; otherwise, it is written, and the expression must be an lvalue.
-// If `addrof` is `true`, then the expression is evaluated as though wrapped in the address-of operator.
-// Not both `assign` and `addrof` may be specified at the same time.
-c_compile_expr_t c_compile_expr(
-    c_compiler_t *ctx,
-    ir_func_t    *func,
-    ir_code_t    *code,
-    c_scope_t    *scope,
-    token_t       expr,
-    ir_operand_t *assign,
-    bool          addrof
-);
+c_compile_expr_t c_compile_expr(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c_scope_t *scope, token_t expr);
 // Compile a statement node into IR.
 // Returns the code path linearly after this.
-ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c_scope_t *scope, token_t stmt);
+ir_code_t       *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c_scope_t *scope, token_t stmt);
 // Compile a C function definition into IR.
-ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t def);
+ir_func_t       *c_compile_func_def(c_compiler_t *ctx, token_t def);
 // Compile a declaration statement.
 // If in global scope, `func` will be NULL.
-void       c_compile_decls(c_compiler_t *ctx, ir_func_t *func, c_scope_t *scope, token_t decls);
+void             c_compile_decls(c_compiler_t *ctx, ir_func_t *func, c_scope_t *scope, token_t decls);
 
 // Explain a C type.
 void c_type_explain(c_type_t *type, FILE *to);

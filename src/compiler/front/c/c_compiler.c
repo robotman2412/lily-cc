@@ -9,19 +9,14 @@
 #include "ir/ir_interpreter.h"
 #include "strong_malloc.h"
 
-// Cache of C types by primitive.
-// TODO: This technically doesn't work in conjunction with sizes as a primitive's size can be changed per context.
-static rc_t primitive_cache[C_N_PRIM];
 
-__attribute__((constructor)) static void fill_primitives_cache() {
-    for (int i = 0; i < C_N_PRIM; i++) {
-        primitive_cache[i] = rc_new_strong(strong_calloc(1, sizeof(c_type_t)), NULL);
-        c_type_t *type     = primitive_cache[i]->data;
-        type->primitive    = i;
-    }
+
+// Guards against actual cleanup happening for the fake RC types.
+static void c_compiler_t_fake_cleanup(void *_) {
+    (void)_;
+    printf("[BUG] Refcount ptr to primitive cache destroyed\n");
+    abort();
 }
-
-
 
 // Create a new C compiler context.
 c_compiler_t *c_compiler_create(cctx_t *cctx, c_options_t options) {
@@ -30,21 +25,29 @@ c_compiler_t *c_compiler_create(cctx_t *cctx, c_options_t options) {
     cc->options             = options;
     cc->global_scope.locals = STR_MAP_EMPTY;
 
-    cc->prim_sizes[C_PRIM_BOOL]    = 1;
-    cc->prim_sizes[C_PRIM_UCHAR]   = 1;
-    cc->prim_sizes[C_PRIM_SCHAR]   = 1;
-    cc->prim_sizes[C_PRIM_USHORT]  = options.short16 ? 2 : 1;
-    cc->prim_sizes[C_PRIM_SSHORT]  = options.short16 ? 2 : 1;
-    cc->prim_sizes[C_PRIM_UINT]    = options.int32 ? 4 : 2;
-    cc->prim_sizes[C_PRIM_SINT]    = options.int32 ? 4 : 2;
-    cc->prim_sizes[C_PRIM_ULONG]   = options.long64 ? 8 : 4;
-    cc->prim_sizes[C_PRIM_SLONG]   = options.long64 ? 8 : 4;
-    cc->prim_sizes[C_PRIM_ULLONG]  = 8;
-    cc->prim_sizes[C_PRIM_SLLONG]  = 8;
-    cc->prim_sizes[C_PRIM_FLOAT]   = 4;
-    cc->prim_sizes[C_PRIM_DOUBLE]  = 8;
-    cc->prim_sizes[C_PRIM_LDOUBLE] = 8;
-    cc->prim_sizes[C_PRIM_VOID]    = 0;
+    cc->prim_types[C_PRIM_BOOL].size    = 1;
+    cc->prim_types[C_PRIM_UCHAR].size   = 1;
+    cc->prim_types[C_PRIM_SCHAR].size   = 1;
+    cc->prim_types[C_PRIM_USHORT].size  = options.short16 ? 2 : 1;
+    cc->prim_types[C_PRIM_SSHORT].size  = options.short16 ? 2 : 1;
+    cc->prim_types[C_PRIM_UINT].size    = options.int32 ? 4 : 2;
+    cc->prim_types[C_PRIM_SINT].size    = options.int32 ? 4 : 2;
+    cc->prim_types[C_PRIM_ULONG].size   = options.long64 ? 8 : 4;
+    cc->prim_types[C_PRIM_SLONG].size   = options.long64 ? 8 : 4;
+    cc->prim_types[C_PRIM_ULLONG].size  = 8;
+    cc->prim_types[C_PRIM_SLLONG].size  = 8;
+    cc->prim_types[C_PRIM_FLOAT].size   = 4;
+    cc->prim_types[C_PRIM_DOUBLE].size  = 8;
+    cc->prim_types[C_PRIM_LDOUBLE].size = 8;
+    cc->prim_types[C_PRIM_VOID].size    = 0;
+
+    for (size_t i = 0; i < C_N_PRIM; i++) {
+        cc->prim_types[i].primitive = i;
+        cc->prim_types[i].align     = cc->prim_types[i].size;
+        cc->prim_rcs[i].refcount    = 1;
+        cc->prim_rcs[i].data        = &cc->prim_types[i];
+        cc->prim_rcs[i].cleanup     = c_compiler_t_fake_cleanup;
+    }
 
     return cc;
 }
@@ -62,12 +65,23 @@ void c_compiler_destroy(c_compiler_t *cc) {
 
 
 
-// Recursively calculate the size of a `c_type_t`.
-static void c_type_calc_size(c_compiler_t *ctx, c_type_t *type) {
-    if (type->inner) {
-        c_type_calc_size(ctx, type->inner->data);
+// Recursively calculate the layout of a `c_type_t`.
+static void c_type_calc_layout(c_compiler_t *ctx, c_type_t *type) {
+    if (type->primitive == C_COMP_POINTER) {
+        c_type_calc_layout(ctx, type->inner->data);
+        type->size  = ctx->prim_types[ctx->options.size_type].size;
+        type->align = ctx->prim_types[ctx->options.size_type].align;
+    } else if (type->primitive == C_COMP_ARRAY) {
+        c_type_calc_layout(ctx, type->inner->data);
+        type->align = ((c_type_t *)type->inner->data)->align;
+        type->size  = ((c_type_t *)type->inner->data)->size * 1; // TODO: Array bounds.
+    } else if (type->primitive == C_COMP_STRUCT || type->primitive == C_COMP_UNION) {
+        printf("TODO: Calculate inner layout of structs and unions.\n");
+        abort();
+    } else {
+        type->size  = ctx->prim_types[type->primitive].size;
+        type->align = ctx->prim_types[type->primitive].align;
     }
-    type->size = ir_prim_sizes[c_type_to_ir_type(ctx, type)];
 }
 
 // Clean up a `c_type_t`.
@@ -235,7 +249,7 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t list) {
         cctx_diagnostic(ctx->cctx, list.pos, DIAG_ERR, "Invalid primitive type");
     }
 
-    c_type_calc_size(ctx, type);
+    c_type_calc_layout(ctx, type);
 
     return rc;
 }
@@ -253,7 +267,7 @@ rc_t c_compile_decl(c_compiler_t *ctx, token_t decl, rc_t spec_qual_type, char c
             if (name_out) {
                 *name_out = decl.strval;
             }
-            c_type_calc_size(ctx, cur->data);
+            c_type_calc_layout(ctx, cur->data);
             return cur;
 
         } else if (decl.type == TOKENTYPE_AST && decl.subtype == C_AST_NOP) {
@@ -297,7 +311,7 @@ rc_t c_compile_decl(c_compiler_t *ctx, token_t decl, rc_t spec_qual_type, char c
                 decl = decl.params[0];
             } else {
                 // No inner node.
-                c_type_calc_size(ctx, next->data);
+                c_type_calc_layout(ctx, next->data);
                 return next;
             }
 
@@ -307,6 +321,8 @@ rc_t c_compile_decl(c_compiler_t *ctx, token_t decl, rc_t spec_qual_type, char c
             rc_t      next       = rc_new_strong(strong_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
             c_type_t *next_type  = next->data;
             next_type->primitive = C_COMP_POINTER;
+            next_type->size      = ctx->prim_types[ctx->options.size_type].size;
+            next_type->align     = ctx->prim_types[ctx->options.size_type].align;
             next_type->inner     = cur;
 
             if (decl.params_len > 1 && decl.params[1].type == TOKENTYPE_AST
@@ -330,7 +346,6 @@ rc_t c_compile_decl(c_compiler_t *ctx, token_t decl, rc_t spec_qual_type, char c
                     decl = decl.params[2];
                 } else {
                     // No inner node.
-                    c_type_calc_size(ctx, next->data);
                     return next;
                 }
             } else if (decl.params_len > 1) {
@@ -338,7 +353,6 @@ rc_t c_compile_decl(c_compiler_t *ctx, token_t decl, rc_t spec_qual_type, char c
                 decl = decl.params[1];
             } else {
                 // No inner node.
-                c_type_calc_size(ctx, next->data);
                 return next;
             }
 
@@ -391,12 +405,14 @@ rc_t c_type_pointer(c_compiler_t *ctx, rc_t inner) {
     c_type_t *data  = strong_calloc(1, sizeof(c_type_t));
     data->primitive = C_COMP_POINTER;
     data->inner     = inner;
-    data->size      = ctx->prim_sizes[ctx->options.size_type];
+    data->size      = ctx->prim_types[ctx->options.size_type].size;
     return rc_new_strong(data, (void (*)(void *))c_type_free);
 }
 
 // Determine type promotion to apply in an infix context.
-rc_t c_type_promote(c_tokentype_t oper, rc_t a_rc, rc_t b_rc) {
+// Note: This does not take ownership of the refcount ptr;
+// It will call `rc_share` on the callers behalf only if necessary.
+rc_t c_type_promote(c_compiler_t *ctx, c_tokentype_t oper, rc_t a_rc, rc_t b_rc) {
     c_type_t *a = a_rc->data;
     c_type_t *b = b_rc->data;
     c_type_t *tmp;
@@ -411,10 +427,10 @@ rc_t c_type_promote(c_tokentype_t oper, rc_t a_rc, rc_t b_rc) {
     if (oper > C_TKN_LOR && tmp->primitive < C_PRIM_UINT) {
         // If a non-boolean operator is used on a type smaller than int, promote to it.
         bool is_unsigned = tmp->primitive & 1;
-        return rc_share(primitive_cache[C_PRIM_SINT - is_unsigned]);
+        return rc_share(&ctx->prim_rcs[C_PRIM_SINT - is_unsigned]);
     } else {
         // Otherwise, merely drop stuff like `volatile` and `const`.
-        return rc_share(primitive_cache[tmp->primitive]);
+        return rc_share(&ctx->prim_rcs[tmp->primitive]);
     }
 }
 
@@ -490,7 +506,6 @@ ir_prim_t c_type_to_ir_type(c_compiler_t *ctx, c_type_t *type) {
 // Cast one IR type to another according to the C rules for doing so.
 // TODO: This may not be sufficient as the type system evolves.
 ir_operand_t c_cast_ir_operand(ir_code_t *code, ir_operand_t operand, ir_prim_t type) {
-    ir_op1_type_t op1 = type == IR_PRIM_bool ? IR_OP1_snez : IR_OP1_mov;
     if (operand.is_const) {
         // Casting constants.
         if (operand.iconst.prim_type == type) {
@@ -498,10 +513,11 @@ ir_operand_t c_cast_ir_operand(ir_code_t *code, ir_operand_t operand, ir_prim_t 
         }
         return (ir_operand_t){
             .is_const = true,
-            .iconst   = ir_calc1(op1, operand.iconst),
+            .iconst   = ir_cast(type, operand.iconst),
         };
     } else {
         // Casting variables or expressions.
+        ir_op1_type_t op1 = type == IR_PRIM_bool ? IR_OP1_snez : IR_OP1_mov;
         if (operand.var->prim_type == type) {
             return operand;
         }
@@ -561,7 +577,7 @@ ir_operand_t c_value_addrof(c_compiler_t *ctx, ir_code_t *code, c_value_t const 
 
     } else if (lvalue->value_type == C_LVALUE_PTR) {
         // Constant offset from variable pointer.
-        addr.is_const = true;
+        addr.is_const = false;
         addr.var      = ir_var_create(code->func, ptr_prim, NULL);
         ir_add_expr2(
             code,
@@ -579,13 +595,13 @@ ir_operand_t c_value_addrof(c_compiler_t *ctx, ir_code_t *code, c_value_t const 
 
     } else if (lvalue->value_type == C_LVALUE_STACK) {
         // Constant offset from stack frame.
-        addr.is_const = true;
+        addr.is_const = false;
         addr.var      = ir_var_create(code->func, ptr_prim, NULL);
         ir_add_lea_stack(code, addr.var, lvalue->lvalue.frame, lvalue->lvalue.offset);
 
     } else if (lvalue->value_type == C_LVALUE_SYMBOL) {
         // Constant offset from symbol.
-        addr.is_const = true;
+        addr.is_const = false;
         addr.var      = ir_var_create(code->func, ptr_prim, NULL);
         ir_add_lea_symbol(code, addr.var, lvalue->lvalue.symbol, lvalue->lvalue.offset);
 
@@ -623,22 +639,7 @@ ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *v
 
 
 // Compile an expression into IR.
-// If `assign` is `NULL`, then the expression is read; otherwise, it is written, and the expression must be an lvalue.
-// If `addrof` is `true`, then the expression is evaluated as though wrapped in the address-of operator.
-// Not both `assign` and `addrof` may be specified at the same time.
-c_compile_expr_t c_compile_expr(
-    c_compiler_t *ctx,
-    ir_func_t    *func,
-    ir_code_t    *code,
-    c_scope_t    *scope,
-    token_t       expr,
-    ir_operand_t *assign,
-    bool          addrof
-) {
-    if (assign && addrof) {
-        fprintf(stderr, "[BUG] Both `assign` and `addrof` specified to `c_compile_expr`\n");
-        abort();
-    }
+c_compile_expr_t c_compile_expr(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c_scope_t *scope, token_t expr) {
     if (expr.type == TOKENTYPE_IDENT) {
         // Look up variable in scope.
         // TODO: Implement enums here.
@@ -647,59 +648,53 @@ c_compile_expr_t c_compile_expr(
             cctx_diagnostic(ctx->cctx, expr.pos, DIAG_ERR, "Identifier %s is undefined", expr.strval);
             return (c_compile_expr_t){
                 .code = code,
-                .type = NULL,
-                .res  = (ir_operand_t){0},
+                .res  = (c_value_t){0},
             };
         }
 
-        if (addrof) {
-            // Address-of implementation.
-            ir_var_t *pointer = ir_var_create(func, c_prim_to_ir_type(ctx, ctx->options.size_type), NULL);
-            if (c_var->is_global) {
-                ir_add_lea_symbol(code, pointer, expr.strval, 0);
-            } else {
-                ir_add_lea_stack(code, pointer, c_var->ir_frame, 0);
-            }
-            return (c_compile_expr_t){
+        if (c_var->is_global) {
+            // Global variables are referenced by symbol.
+            return (c_compile_expr_t) {
                 .code = code,
-                .type = c_type_pointer(ctx, rc_share(c_var->type)),
-                .res  = (ir_operand_t){
-                    .is_const = false,
-                    .var      = pointer,
+                .res  = {
+                    .value_type = C_LVALUE_SYMBOL,
+                    .c_type     = rc_share(c_var->type),
+                    .lvalue     = {
+                        .offset  = 0,
+                        .symbol  = strong_strdup(expr.strval),
+                        .current = NULL,
+                    },
                 },
-                .addrof_ok = true,
+            };
+
+        } else {
+            // Local variables are referenced by stack frame.
+            return (c_compile_expr_t) {
+                .code = code,
+                .res  = {
+                    .value_type = C_LVALUE_STACK,
+                    .c_type     = rc_share(c_var->type),
+                    .lvalue     = {
+                        .offset  = 0,
+                        .frame   = c_var->ir_frame,
+                        .current = c_var->ir_var,
+                    },
+                },
             };
         }
-
-        // Assignment implementation.
-        if (assign && ((c_type_t *)c_var->type->data)->is_const) {
-            cctx_diagnostic(ctx->cctx, expr.pos, DIAG_ERR, "Expression must be a modifiable lvalue");
-        } else if (assign) {
-            ir_add_expr1(code, c_var->ir_var, IR_OP1_mov, *assign);
-        }
-
-        // Assignment and/or read implementation.
-        return (c_compile_expr_t){
-            .code = code,
-            .type = rc_share(c_var->type),
-            .res  = assign ? *assign : (ir_operand_t){
-                .is_const = false,
-                .var      = c_var->ir_var,
-            },
-        };
 
     } else if (expr.type == TOKENTYPE_ICONST || expr.type == TOKENTYPE_CCONST) {
-        // Create integer constant.
-        if (assign) {
-            cctx_diagnostic(ctx->cctx, expr.pos, DIAG_ERR, "Expression must be a modifiable lvalue");
-        }
-
         // TODO: Typed literals.
-        ir_prim_t prim = ctx->options.int32 ? IR_PRIM_s32 : IR_PRIM_s16;
         return (c_compile_expr_t){
             .code = code,
-            .type = rc_share(primitive_cache[C_PRIM_SINT]),
-            .res  = (ir_operand_t){.is_const = true, .iconst = {.prim_type = prim, .constl = expr.ival}},
+            .res  = {
+                .value_type = C_RVALUE,
+                .c_type     = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
+                .rvalue     = {
+                    .is_const      = true,
+                    .iconst.constl = expr.ival,
+                },
+            },
         };
 
     } else if (expr.type == TOKENTYPE_SCONST) {
@@ -708,44 +703,35 @@ c_compile_expr_t c_compile_expr(
 
     } else if (expr.subtype == C_AST_EXPRS) {
         // Multiple expressions; return value from the last one.
-        if (assign) {
-            cctx_diagnostic(ctx->cctx, expr.pos, DIAG_ERR, "Expression must be a modifiable lvalue");
-        }
         for (size_t i = 0; i < expr.params_len - 1; i++) {
             c_compile_expr_t res;
-            res = c_compile_expr(ctx, func, code, scope, expr.params[i], NULL, false);
-            if (!res.type) {
+            res = c_compile_expr(ctx, func, code, scope, expr.params[i]);
+            if (res.res.value_type == C_VALUE_ERROR) {
                 return (c_compile_expr_t){
                     .code = code,
-                    .type = NULL,
-                    .res  = (ir_operand_t){0},
+                    .res  = (c_value_t){0},
                 };
             }
             code = res.code;
-            rc_delete(res.type);
+            c_value_destroy(res.res);
         }
-        return c_compile_expr(ctx, func, code, scope, expr.params[expr.params_len - 1], NULL, false);
+        return c_compile_expr(ctx, func, code, scope, expr.params[expr.params_len - 1]);
 
     } else if (expr.subtype == C_AST_EXPR_CALL) {
-        if (assign) {
-            cctx_diagnostic(ctx->cctx, expr.pos, DIAG_ERR, "Expression must be a modifiable lvalue");
-        }
-
         ir_operand_t funcptr;
         rc_t         functype_rc;
         if (expr.params[0].type != TOKENTYPE_IDENT) {
             // If not an ident, compile function addr expression.
-            c_compile_expr_t res = c_compile_expr(ctx, func, code, scope, expr.params[0], NULL, false);
-            if (!res.type) {
+            c_compile_expr_t res = c_compile_expr(ctx, func, code, scope, expr.params[0]);
+            if (res.res.value_type == C_VALUE_ERROR) {
                 return (c_compile_expr_t){
                     .code = code,
-                    .type = NULL,
-                    .res  = (ir_operand_t){0},
+                    .res  = (c_value_t){0},
                 };
             }
             code        = res.code;
-            funcptr     = res.res;
-            functype_rc = res.type;
+            funcptr     = c_value_read(ctx, code, &res.res);
+            functype_rc = res.res.c_type;
         } else {
             // If it is an ident, it should be a function in the global scope.
             c_var_t *funcvar = c_scope_lookup(scope, expr.params[0].strval);
@@ -767,44 +753,42 @@ c_compile_expr_t c_compile_expr(
             rc_delete(functype_rc);
             return (c_compile_expr_t){
                 .code = code,
-                .type = NULL,
-                .res  = (ir_operand_t){0},
+                .res  = (c_value_t){0},
             };
         } else if (functype->func.args_len < expr.params_len - 1) {
             cctx_diagnostic(ctx->cctx, expr.params[functype->func.args_len + 1].pos, DIAG_ERR, "Too many arguments");
             rc_delete(functype_rc);
             return (c_compile_expr_t){
                 .code = code,
-                .type = NULL,
-                .res  = (ir_operand_t){0},
+                .res  = (c_value_t){0},
             };
         } else if (functype->func.args_len > expr.params_len - 1) {
             cctx_diagnostic(ctx->cctx, expr.pos, DIAG_ERR, "Not enough arguments");
             rc_delete(functype_rc);
             return (c_compile_expr_t){
                 .code = code,
-                .type = NULL,
-                .res  = (ir_operand_t){0},
+                .res  = (c_value_t){0},
             };
         }
 
         ir_operand_t *params = strong_calloc(sizeof(ir_operand_t), expr.params_len - 1);
         for (size_t i = 0; i < expr.params_len - 1; i++) {
-            c_compile_expr_t res = c_compile_expr(ctx, func, code, scope, expr.params[i + 1], NULL, false);
-            if (!res.type) {
+            c_compile_expr_t res = c_compile_expr(ctx, func, code, scope, expr.params[i + 1]);
+            if (res.res.value_type == C_VALUE_ERROR) {
                 rc_delete(functype_rc);
                 free(params);
                 return (c_compile_expr_t){
                     .code = code,
-                    .type = NULL,
-                    .res  = (ir_operand_t){0},
+                    .res  = (c_value_t){0},
                 };
             }
             // TODO: Do casting here.
-            code      = res.code;
-            params[i] = res.res;
+            // code = res.code;
+            // params[i] = res.res;
         }
 
+        printf("TODO: Call expressions\n");
+        abort();
         // rc_t return_type = rc_share(functype->func.return_type);
         // rc_delete(functype_rc);
         // return (c_compile_expr_t){
@@ -834,23 +818,52 @@ c_compile_expr_t c_compile_expr(
         abort();
 
     } else if (expr.subtype == C_AST_EXPR_INFIX) {
-        if (assign) {
-            cctx_diagnostic(ctx->cctx, expr.pos, DIAG_ERR, "Expression must be a modifiable lvalue");
-        }
         if (expr.params[0].subtype == C_TKN_ASSIGN) {
             // Simple assignment expression.
             c_compile_expr_t res;
-            res = c_compile_expr(ctx, func, code, scope, expr.params[2], NULL, false);
-            if (!res.type) {
+
+            // Compile the rvalue.
+            res = c_compile_expr(ctx, func, code, scope, expr.params[2]);
+            if (res.res.value_type == C_VALUE_ERROR) {
                 return (c_compile_expr_t){
                     .code = code,
-                    .type = NULL,
-                    .res  = (ir_operand_t){0},
+                    .res  = (c_value_t){0},
                 };
             }
-            code = res.code;
-            rc_delete(res.type);
-            return c_compile_expr(ctx, func, code, scope, expr.params[1], &res.res, false);
+            code             = res.code;
+            c_value_t rvalue = res.res;
+
+            // Compile the lvalue.
+            res = c_compile_expr(ctx, func, code, scope, expr.params[1]);
+            if (res.res.value_type == C_VALUE_ERROR) {
+                return (c_compile_expr_t){
+                    .code = code,
+                    .res  = (c_value_t){0},
+                };
+            }
+            code             = res.code;
+            c_value_t lvalue = res.res;
+
+            // Assert that it's actually a writable lvalue.
+            if (lvalue.value_type == C_RVALUE || ((c_type_t *)lvalue.c_type->data)->is_const) {
+                cctx_diagnostic(ctx->cctx, expr.params[1].pos, DIAG_ERR, "Expression must be a modifiable lvalue");
+                c_value_destroy(lvalue);
+                c_value_destroy(rvalue);
+                return (c_compile_expr_t){
+                    .code = code,
+                    .res  = (c_value_t){0},
+                };
+            }
+
+            // Write into the lvalue.
+            c_value_write(ctx, code, &lvalue, &rvalue);
+            // The C semantics specify that the result of an assignment expression is an rvalue.
+            // Therefor, clean up the lvalue and return the rvalue.
+            c_value_destroy(lvalue);
+            return (c_compile_expr_t){
+                .code = code,
+                .res  = rvalue,
+            };
 
         } else {
             // Other expressions.
@@ -858,35 +871,29 @@ c_compile_expr_t c_compile_expr(
             bool             is_assign = expr.params[0].subtype >= C_TKN_ADD_S && expr.params[0].subtype <= C_TKN_XOR_S;
 
             // Get operands.
-            res = c_compile_expr(ctx, func, code, scope, expr.params[1], NULL, false);
-            if (!res.type) {
+            res = c_compile_expr(ctx, func, code, scope, expr.params[1]);
+            if (res.res.value_type == C_VALUE_ERROR) {
                 return (c_compile_expr_t){
                     .code = code,
-                    .type = NULL,
-                    .res  = (ir_operand_t){0},
+                    .res  = (c_value_t){0},
                 };
             }
-            rc_t         type0 = res.type;
-            ir_operand_t var0  = res.res;
-            code               = res.code;
-            res                = c_compile_expr(ctx, func, code, scope, expr.params[2], NULL, false);
-            if (!res.type) {
-                rc_delete(type0);
+            c_value_t lhs = res.res;
+            code          = res.code;
+            res           = c_compile_expr(ctx, func, code, scope, expr.params[2]);
+            if (res.res.value_type == C_VALUE_ERROR) {
+                c_value_destroy(lhs);
                 return (c_compile_expr_t){
                     .code = code,
-                    .type = NULL,
-                    .res  = (ir_operand_t){0},
+                    .res  = (c_value_t){0},
                 };
             }
-            rc_t         type1 = res.type;
-            ir_operand_t var1  = res.res;
-            code               = res.code;
+            c_value_t rhs = res.res;
+            code          = res.code;
 
             // Determine promotion.
             c_tokentype_t op2  = is_assign ? expr.params[0].subtype + C_TKN_ADD - C_TKN_ADD_S : expr.params[0].subtype;
-            rc_t          type = c_type_promote(op2, type0, type1);
-            rc_delete(type0);
-            rc_delete(type1);
+            rc_t          type = c_type_promote(ctx, op2, lhs.c_type, lhs.c_type);
 
             // Cast the variables if needed.
             ir_prim_t ir_prim;
@@ -895,239 +902,293 @@ c_compile_expr_t c_compile_expr(
             } else {
                 ir_prim = c_type_to_ir_type(ctx, type->data);
             }
-            var0 = c_cast_ir_operand(code, var0, ir_prim);
-            var1 = c_cast_ir_operand(code, var1, ir_prim);
+            ir_operand_t ir_lhs = c_cast_ir_operand(code, c_value_read(ctx, code, &lhs), ir_prim);
+            ir_operand_t ir_rhs = c_cast_ir_operand(code, c_value_read(ctx, code, &rhs), ir_prim);
 
-            if (var0.is_const && var1.is_const) {
-                // Resulting constant can be compiled directly.
-                if (assign) {
-                    cctx_diagnostic(ctx->cctx, expr.pos, DIAG_ERR, "Expression must be a modifiable lvalue");
-                }
+            if (ir_lhs.is_const && ir_rhs.is_const) {
+                // Resulting constant can be evaluated at compile-time.
+                c_value_destroy(lhs);
+                c_value_destroy(rhs);
                 return (c_compile_expr_t) {
-                    .code = code, .type = type, .res = (ir_operand_t) {
-                        .is_const = true,
-                        .iconst = ir_calc2(c_op2_to_ir_op2(op2), var0.iconst, var1.iconst),
+                    .code = code,
+                    .res  = {
+                        .value_type = C_RVALUE,
+                        .c_type     = type,
+                        .rvalue     = {
+                            .is_const = true,
+                            .iconst   = ir_calc2(c_op2_to_ir_op2(op2), ir_lhs.iconst, ir_rhs.iconst),
+                        },
                     },
                 };
             }
 
             // Add math instruction.
             ir_var_t *tmpvar = ir_var_create(func, ir_prim, NULL);
-            ir_add_expr2(code, tmpvar, c_op2_to_ir_op2(op2), var0, var1);
+            ir_add_expr2(code, tmpvar, c_op2_to_ir_op2(op2), ir_lhs, ir_rhs);
 
-            if (is_assign) {
-                // Write back.
-                rc_delete(type);
-                ir_operand_t operand = {
-                    .is_const = false,
-                    .var      = tmpvar,
-                };
-                return c_compile_expr(ctx, func, code, scope, expr.params[1], &operand, false);
-            } else {
-                return (c_compile_expr_t){
-                    .code = code,
-                    .type = type,
-                    .res  = (ir_operand_t) {
+            c_value_destroy(lhs);
+            c_value_destroy(rhs);
+            return (c_compile_expr_t){
+                .code = code,
+                .res  = {
+                    .value_type = C_RVALUE,
+                    .c_type     = type,
+                    .rvalue     = {
                         .is_const = false,
                         .var      = tmpvar,
                     },
-                };
-            }
+                },
+            };
         }
 
     } else if (expr.subtype == C_AST_EXPR_PREFIX) {
         if (expr.params[0].subtype == C_TKN_INC || expr.params[0].subtype == C_TKN_DEC) {
-            if (addrof) {
-                cctx_diagnostic(ctx->cctx, expr.pos, DIAG_ERR, "This expression");
-            }
-
             // Pre-increment / pre-decrement.
             bool             is_inc = expr.params[0].subtype == C_TKN_INC;
             c_compile_expr_t res;
-            res = c_compile_expr(ctx, func, code, scope, expr.params[1], NULL, false);
-            if (!res.type) {
+            res = c_compile_expr(ctx, func, code, scope, expr.params[1]);
+            if (res.res.value_type == C_VALUE_ERROR) {
                 return (c_compile_expr_t){
                     .code = code,
-                    .type = NULL,
-                    .res  = (ir_operand_t){0},
+                    .res  = (c_value_t){0},
                 };
             }
             code = res.code;
 
+            // Assert that it's writeable.
+            if (res.res.value_type == C_RVALUE || ((c_type_t *)res.res.c_type->data)->is_const) {
+                cctx_diagnostic(ctx->cctx, expr.params[1].pos, DIAG_ERR, "Expression must be a modifiable lvalue");
+                c_value_destroy(res.res);
+                return (c_compile_expr_t){
+                    .code = code,
+                    .res  = (c_value_t){0},
+                };
+            }
+
             // Add or subtract one.
-            ir_var_t *tmpvar = ir_var_create(func, c_type_to_ir_type(ctx, res.type->data), NULL);
+            ir_var_t *tmpvar = ir_var_create(func, c_type_to_ir_type(ctx, res.res.c_type->data), NULL);
             ir_add_expr2(
                 code,
                 tmpvar,
                 is_inc ? IR_OP2_add : IR_OP2_sub,
-                res.res,
+                c_value_read(ctx, code, &res.res),
                 (ir_operand_t){.is_const = true, .iconst = {.prim_type = tmpvar->prim_type, .constl = 1, .consth = 0}}
             );
-            rc_delete(res.type);
 
             // After modifying, write back and return value.
-            ir_operand_t operand = {
-                .is_const = false,
-                .var      = tmpvar,
+            c_value_t rvalue = {
+                .value_type = C_RVALUE,
+                .c_type     = rc_share(res.res.c_type),
+                .rvalue     = {
+                    .is_const = false,
+                    .var      = tmpvar,
+                },
             };
-            return c_compile_expr(ctx, func, code, scope, expr.params[1], &operand, false);
+            c_value_write(ctx, code, &res.res, &rvalue);
+            c_value_destroy(res.res);
+
+            return (c_compile_expr_t){
+                .code = code,
+                .res  = rvalue,
+            };
 
         } else if (expr.params[0].subtype == C_TKN_AND) {
             // Address of operator.
-            c_compile_expr_t res = c_compile_expr(ctx, func, code, scope, expr.params[1], NULL, true);
-            if (!res.addrof_ok && res.type) {
-                cctx_diagnostic(ctx->cctx, expr.params[0].pos, DIAG_ERR, "Lvalue required as unary `&` operand");
-                rc_delete(res.type);
-                return (c_compile_expr_t){0};
-            }
-            return res;
-
-        } else if (expr.params[0].subtype == C_TKN_MUL) {
-            // Pointer dereference expression.
-            c_compile_expr_t res;
-            res = c_compile_expr(ctx, func, code, scope, expr.params[1], NULL, false);
-            if (!res.type) {
+            c_compile_expr_t res = c_compile_expr(ctx, func, code, scope, expr.params[1]);
+            if (res.res.value_type == C_VALUE_ERROR) {
                 return (c_compile_expr_t){
                     .code = code,
-                    .type = NULL,
-                    .res  = (ir_operand_t){0},
+                    .res  = (c_value_t){0},
+                };
+            } else if (res.res.value_type == C_RVALUE) {
+                cctx_diagnostic(ctx->cctx, expr.params[0].pos, DIAG_ERR, "Lvalue required as unary `&` operand");
+                c_value_destroy(res.res);
+                return (c_compile_expr_t){
+                    .code = code,
+                    .res  = (c_value_t){0},
                 };
             }
-            c_type_t *type = res.type->data;
+
+            // Create pointer type.
+            c_type_t *ptr_type  = strong_calloc(1, sizeof(c_type_t));
+            ptr_type->primitive = C_COMP_POINTER;
+            ptr_type->size      = ctx->prim_types[ctx->options.size_type].size;
+            ptr_type->align     = ctx->prim_types[ctx->options.size_type].align;
+            ptr_type->inner     = rc_share(res.res.c_type);
+            rc_t ptr_rc         = rc_new_strong(ptr_type, (void (*)(void *))c_type_free);
+
+            // Get address into an rvalue.
+            c_value_t rvalue = {
+                .value_type = C_RVALUE,
+                .c_type     = ptr_rc,
+                .rvalue     = c_value_addrof(ctx, code, &res.res),
+            };
+            c_value_destroy(res.res);
+
+            return (c_compile_expr_t){
+                .code = code,
+                .res  = rvalue,
+            };
+
+        } else if (expr.params[0].subtype == C_TKN_MUL) {
+            // Address of operator.
+            c_compile_expr_t res = c_compile_expr(ctx, func, code, scope, expr.params[1]);
+            if (res.res.value_type == C_VALUE_ERROR) {
+                return (c_compile_expr_t){
+                    .code = code,
+                    .res  = (c_value_t){0},
+                };
+            }
+            code           = res.code;
+            c_type_t *type = res.res.c_type->data;
 
             // Enforce inner expression to be a pointer type.
             if (type->primitive != C_COMP_POINTER && type->primitive != C_COMP_ARRAY) {
                 cctx_diagnostic(ctx->cctx, expr.pos, DIAG_ERR, "Expected a pointer or array type");
-                rc_delete(res.type);
+                c_value_destroy(res.res);
                 return (c_compile_expr_t){
                     .code = code,
-                    .type = NULL,
-                    .res  = (ir_operand_t){0},
+                    .res  = (c_value_t){0},
                 };
             }
-            code = res.code;
 
-            if (addrof) {
-                // Address of dereference is just the pointer itself.
-                res.addrof_ok = true;
-                return res;
+            // Create pointer lvalue.
+            c_value_t rvalue = {
+                .value_type = C_LVALUE_PTR,
+                .c_type     = rc_share(type->inner),
+                .lvalue     = {
+                    .offset  = 0,
+                    .ptr     = c_value_read(ctx, code, &res.res),
+                    .current = NULL,
+                },
+            };
+            c_value_destroy(res.res);
 
-            } else if (assign) {
-                // Pointer store.
-
-                // TODO: Assert pointer type be compatible with value to store.
-                // TODO: Support for structs.
-                ir_add_store(code, *assign, res.res);
-                rc_delete(res.type);
-
-                return (c_compile_expr_t){
-                    .code = code,
-                    .type = rc_share(((c_type_t *)res.type->data)->inner),
-                    .res  = *assign,
-                };
-
-            } else {
-                // Pointer load.
-                ir_var_t *load
-                    = ir_var_create(func, c_type_to_ir_type(ctx, ((c_type_t *)res.type->data)->inner->data), NULL);
-                ir_add_load(code, load, res.res);
-                rc_delete(res.type);
-
-                return (c_compile_expr_t){
-                    .code = code,
-                    .type = rc_share(((c_type_t *)res.type->data)->inner),
-                    .res  = (ir_operand_t){
-                        .is_const = false,
-                        .var      = load,
-                    },
-                };
-            }
+            return (c_compile_expr_t){
+                .code = code,
+                .res  = rvalue,
+            };
 
         } else {
             // Normal unary operator.
             c_compile_expr_t res;
-            res = c_compile_expr(ctx, func, code, scope, expr.params[1], NULL, false);
-            if (!res.type) {
+            res = c_compile_expr(ctx, func, code, scope, expr.params[1]);
+            if (res.res.value_type == C_VALUE_ERROR) {
                 return (c_compile_expr_t){
                     .code = code,
-                    .type = NULL,
-                    .res  = (ir_operand_t){0},
+                    .res  = (c_value_t){0},
                 };
             }
             code = res.code;
 
             // Apply unary operator.
+            ir_operand_t ir_value = c_value_read(ctx, code, &res.res);
+            if (ir_value.is_const) {
+                // Resulting constant can be evaluated at compile-time.
+                rc_t type = rc_share(res.res.c_type);
+                c_value_destroy(res.res);
+                return (c_compile_expr_t) {
+                    .code = code,
+                    .res  = {
+                        .value_type = C_RVALUE,
+                        .c_type     = type,
+                        .rvalue     = {
+                            .is_const = true,
+                            .iconst   = ir_calc1(c_op1_to_ir_op1(expr.params[0].subtype), ir_value.iconst),
+                        },
+                    },
+                };
+            }
+
             ir_prim_t ir_prim;
             if (expr.params[0].subtype == C_TKN_LNOT) {
                 ir_prim = IR_PRIM_bool;
             } else {
-                ir_prim = c_type_to_ir_type(ctx, res.type->data);
+                ir_prim = c_type_to_ir_type(ctx, res.res.c_type->data);
             }
             ir_var_t *tmpvar = ir_var_create(func, ir_prim, NULL);
-            ir_add_expr1(code, tmpvar, c_op1_to_ir_op1(expr.params[0].subtype), res.res);
+            ir_add_expr1(code, tmpvar, c_op1_to_ir_op1(expr.params[0].subtype), ir_value);
 
             // Return temporary value.
-            return (c_compile_expr_t){
-                .code = code,
-                .type = res.type,
-                .res  = (ir_operand_t) {
+            c_value_t rvalue = {
+                .value_type = C_RVALUE,
+                .c_type     = rc_share(res.res.c_type),
+                .rvalue     = {
                     .is_const = false,
                     .var      = tmpvar,
                 },
+            };
+
+            c_value_destroy(res.res);
+            return (c_compile_expr_t){
+                .code = code,
+                .res  = rvalue,
             };
         }
     } else if (expr.subtype == C_AST_EXPR_SUFFIX) {
         // Post-increment / post-decrement.
         bool             is_inc = expr.params[0].subtype == C_TKN_INC;
         c_compile_expr_t res;
-        res = c_compile_expr(ctx, func, code, scope, expr.params[1], NULL, false);
-        if (!res.type) {
+        res = c_compile_expr(ctx, func, code, scope, expr.params[1]);
+        if (res.res.value_type == C_VALUE_ERROR) {
             return (c_compile_expr_t){
                 .code = code,
-                .type = NULL,
-                .res  = (ir_operand_t){0},
+                .res  = (c_value_t){0},
             };
         }
         code = res.code;
 
+        // Assert that it's actually a writable lvalue.
+        if (res.res.value_type == C_RVALUE || ((c_type_t *)res.res.c_type->data)->is_const) {
+            cctx_diagnostic(ctx->cctx, expr.params[1].pos, DIAG_ERR, "Expression must be a modifiable lvalue");
+            c_value_destroy(res.res);
+            return (c_compile_expr_t){
+                .code = code,
+                .res  = (c_value_t){0},
+            };
+        }
+
         // Save value for later use.
-        ir_var_t *oldvar = ir_var_create(func, c_type_to_ir_type(ctx, res.type->data), NULL);
-        ir_add_expr1(code, oldvar, IR_OP1_mov, res.res);
+        ir_prim_t    ir_prim    = c_type_to_ir_type(ctx, res.res.c_type->data);
+        ir_operand_t read_value = c_value_read(ctx, code, &res.res);
+        ir_var_t    *oldvar     = ir_var_create(func, ir_prim, NULL);
+        ir_add_expr1(code, oldvar, IR_OP1_mov, read_value);
 
         // Add or subtract one.
-        ir_var_t *tmpvar = ir_var_create(func, c_type_to_ir_type(ctx, res.type->data), NULL);
+        ir_var_t *tmpvar = ir_var_create(func, ir_prim, NULL);
         ir_add_expr2(
             code,
             tmpvar,
             is_inc ? IR_OP2_add : IR_OP2_sub,
-            res.res,
+            read_value,
             (ir_operand_t){.is_const = true, .iconst = {.prim_type = tmpvar->prim_type, .constl = 1, .consth = 0}}
         );
 
         // After modifying, write back.
-        rc_delete(res.type);
-        ir_operand_t operand = {
-            .is_const = false,
-            .var      = tmpvar,
+        c_value_t write_rvalue = {
+            .value_type = C_RVALUE,
+            .c_type     = res.res.c_type,
+            .rvalue     = {
+                .is_const = false,
+                .var      = tmpvar,
+            },
         };
-        res = c_compile_expr(ctx, func, code, scope, expr.params[1], &operand, false);
-        if (!res.type) {
-            return (c_compile_expr_t){
-                .code = code,
-                .type = NULL,
-                .res  = (ir_operand_t){0},
-            };
-        }
-        code = res.code;
+        c_value_write(ctx, code, &res.res, &write_rvalue);
 
-        // Return previous value.
+        // Return old value.
+        c_value_t old_rvalue = {
+            .value_type = C_RVALUE,
+            .c_type     = rc_share(res.res.c_type),
+            .rvalue     = {
+                .is_const = false,
+                .var      = tmpvar,
+            },
+        };
+        c_value_destroy(res.res);
+
         return (c_compile_expr_t){
             .code = code,
-            .type = res.type,
-            .res  = (ir_operand_t) {
-                .is_const = false,
-                .var      = oldvar,
-            },
+            .res  = old_rvalue,
         };
     }
     abort();
@@ -1150,10 +1211,10 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c
 
     } else if (stmt.subtype == C_AST_EXPRS) {
         // Expression statement.
-        c_compile_expr_t expr = c_compile_expr(ctx, func, code, scope, stmt, NULL, false);
+        c_compile_expr_t expr = c_compile_expr(ctx, func, code, scope, stmt);
         code                  = expr.code;
-        if (expr.type) {
-            rc_delete(expr.type);
+        if (expr.res.value_type != C_VALUE_ERROR) {
+            c_value_destroy(expr.res);
         }
 
     } else if (stmt.subtype == C_AST_DECLS) {
@@ -1168,11 +1229,15 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c
         ir_code_t *after     = ir_code_create(func, NULL);
 
         // Compile expression.
-        c_compile_expr_t expr = c_compile_expr(ctx, func, cond_body, scope, stmt.params[0], NULL, false);
+        c_compile_expr_t expr = c_compile_expr(ctx, func, cond_body, scope, stmt.params[0]);
         cond_body             = expr.code;
-        if (expr.type) {
-            rc_delete(expr.type);
-            ir_add_branch(cond_body, c_cast_ir_operand(cond_body, expr.res, IR_PRIM_bool), loop_body);
+        if (expr.res.value_type != C_VALUE_ERROR) {
+            ir_add_branch(
+                cond_body,
+                c_cast_ir_operand(cond_body, c_value_read(ctx, code, &expr.res), IR_PRIM_bool),
+                loop_body
+            );
+            c_value_destroy(expr.res);
         }
         ir_add_jump(cond_body, after);
 
@@ -1193,7 +1258,7 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c
     } else if (stmt.subtype == C_AST_IF_ELSE) {
         // If or if...else statement.
         // Evaluate condition.
-        c_compile_expr_t expr = c_compile_expr(ctx, func, code, scope, stmt.params[0], NULL, false);
+        c_compile_expr_t expr = c_compile_expr(ctx, func, code, scope, stmt.params[0]);
         code                  = expr.code;
 
         // Allocate code paths.
@@ -1201,8 +1266,8 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c
         ir_code_t *after   = ir_code_create(func, NULL);
         c_compile_stmt(ctx, func, if_body, scope, stmt.params[1]);
         ir_add_jump(if_body, after);
-        if (expr.type) {
-            ir_add_branch(code, c_cast_ir_operand(code, expr.res, IR_PRIM_bool), if_body);
+        if (expr.res.value_type != C_VALUE_ERROR) {
+            ir_add_branch(code, c_cast_ir_operand(code, c_value_read(ctx, code, &expr.res), IR_PRIM_bool), if_body);
         }
         if (stmt.params_len == 3) {
             // If...else statement.
@@ -1215,8 +1280,8 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c
             ir_add_jump(code, after);
         }
 
-        if (expr.type) {
-            rc_delete(expr.type);
+        if (expr.res.value_type != C_VALUE_ERROR) {
+            c_value_destroy(expr.res);
         }
 
         // Continue after the if statement.
@@ -1241,11 +1306,11 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c
         // Return statement.
         if (stmt.params_len) {
             // With value.
-            c_compile_expr_t expr = c_compile_expr(ctx, func, code, scope, stmt.params[0], NULL, false);
+            c_compile_expr_t expr = c_compile_expr(ctx, func, code, scope, stmt.params[0]);
             code                  = expr.code;
-            if (expr.type) {
-                ir_add_return1(code, expr.res);
-                rc_delete(expr.type);
+            if (expr.res.value_type != C_VALUE_ERROR) {
+                ir_add_return1(code, c_value_read(ctx, code, &expr.res));
+                c_value_destroy(expr.res);
             }
         } else {
             // Without.
@@ -1278,9 +1343,11 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t def) {
     // Bring parameters into scope.
     for (size_t i = 0; i < func_type->func.args_len; i++) {
         if (func_type->func.arg_names[i]) {
-            c_var_t *var           = calloc(1, sizeof(c_var_t));
+            c_type_t *c_type       = (c_type_t *)func_type->func.args[i]->data;
+            c_var_t  *var          = calloc(1, sizeof(c_var_t));
             var->type              = rc_share(func_type->func.args[i]);
             var->ir_var            = func->args[i];
+            var->ir_frame          = ir_frame_create(func, c_type->size, c_type->align, NULL);
             var->ir_var->prim_type = c_type_to_ir_type(ctx, var->type->data);
             map_set(&scope->locals, func_type->func.arg_names[i], var);
         }

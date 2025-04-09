@@ -5,6 +5,7 @@
 
 #include "c_compiler.h"
 #include "c_parser.h"
+#include "ir/ir_optimizer.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,6 +43,8 @@ static void compile(char const *path) {
             ir_func_t *func = c_compile_func_def(cc, decls);
             printf("\n");
             ir_func_serialize(func, stdout);
+            ir_func_to_ssa(func);
+            ir_optimize(func);
             ir_func_destroy(func);
         } else {
             // Declarations.

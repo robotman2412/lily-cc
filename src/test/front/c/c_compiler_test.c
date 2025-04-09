@@ -113,8 +113,9 @@ static char *test_c_compile_expr() {
         return TEST_FAIL;
     }
 
-    ir_func_t *func = ir_func_create("c_compile_expr", NULL, 0, NULL);
-    c_compile_expr(cc, func, (ir_code_t *)func->code_list.head, NULL, expr_tok, NULL, false);
+    ir_func_t       *func = ir_func_create("c_compile_expr", NULL, 0, NULL);
+    c_compile_expr_t expr = c_compile_expr(cc, func, (ir_code_t *)func->code_list.head, NULL, expr_tok);
+    c_value_destroy(expr.res);
 
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;

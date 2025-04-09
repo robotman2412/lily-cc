@@ -203,7 +203,6 @@ static void create_combinator(ir_code_t *code, ir_var_t *dest) {
             },
             .prev = pred,
         };
-        set_add(&dest->used_at, expr);
     }
     dlist_append(&dest->assigned_at, &expr->dest_node);
     dlist_prepend(&code->insns, &expr->base.node);
@@ -293,6 +292,10 @@ static void replace_insn_var(ir_insn_t *insn, ir_var_t *from, ir_var_t *to) {
                 set_add(&to->used_at, insn);
                 expr->e_unary.value.var = to;
             }
+        } else if (expr->type == IR_EXPR_COMBINATOR || expr->type == IR_EXPR_UNDEFINED) {
+            // Nothing to do.
+        } else {
+            abort();
         }
     } else if (insn->type == IR_INSN_MEM) {
         ir_mem_t *mem = (void *)insn;
@@ -310,16 +313,20 @@ static void replace_insn_var(ir_insn_t *insn, ir_var_t *from, ir_var_t *to) {
                 set_add(&to->used_at, insn);
                 mem->m_store.src.var = to;
             }
+        } else if (mem->type == IR_MEM_LEA_STACK || mem->type == IR_MEM_LEA_SYMBOL) {
+            // Nothing to do.
+        } else {
+            abort();
         }
-    } else {
+    } else if (insn->type == IR_INSN_FLOW) {
         ir_flow_t *flow = (void *)insn;
         if (flow->type == IR_FLOW_BRANCH) {
             if (!flow->f_branch.cond.is_const && flow->f_branch.cond.var == from) {
                 set_add(&to->used_at, insn);
                 flow->f_branch.cond.var = to;
             }
-        } else if (flow->type == IR_FLOW_RETURN && flow->f_return.has_value) {
-            if (!flow->f_return.value.is_const && flow->f_return.value.var == from) {
+        } else if (flow->type == IR_FLOW_RETURN) {
+            if (flow->f_return.has_value && !flow->f_return.value.is_const && flow->f_return.value.var == from) {
                 set_add(&to->used_at, insn);
                 flow->f_return.value.var = to;
             }
@@ -336,7 +343,13 @@ static void replace_insn_var(ir_insn_t *insn, ir_var_t *from, ir_var_t *to) {
                     flow->f_call_direct.args[i].var = to;
                 }
             }
+        } else if (flow->type == IR_FLOW_JUMP) {
+            // Nothing to do.
+        } else {
+            abort();
         }
+    } else {
+        abort();
     }
 }
 
@@ -370,7 +383,9 @@ static void rename_assignments(ir_func_t *func, ir_code_t *code, ir_var_t *from,
     code->visited = true;
 
     dlist_foreach_node(ir_insn_t, insn, &code->insns) {
-        replace_insn_var(insn, from, to);
+        if (to) {
+            replace_insn_var(insn, from, to);
+        }
         if (insn->type == IR_INSN_EXPR) {
             ir_expr_t *expr = (void *)insn;
             if (expr->dest == from) {
@@ -569,8 +584,39 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
                         }
                     }
                 }
+            } else if (expr->type == IR_EXPR_UNDEFINED) {
+                // Nothing to do.
+            } else {
+                abort();
             }
-        } else {
+        } else if (insn->type == IR_INSN_MEM) {
+            ir_mem_t *mem = (void *)insn;
+            if (mem->type == IR_MEM_LOAD) {
+                if (!mem->m_load.addr.is_const && mem->m_load.addr.var == var) {
+                    mem->m_load.addr = value;
+                    if (!value.is_const) {
+                        set_add(&value.var->used_at, insn);
+                    }
+                }
+            } else if (mem->type == IR_MEM_STORE) {
+                if (!mem->m_store.src.is_const && mem->m_store.src.var == var) {
+                    mem->m_store.src = value;
+                    if (!value.is_const) {
+                        set_add(&value.var->used_at, insn);
+                    }
+                }
+                if (!mem->m_store.addr.is_const && mem->m_store.addr.var == var) {
+                    mem->m_store.addr = value;
+                    if (!value.is_const) {
+                        set_add(&value.var->used_at, insn);
+                    }
+                }
+            } else if (mem->type == IR_MEM_LEA_STACK || mem->type == IR_MEM_LEA_SYMBOL) {
+                // Nothing to do.
+            } else {
+                abort();
+            }
+        } else if (insn->type == IR_INSN_FLOW) {
             ir_flow_t *flow = (void *)insn;
             if (flow->type == IR_FLOW_BRANCH) {
                 if (!flow->f_branch.cond.is_const && flow->f_branch.cond.var == var) {
@@ -602,7 +648,11 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
                         set_add(&value.var->used_at, insn);
                     }
                 }
+            } else {
+                abort();
             }
+        } else {
+            abort();
         }
     }
     set_clear(&var->used_at);

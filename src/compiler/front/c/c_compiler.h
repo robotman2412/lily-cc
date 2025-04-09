@@ -156,35 +156,29 @@ struct c_type {
     };
 };
 
-// C value.
+// A C value returned from an expression.
 struct c_value {
     // Type of value that this is.
     c_value_type_t value_type;
     // Refcount pointer of `c_type_t`; C type of this value.
     rc_t           c_type;
-    // Offset into the pointer, symbol or stack frame.
-    uint64_t       offset;
+    // Representation of the value.
     union {
         struct {
-            // Pointer to IR variable that holds or will hold the current value.
-            ir_var_t   **ir_var_ptr;
-            // The pointer at which the variable is to be stored.
-            ir_operand_t ptr;
-        } v_lvalue_ptr;
-        struct {
-            // Pointer to IR variable that holds or will hold the current value.
-            ir_var_t **ir_var_ptr;
-            // Symbol at which the value is stored.
-            char      *symbol;
-        } v_lvalue_symbol;
-        struct {
-            // IR variable that holds the current value.
-            ir_var_t   *ir_var;
-            // IR stack frame in which the value is stored.
-            ir_frame_t *frame;
-        } v_lvalue_stack;
+            // Offset into the pointer, symbol or stack frame.
+            uint64_t offset;
+            // Memory location in which the lvalue is to be written.
+            union {
+                // IR stack frame in which the value is stored.
+                ir_frame_t  *frame;
+                // Symbol at which the value is stored.
+                char        *symbol;
+                // The pointer at which the variable is to be stored.
+                ir_operand_t ptr;
+            };
+        } lvalue;
         // IR operand that holds the current rvalue.
-        ir_operand_t v_rvalue;
+        ir_operand_t rvalue;
     };
 };
 
@@ -268,12 +262,14 @@ ir_prim_t     c_type_to_ir_type(c_compiler_t *ctx, c_type_t *type);
 // Cast one IR type to another according to the C rules for doing so.
 ir_operand_t  c_cast_ir_operand(ir_code_t *code, ir_operand_t operand, ir_prim_t type);
 
-// Clear up an lvalue or rvalue.
-void         c_value_destroy(c_value_t *value);
+// Clean up an lvalue or rvalue.
+void         c_value_destroy(c_value_t value);
 // Write to an lvalue.
-void         c_value_write(ir_code_t *code, c_value_t *lvalue, c_value_t *rvalue);
+void         c_value_write(ir_code_t *code, c_value_t const *lvalue, c_value_t const *rvalue);
+// Relax an lvalue into an rvalue.
+void         c_value_into_rvalue(ir_code_t *code, c_value_t *value);
 // Read a value for scalar arithmetic.
-ir_operand_t c_value_read(ir_code_t *code, c_value_t *value);
+ir_operand_t c_value_read(ir_code_t *code, c_value_t const *value);
 
 // Compile an expression into IR.
 // If `assign` is `NULL`, then the expression is read; otherwise, it is written, and the expression must be an lvalue.

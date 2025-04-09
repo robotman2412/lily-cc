@@ -500,7 +500,7 @@ ir_prim_t c_type_to_ir_type(c_compiler_t *ctx, c_type_t *type) {
     if (c_prim == C_COMP_POINTER) {
         c_prim = ctx->options.size_type;
     }
-    return c_prim_to_ir_type(ctx, type->primitive);
+    return c_prim_to_ir_type(ctx, c_prim);
 }
 
 // Cast one IR type to another according to the C rules for doing so.

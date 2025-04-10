@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "c_prepass.h"
 #include "c_std.h"
 #include "c_tokenizer.h"
 #include "compiler.h"
@@ -73,10 +74,8 @@ typedef enum {
     C_VALUE_ERROR,
     // Lvalue by pointer + offset.
     C_LVALUE_PTR,
-    // Lvalue by symbol + offset.
-    C_LVALUE_SYMBOL,
-    // Lvalue by stack frame + offset.
-    C_LVALUE_STACK,
+    // Lvalue by c_var_t.
+    C_LVALUE_VAR,
     // Rvalue.
     C_RVALUE,
 } c_value_type_t;
@@ -103,16 +102,19 @@ typedef struct c_compile_expr c_compile_expr_t;
 // C variable.
 struct c_var {
     // Is a global variable?
-    bool        is_global;
-    // Has a pointer been taken?
-    // Should always be true for globals.
-    bool        pointer_taken;
+    bool      is_global;
+    // Has a pointer been taken of this variable?
+    bool      pointer_taken;
     // Variable type (refcount ptr of `c_var_t`).
-    rc_t        type;
-    // Matching IR variable.
-    ir_var_t   *ir_var;
-    // Variable's stack frame.
-    ir_frame_t *ir_frame;
+    rc_t      type;
+    // Variable's IR register.
+    ir_var_t *ir_var;
+    union {
+        // Local variable's stack frame.
+        ir_frame_t *ir_frame;
+        // Global/static local variable's symbol.
+        char       *symbol;
+    };
 };
 
 // C scope.
@@ -168,20 +170,11 @@ struct c_value {
     rc_t           c_type;
     // Representation of the value.
     union {
-        struct {
-            // Offset into the pointer, symbol or stack frame.
-            uint64_t offset;
-            // Memory location in which the lvalue is to be written.
-            union {
-                // IR stack frame in which the value is stored.
-                ir_frame_t  *frame;
-                // Symbol at which the value is stored.
-                char        *symbol;
-                // The pointer at which the variable is to be stored.
-                ir_operand_t ptr;
-            };
-            // IR variable that holds the current value, if any.
-            ir_var_t *current;
+        union {
+            // The pointer at which the variable is to be stored.
+            ir_operand_t ptr;
+            // Associated C variable, if any.
+            c_var_t     *c_var;
         } lvalue;
         // IR operand that holds the current rvalue.
         ir_operand_t rvalue;
@@ -239,10 +232,10 @@ void          c_compiler_destroy(c_compiler_t *cc);
 
 // Create a C type from a specifier-qualifer list.
 // Returns a refcount pointer of `c_type_t`.
-rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t list);
+rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t *list);
 // Create a C type and get the name from an (abstract) declarator.
 // Takes ownership of the `spec_qual_type` share passed.
-rc_t c_compile_decl(c_compiler_t *ctx, token_t decl, rc_t spec_qual_type, char const **name_out);
+rc_t c_compile_decl(c_compiler_t *ctx, token_t *decl, rc_t spec_qual_type, token_t const **name_out);
 
 // Create a new scope.
 c_scope_t *c_scope_create(c_scope_t *parent);
@@ -278,15 +271,16 @@ ir_operand_t c_value_addrof(c_compiler_t *ctx, ir_code_t *code, c_value_t const 
 ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
 
 // Compile an expression into IR.
-c_compile_expr_t c_compile_expr(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c_scope_t *scope, token_t expr);
+c_compile_expr_t
+           c_compile_expr(c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *code, c_scope_t *scope, token_t *expr);
 // Compile a statement node into IR.
 // Returns the code path linearly after this.
-ir_code_t       *c_compile_stmt(c_compiler_t *ctx, ir_func_t *func, ir_code_t *code, c_scope_t *scope, token_t stmt);
+ir_code_t *c_compile_stmt(c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *code, c_scope_t *scope, token_t *stmt);
 // Compile a C function definition into IR.
-ir_func_t       *c_compile_func_def(c_compiler_t *ctx, token_t def);
+ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t *def, c_prepass_t *prepass);
 // Compile a declaration statement.
 // If in global scope, `func` will be NULL.
-void             c_compile_decls(c_compiler_t *ctx, ir_func_t *func, c_scope_t *scope, token_t decls);
+void       c_compile_decls(c_compiler_t *ctx, ir_func_t *func, c_scope_t *scope, token_t *decls);
 
 // Explain a C type.
 void c_type_explain(c_type_t *type, FILE *to);

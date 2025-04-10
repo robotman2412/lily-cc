@@ -40,7 +40,9 @@ static void compile(char const *path) {
         token_t decls = c_parse_decls(&pctx, true);
         if (decls.subtype == C_AST_FUNC_DEF) {
             // Function definition.
-            ir_func_t *func = c_compile_func_def(cc, decls);
+            c_prepass_t prepass = c_precompile_pass(&decls);
+            ir_func_t  *func    = c_compile_func_def(cc, &decls, &prepass);
+            c_prepass_destroy(prepass);
             printf("\n");
             ir_func_serialize(func, stdout);
             ir_func_to_ssa(func);
@@ -48,7 +50,7 @@ static void compile(char const *path) {
             ir_func_destroy(func);
         } else {
             // Declarations.
-            c_compile_decls(cc, NULL, &cc->global_scope, decls);
+            c_compile_decls(cc, NULL, &cc->global_scope, &decls);
         }
         tkn_delete(decls);
     }

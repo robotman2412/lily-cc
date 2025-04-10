@@ -36,10 +36,10 @@ static void compile_explain_type(char const *value) {
     rc_t    type_rc = NULL;
     if (!cctx->diagnostics.len) {
         if (ast.subtype == C_AST_TYPE_NAME) {
-            rc_t spec_qual = c_compile_spec_qual_list(cc, ast.params[0]);
-            type_rc        = c_compile_decl(cc, ast.params[1], spec_qual, NULL);
+            rc_t spec_qual = c_compile_spec_qual_list(cc, &ast.params[0]);
+            type_rc        = c_compile_decl(cc, &ast.params[1], spec_qual, NULL);
         } else if (ast.subtype == C_AST_SPEC_QUAL_LIST) {
-            type_rc = c_compile_spec_qual_list(cc, ast);
+            type_rc = c_compile_spec_qual_list(cc, &ast);
         }
     }
 

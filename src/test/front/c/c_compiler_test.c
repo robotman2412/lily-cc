@@ -40,7 +40,7 @@ static char *test_c_compile_type() {
         return TEST_FAIL;
     }
 
-    rc_t inner = c_compile_spec_qual_list(&cc, decl.params[0]);
+    rc_t inner = c_compile_spec_qual_list(&cc, &decl.params[0]);
 
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
@@ -56,8 +56,7 @@ static char *test_c_compile_type() {
         return TEST_FAIL;
     }
 
-    char const *name;
-    rc_t        full = c_compile_decl(&cc, decl.params[1], inner, &name);
+    rc_t full = c_compile_decl(&cc, &decl.params[1], inner, NULL);
 
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
@@ -99,6 +98,9 @@ static char *test_c_compile_expr() {
                   .size_type      = C_PRIM_ULONG,
         }
     );
+    c_prepass_t dummy_prepass = {
+        .pointer_taken = PTR_SET_EMPTY,
+    };
 
     token_t expr_tok = c_parse_expr(&pctx);
 
@@ -114,7 +116,7 @@ static char *test_c_compile_expr() {
     }
 
     ir_func_t       *func = ir_func_create("c_compile_expr", NULL, 0, NULL);
-    c_compile_expr_t expr = c_compile_expr(cc, func, (ir_code_t *)func->code_list.head, NULL, expr_tok);
+    c_compile_expr_t expr = c_compile_expr(cc, &dummy_prepass, (ir_code_t *)func->code_list.head, NULL, &expr_tok);
     c_value_destroy(expr.res);
 
     if (cctx->diagnostics.len) {
@@ -198,8 +200,10 @@ static char *test_c_compile_func() {
         return TEST_FAIL;
     }
 
-    c_compile_decls(cc, NULL, &cc->global_scope, foobar_tok);
-    ir_func_t *func = c_compile_func_def(cc, functest_tok);
+    c_compile_decls(cc, NULL, &cc->global_scope, &foobar_tok);
+    c_prepass_t prepass = c_precompile_pass(&functest_tok);
+    ir_func_t  *func    = c_compile_func_def(cc, &functest_tok, &prepass);
+    c_prepass_destroy(prepass);
 
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;

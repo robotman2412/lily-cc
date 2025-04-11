@@ -279,8 +279,8 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *co
 // Compile a C function definition into IR.
 ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t *def, c_prepass_t *prepass);
 // Compile a declaration statement.
-// If in global scope, `func` will be NULL.
-void       c_compile_decls(c_compiler_t *ctx, ir_func_t *func, c_scope_t *scope, token_t *decls);
+// If in global scope, `func` and `prepass` must be NULL.
+void       c_compile_decls(c_compiler_t *ctx, c_prepass_t *prepass, ir_func_t *func, c_scope_t *scope, token_t *decls);
 
 // Explain a C type.
 void c_type_explain(c_type_t *type, FILE *to);

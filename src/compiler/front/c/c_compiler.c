@@ -627,8 +627,31 @@ ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *v
 
 
 // Clobber memory in the current scope.
+// If `do_load` is `true`, clobbered variables will be loaded. Otherwise, they will be stored.
 // Any variables in `exempt_c_vars` (which may be NULL) are not treated as being clobbered.
-static void c_clobber_memory(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, set_t *exempt_c_vars) {
+static void c_clobber_memory(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, set_t *exempt_c_vars, bool do_load) {
+    while (scope) {
+        set_foreach(c_var_t, var, &scope->locals) {
+            if (var->pointer_taken && (!exempt_c_vars || !set_contains(exempt_c_vars, var))) {
+                ir_var_t *addr;
+                if (var->is_global) {
+                    ir_add_lea_symbol(code, addr, var->symbol, 0);
+                } else {
+                    ir_add_lea_stack(code, addr, var->ir_frame, 0);
+                }
+                if (do_load) {
+                    ir_add_load(code, var->ir_var, (ir_operand_t){.is_const = false, .var = addr});
+                } else {
+                    ir_add_store(
+                        code,
+                        (ir_operand_t){.is_const = false, .var = var->ir_var},
+                        (ir_operand_t){.is_const = false, .var = addr}
+                    );
+                }
+            }
+        }
+        scope = scope->parent;
+    }
 }
 
 // Compile an expression into IR.
@@ -1190,7 +1213,7 @@ ir_code_t *c_compile_stmt(c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *co
     } else if (stmt->subtype == C_AST_DECLS) {
         // Local declarations.
         // TODO: Init declarator support.
-        c_compile_decls(ctx, code->func, scope, stmt);
+        c_compile_decls(ctx, prepass, code->func, scope, stmt);
 
     } else if (stmt->subtype == C_AST_DO_WHILE || stmt->subtype == C_AST_WHILE) {
         // While or do...while loop.
@@ -1345,7 +1368,8 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t *def, c_prepass_t *prep
 }
 
 // Compile a declaration statement.
-void c_compile_decls(c_compiler_t *ctx, ir_func_t *func, c_scope_t *scope, token_t *decls) {
+// If in global scope, `func` and `prepass` must be NULL.
+void c_compile_decls(c_compiler_t *ctx, c_prepass_t *prepass, ir_func_t *func, c_scope_t *scope, token_t *decls) {
     // TODO: Typedef support.
     rc_t inner_type = c_compile_spec_qual_list(ctx, &decls->params[0]);
     if (!inner_type) {
@@ -1365,6 +1389,7 @@ void c_compile_decls(c_compiler_t *ctx, ir_func_t *func, c_scope_t *scope, token
         c_type_t *c_decl_type = decl_type->data;
         var->is_global        = scope->depth == 0;
         var->type             = decl_type;
+        var->pointer_taken    = var->is_global || set_contains(&prepass->pointer_taken, name);
         var->ir_var           = func ? ir_var_create(func, c_type_to_ir_type(ctx, decl_type->data), NULL) : NULL;
         var->ir_frame         = func ? ir_frame_create(func, c_decl_type->size, c_decl_type->size, NULL) : NULL;
         map_set(&scope->locals, name->strval, var);

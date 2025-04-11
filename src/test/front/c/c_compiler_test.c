@@ -200,7 +200,6 @@ static char *test_c_compile_func() {
         return TEST_FAIL;
     }
 
-    c_compile_decls(cc, NULL, &cc->global_scope, &foobar_tok);
     c_prepass_t prepass = c_precompile_pass(&functest_tok);
     ir_func_t  *func    = c_compile_func_def(cc, &functest_tok, &prepass);
     c_prepass_destroy(prepass);

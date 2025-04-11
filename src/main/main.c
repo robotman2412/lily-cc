@@ -50,7 +50,7 @@ static void compile(char const *path) {
             ir_func_destroy(func);
         } else {
             // Declarations.
-            c_compile_decls(cc, NULL, &cc->global_scope, &decls);
+            c_compile_decls(cc, NULL, NULL, &cc->global_scope, &decls);
         }
         tkn_delete(decls);
     }

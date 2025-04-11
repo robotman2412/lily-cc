@@ -631,7 +631,8 @@ ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *v
 // Any variables in `exempt_c_vars` (which may be NULL) are not treated as being clobbered.
 static void c_clobber_memory(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, set_t *exempt_c_vars, bool do_load) {
     while (scope) {
-        set_foreach(c_var_t, var, &scope->locals) {
+        map_foreach(entry, &scope->locals) {
+            c_var_t *var = (c_var_t *)entry->value;
             if (var->pointer_taken && (!exempt_c_vars || !set_contains(exempt_c_vars, var))) {
                 ir_var_t *addr;
                 if (var->is_global) {

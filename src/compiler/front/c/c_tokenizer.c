@@ -5,6 +5,7 @@
 
 #include "c_tokenizer.h"
 
+#include "c_compiler.h"
 #include "strong_malloc.h"
 
 #include <arrays.h>
@@ -110,13 +111,12 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         if (c >= '0' && c <= '9') {
             // Valid digit 0-9.
             digit = c - '0';
-        } else if ((c | 0x20) >= 'a' && (c | 0x20) <= 'z') {
-            // Valid digit a-z / A-Z.
+        } else if ((c | 0x20) >= 'a' && (c | 0x20) <= 'f') {
+            // Valid digit a-f / A-F.
             digit = (c | 0x20) - 'a' + 10;
-        } else if (c == '_') {
-            // Invalid character.
-            invalid = true;
-            digit   = 0;
+        } else if (c == '_' || (c | 0x20) >= 'g' && (c | 0x20) <= 'z') {
+            // Start of the suffix.
+            break;
         } else {
             // End of constant.
             break;
@@ -131,9 +131,78 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         hasdat = true;
         pos0   = pos1;
     }
-    ctx->pos = pos0;
+    pos1 = pos0;
 
-    pos_t pos = pos_between(start_pos, pos0);
+    // Check for literal suffixes.
+    pos_t    lit_end    = pos0;
+    c_prim_t c_prim     = C_PRIM_SINT;
+    bool     bad_suffix = false;
+    bool     u_suffix   = false;
+    int      c          = srcfile_getc(ctx->file, &pos1);
+
+    // Promote the primitive to be bigger if necessary.
+    int opt_int_bits   = 32;
+    int opt_long_bits  = 32;
+    int opt_llong_bits = 64;
+    if (val <= ((1llu << opt_int_bits) - 1)) {
+        c_prim = C_PRIM_SINT;
+    } else if (val <= ((1llu << opt_long_bits) - 1)) {
+        c_prim = C_PRIM_SLONG;
+    } else {
+        c_prim = C_PRIM_SLLONG;
+    }
+
+    // Unsigned (before).
+    if (c == 'u' || c == 'U') {
+        u_suffix = true;
+        pos0     = pos1;
+        c        = srcfile_getc(ctx->file, &pos1);
+        if (c != 'l' && c != 'L' && (c == '_' || ((c | 0x20) >= 'a' && (c | 0x20) <= 'z'))) {
+            bad_suffix = true;
+        }
+    }
+    // Long / long long.
+    if (!bad_suffix && (c == 'l' || c == 'L')) {
+        pos0   = pos1;
+        int c2 = c;
+        c      = srcfile_getc(ctx->file, &pos1);
+        if (c == c2) {
+            pos0   = pos1;
+            c      = srcfile_getc(ctx->file, &pos1);
+            c_prim = C_PRIM_SLLONG;
+        } else if (c != 'u' && (c == '_' || ((c | 0x20) >= 'a' && (c | 0x20) <= 'z'))) {
+            bad_suffix = true;
+        } else {
+            c_prim = C_PRIM_SLONG;
+        }
+    } else if (c == '_' || ((c | 0x20) >= 'a' && (c | 0x20) <= 'z')) {
+        bad_suffix = true;
+    }
+    // Unsigned (after).
+    if (!bad_suffix && !u_suffix && c_prim != C_PRIM_SINT && (c == 'u' || c == 'U')) {
+        pos0     = pos1;
+        c        = srcfile_getc(ctx->file, &pos1);
+        u_suffix = true;
+    } else if (c == '_' || ((c | 0x20) >= 'a' && (c | 0x20) <= 'z')) {
+        bad_suffix = true;
+    }
+    // Assert the suffix to end now.
+    if (!bad_suffix && (c == '_' || ((c | 0x20) >= 'a' && (c | 0x20) <= 'z'))) {
+        bad_suffix = true;
+    }
+
+    if (bad_suffix && hasdat) {
+        cctx_diagnostic(ctx->cctx, pos_including(lit_end, pos0), DIAG_ERR, "Invalid literal suffix");
+    }
+
+    // Make it unsigned if the MSB is set.
+    int bits = c_prim == C_PRIM_SINT ? opt_int_bits : c_prim == C_PRIM_SLONG ? opt_long_bits : opt_llong_bits;
+    if (val >> (bits - 1)) {
+        u_suffix = true;
+    }
+
+    ctx->pos  = pos0;
+    pos_t pos = pos_including(start_pos, pos0);
     if (invalid || !hasdat) {
         // Report error (invalid constant).
         char const *ctype;
@@ -162,7 +231,7 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         .type       = TOKENTYPE_ICONST,
         .pos        = pos,
         .ival       = val,
-        .subtype    = 0,
+        .subtype    = c_prim - u_suffix,
         .strval     = NULL,
         .strval_len = 0,
         .params_len = 0,

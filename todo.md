@@ -13,7 +13,7 @@
     - Decimal ✓
     - Octal ✓
     - Binary (GNU extension) ✓
-    - Type suffixes
+    - Type suffixes ✓
 
 ### C preprocessor
 - `#include`
@@ -73,11 +73,10 @@
     - Function pointers
 - Expression operators
     - Arithmetic ✓
-    - Addrof
-    - Dereference
+    - Addrof ✓
+    - Dereference ✓
     - Index
-- Modifiable l-value check
-    - *Note: The current system can't tell the difference between writing to a temporary and a modifiable l-value.*
+- Modifiable l-value check ✓
 
 
 ## Generic codegen
@@ -85,10 +84,10 @@
     - Known-value optimizations ✓
     - Loop unrolling
 - IR support for memory
-    - Concept of stack frame
+    - Concept of stack frame ✓
     - Concept of stack variable within such a frame
-    - Instruction to get stack variable pointer
-    - Memory load/store
+    - Instruction to get stack variable pointer ✓
+    - Memory load/store ✓
 - Generic instruction selection code
 
 

@@ -778,15 +778,17 @@ c_compile_expr_t
         };
 
     } else if (expr->type == TOKENTYPE_ICONST || expr->type == TOKENTYPE_CCONST) {
-        // TODO: Typed literals.
         return (c_compile_expr_t){
             .code = code,
             .res  = {
                 .value_type = C_RVALUE,
                 .c_type     = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
                 .rvalue     = {
-                    .is_const      = true,
-                    .iconst.constl = expr->ival,
+                    .is_const = true,
+                    .iconst   = {
+                        .prim_type = c_prim_to_ir_type(ctx, expr->subtype), 
+                        .constl    = expr->ival,
+                    }
                 },
             },
         };

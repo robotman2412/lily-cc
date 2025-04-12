@@ -9,6 +9,12 @@
 
 
 
+// Count number of trailing zeroes.
+int        ir_const_ctz(ir_const_t value);
+// Count number of set bits.
+int        ir_const_popcnt(ir_const_t value);
+// Whether a constant is negative.
+bool       ir_const_is_negative(ir_const_t value);
 // Truncate unused bits of a constant.
 ir_const_t ir_trim_const(ir_const_t value);
 // Cast from one type to another with IR rules.

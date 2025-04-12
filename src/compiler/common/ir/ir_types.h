@@ -83,6 +83,8 @@ typedef enum __attribute__((packed)) {
 
 // IR stack frame.
 typedef struct ir_frame      ir_frame_t;
+// IR function argument.
+typedef struct ir_arg        ir_arg_t;
 // IR variable.
 typedef struct ir_var        ir_var_t;
 // IR constant.
@@ -120,6 +122,19 @@ struct ir_frame {
     uint64_t     size;
 };
 
+// IR function argument.
+struct ir_arg {
+    // Whether this argument has a variable.
+    // If it doesn't, it's still counted by the ABI but not used.
+    bool has_var;
+    union {
+        // Type for variable-less args.
+        ir_prim_t type;
+        // Variable args.
+        ir_var_t *var;
+    };
+};
+
 // IR variable.
 struct ir_var {
     // Function's variables list node.
@@ -130,6 +145,8 @@ struct ir_var {
     ir_func_t   *func;
     // Variable type.
     ir_prim_t    prim_type;
+    // Is one of this function's args and if so, which.
+    ptrdiff_t    is_arg;
     // Expressions that assign this variable.
     dlist_t      assigned_at;
     // instructions that read this variable.
@@ -328,7 +345,7 @@ struct ir_func {
     // Number of arguments.
     size_t     args_len;
     // Function arguments.
-    ir_var_t **args;
+    ir_arg_t  *args;
     // Function entrypoint.
     ir_code_t *entry;
     // Unordered list of code blocks.

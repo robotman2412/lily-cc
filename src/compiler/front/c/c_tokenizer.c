@@ -515,9 +515,10 @@ retry:
         } else {
             // Just a zero.
             return (token_t){
-                .type = TOKENTYPE_ICONST,
-                .pos  = pos_between(pos0, pos1),
-                .ival = 0,
+                .type    = TOKENTYPE_ICONST,
+                .pos     = pos_between(pos0, pos1),
+                .ival    = 0,
+                .subtype = C_PRIM_SINT,
             };
         }
     }

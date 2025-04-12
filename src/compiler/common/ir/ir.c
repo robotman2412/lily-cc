@@ -19,10 +19,12 @@
 ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_len, char const *const *args_name) {
     ir_func_t *func = strong_calloc(1, sizeof(ir_func_t));
     func->name      = strong_strdup(name);
-    func->args      = strong_calloc(1, sizeof(ir_var_t *) * args_len);
+    func->args      = strong_calloc(args_len, sizeof(ir_arg_t));
     func->args_len  = args_len;
     for (size_t i = 0; i < args_len; i++) {
-        func->args[i] = ir_var_create(func, IR_PRIM_s32, args_name ? args_name[i] : NULL);
+        func->args[i].has_var     = true;
+        func->args[i].var         = ir_var_create(func, IR_PRIM_s32, args_name ? args_name[i] : NULL);
+        func->args[i].var->is_arg = i;
     }
     func->entry = ir_code_create(func, entry_name);
     return func;
@@ -526,6 +528,7 @@ ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
     var->func      = func;
     var->used_at   = PTR_SET_EMPTY;
     var->node      = DLIST_NODE_EMPTY;
+    var->is_arg    = -1;
     dlist_append(&func->vars_list, &var->node);
     return var;
 }
@@ -533,6 +536,8 @@ ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
 // Delete an IR variable, removing all assignments and references in the process.
 void ir_var_delete(ir_var_t *var) {
     set_t to_delete = PTR_SET_EMPTY;
+
+    // Delete variable's usages.
     set_addall(&to_delete, &var->used_at);
     dlist_foreach(ir_expr_t, expr, dest_node, &var->assigned_at) {
         set_add(&to_delete, expr);
@@ -541,6 +546,14 @@ void ir_var_delete(ir_var_t *var) {
         ir_insn_delete(insn);
     }
     set_clear(&to_delete);
+
+    if (var->is_arg >= 0) {
+        // Turn function arg into variable-less.
+        var->func->args[var->is_arg].has_var = false;
+        var->func->args[var->is_arg].type    = var->prim_type;
+    }
+
+    // Delete the variable itself.
     dlist_remove(&var->func->vars_list, &var->node);
     set_clear(&var->used_at);
     free(var->name);
@@ -925,14 +938,25 @@ void ir_add_expr2(ir_code_t *code, ir_var_t *dest, ir_op2_type_t oper, ir_operan
         }
     }
     ir_prim_t lhs_prim = lhs.is_const ? lhs.iconst.prim_type : lhs.var->prim_type;
-    if (lhs_prim != dest->prim_type) {
-        fprintf(stderr, "[BUG] IR expr2 has conflicting operand and return types\n");
-        abort();
-    }
     ir_prim_t rhs_prim = rhs.is_const ? rhs.iconst.prim_type : rhs.var->prim_type;
-    if (rhs_prim != dest->prim_type) {
-        fprintf(stderr, "[BUG] IR expr2 has conflicting operand and return types\n");
-        abort();
+    if (oper >= IR_OP2_sgt && oper <= IR_OP2_sne) {
+        if (lhs_prim != rhs_prim) {
+            fprintf(stderr, "[BUG] IR expr2 has conflicting operand types\n");
+            abort();
+        }
+        if (dest->prim_type != IR_PRIM_bool) {
+            fprintf(stderr, "[BUG] IR expr2 should be returning IR_PRIM_bool\n");
+            abort();
+        }
+    } else {
+        if (lhs_prim != dest->prim_type) {
+            fprintf(stderr, "[BUG] IR expr2 has conflicting operand and return types\n");
+            abort();
+        }
+        if (rhs_prim != dest->prim_type) {
+            fprintf(stderr, "[BUG] IR expr2 has conflicting operand and return types\n");
+            abort();
+        }
     }
     if (!lhs.is_const) {
         set_add(&lhs.var->used_at, expr);

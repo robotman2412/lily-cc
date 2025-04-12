@@ -460,7 +460,7 @@ ir_op2_type_t c_op2_to_ir_op2(c_tokentype_t subtype) {
         case C_TKN_SUB: return IR_OP2_sub;
         case C_TKN_MUL: return IR_OP2_mul;
         case C_TKN_DIV: return IR_OP2_div;
-        case C_TKN_MOD: return IR_OP2_mod;
+        case C_TKN_MOD: return IR_OP2_rem;
         case C_TKN_SHL: return IR_OP2_shl;
         case C_TKN_SHR: return IR_OP2_shr;
         case C_TKN_AND: return IR_OP2_band;
@@ -782,7 +782,7 @@ c_compile_expr_t
             .code = code,
             .res  = {
                 .value_type = C_RVALUE,
-                .c_type     = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
+                .c_type     = rc_share(&ctx->prim_rcs[expr->subtype]),
                 .rvalue     = {
                     .is_const = true,
                     .iconst   = {
@@ -989,14 +989,15 @@ c_compile_expr_t
 
             // Determine promotion.
             c_tokentype_t op2 = is_assign ? expr->params[0].subtype + C_TKN_ADD - C_TKN_ADD_S : expr->params[0].subtype;
-            rc_t          type = c_type_promote(ctx, op2, lhs.c_type, lhs.c_type);
+            rc_t          type = c_type_promote(ctx, op2, lhs.c_type, rhs.c_type);
+            rc_t          res_type;
 
             // Cast the variables if needed.
-            ir_prim_t ir_prim;
+            ir_prim_t ir_prim = c_type_to_ir_type(ctx, type->data);
             if (op2 >= C_TKN_EQ && op2 <= C_TKN_GE) {
-                ir_prim = IR_PRIM_bool;
+                res_type = rc_share(&ctx->prim_rcs[C_PRIM_BOOL]);
             } else {
-                ir_prim = c_type_to_ir_type(ctx, type->data);
+                res_type = rc_share(type);
             }
             ir_operand_t ir_lhs = c_cast_ir_operand(code, c_value_read(ctx, code, scope, &lhs), ir_prim);
             ir_operand_t ir_rhs = c_cast_ir_operand(code, c_value_read(ctx, code, scope, &rhs), ir_prim);
@@ -1019,21 +1020,33 @@ c_compile_expr_t
             }
 
             // Add math instruction.
-            ir_var_t *tmpvar = ir_var_create(code->func, ir_prim, NULL);
+            ir_var_t *tmpvar = ir_var_create(code->func, c_type_to_ir_type(ctx, res_type->data), NULL);
             ir_add_expr2(code, tmpvar, c_op2_to_ir_op2(op2), ir_lhs, ir_rhs);
+
+            c_value_t rvalue = {
+                .value_type = C_RVALUE,
+                .c_type     = res_type,
+                .rvalue     = {
+                    .is_const = false,
+                    .var      = tmpvar,
+                },
+            };
+
+            if (expr->params[0].subtype >= C_TKN_ADD_S && expr->params[0].subtype <= C_TKN_XOR_S) {
+                // Assignment arithmetic expression; write back.
+                if (lhs.value_type == C_RVALUE || ((c_type_t *)lhs.c_type->data)->is_const) {
+                    cctx_diagnostic(ctx->cctx, expr->params[1].pos, DIAG_ERR, "Expression must be a modifiable lvalue");
+                } else {
+                    c_value_write(ctx, code, scope, &lhs, &rvalue);
+                }
+            }
 
             c_value_destroy(lhs);
             c_value_destroy(rhs);
+            rc_delete(type);
             return (c_compile_expr_t){
                 .code = code,
-                .res  = {
-                    .value_type = C_RVALUE,
-                    .c_type     = type,
-                    .rvalue     = {
-                        .is_const = false,
-                        .var      = tmpvar,
-                    },
-                },
+                .res  = rvalue,
             };
         }
 
@@ -1448,7 +1461,7 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
             c_type_t *c_type         = (c_type_t *)func_type->func.args[i]->data;
             c_var_t  *var            = calloc(1, sizeof(c_var_t));
             var->type                = rc_share(func_type->func.args[i]);
-            var->ir_var              = func->args[i];
+            var->ir_var              = func->args[i].var;
             var->ir_frame            = ir_frame_create(func, c_type->size, c_type->align, NULL);
             var->ir_var->prim_type   = c_type_to_ir_type(ctx, var->type->data);
             var->register_up_to_date = true;

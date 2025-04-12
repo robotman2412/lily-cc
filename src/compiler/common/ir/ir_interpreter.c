@@ -9,6 +9,65 @@
 
 
 
+// Count number of trailing zeroes.
+int ir_const_ctz(ir_const_t value) {
+    if (value.prim_type == IR_PRIM_f32 || value.prim_type == IR_PRIM_f64) {
+        printf("[BUG] ir_const_ctz with float value\n");
+        abort();
+    }
+
+    if (value.constl) {
+        return __builtin_ctzll(value.constl);
+    } else {
+        return 64 + __builtin_ctzll(value.constl);
+    }
+}
+
+// Count number of set bits.
+int ir_const_popcnt(ir_const_t value) {
+    if (value.prim_type == IR_PRIM_f32 || value.prim_type == IR_PRIM_f64) {
+        printf("[BUG] ir_const_popcnt with float value\n");
+        abort();
+    }
+    // Make it unsigned so the number isn't sign-extended on truncate.
+    if (value.prim_type <= IR_PRIM_u128) {
+        value.prim_type |= 1;
+    }
+    value = ir_trim_const(value);
+
+    // Actually count the bits.
+    int count = 0;
+    while (value.constl) {
+        value.constl &= value.constl - 1;
+        count--;
+    }
+    while (value.consth) {
+        value.consth &= value.consth - 1;
+        count--;
+    }
+
+    return count;
+}
+
+// Whether a constant is negative.
+bool ir_const_is_negative(ir_const_t value) {
+    if (value.prim_type == IR_PRIM_bool) {
+        return false;
+    } else if (value.prim_type == IR_PRIM_f32) {
+        return value.constf32 < 0;
+    } else if (value.prim_type == IR_PRIM_f64) {
+        return value.constf64 < 0;
+    } else if (value.prim_type & 1) {
+        return false;
+    } else if (value.prim_type == IR_PRIM_s128) {
+        return value.consth >> 63;
+    } else {
+        int bytes = value.prim_type >> 1;
+        int bits  = bytes * 8;
+        return value.constl >> (bits - 1);
+    }
+}
+
 // Truncate unused bits of a constant.
 ir_const_t ir_trim_const(ir_const_t value) {
     uint8_t bytes;
@@ -241,7 +300,7 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
             case IR_OP2_sub: out.const128 = add128(lhs.const128, neg128(rhs.const128)); break;
             case IR_OP2_mul: out.const128 = mul128(lhs.const128, rhs.const128); break;
             case IR_OP2_div: out.const128 = div128u(lhs.const128, rhs.const128); break;
-            case IR_OP2_mod: out.const128 = rem128u(lhs.const128, rhs.const128); break;
+            case IR_OP2_rem: out.const128 = rem128u(lhs.const128, rhs.const128); break;
             case IR_OP2_shl: out.const128 = shl128(lhs.const128, rhs.constl); break;
             case IR_OP2_shr: out.const128 = shr128u(lhs.const128, rhs.constl); break;
             case IR_OP2_band: out.const128 = and128(lhs.const128, rhs.const128); break;
@@ -262,7 +321,7 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
             case IR_OP2_sub: out.const128 = add128(lhs.const128, neg128(rhs.const128)); break;
             case IR_OP2_mul: out.const128 = mul128(lhs.const128, rhs.const128); break;
             case IR_OP2_div: out.const128 = div128s(lhs.const128, rhs.const128); break;
-            case IR_OP2_mod: out.const128 = rem128s(lhs.const128, rhs.const128); break;
+            case IR_OP2_rem: out.const128 = rem128s(lhs.const128, rhs.const128); break;
             case IR_OP2_shl: out.const128 = shl128(lhs.const128, rhs.constl); break;
             case IR_OP2_shr: out.const128 = shr128s(lhs.const128, rhs.constl); break;
             case IR_OP2_band: out.const128 = and128(lhs.const128, rhs.const128); break;
@@ -285,7 +344,7 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
             case IR_OP2_sub: out.constl = lhs.constl - rhs.constl; break;
             case IR_OP2_mul: out.constl = lhs.constl * rhs.constl; break;
             case IR_OP2_div: out.constl = lhs.constl / rhs.constl; break;
-            case IR_OP2_mod: out.constl = lhs.constl % rhs.constl; break;
+            case IR_OP2_rem: out.constl = lhs.constl % rhs.constl; break;
             case IR_OP2_shl: out.constl = lhs.constl << rhs.constl; break;
             case IR_OP2_shr: out.constl = lhs.constl >> rhs.constl; break;
             case IR_OP2_band: out.constl = lhs.constl & rhs.constl; break;
@@ -308,7 +367,7 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
             case IR_OP2_sub: out.constl = (int64_t)lhs.constl - (int64_t)rhs.constl; break;
             case IR_OP2_mul: out.constl = (int64_t)lhs.constl * (int64_t)rhs.constl; break;
             case IR_OP2_div: out.constl = (int64_t)lhs.constl / (int64_t)rhs.constl; break;
-            case IR_OP2_mod: out.constl = (int64_t)lhs.constl % (int64_t)rhs.constl; break;
+            case IR_OP2_rem: out.constl = (int64_t)lhs.constl % (int64_t)rhs.constl; break;
             case IR_OP2_shl: out.constl = (int64_t)lhs.constl << (int64_t)rhs.constl; break;
             case IR_OP2_shr: out.constl = (int64_t)lhs.constl >> (int64_t)rhs.constl; break;
             case IR_OP2_band: out.constl = (int64_t)lhs.constl & (int64_t)rhs.constl; break;

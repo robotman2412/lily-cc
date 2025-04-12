@@ -16,7 +16,7 @@ static char *test_ir_append() {
     ir_code_t *cur  = func->entry;
     ir_var_t  *var1 = ir_var_create(func, IR_PRIM_bool, "var1");
 
-    ir_add_expr1(cur, var1, IR_OP1_snez, (ir_operand_t){.is_const = false, .var = func->args[0]});
+    ir_add_expr1(cur, var1, IR_OP1_snez, (ir_operand_t){.is_const = false, .var = func->args[0].var});
 
     ir_func_destroy(func);
     return TEST_OK;

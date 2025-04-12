@@ -16,7 +16,7 @@
 typedef __uint128_t i128_t;
 
 // Create a 128-bit integer from two 64-bit ones.
-#define int128(lo, hi) (((uint64_t)(lo) << 64) | ((uint64_t)(hi)))
+#define int128(hi, lo) (((i128_t)(uint64_t)(hi) << 64) | ((uint64_t)(lo)))
 // Get low 64 bits of 128-bit integer.
 #define lo64(i128)     ((uint64_t)(i128))
 // Get high 64 bits of 128-bit integer.

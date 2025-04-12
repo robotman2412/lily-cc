@@ -53,7 +53,11 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
     }
 
     for (size_t i = 0; i < func->args_len; i++) {
-        fprintf(to, "    arg %%%s\n", func->args[i]->name);
+        if (func->args[i].has_var) {
+            fprintf(to, "    arg %%%s\n", func->args[i].var->name);
+        } else {
+            fprintf(to, "    arg %s\n", ir_prim_names[func->args[i].type]);
+        }
     }
 
     dlist_foreach_node(ir_frame_t, frame, &func->frames_list) {

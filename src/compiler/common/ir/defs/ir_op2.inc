@@ -31,8 +31,8 @@ IR_OP2_DEF(sub)
 IR_OP2_DEF(mul)
 // Division.
 IR_OP2_DEF(div)
-// Modulo.
-IR_OP2_DEF(mod)
+// Remainder.
+IR_OP2_DEF(rem)
 
 /* ==== Bitwise operators ==== */
 // Bitwise shift left.

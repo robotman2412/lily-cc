@@ -13,13 +13,15 @@
 // Returns whether any code was changed.
 bool ir_optimize(ir_func_t *func);
 
+// Optimization: Strength reduction; replaces expensive with cheaper arithmetic where available.
+bool opt_strength_reduce(ir_func_t *func);
 // Optimization: Delete all variables and assignments to them whose value is never read.
 // Returns whether any variables were deleted.
 bool opt_unused_vars(ir_func_t *func);
 // Optimization: Delete code from dead paths.
 // Returns whether any code was changed or removed.
 bool opt_dead_code(ir_func_t *func);
-// Optimization: Propagate constants.
+// Optimization: Propagate constants and useless copies.
 // Returns whether any code was changed.
 bool opt_const_prop(ir_func_t *func);
 // Optimization: Remove redundant branches.

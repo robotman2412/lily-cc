@@ -16,7 +16,7 @@
     - Type suffixes ✓
 
 ### C preprocessor
-- `#include`
+- `#include` and `#include_next`
 - `#embed`
 - `#define` and `#undef`
 - `#pragma` and `_Pragma` operator

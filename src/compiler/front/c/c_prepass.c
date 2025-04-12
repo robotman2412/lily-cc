@@ -150,15 +150,18 @@ void c_prepass_stmt(c_prepass_t *prepass, c_prescope_t *scope, c_prebranch_t *br
 // Pre-compilation pass for declarations.
 void c_prepass_decls(c_prepass_t *prepass, c_prescope_t *scope, c_prebranch_t *branch, token_t const *decls) {
     for (size_t i = 1; i < decls->params_len; i++) {
-        c_prepass_decl(prepass, scope, branch, &decls->params[i]);
+        token_t const *decl = &decls->params[i];
+        if (decl->type == TOKENTYPE_AST && decl->subtype == C_AST_ASSIGN_DECL) {
+            c_prepass_decl(prepass, scope, branch, &decl->params[0]);
+            c_prepass_expr(prepass, scope, branch, &decl->params[1], false);
+        } else {
+            c_prepass_decl(prepass, scope, branch, decl);
+        }
     }
 }
 
 // Pre-compilation pass for a single direct (abstract) declarator.
 void c_prepass_decl(c_prepass_t *prepass, c_prescope_t *scope, c_prebranch_t *branch, token_t const *decl) {
-    if (decl->type == TOKENTYPE_AST && decl->subtype == C_AST_ASSIGN_DECL) {
-        decl = &decl->params[0];
-    }
     while (1) {
         if (decl->type == TOKENTYPE_IDENT) {
             if (!map_get(&scope->locals, decl->strval)) {

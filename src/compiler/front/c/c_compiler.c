@@ -1282,6 +1282,11 @@ c_compile_expr_t
             .code = code,
             .res  = old_rvalue,
         };
+    } else if (expr->subtype == C_AST_GARBAGE) {
+        return (c_compile_expr_t){
+            .code = code,
+            .res  = (c_value_t){0},
+        };
     }
     abort();
 }
@@ -1313,7 +1318,7 @@ ir_code_t *
     } else if (stmt->subtype == C_AST_DECLS) {
         // Local declarations.
         // TODO: Init declarator support.
-        c_compile_decls(ctx, prepass, code->func, scope, stmt);
+        code = c_compile_decls(ctx, prepass, code, scope, stmt);
 
     } else if (stmt->subtype == C_AST_DO_WHILE || stmt->subtype == C_AST_WHILE) {
         // While or do...while loop.
@@ -1473,12 +1478,14 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
 }
 
 // Compile a declaration statement.
-// If in global scope, `func` and `prepass` must be NULL.
-void c_compile_decls(c_compiler_t *ctx, c_prepass_t *prepass, ir_func_t *func, c_scope_t *scope, token_t const *decls) {
+// If in global scope, `code` and `prepass` must be `NULL`, and will return `NULL`.
+// If not global, all must not be `NULL` and will return the code path linearly after this.
+ir_code_t *
+    c_compile_decls(c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *code, c_scope_t *scope, token_t const *decls) {
     // TODO: Typedef support.
     rc_t inner_type = c_compile_spec_qual_list(ctx, &decls->params[0]);
     if (!inner_type) {
-        return;
+        return code;
     }
 
     for (size_t i = 1; i < decls->params_len; i++) {
@@ -1490,19 +1497,42 @@ void c_compile_decls(c_compiler_t *ctx, c_prepass_t *prepass, ir_func_t *func, c
             continue;
         }
 
-        c_var_t  *var            = calloc(1, sizeof(c_var_t));
-        c_type_t *c_decl_type    = decl_type->data;
-        var->is_global           = scope->depth == 0;
-        var->type                = decl_type;
-        var->pointer_taken       = var->is_global || set_contains(&prepass->pointer_taken, name);
-        var->ir_var              = func ? ir_var_create(func, c_type_to_ir_type(ctx, decl_type->data), NULL) : NULL;
-        var->ir_frame            = func ? ir_frame_create(func, c_decl_type->size, c_decl_type->size, NULL) : NULL;
+        // Create the C variable.
+        c_var_t  *var         = calloc(1, sizeof(c_var_t));
+        c_type_t *c_decl_type = decl_type->data;
+        var->is_global        = scope->depth == 0;
+        var->type             = decl_type;
+        var->pointer_taken    = var->is_global || set_contains(&prepass->pointer_taken, name);
+        var->ir_var           = code ? ir_var_create(code->func, c_type_to_ir_type(ctx, decl_type->data), NULL) : NULL;
+        var->ir_frame         = code ? ir_frame_create(code->func, c_decl_type->size, c_decl_type->size, NULL) : NULL;
         var->register_up_to_date = !var->is_global;
         var->memory_up_to_date   = var->is_global;
         map_set(&scope->locals, name->strval, var);
         map_set(&scope->locals_by_decl, name, var);
+
+        // If the declaration has an assignment, compile it too.
+        if (decls->params[i].type == TOKENTYPE_AST && decls->params[i].subtype == C_AST_ASSIGN_DECL) {
+            if (scope->depth == 0) {
+                printf("TODO: Initialized variables in the global scope\n");
+                abort();
+            }
+
+            c_value_t lvalue = {
+                .value_type   = C_LVALUE_VAR,
+                .c_type       = var->type,
+                .lvalue.c_var = var,
+            };
+            c_compile_expr_t res = c_compile_expr(ctx, prepass, code, scope, &decls->params[1].params[1]);
+            code                 = res.code;
+            if (res.res.value_type != C_VALUE_ERROR) {
+                c_value_write(ctx, code, scope, &lvalue, &res.res);
+                c_value_destroy(res.res);
+            }
+        }
     }
     rc_delete(inner_type);
+
+    return code;
 }
 
 

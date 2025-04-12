@@ -92,6 +92,7 @@ static bool is_first_expr_tkn(c_parser_t *ctx, token_t tkn) {
         case TOKENTYPE_KEYWORD: return tkn.subtype == C_KEYW_alignof || tkn.subtype == C_KEYW_sizeof;
         case TOKENTYPE_OTHER:
             switch (tkn.subtype) {
+                case C_TKN_AND:
                 case C_TKN_ADD:
                 case C_TKN_SUB:
                 case C_TKN_MUL:

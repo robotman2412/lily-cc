@@ -68,7 +68,7 @@ void             map_clear(map_t *map);
 // Get an item from the map.
 void            *map_get(map_t const *map, void const *key) __attribute__((pure));
 // Insert an item into the map.
-bool             map_set(map_t *map, void const *key, void *value);
+bool             map_set(map_t *map, void const *key, void const *value);
 // Remove an item from the map.
 bool             map_remove(map_t *map, void const *key);
 // Get next item in the map (or first if `ent` is NULL).

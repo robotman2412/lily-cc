@@ -466,7 +466,7 @@ void ir_func_recalc_flow(ir_func_t *func) {
     }
     dlist_foreach_node(ir_code_t, code, &func->code_list) {
         dlist_foreach_node(ir_insn_t, insn, &code->insns) {
-            if (insn->type == IR_INSN_EXPR) {
+            if (insn->type != IR_INSN_FLOW) {
                 continue;
             }
             ir_flow_t *flow = (void *)insn;

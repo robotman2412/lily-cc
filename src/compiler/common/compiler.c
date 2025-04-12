@@ -131,6 +131,8 @@ srcfile_t *srcfile_open(cctx_t *ctx, char const *path) {
     srcfile_t *file = calloc(1, sizeof(srcfile_t));
     if (!file)
         goto err0;
+    file->ctx         = ctx;
+    file->is_ram_file = false;
 
     file->path = strdup(path);
     if (!file->path)
@@ -162,6 +164,8 @@ srcfile_t *srcfile_create(cctx_t *ctx, char const *virt_path, void const *data, 
     srcfile_t *file = calloc(1, sizeof(srcfile_t));
     if (!file)
         goto err0;
+    file->ctx         = ctx;
+    file->is_ram_file = true;
 
     file->path = strdup(virt_path);
     if (!file->path)

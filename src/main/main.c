@@ -33,7 +33,7 @@ static void compile(char const *path) {
         }
     );
 
-    printf("Compiling %s\n", path);
+    printf("// Compiling %s\n", path);
 
     // While not EOF, keep parsing and compiling stuff.
     while (tkn_peek(tctx).type != TOKENTYPE_EOF) {
@@ -43,10 +43,10 @@ static void compile(char const *path) {
             c_prepass_t prepass = c_precompile_pass(&decls);
             ir_func_t  *func    = c_compile_func_def(cc, &decls, &prepass);
             c_prepass_destroy(prepass);
-            printf("\n");
-            ir_func_serialize(func, stdout);
             ir_func_to_ssa(func);
             ir_optimize(func);
+            printf("\n");
+            ir_func_serialize(func, stdout);
             ir_func_destroy(func);
         } else {
             // Declarations.

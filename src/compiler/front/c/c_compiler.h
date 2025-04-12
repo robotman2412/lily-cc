@@ -105,6 +105,14 @@ struct c_var {
     bool      is_global;
     // Has a pointer been taken of this variable?
     bool      pointer_taken;
+    // Is the memory copy up-to-date?
+    // This isn't problematic because branching paths force
+    // local variables into register and globals into memory.
+    bool      memory_up_to_date;
+    // Is the register copy up-to-date?
+    // This isn't problematic because branching paths force
+    // local variables into register and globals into memory.
+    bool      register_up_to_date;
     // Variable type (refcount ptr of `c_var_t`).
     rc_t      type;
     // Variable's IR register.
@@ -126,6 +134,8 @@ struct c_scope {
     bool       local_exclusive;
     // Parent scope, if any.
     c_scope_t *parent;
+    // C variables by declaration's identifier token; `token_t const *` -> `c_var_t *`.
+    map_t      locals_by_decl;
     // Local variable map (entry type is `c_var_t`).
     map_t      locals;
 };
@@ -232,10 +242,10 @@ void          c_compiler_destroy(c_compiler_t *cc);
 
 // Create a C type from a specifier-qualifer list.
 // Returns a refcount pointer of `c_type_t`.
-rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t *list);
+rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list);
 // Create a C type and get the name from an (abstract) declarator.
 // Takes ownership of the `spec_qual_type` share passed.
-rc_t c_compile_decl(c_compiler_t *ctx, token_t *decl, rc_t spec_qual_type, token_t const **name_out);
+rc_t c_compile_decl(c_compiler_t *ctx, token_t const *decl, rc_t spec_qual_type, token_t const **name_out);
 
 // Create a new scope.
 c_scope_t *c_scope_create(c_scope_t *parent);
@@ -243,6 +253,8 @@ c_scope_t *c_scope_create(c_scope_t *parent);
 void       c_scope_destroy(c_scope_t *scope);
 // Look up a variable in scope.
 c_var_t   *c_scope_lookup(c_scope_t *scope, char const *ident);
+// Look up a variable in scope by declaration token.
+c_var_t   *c_scope_lookup_by_decl(c_scope_t *scope, token_t const *decl);
 
 // Create a type that is a pointer to an existing type.
 rc_t          c_type_pointer(c_compiler_t *ctx, rc_t inner);
@@ -262,25 +274,36 @@ ir_prim_t     c_type_to_ir_type(c_compiler_t *ctx, c_type_t *type);
 ir_operand_t  c_cast_ir_operand(ir_code_t *code, ir_operand_t operand, ir_prim_t type);
 
 // Clean up an lvalue or rvalue.
-void         c_value_destroy(c_value_t value);
+void c_value_destroy(c_value_t value);
 // Write to an lvalue.
-void         c_value_write(c_compiler_t *ctx, ir_code_t *code, c_value_t const *lvalue, c_value_t const *rvalue);
+void c_value_write(
+    c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, c_value_t const *lvalue, c_value_t const *rvalue
+);
 // Get the address of an lvalue.
 ir_operand_t c_value_addrof(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
 // Read a value for scalar arithmetic.
-ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
+ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, c_value_t const *value);
+
+// Clobber memory in the current scope.
+// If `do_load` is `true`, clobbered variables will be loaded. Otherwise, they will be stored.
+void c_clobber_memory(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, bool do_load);
+// Transfer affected local variables to registers and global variables to memory.
+// Only applies to variables that are aliased by a pointer.
+// Used before/after branching paths such as if statements.
+void c_branch_consistency(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, set_t const *affected_vars);
 
 // Compile an expression into IR.
 c_compile_expr_t
-           c_compile_expr(c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *code, c_scope_t *scope, token_t *expr);
+    c_compile_expr(c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *code, c_scope_t *scope, token_t const *expr);
 // Compile a statement node into IR.
 // Returns the code path linearly after this.
-ir_code_t *c_compile_stmt(c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *code, c_scope_t *scope, token_t *stmt);
+ir_code_t *
+    c_compile_stmt(c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *code, c_scope_t *scope, token_t const *stmt);
 // Compile a C function definition into IR.
-ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t *def, c_prepass_t *prepass);
+ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t *prepass);
 // Compile a declaration statement.
 // If in global scope, `func` and `prepass` must be NULL.
-void       c_compile_decls(c_compiler_t *ctx, c_prepass_t *prepass, ir_func_t *func, c_scope_t *scope, token_t *decls);
+void c_compile_decls(c_compiler_t *ctx, c_prepass_t *prepass, ir_func_t *func, c_scope_t *scope, token_t const *decls);
 
 // Explain a C type.
 void c_type_explain(c_type_t *type, FILE *to);

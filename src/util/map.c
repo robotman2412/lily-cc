@@ -46,7 +46,7 @@ void *map_get(map_t const *map, void const *key) {
 }
 
 // Insert an item into the map.
-bool map_set(map_t *map, void const *key, void *value) {
+bool map_set(map_t *map, void const *key, void const *value) {
     // Figure out which bucket the key is in.
     uint32_t hash   = map->key_hash(key);
     size_t   bucket = hash % MAP_BUCKETS;
@@ -59,7 +59,7 @@ bool map_set(map_t *map, void const *key, void *value) {
         if (ent->hash == hash && !map->key_cmp(ent->key, key)) {
             if (value) {
                 // Overwrite existing value.
-                ent->value = value;
+                ent->value = (void *)value;
             } else {
                 // Remove existing value.
                 dlist_remove(&map->buckets[bucket], node);
@@ -88,7 +88,7 @@ bool map_set(map_t *map, void const *key, void *value) {
         free(ent);
         return false;
     }
-    ent->value = value;
+    ent->value = (void *)value;
     ent->hash  = hash;
 
     // Add the new item to the bucket.

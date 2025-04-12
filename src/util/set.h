@@ -63,7 +63,7 @@ struct set_ent {
 // Iterate over all entries in the set.
 #define set_foreach(type, varname, set)                                                                                \
     for (set_ent_t const *ent = set_next(set, NULL); ent; ent = set_next(set, ent))                                    \
-        for (type *varname = ent->value, *__dummy = (void *)1; __dummy; __dummy = (void *)0)
+        for (type *varname = ent->value; varname; varname = NULL)
 
 // Vtable for string sets.
 extern set_vtable_t const str_set_vtable;

@@ -217,12 +217,34 @@ bool opt_dead_code(ir_func_t *func) {
 
 
 
+// Test whether two IR operands are identical.
+static bool are_operands_identical(ir_operand_t a, ir_operand_t b) {
+    if (a.is_const != b.is_const) {
+        return false;
+    } else if (a.is_const) {
+        return ir_calc2(IR_OP2_seq, a.iconst, b.iconst).constl;
+    } else {
+        return a.var == b.var;
+    }
+}
+
 // Try to constant-propagate a single expression.
 static bool const_prop_expr(ir_expr_t *expr) {
     if (expr->base.type != IR_INSN_EXPR) {
         return false;
     }
-    if (expr->type == IR_EXPR_UNARY && expr->e_unary.value.is_const) {
+    if (expr->type == IR_EXPR_COMBINATOR) {
+        // Flatten phi-nodes with only a single predecessor or all identical bindings.
+        for (size_t i = 1; i < expr->e_combinator.from_len; i++) {
+            if (!are_operands_identical(expr->e_combinator.from[0].bind, expr->e_combinator.from[i].bind)) {
+                return false;
+            }
+        }
+        ir_var_replace(expr->dest, expr->e_combinator.from[0].bind);
+        ir_var_delete(expr->dest);
+        return true;
+
+    } else if (expr->type == IR_EXPR_UNARY && expr->e_unary.value.is_const) {
         // Calculate unary expression at compile time.
         ir_const_t iconst;
         if (expr->e_unary.oper == IR_OP1_mov) {

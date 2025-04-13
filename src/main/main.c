@@ -43,8 +43,8 @@ static void compile(char const *path) {
             c_prepass_t prepass = c_precompile_pass(&decls);
             ir_func_t  *func    = c_compile_func_def(cc, &decls, &prepass);
             c_prepass_destroy(prepass);
-            // ir_func_to_ssa(func);
-            // ir_optimize(func);
+            ir_func_to_ssa(func);
+            ir_optimize(func);
             printf("\n");
             ir_func_serialize(func, stdout);
             ir_func_destroy(func);

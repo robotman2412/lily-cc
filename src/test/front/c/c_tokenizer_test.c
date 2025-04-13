@@ -198,6 +198,9 @@ static char *test_c_tkn_litsuffix() {
     EXPECT_INT(tkn.subtype, C_PRIM_ULONG);
     tkn_delete(tkn);
 
+    tkn_ctx_delete(tkn_ctx);
+    cctx_delete(cctx);
+
     return TEST_OK;
 }
 LILY_TEST_CASE(test_c_tkn_litsuffix)

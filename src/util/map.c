@@ -83,7 +83,8 @@ bool map_set(map_t *map, void const *key, void const *value) {
     if (!ent) {
         return false;
     }
-    ent->key = map->key_dup(key);
+    ent->node = DLIST_NODE_EMPTY;
+    ent->key  = map->key_dup(key);
     if (!ent->key) {
         free(ent);
         return false;

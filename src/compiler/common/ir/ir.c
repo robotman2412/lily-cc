@@ -6,6 +6,7 @@
 #include "ir.h"
 
 #include "arrays.h"
+#include "ir/ir_optimizer.h"
 #include "strong_malloc.h"
 
 #include <inttypes.h>
@@ -427,6 +428,10 @@ void ir_func_to_ssa(ir_func_t *func) {
     if (func->enforce_ssa) {
         return;
     }
+
+    // Converting to SSA form requires deleting trivially unreachable code.
+    opt_dead_code(func);
+
     size_t      nodes_len = func->code_list.len;
     dom_node_t *nodes     = calloc(sizeof(dom_node_t), nodes_len);
 

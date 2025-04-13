@@ -96,9 +96,10 @@ diagnostic_t *cctx_diagnostic(cctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const
         free(buf);
         return NULL;
     }
-    diag->pos = pos;
-    diag->lvl = lvl;
-    diag->msg = buf;
+    diag->node = DLIST_NODE_EMPTY;
+    diag->pos  = pos;
+    diag->lvl  = lvl;
+    diag->msg  = buf;
     dlist_append(&ctx->diagnostics, &diag->node);
     return diag;
 }

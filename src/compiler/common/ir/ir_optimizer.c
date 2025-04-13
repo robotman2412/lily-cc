@@ -5,6 +5,7 @@
 
 #include "ir/ir_optimizer.h"
 
+#include "assert.h"
 #include "ir/ir_interpreter.h"
 
 
@@ -34,8 +35,8 @@ bool ir_optimize(ir_func_t *func) {
 
 // Try to strength-reduce a single expression.
 static bool strength_reduce_expr(ir_expr_t *expr) {
-    if (expr->type != IR_EXPR_BINARY) {
-        // The strength-reduced expressions are all binary.
+    if (expr->base.type != IR_INSN_EXPR || expr->type != IR_EXPR_BINARY) {
+        // The strength-reduced expressions are all binary exprs.
         return false;
     }
 
@@ -218,6 +219,9 @@ bool opt_dead_code(ir_func_t *func) {
 
 // Try to constant-propagate a single expression.
 static bool const_prop_expr(ir_expr_t *expr) {
+    if (expr->base.type != IR_INSN_EXPR) {
+        return false;
+    }
     if (expr->type == IR_EXPR_UNARY && expr->e_unary.value.is_const) {
         // Calculate unary expression at compile time.
         ir_const_t iconst;
@@ -310,7 +314,19 @@ bool opt_const_prop(ir_func_t *func) {
 // Combine two code blocks end-to-end.
 static void merge_code(ir_code_t *first, ir_code_t *second) {
     // The very last instruction should be the one and only jump.
-    ir_insn_delete(container_of(first->insns.tail, ir_insn_t, node));
+    ir_flow_t *last_jmp = container_of(first->insns.tail, ir_flow_t, base.node);
+    assert(last_jmp);
+    assert(last_jmp->base.type == IR_INSN_FLOW);
+    assert(last_jmp->type == IR_FLOW_JUMP || last_jmp->type == IR_FLOW_BRANCH);
+    if (last_jmp->type == IR_FLOW_JUMP) {
+        assert(last_jmp->f_jump.target == second);
+    } else {
+        assert(last_jmp->f_branch.target == second);
+        assert(last_jmp->f_branch.cond.is_const);
+        assert(last_jmp->f_branch.cond.iconst.prim_type == IR_PRIM_bool);
+        assert(last_jmp->f_branch.cond.iconst.constl & 1);
+    }
+    ir_insn_delete((ir_insn_t *)last_jmp);
 
     // Transfer all instructions from second to first.
     dlist_foreach_node(ir_insn_t, insn, &second->insns) {
@@ -343,7 +359,7 @@ static bool branch_opt_dfs(ir_code_t *code) {
     bool changed = false;
     while (code->succ.len == 1) {
         ir_code_t *succ = set_next(&code->succ, NULL)->value;
-        if (succ->pred.len == 1) {
+        if (succ != code && succ->pred.len == 1) {
             // If this is a 1:1 link, combine into one block.
             merge_code(code, succ);
             changed = true;

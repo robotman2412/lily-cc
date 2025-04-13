@@ -1406,16 +1406,48 @@ ir_code_t *
         // For loop.
         if (stmt->params[0].type == TOKENTYPE_AST && stmt->params[0].subtype == C_AST_DECLS) {
             // Setup is a decls.
+            code = c_compile_decls(ctx, prepass, code, scope, &stmt->params[0]);
         } else if (stmt->params[0].type != TOKENTYPE_AST || stmt->params[0].subtype != C_AST_NOP) {
             // Setup is an expr.
+            c_compile_expr_t res = c_compile_expr(ctx, prepass, code, scope, &stmt->params[0]);
+            c_value_destroy(res.res);
+            code = res.code;
         }
 
-        ir_code_t *for_cond = ir_code_create(code->func, NULL);
         ir_code_t *for_body = ir_code_create(code->func, NULL);
-        (void)for_cond;
-        (void)for_body;
-        printf("TODO: for loops\n");
-        abort();
+        ir_code_t *for_cond;
+        ir_code_t *after = ir_code_create(code->func, NULL);
+
+        // Compile condition.
+        if (stmt->params[1].type == TOKENTYPE_AST && stmt->params[1].subtype == C_AST_NOP) {
+            for_cond = for_body;
+        } else {
+            for_cond             = ir_code_create(code->func, NULL);
+            c_compile_expr_t res = c_compile_expr(ctx, prepass, for_cond, scope, &stmt->params[1]);
+            if (res.res.value_type != C_VALUE_ERROR) {
+                ir_add_branch(
+                    res.code,
+                    c_cast_ir_operand(res.code, c_value_read(ctx, res.code, scope, &res.res), IR_PRIM_bool),
+                    for_body
+                );
+            }
+            ir_add_jump(res.code, after);
+            c_value_destroy(res.res);
+        }
+        ir_add_jump(code, for_cond);
+
+        // Compile body.
+        code = c_compile_stmt(ctx, prepass, for_body, scope, &stmt->params[3]);
+
+        // Compile increment.
+        if (stmt->params[2].type != TOKENTYPE_AST || stmt->params[2].subtype != C_AST_NOP) {
+            c_compile_expr_t res = c_compile_expr(ctx, prepass, code, scope, &stmt->params[1]);
+            code                 = res.code;
+            c_value_destroy(res.res);
+        }
+        ir_add_jump(code, for_cond);
+
+        return after;
 
     } else if (stmt->subtype == C_AST_RETURN) {
         // Return statement.

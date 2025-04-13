@@ -10,19 +10,45 @@
 
 
 
+// List consistency check.
+__attribute__((always_inline)) static inline void consistency_check(dlist_t const *list) {
+#ifdef DLIST_CONSISTENCY_CHECK
+    size_t              count = 0;
+    dlist_node_t const *node  = list->head;
+    while (node) {
+        count++;
+        node = node->next;
+    }
+    assert(count == list->len);
+
+    count = 0;
+    node  = list->tail;
+    while (node) {
+        count++;
+        node = node->previous;
+    }
+    assert(count == list->len);
+#else
+    (void)list;
+#endif
+}
+
 // Concatenates the elements from dlist `back` on dlist `front`, clearing `back` in the process.
 // Both lists must be non-NULL.
 void dlist_concat(dlist_t *front, dlist_t *back) {
     assert_dev_drop(front != NULL);
     assert_dev_drop(back != NULL);
+    consistency_check(front);
+    consistency_check(back);
 
     if (front->tail != NULL && back->tail != NULL) {
         // Both lists have elements.
         // Concatenate lists.
-        front->tail->next    = back->head;
-        back->head->previous = front->tail;
-        front->tail          = back->head;
-        *back                = DLIST_EMPTY;
+        front->tail->next     = back->head;
+        back->head->previous  = front->tail;
+        front->tail           = back->head;
+        front->len           += back->len;
+        *back                 = DLIST_EMPTY;
 
     } else if (front->tail != NULL) {
         // Front list has elements, back is empty.
@@ -46,6 +72,7 @@ void dlist_concat(dlist_t *front, dlist_t *back) {
         assert_dev_drop(back->head == NULL);
         assert_dev_drop(back->len == 0);
     }
+    consistency_check(front);
 }
 
 // Appends `node` after the `tail` of the `list`.
@@ -54,7 +81,10 @@ void dlist_concat(dlist_t *front, dlist_t *back) {
 void dlist_append(dlist_t *const list, dlist_node_t *const node) {
     assert_dev_drop(list != NULL);
     assert_dev_drop(node != NULL);
+    assert_dev_drop(node->next == NULL);
+    assert_dev_drop(node->previous == NULL);
     assert_dev_drop(!dlist_contains(list, node));
+    consistency_check(list);
 
     *node = (dlist_node_t){
         .next     = NULL,
@@ -70,6 +100,7 @@ void dlist_append(dlist_t *const list, dlist_node_t *const node) {
     }
     list->tail  = node;
     list->len  += 1;
+    consistency_check(list);
 }
 
 // Prepends `node` before the `head` of the `list`.
@@ -78,7 +109,10 @@ void dlist_append(dlist_t *const list, dlist_node_t *const node) {
 void dlist_prepend(dlist_t *const list, dlist_node_t *const node) {
     assert_dev_drop(list != NULL);
     assert_dev_drop(node != NULL);
+    assert_dev_drop(node->next == NULL);
+    assert_dev_drop(node->previous == NULL);
     assert_dev_drop(!dlist_contains(list, node));
+    consistency_check(list);
 
     *node = (dlist_node_t){
         .next     = list->head,
@@ -94,12 +128,14 @@ void dlist_prepend(dlist_t *const list, dlist_node_t *const node) {
     }
     list->head  = node;
     list->len  += 1;
+    consistency_check(list);
 }
 
 // Removes the `head` of the given `list`. Will return NULL if the list was empty.
 // `list` must be non-NULL.
 dlist_node_t *dlist_pop_front(dlist_t *const list) {
     assert_dev_drop(list != NULL);
+    consistency_check(list);
 
     if (list->head != NULL) {
         assert_dev_drop(list->tail != NULL);
@@ -121,6 +157,7 @@ dlist_node_t *dlist_pop_front(dlist_t *const list) {
         assert_dev_drop((list->head != NULL) == (list->len > 0));
 
         *node = DLIST_NODE_EMPTY;
+        consistency_check(list);
         return node;
     } else {
         assert_dev_drop(list->tail == NULL);
@@ -133,6 +170,7 @@ dlist_node_t *dlist_pop_front(dlist_t *const list) {
 // `list` must be non-NULL.
 dlist_node_t *dlist_pop_back(dlist_t *const list) {
     assert_dev_drop(list != NULL);
+    consistency_check(list);
 
     if (list->tail != NULL) {
         assert_dev_drop(list->head != NULL);
@@ -154,6 +192,7 @@ dlist_node_t *dlist_pop_back(dlist_t *const list) {
         assert_dev_drop((list->head != NULL) == (list->len > 0));
 
         *node = DLIST_NODE_EMPTY;
+        consistency_check(list);
         return node;
     } else {
         assert_dev_drop(list->head == NULL);
@@ -167,6 +206,7 @@ dlist_node_t *dlist_pop_back(dlist_t *const list) {
 bool dlist_contains(dlist_t const *const list, dlist_node_t const *const node) {
     assert_dev_drop(list != NULL);
     assert_dev_drop(node != NULL);
+    consistency_check(list);
 
     dlist_node_t const *iter = list->head;
     while (iter != NULL) {
@@ -183,28 +223,25 @@ bool dlist_contains(dlist_t const *const list, dlist_node_t const *const node) {
 // Both `list` and `node` must be non-NULL.
 void dlist_remove(dlist_t *const list, dlist_node_t *const node) {
     assert_dev_drop(dlist_contains(list, node));
+    assert_dev_drop(list->len > 0);
+    consistency_check(list);
 
-    bool decrement = false;
     if (node->previous != NULL) {
         node->previous->next = node->next;
-        decrement            = true;
     }
     if (node->next != NULL) {
         node->next->previous = node->previous;
-        decrement            = true;
     }
 
     if (node == list->head) {
         list->head = node->next;
-        decrement  = true;
     }
     if (node == list->tail) {
         list->tail = node->previous;
-        decrement  = true;
     }
 
-    if (decrement) {
-        list->len -= 1;
-    }
-    *node = DLIST_NODE_EMPTY;
+    list->len -= 1;
+    *node      = DLIST_NODE_EMPTY;
+
+    consistency_check(list);
 }

@@ -367,7 +367,7 @@ static void replace_phi_vars(ir_code_t *pred, ir_code_t *code, set_t *from, ir_v
             return;
         } else if (set_contains(from, expr->dest)) {
             for (size_t i = 0; i < expr->e_combinator.from_len; i++) {
-                if (expr->e_combinator.from[i].prev == pred && !expr->e_combinator.from[i].bind.is_const) {
+                if (expr->e_combinator.from[i].prev == pred) {
                     set_add(&to->used_at, expr);
                     expr->e_combinator.from[i].bind.is_const = false;
                     expr->e_combinator.from[i].bind.var      = to;
@@ -413,10 +413,8 @@ static void rename_assignments(ir_func_t *func, ir_code_t *code, ir_var_t *from,
             }
         }
     }
-    if (to) {
-        set_foreach(ir_code_t, succ, &code->succ) {
-            replace_phi_vars(code, succ, phi_from, to);
-        }
+    set_foreach(ir_code_t, succ, &code->succ) {
+        replace_phi_vars(code, succ, phi_from, to ?: from);
     }
     set_foreach(ir_code_t, succ, &code->succ) {
         rename_assignments(func, succ, from, to, phi_from);

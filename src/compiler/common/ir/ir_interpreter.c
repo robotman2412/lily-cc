@@ -78,13 +78,13 @@ ir_const_t ir_trim_const(ir_const_t value) {
         case IR_PRIM_u16: bytes = 2; break;
         case IR_PRIM_s32: bytes = 4; break;
         case IR_PRIM_u32: bytes = 4; break;
-        case IR_PRIM_s64: bytes = 8; break;
-        case IR_PRIM_u64: bytes = 8; break;
+        case IR_PRIM_s64: value.consth = -((int64_t)value.constl < 0); return value;
+        case IR_PRIM_u64: value.consth = 0; return value;
         case IR_PRIM_s128: return value;
         case IR_PRIM_u128: return value;
         case IR_PRIM_bool:
-            value.constl = value.constl || value.consth;
-            value.consth = 0;
+            value.constl &= 1;
+            value.consth  = 0;
             return value;
         case IR_PRIM_f32: bytes = 4; break;
         case IR_PRIM_f64: bytes = 8; break;
@@ -92,11 +92,9 @@ ir_const_t ir_trim_const(ir_const_t value) {
     }
     value.constl &= (1llu << (8 * bytes)) - 1;
     value.consth  = 0;
-    if (value.prim_type <= IR_PRIM_s64) {
-        if (!(value.prim_type & 1) && (value.constl & (1 << (8 * bytes - 1)))) {
-            value.consth  = -1llu;
-            value.constl |= -1llu << (8 * bytes);
-        }
+    if (!(value.prim_type & 1) && (value.constl & (1llu << (8 * bytes - 1)))) {
+        value.consth  = -1llu;
+        value.constl |= -1llu << (8 * bytes);
     }
     return value;
 }

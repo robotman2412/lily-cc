@@ -29,3 +29,12 @@ int consistency_test1(int a, int c) {
 
     return a;
 }
+
+unsigned long strlen(char const *str) {
+    unsigned long len = 0;
+    while (*str) {
+        len++;
+        str++;
+    }
+    return len;
+}

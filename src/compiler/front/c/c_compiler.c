@@ -717,6 +717,9 @@ void c_clobber_memory(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, bool
 // Only applies to variables that are aliased by a pointer.
 // Used before/after branching paths such as if statements.
 void c_create_branch_consistency(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, set_t const *affected_vars) {
+    if (!affected_vars) {
+        return;
+    }
     set_foreach(token_t const, var_ident, affected_vars) {
         c_var_t *var = c_scope_lookup_by_decl(scope, var_ident);
         if (!var) {
@@ -754,6 +757,9 @@ void c_create_branch_consistency(c_compiler_t *ctx, ir_code_t *code, c_scope_t *
 
 // Assume the variables are in the state that would be created by `c_create_branch_consistency`.
 void c_assume_branch_consistency(c_compiler_t *ctx, c_scope_t *scope, set_t const *affected_vars) {
+    if (!affected_vars) {
+        return;
+    }
     set_foreach(token_t const, var_ident, affected_vars) {
         c_var_t *var = c_scope_lookup_by_decl(scope, var_ident);
         if (!var) {
@@ -1378,18 +1384,17 @@ ir_code_t *
 
         // Compile expression.
         c_compile_expr_t expr = c_compile_expr(ctx, prepass, cond_body, scope, &stmt->params[0]);
-        cond_body             = expr.code;
         // Condition -> body/after.
-        c_create_branch_consistency(ctx, cond_body, scope, affected);
+        c_create_branch_consistency(ctx, expr.code, scope, affected);
         if (expr.res.value_type != C_VALUE_ERROR) {
             ir_add_branch(
-                cond_body,
-                c_cast_ir_operand(cond_body, c_value_read(ctx, code, scope, &expr.res), IR_PRIM_bool),
+                expr.code,
+                c_cast_ir_operand(expr.code, c_value_read(ctx, expr.code, scope, &expr.res), IR_PRIM_bool),
                 loop_body
             );
             c_value_destroy(expr.res);
         }
-        ir_add_jump(cond_body, after);
+        ir_add_jump(expr.code, after);
 
         // Compile loop body.
         loop_body = c_compile_stmt(ctx, prepass, loop_body, scope, &stmt->params[1]);

@@ -20,10 +20,11 @@ static void c_compiler_t_fake_cleanup(void *_) {
 
 // Create a new C compiler context.
 c_compiler_t *c_compiler_create(cctx_t *cctx, c_options_t options) {
-    c_compiler_t *cc        = strong_calloc(1, sizeof(c_compiler_t));
-    cc->cctx                = cctx;
-    cc->options             = options;
-    cc->global_scope.locals = STR_MAP_EMPTY;
+    c_compiler_t *cc                = strong_calloc(1, sizeof(c_compiler_t));
+    cc->cctx                        = cctx;
+    cc->options                     = options;
+    cc->global_scope.locals         = STR_MAP_EMPTY;
+    cc->global_scope.locals_by_decl = PTR_MAP_EMPTY;
 
     cc->prim_types[C_PRIM_BOOL].size    = 1;
     cc->prim_types[C_PRIM_UCHAR].size   = 1;
@@ -94,6 +95,7 @@ static void c_type_free(c_type_t *type) {
         }
         free(type->func.args);
         free(type->func.arg_names);
+        free(type->func.arg_name_tkns);
     } else if (type->primitive == C_COMP_ARRAY) {
         // TODO: An array size could be here.
         rc_delete(type->inner);
@@ -283,20 +285,21 @@ rc_t c_compile_decl(c_compiler_t *ctx, token_t const *decl, rc_t spec_qual_type,
             func_type->func.return_type = cur;
             func_type->func.args_len    = decl->params_len - 1;
             if (decl->params_len > 1) {
-                func_type->func.args      = strong_malloc(sizeof(rc_t) * (decl->params_len - 1));
-                func_type->func.arg_names = strong_malloc(sizeof(void *) * (decl->params_len - 1));
+                func_type->func.args          = strong_calloc((decl->params_len - 1), sizeof(rc_t));
+                func_type->func.arg_names     = strong_calloc((decl->params_len - 1), sizeof(void *));
+                func_type->func.arg_name_tkns = strong_calloc((decl->params_len - 1), sizeof(void *));
             }
 
             for (size_t i = 0; i < decl->params_len - 1; i++) {
                 token_t const *param = &decl->params[i + 1];
                 if (param->subtype == C_AST_SPEC_QUAL_LIST) {
-                    func_type->func.args[i]      = c_compile_spec_qual_list(ctx, param);
-                    func_type->func.arg_names[i] = NULL;
+                    func_type->func.args[i] = c_compile_spec_qual_list(ctx, param);
                 } else {
                     token_t const *name_tmp;
-                    rc_t           list          = c_compile_spec_qual_list(ctx, &param->params[0]);
-                    func_type->func.args[i]      = c_compile_decl(ctx, &param->params[1], list, &name_tmp);
-                    func_type->func.arg_names[i] = strong_strdup(name_tmp->strval);
+                    rc_t           list              = c_compile_spec_qual_list(ctx, &param->params[0]);
+                    func_type->func.args[i]          = c_compile_decl(ctx, &param->params[1], list, &name_tmp);
+                    func_type->func.arg_names[i]     = strong_strdup(name_tmp->strval);
+                    func_type->func.arg_name_tkns[i] = name_tmp;
                 }
             }
 
@@ -713,11 +716,11 @@ void c_clobber_memory(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, bool
 // Transfer affected local variables to registers and global variables to memory.
 // Only applies to variables that are aliased by a pointer.
 // Used before/after branching paths such as if statements.
-void c_branch_consistency(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, set_t const *affected_vars) {
+void c_create_branch_consistency(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, set_t const *affected_vars) {
     set_foreach(token_t const, var_ident, affected_vars) {
         c_var_t *var = c_scope_lookup_by_decl(scope, var_ident);
         if (!var) {
-            printf("[BUG] Affected variables set for c_branch_consistency contains an undefined variable\n");
+            printf("[BUG] Affected variables set for c_create_branch_consistency contains an undefined variable\n");
             abort();
         }
         if (!var->pointer_taken) {
@@ -738,6 +741,33 @@ void c_branch_consistency(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, 
             ir_var_t *addr = ir_var_create(code->func, c_prim_to_ir_type(ctx, ctx->options.size_type), NULL);
             ir_add_lea_stack(code, addr, var->ir_frame, 0);
             ir_add_load(code, var->ir_var, (ir_operand_t){.is_const = false, .var = addr});
+            var->register_up_to_date = true;
+        }
+        // Preventively clobber the location the variable isn't supposed to be in.
+        if (var->is_global) {
+            var->register_up_to_date = false;
+        } else {
+            var->memory_up_to_date = false;
+        }
+    }
+}
+
+// Assume the variables are in the state that would be created by `c_create_branch_consistency`.
+void c_assume_branch_consistency(c_compiler_t *ctx, c_scope_t *scope, set_t const *affected_vars) {
+    set_foreach(token_t const, var_ident, affected_vars) {
+        c_var_t *var = c_scope_lookup_by_decl(scope, var_ident);
+        if (!var) {
+            printf("[BUG] Affected variables set for c_create_branch_consistency contains an undefined variable\n");
+            abort();
+        }
+        if (!var->pointer_taken) {
+            // Variable isn't aliased so it's always in a register.
+            continue;
+        } else if (var->is_global && !var->memory_up_to_date) {
+            // Global assumed to be copied to memory.
+            var->memory_up_to_date = true;
+        } else if (!var->is_global && !var->register_up_to_date) {
+            // Variable assumed to be copied to a register.
             var->register_up_to_date = true;
         }
         // Preventively clobber the location the variable isn't supposed to be in.
@@ -1330,18 +1360,27 @@ ir_code_t *
 
     } else if (stmt->subtype == C_AST_DECLS) {
         // Local declarations.
-        // TODO: Init declarator support.
         code = c_compile_decls(ctx, prepass, code, scope, stmt);
 
     } else if (stmt->subtype == C_AST_DO_WHILE || stmt->subtype == C_AST_WHILE) {
         // While or do...while loop.
+        // Consistency points are before and after condition eval.
+        // For do...while: before -> body, body -> condition, condition -> body/after.
+        // For while: before -> condition, body -> condition, condition -> body/after.
+        set_t const *affected = map_get(&prepass->branch_vars, stmt);
+
         ir_code_t *loop_body = ir_code_create(code->func, NULL);
         ir_code_t *cond_body = ir_code_create(code->func, NULL);
         ir_code_t *after     = ir_code_create(code->func, NULL);
 
+        // Before -> body (do...while) or before -> condition (while).
+        c_create_branch_consistency(ctx, code, scope, affected);
+
         // Compile expression.
         c_compile_expr_t expr = c_compile_expr(ctx, prepass, cond_body, scope, &stmt->params[0]);
         cond_body             = expr.code;
+        // Condition -> body/after.
+        c_create_branch_consistency(ctx, cond_body, scope, affected);
         if (expr.res.value_type != C_VALUE_ERROR) {
             ir_add_branch(
                 cond_body,
@@ -1354,6 +1393,8 @@ ir_code_t *
 
         // Compile loop body.
         loop_body = c_compile_stmt(ctx, prepass, loop_body, scope, &stmt->params[1]);
+        /// Body -> condition.
+        c_create_branch_consistency(ctx, loop_body, scope, affected);
         ir_add_jump(loop_body, cond_body);
 
         if (stmt->subtype == C_AST_DO_WHILE) {
@@ -1368,14 +1409,22 @@ ir_code_t *
 
     } else if (stmt->subtype == C_AST_IF_ELSE) {
         // If or if...else statement.
+        // Consistency points are after condition and after convergence.
+        // That means condition -> if/else, if -> after, else -> after.
+        set_t const *affected = map_get(&prepass->branch_vars, stmt);
+
         // Evaluate condition.
         c_compile_expr_t expr = c_compile_expr(ctx, prepass, code, scope, &stmt->params[0]);
         code                  = expr.code;
+        // Condition -> if/else.
+        c_create_branch_consistency(ctx, code, scope, affected);
 
         // Allocate code paths.
         ir_code_t *if_body = ir_code_create(code->func, NULL);
         ir_code_t *after   = ir_code_create(code->func, NULL);
         c_compile_stmt(ctx, prepass, if_body, scope, &stmt->params[1]);
+        // If -> after.
+        c_create_branch_consistency(ctx, if_body, scope, affected);
         ir_add_jump(if_body, after);
         if (expr.res.value_type != C_VALUE_ERROR) {
             ir_add_branch(
@@ -1388,6 +1437,8 @@ ir_code_t *
             // If...else statement.
             ir_code_t *else_body = ir_code_create(code->func, NULL);
             c_compile_stmt(ctx, prepass, else_body, scope, &stmt->params[2]);
+            // Else -> after.
+            c_create_branch_consistency(ctx, else_body, scope, affected);
             ir_add_jump(else_body, after);
             ir_add_jump(code, else_body);
         } else {
@@ -1404,6 +1455,10 @@ ir_code_t *
 
     } else if (stmt->subtype == C_AST_FOR_LOOP) {
         // For loop.
+        // Consistency points are before and after condition eval.
+        // That means setup -> condition, body -> condition and condition -> body/after.
+        set_t const *affected = map_get(&prepass->branch_vars, stmt);
+
         if (stmt->params[0].type == TOKENTYPE_AST && stmt->params[0].subtype == C_AST_DECLS) {
             // Setup is a decls.
             code = c_compile_decls(ctx, prepass, code, scope, &stmt->params[0]);
@@ -1418,12 +1473,18 @@ ir_code_t *
         ir_code_t *for_cond;
         ir_code_t *after = ir_code_create(code->func, NULL);
 
+        // Setup -> condition consistency.
+        c_create_branch_consistency(ctx, code, scope, affected);
+
         // Compile condition.
         if (stmt->params[1].type == TOKENTYPE_AST && stmt->params[1].subtype == C_AST_NOP) {
+            // Condition -> body consistency is not needed because the body will have already made it so.
             for_cond = for_body;
         } else {
             for_cond             = ir_code_create(code->func, NULL);
             c_compile_expr_t res = c_compile_expr(ctx, prepass, for_cond, scope, &stmt->params[1]);
+            // Condition -> body consistency.
+            c_create_branch_consistency(ctx, res.code, scope, affected);
             if (res.res.value_type != C_VALUE_ERROR) {
                 ir_add_branch(
                     res.code,
@@ -1441,10 +1502,13 @@ ir_code_t *
 
         // Compile increment.
         if (stmt->params[2].type != TOKENTYPE_AST || stmt->params[2].subtype != C_AST_NOP) {
-            c_compile_expr_t res = c_compile_expr(ctx, prepass, code, scope, &stmt->params[1]);
+            c_compile_expr_t res = c_compile_expr(ctx, prepass, code, scope, &stmt->params[2]);
             code                 = res.code;
             c_value_destroy(res.res);
         }
+
+        // Body -> condition consistency.
+        c_create_branch_consistency(ctx, code, scope, affected);
         ir_add_jump(code, for_cond);
 
         return after;
@@ -1497,7 +1561,9 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
             var->ir_frame            = ir_frame_create(func, c_type->size, c_type->align, NULL);
             var->ir_var->prim_type   = c_type_to_ir_type(ctx, var->type->data);
             var->register_up_to_date = true;
+            var->pointer_taken       = set_contains(&prepass->pointer_taken, func_type->func.arg_name_tkns[i]);
             map_set(&scope->locals, func_type->func.arg_names[i], var);
+            map_set(&scope->locals_by_decl, func_type->func.arg_name_tkns[i], var);
         }
     }
 

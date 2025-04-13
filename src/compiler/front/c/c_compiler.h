@@ -161,13 +161,15 @@ struct c_type {
         rc_t inner;
         struct {
             // Function return type.
-            rc_t   return_type;
+            rc_t            return_type;
             // Number of arguments.
-            size_t args_len;
+            size_t          args_len;
             // Argument types.
-            rc_t  *args;
+            rc_t           *args;
             // Argument names.
-            char **arg_names;
+            char          **arg_names;
+            // Argument names by token.
+            token_t const **arg_name_tkns;
         } func;
     };
 };
@@ -290,7 +292,9 @@ void c_clobber_memory(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, bool
 // Transfer affected local variables to registers and global variables to memory.
 // Only applies to variables that are aliased by a pointer.
 // Used before/after branching paths such as if statements.
-void c_branch_consistency(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, set_t const *affected_vars);
+void c_create_branch_consistency(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, set_t const *affected_vars);
+// Assume the variables are in the state that would be created by `c_create_branch_consistency`.
+void c_assume_branch_consistency(c_compiler_t *ctx, c_scope_t *scope, set_t const *affected_vars);
 
 // Compile an expression into IR.
 c_compile_expr_t

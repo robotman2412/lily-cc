@@ -10,7 +10,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS true)
 project(lily-cc)
 add_compile_options(
     -std=gnu17
-    -Og -ggdb
+    -O0 -ggdb
     -Wall -Wno-parentheses -Wno-unused-function -Wno-missing-braces
     -Werror=all -Werror=enum-conversion
     -lbsd

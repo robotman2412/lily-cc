@@ -9,3 +9,23 @@ int alias_test() {
     *b     = 4;
     return a;
 }
+
+int consistency_test0(int a, int c) {
+    int *b = &a;
+    if (c) {
+        *b = 2;
+    } else {
+        a *= 2;
+    }
+    return a;
+}
+
+int consistency_test1(int a, int c) {
+    int *b = &a;
+
+    for (int i = 0; i < c; i++) {
+        *b = a + 1;
+    }
+
+    return a;
+}

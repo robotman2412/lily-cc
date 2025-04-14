@@ -34,7 +34,13 @@
     };
 
 // Define an ALU instruction.
-#define DEF_ALU_RI32(name, isa, immbits, sign, funct3, ir_op2) \
+#define DEF_ALU_RIW(name, isa, immbits, sign, funct3, ir_op2) \
+    expr_tree_t const rv_itree_##name = NODE_EXPR2(ir_op2, &NODE_OPERAND_0, &NODE_OPERAND_1); \
+    DEF_RI(name##iw, NULL, &rv_itree_##name, immbits, sign) \
+    DEF_RR(name##w,  NULL, &rv_itree_##name, immbits, sign)
+
+// Define an ALU instruction.
+#define DEF_ALU_RIWD(name, isa, immbits, sign, funct3, ir_op2) \
     expr_tree_t const rv_itree_##name = NODE_EXPR2(ir_op2, &NODE_OPERAND_0, &NODE_OPERAND_1); \
     DEF_RI(name##i,  NULL, &rv_itree_##name, immbits, sign) \
     DEF_RI(name##iw, NULL, &rv_itree_##name, immbits, sign) \
@@ -42,13 +48,13 @@
     DEF_RR(name##w,  NULL, &rv_itree_##name, immbits, sign)
 
 // Define an ALU instruction.
-#define DEF_ALU_R32(name, isa, immbits, sign, funct3, ir_op2) \
+#define DEF_ALU_RWD(name, isa, immbits, sign, funct3, ir_op2) \
     expr_tree_t const rv_itree_##name = NODE_EXPR2(ir_op2, &NODE_OPERAND_0, &NODE_OPERAND_1); \
     DEF_RR(name,     NULL, &rv_itree_##name, immbits, sign) \
     DEF_RR(name##w,  NULL, &rv_itree_##name, immbits, sign)
 
 // Define an ALU instruction.
-#define DEF_ALU_R32(name, isa, immbits, sign, funct3, ir_op2) \
+#define DEF_ALU_RWD(name, isa, immbits, sign, funct3, ir_op2) \
     expr_tree_t const rv_itree_##name = NODE_EXPR2(ir_op2, &NODE_OPERAND_0, &NODE_OPERAND_1); \
     DEF_RI(name,     NULL, &rv_itree_##name, immbits, sign) \
     DEF_RI(name##w,  NULL, &rv_itree_##name, immbits, sign)

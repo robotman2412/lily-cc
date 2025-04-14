@@ -4,30 +4,74 @@
 // SPDX-License-Identifier: MIT
 
 #ifndef DEF_MISC
-#define DEF_MISC(name, isa, s, u, r, i, _32)
+#define DEF_MISC(name, isa, immbits, sign, r, i, _32)
+#endif
+
+#ifndef DEF_BRANCH
+// Defines a branch instruction.
+#define DEF_BRANCH(name, sign, funct3, ir_cmp) DEF_MISC(name, RV_BASE, 0, sign, 1, 0, 0)
 #endif
 
 #ifndef DEF_ALU_I32
 // Defines ALU operations with only imm and 32-bit versions.
-#define DEF_ALU_I32(name, isa, s, u, ir_op2) DEF_MISC(name, isa, 0, 1, 1)
+#define DEF_ALU_I32(name, isa, immbits, sign, funct3, ir_op2) DEF_MISC(name, isa, immbits, sign, 0, 1, 1)
 #endif
 
 #ifndef DEF_ALU_RI32
 // Defines ALU operations with imm and 32-bit versions.
-#define DEF_ALU_RI32(name, isa, s, u, ir_op2) DEF_MISC(name, isa, 1, 1, 1)
+#define DEF_ALU_RI32(name, isa, immbits, sign, funct3, ir_op2) DEF_MISC(name, isa, immbits, sign, 1, 1, 1)
 #endif
 
 #ifndef DEF_ALU_R32
 // Defines ALU operations with 32-bit versions.
-#define DEF_ALU_R32(name, isa, s, u, ir_op2) DEF_MISC(name, isa, 1, 0, 1)
+#define DEF_ALU_R32(name, isa, immbits, sign, funct3, ir_op2) DEF_MISC(name, isa, immbits, sign, 1, 0, 1)
+#endif
+
+#ifndef DEF_MEM
+// Defines memory instructions
+#define DEF_MEM(name, isa, membits, sign, funct3, is_store, op_maj) DEF_MISC(name, isa, 0, sign, 1, 0, 1)
 #endif
 
 // clang-format off
 
 
 
-DEF_ALU_RI32(add, RV_BASE_E, 1, 1, IR_OP2_add)
-DEF_ALU_R32( sub, RV_BASE_E, 1, 1, IR_OP2_sub)
-DEF_ALU_RI32(xor, RV_BASE_E, 1, 1, IR_OP2_bxor)
-DEF_ALU_RI32(or,  RV_BASE_E, 1, 1, IR_OP2_bor)
-DEF_ALU_RI32(and, RV_BASE_E, 1, 1, IR_OP2_band)
+/* ==== RV32I instructions ==== */
+
+DEF_MISC(    lui,    RV_BASE,   12, s,  0, 0, 0)
+DEF_MISC(    auipc,  RV_BASE,   12, s,  0, 0, 0)
+DEF_MISC(    jal,    RV_BASE,   21, s,  0, 0, 0)
+DEF_MISC(    jalr,   RV_BASE,   21, s,  0, 0, 0)
+DEF_BRANCH(  beq,                   su, 0b000, IR_OP2_seq)
+DEF_BRANCH(  bne,                   su, 0b001, IR_OP2_sne)
+DEF_BRANCH(  blt,                   s,  0b100, IR_OP2_slt)
+DEF_BRANCH(  bge,                   s,  0b101, IR_OP2_sge)
+DEF_BRANCH(  bltu,                  u,  0b110, IR_OP2_slt)
+DEF_BRANCH(  bgeu,                  u,  0b111, IR_OP2_sge)
+DEF_MEM(     lb,     RV_BASE,    8, s,  0b000, 0, RV_OP_LOAD)
+DEF_MEM(     lh,     RV_BASE,   16, s,  0b001, 0, RV_OP_LOAD)
+DEF_MEM(     lw,     RV_BASE,   32, s,  0b010, 0, RV_OP_LOAD)
+DEF_MEM(     lbu,    RV_BASE,    8, u,  0b100, 0, RV_OP_LOAD)
+DEF_MEM(     lhu,    RV_BASE,   16, u,  0b101, 0, RV_OP_LOAD)
+DEF_MEM(     sb,     RV_BASE,    8, su, 0b000, 1, RV_OP_STORE)
+DEF_MEM(     sh,     RV_BASE,   16, su, 0b001, 1, RV_OP_STORE)
+DEF_MEM(     sw,     RV_BASE,   32, su, 0b010, 1, RV_OP_STORE)
+DEF_ALU_RI32(add,    RV_BASE,   12, su, 0b000, IR_OP2_add)
+DEF_ALU_R32( sub,    RV_BASE,   12, su, 0b000, IR_OP2_sub)
+DEF_ALU_RI32(slt,    RV_BASE,   12, s,  0b010, IP_OP2_slt)
+DEF_ALU_R32( sltu,   RV_BASE,   12, u,  0b010, IP_OP2_slt)
+DEF_ALU_I32( sltiu,  RV_BASE,   12, u,  0b010, IP_OP2_slt)
+DEF_ALU_RI32(sll,    RV_32ONLY,  5, su, 0b001, IP_OP2_shl)
+DEF_ALU_RI32(srl,    RV_32ONLY,  5, u,  0b101, IP_OP2_shr)
+DEF_ALU_RI32(sra,    RV_32ONLY,  5, s,  0b101, IP_OP2_shr)
+DEF_ALU_RI32(xor,    RV_BASE,   12, su, 0b100, IR_OP2_bxor)
+DEF_ALU_RI32(or,     RV_BASE,   12, su, 0b110, IR_OP2_bor)
+DEF_ALU_RI32(and,    RV_BASE,   12, su, 0b111, IR_OP2_band)
+DEF_MISC(    fence,  RV_BASE,    0, _,  0, 0, 0)
+DEF_MISC(    ecall,  RV_BASE,    0, _,  0, 0, 0)
+DEF_MISC(    ebreak, RV_BASE,    0, _,  0, 0, 0)
+
+/* ==== RV64I instructions ==== */
+DEF_MEM(     lwu,    RV_64,     32, u,  0b110, 0, RV_OP_LOAD)
+DEF_MEM(     ld,     RV_64,     32, u,  0b011, 0, RV_OP_LOAD)
+DEF_MEM(     sd,     RV_64,     32, u,  0b011, 1, RV_OP_STORE)

@@ -21,18 +21,22 @@ typedef enum {
 
 // RISC-V instruction set extensions.
 typedef enum {
-    // Allowed E and I.
-    RV_BASE_E,
-    // Allowed in I but not E.
-    RV_BASE_I,
-    // Allowed in M.
+    // Always allowed.
+    RV_BASE,
+    // Allowed if RV32 but not RV64 or RV128.
+    RV_32ONLY,
+    // Allowed if RV64.
+    RV_64,
+    // Allowed if RV128,
+    RV_128,
+    // Allowed if M is present.
     RV_EXT_M,
-    // Allowed in A.
+    // Allowed if A is present.
     RV_EXT_A,
-    // Allowed in C.
+    // Allowed if C is present.
     RV_EXT_C,
-    // Allowed in F.
+    // Allowed if F is present.
     RV_EXT_F,
-    // Allowed in D,
+    // Allowed if D is present,
     RV_EXT_D,
 } rv_ext_t;

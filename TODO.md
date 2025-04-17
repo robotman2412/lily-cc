@@ -96,4 +96,23 @@
 - Create ELF writer
 - Create backends
     - Faerie backend
-    - RISC-V backend
+- Generic assembler
+
+## RISC-V backend
+- RISC-V assembler
+- Instruction encoder
+- Instruction definitions
+    - RV32I ✓
+    - RV64I
+    - Zicsr
+    - M
+    - A
+    - F
+    - D
+    - C
+    - V
+    - Privileged instructions
+- Register definitions
+    - Integer
+    - Float
+    - CSR

@@ -3,3 +3,4 @@ build
 comp
 a.out
 a.lines
+__pycache__

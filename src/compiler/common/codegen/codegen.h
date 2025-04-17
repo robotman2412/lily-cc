@@ -4,5 +4,3 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-
-#include "insn_proto.h"

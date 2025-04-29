@@ -279,3 +279,10 @@ extern expr_tree_t const NODE_OPERAND_3;
 
 
 // clang-format on
+
+
+
+// Calculate the number of nodes in an `expr_tree_t`.
+size_t expr_tree_size(expr_tree_t const *tree);
+// Test whether a prototype can be applied to a certain piece of IR in SSA form.
+bool   insn_proto_match(insn_proto_t const *proto, ir_insn_t const *ir_insn);

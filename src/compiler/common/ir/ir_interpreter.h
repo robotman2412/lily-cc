@@ -15,6 +15,11 @@ int        ir_const_ctz(ir_const_t value);
 int        ir_const_popcnt(ir_const_t value);
 // Whether a constant is negative.
 bool       ir_const_is_negative(ir_const_t value);
+// Determines whether two constants are identical. Floats will be compared bitwise.
+bool       ir_const_identical(ir_const_t lhs, ir_const_t rhs);
+// Determines whether two constants are effectively identical after casting.
+// Floats are promoted to f64, then compared bitwise.
+bool       ir_const_lenient_identical(ir_const_t lhs, ir_const_t rhs);
 // Truncate unused bits of a constant.
 ir_const_t ir_trim_const(ir_const_t value);
 // Cast from one type to another with IR rules.

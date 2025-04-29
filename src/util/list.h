@@ -38,7 +38,7 @@ typedef struct dlist_t {
 #ifndef container_of
 #define container_of(ptr, type, member)                                                                                \
     ({                                                                                                                 \
-        _Static_assert(sizeof(((type *)0)->member) == sizeof(*(ptr)));                                                 \
+        _Static_assert(sizeof(((type *)0)->member) == sizeof(*(ptr)), "Invalid member size");                          \
         (type *)((size_t)ptr - offsetof(type, member));                                                                \
     })
 #endif

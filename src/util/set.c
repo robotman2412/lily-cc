@@ -5,6 +5,7 @@
 
 #include "set.h"
 
+#include "list.h"
 #include "strong_malloc.h"
 
 #include <stdlib.h>
@@ -113,6 +114,71 @@ size_t set_addall(set_t *set, set_t const *other) {
     }
 
     return added;
+}
+
+// Retain all items also in the other set.
+// Returns how many items, if any, are removed.
+size_t set_intersect(set_t *set, set_t const *other) {
+    if (other->val_hash != set->val_hash || other->val_cmp != set->val_cmp || other->val_dup != set->val_dup
+        || other->val_del != set->val_del) {
+        printf("Error: Sets contain different types\n");
+        abort();
+    }
+    size_t removed = 0;
+
+    for (size_t i = 0; i < SET_BUCKETS; i++) {
+        set_ent_t *ent = (void *)set->buckets[i].head;
+        while (ent) {
+            bool keep = false;
+            dlist_foreach_node(set_ent_t, other_ent, &other->buckets[i]) {
+                if (ent->hash == other_ent->hash && set->val_cmp(ent->value, other_ent->value) == 0) {
+                    keep = true;
+                    break;
+                }
+            }
+            set_ent_t *next = (void *)ent->node.next;
+            if (!keep) {
+                dlist_remove(&set->buckets[i], &ent->node);
+                set->val_del(ent->value);
+                free(ent);
+                removed++;
+            }
+            ent = next;
+        }
+    }
+
+    return removed;
+}
+
+// Retain all items that are in the array.
+// Returns how many items, if any, are removed.
+size_t set_intersect_array(set_t *set, void const *const *values, size_t values_len) {
+    size_t removed = 0;
+
+    for (size_t i = 0; i < SET_BUCKETS; i++) {
+        set_ent_t *ent = (void *)set->buckets[i].head;
+        while (ent) {
+            bool keep = false;
+
+            for (size_t j = 0; j < values_len; j++) {
+                if (set->val_cmp(ent->value, values[j]) == 0) {
+                    keep = true;
+                    break;
+                }
+            }
+
+            set_ent_t *next = (void *)ent->node.next;
+            if (!keep) {
+                dlist_remove(&set->buckets[i], &ent->node);
+                set->val_del(ent->value);
+                free(ent);
+                removed++;
+            }
+            ent = next;
+        }
+    }
+
+    return removed;
 }
 
 // Remove an item from the set.

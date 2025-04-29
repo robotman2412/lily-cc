@@ -68,6 +68,42 @@ bool ir_const_is_negative(ir_const_t value) {
     }
 }
 
+// Determines whether two constants are identical. Floats will be compared bitwise.
+bool ir_const_identical(ir_const_t lhs, ir_const_t rhs) {
+    if (lhs.prim_type != rhs.prim_type) {
+        return false;
+    } else if (lhs.prim_type == IR_PRIM_f32) {
+        return (uint32_t)lhs.constl == (uint32_t)rhs.constl;
+    } else if (lhs.prim_type == IR_PRIM_f64) {
+        return lhs.constl == rhs.constl;
+    } else if (lhs.prim_type == IR_PRIM_bool) {
+        return (lhs.constl ^ rhs.constl) & 1;
+    } else {
+        return ir_calc2(IR_OP2_seq, lhs, rhs).constl & 1;
+    }
+}
+
+// Determines whether two constants are effectively identical after casting.
+// Floats are promoted to f64, then compared bitwise.
+bool ir_const_lenient_identical(ir_const_t lhs, ir_const_t rhs) {
+    if (lhs.prim_type == IR_PRIM_f32) {
+        lhs.constf64  = lhs.constf32;
+        lhs.prim_type = IR_PRIM_f64;
+    }
+    if (rhs.prim_type == IR_PRIM_f32) {
+        rhs.constf64  = rhs.constf32;
+        rhs.prim_type = IR_PRIM_f64;
+    }
+    if ((lhs.prim_type == IR_PRIM_f32) != (rhs.prim_type == IR_PRIM_f64)) {
+        return false;
+    } else if (lhs.prim_type == IR_PRIM_f64) {
+        return lhs.constl == rhs.constl;
+    }
+    lhs = ir_trim_const(lhs);
+    rhs = ir_trim_const(rhs);
+    return lhs.consth == rhs.consth && lhs.constl == rhs.constl;
+}
+
 // Truncate unused bits of a constant.
 ir_const_t ir_trim_const(ir_const_t value) {
     uint8_t bytes;

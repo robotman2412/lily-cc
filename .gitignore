@@ -4,3 +4,4 @@ comp
 a.out
 a.lines
 __pycache__
+.cache

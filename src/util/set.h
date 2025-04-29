@@ -76,6 +76,12 @@ bool             set_contains(set_t const *set, void const *value) __attribute__
 bool             set_add(set_t *set, void const *value);
 // Add all items from another set to this one.
 size_t           set_addall(set_t *set, set_t const *other);
+// Retain all items also in the other set.
+// Returns how many items, if any, are removed.
+size_t           set_intersect(set_t *set, set_t const *other);
+// Retain all items that are in the array.
+// Returns how many items, if any, are removed.
+size_t           set_intersect_array(set_t *set, void const *const *values, size_t values_len);
 // Remove an item from the set.
 bool             set_remove(set_t *set, void const *value);
 // Remove all items in another set from this one.

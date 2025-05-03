@@ -5,7 +5,7 @@
 
 add_library(compiler-common STATIC
     codegen/codegen.c
-    codegen/isel_tree.c
+    codegen/cand_tree.c
     ir/ir_interpreter.c
     ir/ir_optimizer.c
     ir/ir_serialization.c

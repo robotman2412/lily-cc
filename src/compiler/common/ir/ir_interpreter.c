@@ -413,3 +413,27 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
     }
     abort();
 }
+
+
+
+// Determine whether two operands are either the same variable or identical.
+// Floats will be compared bitwise.
+bool ir_operand_identical(ir_operand_t lhs, ir_operand_t rhs) {
+    if (lhs.is_const != rhs.is_const)
+        return false;
+    else if (lhs.is_const)
+        return lhs.var == rhs.var;
+    else
+        return ir_const_identical(lhs.iconst, rhs.iconst);
+}
+
+// Determines whether two operands are either the same variable or effectively identical after casting.
+// Floats are promoted to f64, then compared bitwise.
+bool ir_operand_lenient_identical(ir_operand_t lhs, ir_operand_t rhs) {
+    if (lhs.is_const != rhs.is_const)
+        return false;
+    else if (lhs.is_const)
+        return lhs.var == rhs.var;
+    else
+        return ir_const_lenient_identical(lhs.iconst, rhs.iconst);
+}

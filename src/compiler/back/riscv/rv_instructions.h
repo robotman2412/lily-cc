@@ -6,6 +6,7 @@
 #pragma once
 
 #include "insn_proto.h"
+#include "rv_misc.h"
 
 
 
@@ -18,28 +19,6 @@ typedef enum {
     RV_OP_BRANCH, RV_OP_JALR,     RV_OP__resv0, RV_OP_JAL,      RV_OP_SYSTEM, RV_OP_OP_VE, RV_OP__cust3,    RV_OP__80b,
     /* clang-format on */
 } rv_opcode_t;
-
-// RISC-V instruction set extensions.
-typedef enum {
-    // Always allowed.
-    RV_BASE,
-    // Allowed if RV32 but not RV64 or RV128.
-    RV_32ONLY,
-    // Allowed if RV64.
-    RV_64,
-    // Allowed if RV128,
-    RV_128,
-    // Allowed if M is present.
-    RV_EXT_M,
-    // Allowed if A is present.
-    RV_EXT_A,
-    // Allowed if C is present.
-    RV_EXT_C,
-    // Allowed if F is present.
-    RV_EXT_F,
-    // Allowed if D is present,
-    RV_EXT_D,
-} rv_ext_t;
 
 // Types of RISC-V instruction encoding.
 typedef enum {
@@ -91,7 +70,9 @@ struct rv_encoding {
 
 
 // Table of supported RISC-V instructions.
-extern insn_proto_t const *const riscv_insns[];
+extern insn_proto_t const *const rv_insns[];
+// Number of supported RISC-V instructions.
+extern size_t const              rv_insns_len;
 
 // clang-format off
 #define RV_INSN_MISC(name, ...) \

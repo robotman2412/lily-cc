@@ -91,8 +91,9 @@ operand_rule_t const RV_OP_RULES_L[] = {
 };
 
 // Define some other intstruction not common enough to have a dedicated macro.
-#define RV_INSN_MISC(name, ext, op_maj, funct3, funct7, funct12, allow_s, allow_u, encoding, _operands_len, _operands, _tree) \
-    insn_proto_t const rv_insn_##name = {                                          \
+#define RV_INSN_MISC(_name, ext, op_maj, funct3, funct7, funct12, allow_s, allow_u, encoding, _operands_len, _operands, _tree) \
+    insn_proto_t const rv_insn_##_name = {                                         \
+        .name         = #_name,                                                    \
         .cookie       = RV_COOKIE(ext, op_maj, encoding, funct3, funct7, funct12), \
         .return_kinds = {                                                          \
             .uint = allow_u,                                                       \
@@ -104,8 +105,9 @@ operand_rule_t const RV_OP_RULES_L[] = {
     };
 
 // Define an ALU instruction.
-#define RV_INSN_ALU(name, ext, op_maj, funct3, funct7, ir_op2, immbits, is_ri, allow_s, allow_u) \
-    insn_proto_t const rv_insn_##name = {                                                       \
+#define RV_INSN_ALU(_name, ext, op_maj, funct3, funct7, ir_op2, immbits, is_ri, allow_s, allow_u) \
+    insn_proto_t const rv_insn_##_name = {                                                      \
+        .name         = #_name,                                                                 \
         .cookie       = RV_COOKIE(ext, op_maj, is_ri ? RV_ENC_I : RV_ENC_R, funct3, funct7, 0), \
         .return_kinds = {                                                                       \
             .uint = 1,                                                                          \
@@ -125,8 +127,9 @@ operand_rule_t const RV_OP_RULES_L[] = {
     RV_INSN_ALU(name, ext, op_maj, funct3, funct7, ir_op2, 0, 0, allow_s, allow_u)
 
 // Define an ALU comparison instruction.
-#define RV_INSN_ALU_CMP(name, ext, op_maj, funct3, ir_op2, immbits, is_ri, allow_s, allow_u) \
-    insn_proto_t const rv_insn_##name = {                                                               \
+#define RV_INSN_ALU_CMP(_name, ext, op_maj, funct3, ir_op2, immbits, is_ri, allow_s, allow_u) \
+    insn_proto_t const rv_insn_##_name = {                                                              \
+        .name         = #_name,                                                                         \
         .cookie       = RV_COOKIE(ext, op_maj, is_ri ? RV_ENC_I : RV_ENC_R, funct3, 0, 0),              \
         .return_kinds = {                                                                               \
             .uint = 1,                                                                                  \
@@ -138,8 +141,9 @@ operand_rule_t const RV_OP_RULES_L[] = {
     };
 
 // Define a branch instruction.
-#define RV_INSN_BRANCH(name, ext, op_maj, funct3, ir_op2, allow_s, allow_u) \
-    insn_proto_t const rv_insn_##name = {                                                    \
+#define RV_INSN_BRANCH(_name, ext, op_maj, funct3, ir_op2, allow_s, allow_u) \
+    insn_proto_t const rv_insn_##_name = {                                                   \
+        .name         = #_name,                                                              \
         .cookie       = RV_COOKIE(ext, op_maj, RV_ENC_B, funct3, 0, 0),                      \
         .operands_len = 2,                                                                   \
         .operands     = RV_OP_RULES2(12, 0, allow_s, allow_u, 0),                            \
@@ -147,8 +151,9 @@ operand_rule_t const RV_OP_RULES_L[] = {
     };
 
 // Define a store instruction.
-#define RV_INSN_STORE(name, ext, op_maj, funct3, membits, allow_s, allow_u) \
-    insn_proto_t const rv_insn_##name = {                                                                        \
+#define RV_INSN_STORE(_name, ext, op_maj, funct3, membits, allow_s, allow_u) \
+    insn_proto_t const rv_insn_##_name = {                                                                       \
+        .name         = #_name,                                                                                  \
         .cookie       = RV_COOKIE(ext, op_maj, RV_ENC_S, funct3, 0, 0),                                          \
         .operands_len = 3,                                                                                       \
         .operands     = RV_OP_RULES_S(membits, allow_s, allow_u),                                                \
@@ -156,8 +161,9 @@ operand_rule_t const RV_OP_RULES_L[] = {
     };
 
 // Define a load instruction.
-#define RV_INSN_LOAD(name, ext, op_maj, funct3, membits, allow_s, allow_u) \
-    insn_proto_t const rv_insn_##name = {                                                      \
+#define RV_INSN_LOAD(_name, ext, op_maj, funct3, membits, allow_s, allow_u) \
+    insn_proto_t const rv_insn_##_name = {                                                     \
+        .name         = #_name,                                                                \
         .cookie       = RV_COOKIE(ext, op_maj, RV_ENC_I, funct3, 0, 0),                        \
         .return_kinds = {                                                                      \
             .uint = allow_u,                                                                   \
@@ -179,28 +185,6 @@ operand_rule_t const RV_OP_RULES_L[] = {
 
 
 
-operand_rule_t const rv_jal_rules[] = {{
-    .location_kinds.imm = 1,
-    .operand_kinds.sint = 1,
-    .const_bits         = 21,
-}};
-expr_tree_t const    rv_jal_tree    = NODE_CALL_PTR(&NODE_OPERAND_0);
-
-operand_rule_t const rv_jalr_rules[] = {
-    {
-        .location_kinds.imm = 1,
-        .operand_kinds.sint = 1,
-        .const_bits         = 12,
-    },
-    {
-        .location_kinds.reg    = 1,
-        .operand_kinds.uint    = 1,
-        .operand_kinds.sint    = 1,
-        .operand_sizes.sizeptr = 1,
-    },
-};
-expr_tree_t const rv_jalr_tree = NODE_CALL_PTR(&NODE_EXPR2(IR_OP2_add, &NODE_OPERAND_0, &NODE_OPERAND_1));
-
 operand_rule_t const rv_li_rules[] = {{
     .location_kinds.imm = 1,
     .operand_kinds.sint = 1,
@@ -208,29 +192,17 @@ operand_rule_t const rv_li_rules[] = {{
 }};
 expr_tree_t const    rv_li_tree    = NODE_EXPR1(IR_OP1_mov, &NODE_OPERAND_0);
 
-expr_tree_t const rv_ret_tree = {
-    .type = EXPR_TREE_IR_INSN,
-    .expr = {
-        .insn_type = IR_INSN_FLOW,
-        .flow = {
-            .type = IR_FLOW_RETURN,
-        },
-    },
-};
-
 
 
 #include "rv_instructions.inc"
 
 
-
-// clang-format off
 
 // Table of supported RISC-V instructions.
-insn_proto_t const *const riscv_insns[] = {
-    #define RV_INSN_MISC(name, ...) \
-        &rv_insn_##name,
+insn_proto_t const *const rv_insns[] = {
+#define RV_INSN_MISC(name, ...) &rv_insn_##name,
 #include "rv_instructions.inc"
 };
 
-// clang-format on
+// Number of supported RISC-V instructions.
+size_t const rv_insns_len = sizeof(rv_insns) / sizeof(insn_proto_t const *);

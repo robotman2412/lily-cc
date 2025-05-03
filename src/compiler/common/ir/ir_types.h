@@ -5,6 +5,9 @@
 
 #pragma once
 
+// Defines how a machine instruction behaves in terms of IR expressions.
+typedef struct insn_proto insn_proto_t;
+
 // IR primitive types.
 // Must be before <stdbool.h> because it contains the identifier `bool`.
 typedef enum __attribute__((packed)) {
@@ -77,6 +80,8 @@ typedef enum __attribute__((packed)) {
     IR_INSN_FLOW,
     // Memory instructions (e.g. `lea` or `store`).
     IR_INSN_MEM,
+    // Machine instructions; target architecture-dependent.
+    IR_INSN_MACHINE,
 } ir_insn_type_t;
 
 
@@ -101,6 +106,8 @@ typedef struct ir_expr       ir_expr_t;
 typedef struct ir_flow       ir_flow_t;
 // IR memory instruction.
 typedef struct ir_mem        ir_mem_t;
+// IR machine instruction.
+typedef struct ir_mach_insn  ir_mach_insn_t;
 // IR code block.
 typedef struct ir_code       ir_code_t;
 // IR function.
@@ -206,10 +213,10 @@ struct ir_insn {
 // IR expression.
 struct ir_expr {
     ir_insn_t      base;
-    // Expression type.
-    ir_expr_type_t type;
     // Linked list node for variable assignments.
     dlist_node_t   dest_node;
+    // Expression type.
+    ir_expr_type_t type;
     // Destination variable.
     ir_var_t      *dest;
     union {
@@ -280,10 +287,10 @@ struct ir_flow {
 // IR memory instruction.
 struct ir_mem {
     ir_insn_t     base;
-    // Memory instruction type.
-    ir_mem_type_t type;
     // Linked list node for variable assignments.
     dlist_node_t  dest_node;
+    // Memory instruction type.
+    ir_mem_type_t type;
     union {
         struct {
             // Destination variable.
@@ -314,6 +321,19 @@ struct ir_mem {
             ir_operand_t addr;
         } m_store;
     };
+};
+
+// IR machine instruction.
+struct ir_mach_insn {
+    ir_insn_t           base;
+    // Linked list node for variable assignments.
+    dlist_node_t        dest_node;
+    // Machine instruction prototye.
+    insn_proto_t const *prototype;
+    // Destination variable.
+    ir_var_t           *dest;
+    // Operands to the machine instruction.
+    ir_operand_t        operands[8];
 };
 
 // IR code block.

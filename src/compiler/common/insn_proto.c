@@ -7,6 +7,8 @@
 
 #include "ir_types.h"
 
+#include <stdlib.h>
+
 
 
 // Shorthand for NODE_OPERAND(0).
@@ -32,9 +34,13 @@ size_t expr_tree_size(expr_tree_t const *tree) {
         case IR_INSN_EXPR: return expr_tree_size(tree->expr.expr.lhs) + expr_tree_size(tree->expr.expr.rhs);
         case IR_INSN_FLOW: return expr_tree_size(tree->expr.flow.value) + 1;
         case IR_INSN_MEM: return expr_tree_size(tree->expr.mem.value) + expr_tree_size(tree->expr.mem.ptr);
+        case IR_INSN_MACHINE: printf("[BUG] Machine instruction is present in instruction prototype\n"); break;
     }
+    abort();
 }
 
-// Test whether a prototype can be applied to a certain piece of IR in SSA form.
-bool insn_proto_match(insn_proto_t const *proto, ir_insn_t const *ir_insn) {
+
+
+// Substitute a set of IR instructions with a machine instruction, assuming the instructions match the given prototype.
+void insn_proto_substitute(insn_proto_t const *proto, ir_insn_t *ir_insn) {
 }

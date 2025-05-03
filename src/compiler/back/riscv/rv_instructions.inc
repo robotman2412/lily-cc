@@ -72,9 +72,9 @@
 
 //              [ name ]  [ ext ]  [   opcode   ]  [f3 ]  [funct7 ]  [ ir op  ]      imm  ri s  u  [   encoding    ]
 RV_INSN_PSEUDO( li,       RV_BASE,                                                           1, 1, RV_ENC_PSEUDO_LI,  1, rv_li_rules,   &rv_li_tree)
-RV_INSN_PSEUDO( ret,      RV_BASE,                                                           0, 0, RV_ENC_PSEUDO_RET, 0, NULL,          &rv_ret_tree)
-RV_INSN_PSEUDO( j,        RV_BASE,                                                           0, 0, RV_ENC_PSEUDO_J,   1, rv_jal_rules,  &rv_jal_tree)
-RV_INSN_PSEUDO( jr,       RV_BASE,                                                           0, 0, RV_ENC_PSEUDO_JR,  1, rv_jalr_rules, &rv_jalr_tree)
+RV_INSN_PSEUDO( ret,      RV_BASE,                                                           0, 0, RV_ENC_PSEUDO_RET, 0, NULL,          NULL)
+RV_INSN_PSEUDO( j,        RV_BASE,                                                           0, 0, RV_ENC_PSEUDO_J,   1, NULL,          NULL)
+RV_INSN_PSEUDO( jr,       RV_BASE,                                                           0, 0, RV_ENC_PSEUDO_JR,  1, NULL,          NULL)
 
 /* ==== RV32I instructions ==== */
 

@@ -15,7 +15,8 @@ int        ir_const_ctz(ir_const_t value);
 int        ir_const_popcnt(ir_const_t value);
 // Whether a constant is negative.
 bool       ir_const_is_negative(ir_const_t value);
-// Determines whether two constants are identical. Floats will be compared bitwise.
+// Determines whether two constants are identical.
+// Floats will be compared bitwise.
 bool       ir_const_identical(ir_const_t lhs, ir_const_t rhs);
 // Determines whether two constants are effectively identical after casting.
 // Floats are promoted to f64, then compared bitwise.
@@ -28,3 +29,10 @@ ir_const_t ir_cast(ir_prim_t type, ir_const_t value);
 ir_const_t ir_calc1(ir_op1_type_t oper, ir_const_t value);
 // Calculate the result of an expr2.
 ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs);
+
+// Determine whether two operands are either the same variable or identical.
+// Floats will be compared bitwise.
+bool ir_operand_identical(ir_operand_t lhs, ir_operand_t rhs);
+// Determines whether two operands are either the same variable or effectively identical after casting.
+// Floats are promoted to f64, then compared bitwise.
+bool ir_operand_lenient_identical(ir_operand_t lhs, ir_operand_t rhs);

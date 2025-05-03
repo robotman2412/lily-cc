@@ -77,3 +77,17 @@ void ir_add_branch(ir_code_t *from, ir_operand_t cond, ir_code_t *to);
 void ir_add_return0(ir_code_t *from);
 // Add a return with value.
 void ir_add_return1(ir_code_t *from, ir_operand_t value);
+
+
+
+// If the instruction stores to a variable, returns the variable written to.
+static inline ir_var_t *ir_insn_get_dest(ir_insn_t const *insn) {
+    if (insn->type == IR_INSN_EXPR) {
+        return ((ir_expr_t const *)insn)->dest;
+    } else if (insn->type == IR_INSN_MEM) {
+        ir_mem_t const *mem = (ir_mem_t const *)insn;
+        return mem->type != IR_MEM_STORE ? mem->m_load.dest : NULL;
+    } else {
+        return NULL;
+    }
+}

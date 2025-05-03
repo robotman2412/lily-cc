@@ -9,14 +9,14 @@
 
 
 
-// IR instruction in a `isel_tree_t`.
+// IR instruction in a `cand_tree_t`.
 typedef struct isel_node isel_node_t;
 // Tree structure used to make instruction selection decisions.
-typedef struct isel_tree isel_tree_t;
+typedef struct cand_tree cand_tree_t;
 
 
 
-// IR instruction in a `isel_tree_t`.
+// IR instruction in a `cand_tree_t`.
 struct isel_node {
     // IR instruction category.
     ir_insn_type_t insn_type;
@@ -32,33 +32,30 @@ struct isel_node {
             };
             // Left-hand side subtree.
             // Also the operand for unary expressions.
-            isel_tree_t *lhs;
+            cand_tree_t *lhs;
             // Right-hand side subtree.
-            isel_tree_t *rhs;
+            cand_tree_t *rhs;
         } expr;
         struct {
-            // Control-flow subtype.
-            // Allowed: all.
-            ir_flow_type_t type;
-            // Jump / call pointer subtree or branch condition.
-            isel_tree_t   *value;
+            // Branch condition; no other types of flow-control are allowed here.
+            cand_tree_t *value;
         } flow;
         struct {
             // Memory subtype.
             // Allowed: all.
             ir_mem_type_t type;
             // Value to store.
-            isel_tree_t  *value;
+            cand_tree_t  *value;
             // Load / store pointer.
-            isel_tree_t  *ptr;
+            cand_tree_t  *ptr;
         } mem;
     };
 };
 
 // Tree structure used to make instruction selection decisions.
-struct isel_tree {
+struct cand_tree {
     // Next decision node, if any.
-    isel_tree_t     *next;
+    cand_tree_t     *next;
     // Type of structure this matches against.
     expr_tree_type_t type;
     union {
@@ -78,7 +75,6 @@ struct isel_tree {
 
 
 // Generate an instruction selection tree given an instruction set.
-isel_tree_t *isel_tree_generate(size_t protos_len, insn_proto_t const *const *protos);
-
+cand_tree_t        *cand_tree_generate(size_t protos_len, insn_proto_t const *const *protos);
 // Match an instruction selection tree against IR in SSA form.
-insn_proto_t const *isel(isel_tree_t const *tree, ir_insn_t const *ir_insn);
+insn_proto_t const *cand_tree_isel(cand_tree_t const *tree, ir_insn_t const *ir_insn);

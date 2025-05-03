@@ -59,10 +59,7 @@ struct expr_node {
             expr_tree_t const *rhs;
         } expr;
         struct {
-            // Control-flow subtype.
-            // Allowed: all.
-            ir_flow_type_t     type;
-            // Jump / call pointer subtree or branch condition.
+            // Branch condition; no other types of flow-control are allowed here.
             expr_tree_t const *value;
         } flow;
         struct {
@@ -161,6 +158,8 @@ struct operand_rule {
 
 // Defines how a machine instruction behaves in terms of IR expressions.
 struct insn_proto {
+    // Human-readable instruction name.
+    char const           *name;
     // Backend-specific extra information.
     void const           *cookie;
     // What kinds of value this instruction may return.
@@ -259,7 +258,6 @@ extern expr_tree_t const NODE_OPERAND_3;
         .expr = {                               \
             .insn_type = IR_INSN_FLOW,          \
             .flow      = {                      \
-                .type  = IR_FLOW_BRANCH,        \
                 .value = e_cond,                \
             },                                  \
         },                                      \
@@ -284,5 +282,6 @@ extern expr_tree_t const NODE_OPERAND_3;
 
 // Calculate the number of nodes in an `expr_tree_t`.
 size_t expr_tree_size(expr_tree_t const *tree);
-// Test whether a prototype can be applied to a certain piece of IR in SSA form.
-bool   insn_proto_match(insn_proto_t const *proto, ir_insn_t const *ir_insn);
+
+// Substitute a set of IR instructions with a machine instruction, assuming the instructions match the given prototype.
+void insn_proto_substitute(insn_proto_t const *proto, ir_insn_t *ir_insn);

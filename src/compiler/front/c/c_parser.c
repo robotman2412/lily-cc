@@ -421,8 +421,9 @@ token_t c_parse_expr(c_parser_t *ctx) {
             push(ast_from_va(C_AST_EXPR_PREFIX, 2, op, val));
 
         } else if (is_operand(2) && is_operand(0) && oper_precedence(stack[stack_len - 2], false) >= 0
-                   && (!can_push || oper_precedence(stack[stack_len - 2], false) >= oper_precedence(peek, false)
-                   )) { // Reduce infix.
+                   && (!can_push
+                       || oper_precedence(stack[stack_len - 2], false)
+                              >= oper_precedence(peek, false))) { // Reduce infix.
             token_t rhs = pop();
             token_t op  = pop();
             token_t lhs = pop();
@@ -463,8 +464,8 @@ token_t c_parse_type_name(c_parser_t *ctx) {
         cctx_diagnostic(ctx->tkn_ctx->cctx, spec_qual.pos, DIAG_ERR, "`typedef` not allowed here");
     }
     token_t peek = tkn_peek(ctx->tkn_ctx);
-    if (peek.type == TOKENTYPE_OTHER
-            && (peek.subtype == C_TKN_MUL || peek.subtype == C_TKN_LBRAC || peek.subtype == C_TKN_LPAR)
+    if ((peek.type == TOKENTYPE_OTHER
+         && (peek.subtype == C_TKN_MUL || peek.subtype == C_TKN_LBRAC || peek.subtype == C_TKN_LPAR))
         || peek.subtype == TOKENTYPE_IDENT) {
         token_t decl       = c_parse_decl(ctx, false, false, false);
         bool    is_garbage = spec_qual.subtype == C_AST_GARBAGE || decl.subtype == C_AST_GARBAGE;
@@ -694,7 +695,7 @@ token_t c_parse_spec_qual_list(c_parser_t *ctx, bool *is_typedef_out) {
         if (is_type_specifier(peek) || is_type_qualifier(peek)
             || (peek.type == TOKENTYPE_IDENT
                 && (set_contains(&ctx->type_names, peek.strval)
-                    || ctx->func_body && set_contains(&ctx->local_type_names, peek.strval)))) {
+                    || (ctx->func_body && set_contains(&ctx->local_type_names, peek.strval))))) {
             if (peek.type == TOKENTYPE_KEYWORD && peek.subtype == C_KEYW_typedef && is_typedef_out) {
                 *is_typedef_out = true;
             }

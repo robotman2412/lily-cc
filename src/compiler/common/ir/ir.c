@@ -7,9 +7,12 @@
 
 #include "arrays.h"
 #include "ir/ir_optimizer.h"
+#include "ir_types.h"
+#include "list.h"
 #include "strong_malloc.h"
 
 #include <inttypes.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -840,34 +843,91 @@ void ir_insn_delete(ir_insn_t *insn) {
 
 
 
+// Get the code that an `ir_insnloc_t` describes.
+static ir_code_t *ir_insnloc_code(ir_insnloc_t loc) {
+    switch (loc.type) {
+        case IR_INSNLOC_APPEND_CODE: return loc.code;
+        case IR_INSNLOC_AFTER_INSN:
+        case IR_INSNLOC_BEFORE_INSN: return loc.insn->parent;
+    }
+    abort();
+}
+
+
+
+// Is a jump, branch or return?
+static bool ir_is_jbr(ir_insn_t const *insn) {
+    ir_flow_t *as_flow = (void *)insn;
+    return insn->type == IR_INSN_FLOW
+           && (as_flow->type == IR_FLOW_BRANCH || as_flow->type == IR_FLOW_JUMP || as_flow->type == IR_FLOW_RETURN);
+}
+
+// Is forbidden after a jump, branch or return?
+static bool ir_not_after_jbr(ir_insn_t const *next) {
+    ir_flow_t *next_as_flow = (void *)next;
+    return next
+           && (next->type == IR_INSN_MEM || next->type == IR_INSN_EXPR
+               || (next->type == IR_INSN_FLOW
+                   && (next_as_flow->type == IR_FLOW_CALL_PTR || next_as_flow->type == IR_FLOW_CALL_DIRECT)));
+}
+
+// Helper function that emplaces a new IR instruction at the desired location.
+static void ir_emplace_insn(ir_insnloc_t loc, ir_insn_t *insn) {
+    ir_insn_t *prev = NULL;
+    ir_insn_t *next = NULL;
+    switch (loc.type) {
+        case IR_INSNLOC_APPEND_CODE: {
+            prev = container_of(loc.code->insns.tail, ir_insn_t, node);
+        } break;
+        case IR_INSNLOC_AFTER_INSN: {
+            prev = loc.insn;
+            next = container_of(prev->node.next, ir_insn_t, node);
+        } break;
+        case IR_INSNLOC_BEFORE_INSN: {
+            prev = container_of(prev->node.previous, ir_insn_t, node);
+            next = loc.insn;
+        } break;
+    }
+
+    // IR precondition assertions.
+    if ((ir_is_jbr(insn) && next && ir_not_after_jbr(next)) || (ir_not_after_jbr(insn) && prev && ir_is_jbr(prev))) {
+        fprintf(stderr, "[BUG] Cannot place IR jump, branch or return before an instruction not in that list\n");
+        abort();
+    }
+
+    switch (loc.type) {
+        case IR_INSNLOC_APPEND_CODE: {
+            insn->parent = loc.code;
+            dlist_append(&loc.code->insns, &insn->node);
+        } break;
+        case IR_INSNLOC_AFTER_INSN: {
+            insn->parent = loc.insn->parent;
+            dlist_insert_after(&loc.insn->parent->insns, &loc.insn->node, &insn->node);
+        } break;
+        case IR_INSNLOC_BEFORE_INSN: {
+            insn->parent = loc.insn->parent;
+            dlist_insert_before(&loc.insn->parent->insns, &loc.insn->node, &insn->node);
+        } break;
+    }
+}
+
 // Add a combinator function to a code block.
 // Takes ownership of the `from` array.
-void ir_add_combinator(ir_code_t *code, ir_var_t *dest, size_t from_len, ir_combinator_t *from) {
+void ir_add_combinator(ir_insnloc_t loc, ir_var_t *dest, size_t from_len, ir_combinator_t *from) {
     ir_expr_t *expr             = calloc(1, sizeof(ir_expr_t));
     expr->base.type             = IR_INSN_EXPR;
-    expr->base.parent           = code;
     expr->type                  = IR_EXPR_COMBINATOR;
     expr->e_combinator.from_len = from_len;
     expr->e_combinator.from     = from;
     expr->dest                  = dest;
-    if (code->insns.len) {
-        ir_insn_t *last = container_of(code->insns.tail, ir_insn_t, node);
-        if (last->type == IR_INSN_FLOW) {
-            ir_flow_t *flow = (void *)last;
-            if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
-                fprintf(stderr, "[BUG] Cannot have expr after jump or branch\n");
-                abort();
-            }
-        }
-    }
-    if (dest->assigned_at.len && code->func->enforce_ssa) {
+    if (dest->assigned_at.len && ir_insnloc_code(loc)->func->enforce_ssa) {
         fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
         abort();
     }
     for (size_t i = 0; i < from_len; i++) {
         ir_prim_t bind_prim = from[i].bind.is_const ? from[i].bind.iconst.prim_type : from[i].bind.var->prim_type;
         if (bind_prim != dest->prim_type) {
-            fprintf(stderr, "IR phi has conflicting bind and return types\n");
+            fprintf(stderr, "[BUG] IR phi has conflicting bind and return types\n");
             abort();
         }
         if (!from[i].bind.is_const) {
@@ -875,28 +935,17 @@ void ir_add_combinator(ir_code_t *code, ir_var_t *dest, size_t from_len, ir_comb
         }
     }
     dlist_append(&dest->assigned_at, &expr->dest_node);
-    dlist_append(&code->insns, &expr->base.node);
+    ir_emplace_insn(loc, &expr->base);
 }
 
 // Add an expression to a code block.
-void ir_add_expr1(ir_code_t *code, ir_var_t *dest, ir_op1_type_t oper, ir_operand_t operand) {
+void ir_add_expr1(ir_insnloc_t loc, ir_var_t *dest, ir_op1_type_t oper, ir_operand_t operand) {
     ir_expr_t *expr     = calloc(1, sizeof(ir_expr_t));
     expr->base.type     = IR_INSN_EXPR;
-    expr->base.parent   = code;
     expr->type          = IR_EXPR_UNARY;
     expr->e_unary.oper  = oper;
     expr->e_unary.value = operand;
     expr->dest          = dest;
-    if (code->insns.len) {
-        ir_insn_t *last = container_of(code->insns.tail, ir_insn_t, node);
-        if (last->type == IR_INSN_FLOW) {
-            ir_flow_t *flow = (void *)last;
-            if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
-                fprintf(stderr, "[BUG] Cannot have expr after jump or branch\n");
-                abort();
-            }
-        }
-    }
     if (!operand.is_const) {
         set_add(&operand.var->used_at, expr);
     }
@@ -912,36 +961,25 @@ void ir_add_expr1(ir_code_t *code, ir_var_t *dest, ir_op1_type_t oper, ir_operan
             abort();
         }
     }
-    if (dest->assigned_at.len && code->func->enforce_ssa) {
+    if (dest->assigned_at.len && ir_insnloc_code(loc)->func->enforce_ssa) {
         fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
         abort();
     }
     dlist_append(&dest->assigned_at, &expr->dest_node);
-    dlist_append(&code->insns, &expr->base.node);
+    ir_emplace_insn(loc, &expr->base);
 }
 
 // Add an expression to a code block.
-void ir_add_expr2(ir_code_t *code, ir_var_t *dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs) {
+void ir_add_expr2(ir_insnloc_t loc, ir_var_t *dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs) {
     ir_expr_t *expr     = calloc(1, sizeof(ir_expr_t));
     expr->base.type     = IR_INSN_EXPR;
-    expr->base.parent   = code;
     expr->type          = IR_EXPR_BINARY;
     expr->e_binary.oper = oper;
     expr->e_binary.lhs  = lhs;
     expr->e_binary.rhs  = rhs;
     expr->dest          = dest;
-    if (code->insns.len) {
-        ir_insn_t *last = container_of(code->insns.tail, ir_insn_t, node);
-        if (last->type == IR_INSN_FLOW) {
-            ir_flow_t *flow = (void *)last;
-            if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
-                fprintf(stderr, "[BUG] Cannot have expr after jump or branch\n");
-                abort();
-            }
-        }
-    }
-    ir_prim_t lhs_prim = lhs.is_const ? lhs.iconst.prim_type : lhs.var->prim_type;
-    ir_prim_t rhs_prim = rhs.is_const ? rhs.iconst.prim_type : rhs.var->prim_type;
+    ir_prim_t lhs_prim  = lhs.is_const ? lhs.iconst.prim_type : lhs.var->prim_type;
+    ir_prim_t rhs_prim  = rhs.is_const ? rhs.iconst.prim_type : rhs.var->prim_type;
     if (oper >= IR_OP2_sgt && oper <= IR_OP2_sne) {
         if (lhs_prim != rhs_prim) {
             fprintf(stderr, "[BUG] IR expr2 has conflicting operand types\n");
@@ -967,85 +1005,52 @@ void ir_add_expr2(ir_code_t *code, ir_var_t *dest, ir_op2_type_t oper, ir_operan
     if (!rhs.is_const) {
         set_add(&rhs.var->used_at, expr);
     }
-    if (dest->assigned_at.len && code->func->enforce_ssa) {
+    if (dest->assigned_at.len && ir_insnloc_code(loc)->func->enforce_ssa) {
         fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
         abort();
     }
     dlist_append(&dest->assigned_at, &expr->dest_node);
-    dlist_append(&code->insns, &expr->base.node);
+    ir_emplace_insn(loc, &expr->base);
 }
 
 // Add an undefined variable.
-void ir_add_undefined(ir_code_t *code, ir_var_t *dest) {
-    ir_expr_t *expr   = calloc(1, sizeof(ir_expr_t));
-    expr->base.type   = IR_INSN_EXPR;
-    expr->base.parent = code;
-    expr->type        = IR_EXPR_UNDEFINED;
-    expr->dest        = dest;
-    if (code->insns.len) {
-        ir_insn_t *last = container_of(code->insns.tail, ir_insn_t, node);
-        if (last->type == IR_INSN_FLOW) {
-            ir_flow_t *flow = (void *)last;
-            if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
-                fprintf(stderr, "[BUG] Cannot have expr after jump or branch\n");
-                abort();
-            }
-        }
-    }
-    if (dest->assigned_at.len && code->func->enforce_ssa) {
+void ir_add_undefined(ir_insnloc_t loc, ir_var_t *dest) {
+    ir_expr_t *expr = calloc(1, sizeof(ir_expr_t));
+    expr->base.type = IR_INSN_EXPR;
+    expr->type      = IR_EXPR_UNDEFINED;
+    expr->dest      = dest;
+    if (dest->assigned_at.len && ir_insnloc_code(loc)->func->enforce_ssa) {
         fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
         abort();
     }
     dlist_append(&dest->assigned_at, &expr->dest_node);
-    dlist_append(&code->insns, &expr->base.node);
+    ir_emplace_insn(loc, &expr->base);
 }
 
 // Add a direct (by label) function call.
 // Takes ownership of `params`.
-void ir_add_call_direct(ir_code_t *from, char const *label, size_t params_len, ir_operand_t *params) {
+void ir_add_call_direct(ir_insnloc_t from, char const *label, size_t params_len, ir_operand_t *params) {
     ir_flow_t *flow              = calloc(1, sizeof(ir_flow_t));
-    flow->base.parent            = from;
     flow->type                   = IR_FLOW_CALL_DIRECT;
     flow->f_call_direct.label    = strong_strdup(label);
     flow->f_call_direct.args_len = params_len;
     flow->f_call_direct.args     = params;
-    if (from->insns.len) {
-        ir_insn_t *last = container_of(from->insns.tail, ir_insn_t, node);
-        if (last->type == IR_INSN_FLOW) {
-            ir_flow_t *flow = (void *)last;
-            if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
-                fprintf(stderr, "[BUG] Cannot have call after jump or branch\n");
-                abort();
-            }
-        }
-    }
     for (size_t i = 0; i < params_len; i++) {
         if (!params[i].is_const) {
             set_add(&params[i].var->used_at, flow);
         }
     }
-    dlist_append(&from->insns, &flow->base.node);
+    ir_emplace_insn(from, &flow->base);
 }
 
 // Add an indirect (by pointer) function call.
 // Takes ownership of `params`.
-void ir_add_call_ptr(ir_code_t *from, ir_operand_t funcptr, size_t params_len, ir_operand_t *params) {
+void ir_add_call_ptr(ir_insnloc_t from, ir_operand_t funcptr, size_t params_len, ir_operand_t *params) {
     ir_flow_t *flow           = calloc(1, sizeof(ir_flow_t));
-    flow->base.parent         = from;
     flow->type                = IR_FLOW_CALL_PTR;
     flow->f_call_ptr.addr     = funcptr;
     flow->f_call_ptr.args_len = params_len;
     flow->f_call_ptr.args     = params;
-    if (from->insns.len) {
-        ir_insn_t *last = container_of(from->insns.tail, ir_insn_t, node);
-        if (last->type == IR_INSN_FLOW) {
-            ir_flow_t *flow = (void *)last;
-            if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
-                fprintf(stderr, "[BUG] Cannot have call after jump or branch\n");
-                abort();
-            }
-        }
-    }
     if (!funcptr.is_const) {
         set_add(&funcptr.var->used_at, flow);
     }
@@ -1054,98 +1059,64 @@ void ir_add_call_ptr(ir_code_t *from, ir_operand_t funcptr, size_t params_len, i
             set_add(&params[i].var->used_at, flow);
         }
     }
-    dlist_append(&from->insns, &flow->base.node);
+    ir_emplace_insn(from, &flow->base);
 }
 
 
 // Add a load effective address of a stack frame to a code block.
-void ir_add_lea_stack(ir_code_t *code, ir_var_t *dest, ir_frame_t *frame, uint64_t offset) {
+void ir_add_lea_stack(ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame, uint64_t offset) {
     ir_mem_t *mem           = calloc(1, sizeof(ir_mem_t));
     mem->base.type          = IR_INSN_MEM;
-    mem->base.parent        = code;
     mem->type               = IR_MEM_LEA_STACK;
     mem->m_lea_stack.dest   = dest;
     mem->m_lea_stack.frame  = frame;
     mem->m_lea_stack.offset = offset;
-    if (dest->assigned_at.len && code->func->enforce_ssa) {
+    if (dest->assigned_at.len && ir_insnloc_code(loc)->func->enforce_ssa) {
         fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
         abort();
     }
-    if (code->insns.len) {
-        ir_insn_t *last = container_of(code->insns.tail, ir_insn_t, node);
-        if (last->type == IR_INSN_FLOW) {
-            ir_flow_t *flow = (void *)last;
-            if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
-                fprintf(stderr, "[BUG] Cannot have lea after jump or branch\n");
-                abort();
-            }
-        }
-    }
     dlist_append(&dest->assigned_at, &mem->dest_node);
-    dlist_append(&code->insns, &mem->base.node);
+    ir_emplace_insn(loc, &mem->base);
 }
 
 // Add a load effective address of a symbol to a code block.
-void ir_add_lea_symbol(ir_code_t *code, ir_var_t *dest, char const *symbol, uint64_t offset) {
+void ir_add_lea_symbol(ir_insnloc_t loc, ir_var_t *dest, char const *symbol, uint64_t offset) {
     ir_mem_t *mem            = calloc(1, sizeof(ir_mem_t));
     mem->base.type           = IR_INSN_MEM;
-    mem->base.parent         = code;
     mem->type                = IR_MEM_LEA_SYMBOL;
     mem->m_lea_symbol.dest   = dest;
     mem->m_lea_symbol.symbol = strong_strdup(symbol);
     mem->m_lea_symbol.offset = offset;
-    if (dest->assigned_at.len && code->func->enforce_ssa) {
+    if (dest->assigned_at.len && ir_insnloc_code(loc)->func->enforce_ssa) {
         fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
         abort();
     }
-    if (code->insns.len) {
-        ir_insn_t *last = container_of(code->insns.tail, ir_insn_t, node);
-        if (last->type == IR_INSN_FLOW) {
-            ir_flow_t *flow = (void *)last;
-            if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
-                fprintf(stderr, "[BUG] Cannot have lea after jump or branch\n");
-                abort();
-            }
-        }
-    }
     dlist_append(&dest->assigned_at, &mem->dest_node);
-    dlist_append(&code->insns, &mem->base.node);
+    ir_emplace_insn(loc, &mem->base);
 }
 
 // Add a memory load to a code block.
-void ir_add_load(ir_code_t *code, ir_var_t *dest, ir_operand_t addr) {
+void ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_operand_t addr) {
     ir_mem_t *mem    = calloc(1, sizeof(ir_mem_t));
     mem->base.type   = IR_INSN_MEM;
-    mem->base.parent = code;
     mem->type        = IR_MEM_LOAD;
     mem->m_load.dest = dest;
     mem->m_load.addr = addr;
     if (!addr.is_const) {
         set_add(&addr.var->used_at, mem);
     }
-    if (dest->assigned_at.len && code->func->enforce_ssa) {
+    if (dest->assigned_at.len && ir_insnloc_code(loc)->func->enforce_ssa) {
         fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
         abort();
     }
-    if (code->insns.len) {
-        ir_insn_t *last = container_of(code->insns.tail, ir_insn_t, node);
-        if (last->type == IR_INSN_FLOW) {
-            ir_flow_t *flow = (void *)last;
-            if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
-                fprintf(stderr, "[BUG] Cannot have load after jump or branch\n");
-                abort();
-            }
-        }
-    }
     dlist_append(&dest->assigned_at, &mem->dest_node);
-    dlist_append(&code->insns, &mem->base.node);
+    ir_emplace_insn(loc, &mem->base);
 }
 
 // Add a memory store to a code block.
-void ir_add_store(ir_code_t *code, ir_operand_t src, ir_operand_t addr) {
+void ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_operand_t addr) {
     ir_mem_t *mem     = calloc(1, sizeof(ir_mem_t));
     mem->base.type    = IR_INSN_MEM;
-    mem->base.parent  = code;
     mem->type         = IR_MEM_STORE;
     mem->m_store.src  = src;
     mem->m_store.addr = addr;
@@ -1155,37 +1126,25 @@ void ir_add_store(ir_code_t *code, ir_operand_t src, ir_operand_t addr) {
     if (!addr.is_const) {
         set_add(&addr.var->used_at, mem);
     }
-    if (code->insns.len) {
-        ir_insn_t *last = container_of(code->insns.tail, ir_insn_t, node);
-        if (last->type == IR_INSN_FLOW) {
-            ir_flow_t *flow = (void *)last;
-            if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
-                fprintf(stderr, "[BUG] Cannot have store after jump or branch\n");
-                abort();
-            }
-        }
-    }
-    dlist_append(&code->insns, &mem->base.node);
+    ir_emplace_insn(loc, &mem->base);
 }
 
 
 // Add an unconditional jump.
-void ir_add_jump(ir_code_t *from, ir_code_t *to) {
+void ir_add_jump(ir_insnloc_t from, ir_code_t *to) {
     ir_flow_t *flow     = calloc(1, sizeof(ir_flow_t));
     flow->base.type     = IR_INSN_FLOW;
-    flow->base.parent   = from;
     flow->type          = IR_FLOW_JUMP;
     flow->f_jump.target = to;
-    set_add(&from->succ, to);
-    set_add(&to->pred, from);
-    dlist_append(&from->insns, &flow->base.node);
+    set_add(&ir_insnloc_code(from)->succ, to);
+    set_add(&to->pred, ir_insnloc_code(from));
+    ir_emplace_insn(from, &flow->base);
 }
 
 // Add a conditional branch.
-void ir_add_branch(ir_code_t *from, ir_operand_t cond, ir_code_t *to) {
+void ir_add_branch(ir_insnloc_t from, ir_operand_t cond, ir_code_t *to) {
     ir_flow_t *flow       = calloc(1, sizeof(ir_flow_t));
     flow->base.type       = IR_INSN_FLOW;
-    flow->base.parent     = from;
     flow->type            = IR_FLOW_BRANCH;
     flow->f_branch.cond   = cond;
     flow->f_branch.target = to;
@@ -1197,50 +1156,28 @@ void ir_add_branch(ir_code_t *from, ir_operand_t cond, ir_code_t *to) {
     if (!cond.is_const) {
         set_add(&cond.var->used_at, flow);
     }
-    set_add(&from->succ, to);
-    set_add(&to->pred, from);
-    dlist_append(&from->insns, &flow->base.node);
+    set_add(&ir_insnloc_code(from)->succ, to);
+    set_add(&to->pred, ir_insnloc_code(from));
+    ir_emplace_insn(from, &flow->base);
 }
 
 // Add a return without value.
-void ir_add_return0(ir_code_t *from) {
-    ir_flow_t *flow   = calloc(1, sizeof(ir_flow_t));
-    flow->base.type   = IR_INSN_FLOW;
-    flow->base.parent = from;
-    flow->type        = IR_FLOW_RETURN;
-    if (from->insns.len) {
-        ir_insn_t *last = container_of(from->insns.tail, ir_insn_t, node);
-        if (last->type == IR_INSN_FLOW) {
-            ir_flow_t *flow = (void *)last;
-            if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
-                fprintf(stderr, "[BUG] Cannot have return after jump or branch\n");
-                abort();
-            }
-        }
-    }
-    dlist_append(&from->insns, &flow->base.node);
+void ir_add_return0(ir_insnloc_t from) {
+    ir_flow_t *flow = calloc(1, sizeof(ir_flow_t));
+    flow->base.type = IR_INSN_FLOW;
+    flow->type      = IR_FLOW_RETURN;
+    ir_emplace_insn(from, &flow->base);
 }
 
 // Add a return with value.
-void ir_add_return1(ir_code_t *from, ir_operand_t value) {
+void ir_add_return1(ir_insnloc_t from, ir_operand_t value) {
     ir_flow_t *flow          = calloc(1, sizeof(ir_flow_t));
     flow->base.type          = IR_INSN_FLOW;
-    flow->base.parent        = from;
     flow->type               = IR_FLOW_RETURN;
     flow->f_return.has_value = true;
     flow->f_return.value     = value;
-    if (from->insns.len) {
-        ir_insn_t *last = container_of(from->insns.tail, ir_insn_t, node);
-        if (last->type == IR_INSN_FLOW) {
-            ir_flow_t *flow = (void *)last;
-            if (flow->type == IR_FLOW_BRANCH || flow->type == IR_FLOW_JUMP) {
-                fprintf(stderr, "[BUG] Cannot have return after jump or branch\n");
-                abort();
-            }
-        }
-    }
     if (!value.is_const) {
         set_add(&value.var->used_at, flow);
     }
-    dlist_append(&from->insns, &flow->base.node);
+    ir_emplace_insn(from, &flow->base);
 }

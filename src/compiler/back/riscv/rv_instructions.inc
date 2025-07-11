@@ -81,8 +81,8 @@ RV_INSN_PSEUDO( jr,       RV_BASE,                                              
 //              [ name ]  [ ext ]  [   opcode   ]  [f3 ]  [funct7 ]  [ ir op  ]      imm  ri s  u  [   encoding    ]
 RV_INSN_NOIR(   lui,      RV_BASE, RV_OP_LUI,      0b000, 0b0000000, 0b000000000000,               RV_ENC_U)
 RV_INSN_NOIR(   auipc,    RV_BASE, RV_OP_LUI,      0b000, 0b0000000, 0b000000000000,               RV_ENC_U)
-RV_INSN_MISC(   jal,      RV_BASE, RV_OP_JAL,      0b000, 0b0000000, 0b000000000000,         1, 0, RV_ENC_J,          1, rv_jal_rules,  &rv_jal_tree)
-RV_INSN_MISC(   jalr,     RV_BASE, RV_OP_JALR,     0b000, 0b0000000, 0b000000000000,         1, 0, RV_ENC_I,          2, rv_jalr_rules, &rv_jalr_tree)
+RV_INSN_MISC(   jal,      RV_BASE, RV_OP_JAL,      0b000, 0b0000000, 0b000000000000,         1, 0, RV_ENC_J,          1, NULL,          NULL)
+RV_INSN_MISC(   jalr,     RV_BASE, RV_OP_JALR,     0b000, 0b0000000, 0b000000000000,         1, 0, RV_ENC_I,          2, NULL,          NULL)
 RV_INSN_LOAD(   lb,       RV_BASE, RV_OP_LOAD,     0b000,                              8,    1, 0)
 RV_INSN_LOAD(   lh,       RV_BASE, RV_OP_LOAD,     0b000,                             16,    1, 0)
 RV_INSN_LOAD(   lw,       RV_BASE, RV_OP_LOAD,     0b000,                             32,    1, 0)

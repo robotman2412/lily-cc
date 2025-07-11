@@ -66,6 +66,16 @@ void dlist_append(dlist_t *list, dlist_node_t *node);
 // Both `list` and `node` must be non-NULL.
 void dlist_prepend(dlist_t *list, dlist_node_t *node);
 
+// Inserts `node` after `existing` in `list`.
+// `node` must not be in `list` already and `existing` must be in `list` already.
+// `list`, `node` and `existing` must be non-NULL.
+void dlist_insert_after(dlist_t *list, dlist_node_t *existing, dlist_node_t *node);
+
+// Inserts `node` before `existing` in `list`.
+// `node` must not be in `list` already and `existing` must be in `list` already.
+// `list`, `node` and `existing` must be non-NULL.
+void dlist_insert_before(dlist_t *list, dlist_node_t *existing, dlist_node_t *node);
+
 // Removes the `head` of the given `list`. Will return NULL if the list was empty.
 // `list` must be non-NULL.
 dlist_node_t *dlist_pop_front(dlist_t *list);

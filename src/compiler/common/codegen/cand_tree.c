@@ -147,6 +147,8 @@ static void isel_insert_insn(cand_tree_t *tree, expr_tree_t const *proto_tree, i
                     isel_insert_insn(tree->expr.mem.ptr, proto_tree->expr.mem.ptr, proto);
                     isel_insert_insn(tree->expr.mem.value, proto_tree->expr.mem.value, proto);
                     return;
+
+                case IR_INSN_MACHINE: abort();
             }
         }
     }
@@ -289,6 +291,8 @@ static size_t tree_isel_match_expr_tree_insn(
                 return 1;
             }
         } break;
+
+        case IR_INSN_MACHINE: abort();
     }
 
     abort();
@@ -407,6 +411,8 @@ static void tree_isel_add_candidates_insn(set_t *candidates, cand_tree_t const *
                     }
                 }
             } break;
+
+            case IR_INSN_MACHINE: abort();
         }
     }
 }

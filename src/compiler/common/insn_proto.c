@@ -40,7 +40,11 @@ size_t expr_tree_size(expr_tree_t const *tree) {
 }
 
 
+// Helper function that deletes IR instructions for `insn_proto_substitute`.
+void insn_proto_substitute_del(expr_tree_t const *tree, ir_insn_t *ir_insn) {
+}
 
 // Substitute a set of IR instructions with a machine instruction, assuming the instructions match the given prototype.
 void insn_proto_substitute(insn_proto_t const *proto, ir_insn_t *ir_insn) {
+    insn_proto_substitute_del(proto->tree, ir_insn);
 }

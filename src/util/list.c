@@ -131,6 +131,58 @@ void dlist_prepend(dlist_t *const list, dlist_node_t *const node) {
     consistency_check(list);
 }
 
+// Inserts `node` after `existing` in `list`.
+// `node` must not be in `list` already and `existing` must be in `list` already.
+// `list`, `node` and `existing` must be non-NULL.
+void dlist_insert_after(dlist_t *list, dlist_node_t *existing, dlist_node_t *node) {
+    assert_dev_drop(list != NULL);
+    assert_dev_drop(node != NULL);
+    assert_dev_drop(node->next == NULL);
+    assert_dev_drop(node->previous == NULL);
+    assert_dev_drop(!dlist_contains(list, node));
+    assert_dev_drop(dlist_contains(list, existing));
+    consistency_check(list);
+
+    *node = (dlist_node_t){
+        .next     = existing->next,
+        .previous = existing,
+    };
+    if (existing->next) {
+        existing->next->previous = node;
+    } else {
+        list->tail = node;
+    }
+    existing->next  = node;
+    list->len      += 1;
+    consistency_check(list);
+}
+
+// Inserts `node` before `existing` in `list`.
+// `node` must not be in `list` already and `existing` must be in `list` already.
+// `list`, `node` and `existing` must be non-NULL.
+void dlist_insert_before(dlist_t *list, dlist_node_t *existing, dlist_node_t *node) {
+    assert_dev_drop(list != NULL);
+    assert_dev_drop(node != NULL);
+    assert_dev_drop(node->next == NULL);
+    assert_dev_drop(node->previous == NULL);
+    assert_dev_drop(!dlist_contains(list, node));
+    assert_dev_drop(dlist_contains(list, existing));
+    consistency_check(list);
+
+    *node = (dlist_node_t){
+        .next     = existing,
+        .previous = existing->previous,
+    };
+    if (existing->previous) {
+        existing->previous->next = node;
+    } else {
+        list->head = node;
+    }
+    existing->previous  = node;
+    list->len          += 1;
+    consistency_check(list);
+}
+
 // Removes the `head` of the given `list`. Will return NULL if the list was empty.
 // `list` must be non-NULL.
 dlist_node_t *dlist_pop_front(dlist_t *const list) {

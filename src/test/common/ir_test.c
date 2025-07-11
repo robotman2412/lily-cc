@@ -16,7 +16,7 @@ static char *test_ir_append() {
     ir_code_t *cur  = func->entry;
     ir_var_t  *var1 = ir_var_create(func, IR_PRIM_bool, "var1");
 
-    ir_add_expr1(cur, var1, IR_OP1_snez, (ir_operand_t){.is_const = false, .var = func->args[0].var});
+    ir_add_expr1(IR_APPEND(cur), var1, IR_OP1_snez, (ir_operand_t){.is_const = false, .var = func->args[0].var});
 
     ir_func_destroy(func);
     return TEST_OK;
@@ -38,33 +38,33 @@ static char *test_ir_to_ssa() {
     ir_code_t *code3 = ir_code_create(func, NULL);
 
     ir_add_expr1(
-        code0,
+        IR_APPEND(code0),
         var0,
         IR_OP1_mov,
         (ir_operand_t){.is_const = true, .iconst = {.prim_type = IR_PRIM_s32, .constl = 0xdeadbeef}}
     );
     ir_add_expr1(
-        code0,
+        IR_APPEND(code0),
         var1,
         IR_OP1_mov,
         (ir_operand_t){.is_const = true, .iconst = {.prim_type = IR_PRIM_s32, .constl = 0}}
     );
-    ir_add_jump(code0, code1);
+    ir_add_jump(IR_APPEND(code0), code1);
 
-    ir_add_expr1(code1, var2, IR_OP1_snez, (ir_operand_t){.is_const = false, .var = var1});
-    ir_add_branch(code1, (ir_operand_t){.is_const = false, .var = var2}, code2);
-    ir_add_jump(code1, code3);
+    ir_add_expr1(IR_APPEND(code1), var2, IR_OP1_snez, (ir_operand_t){.is_const = false, .var = var1});
+    ir_add_branch(IR_APPEND(code1), (ir_operand_t){.is_const = false, .var = var2}, code2);
+    ir_add_jump(IR_APPEND(code1), code3);
 
     ir_add_expr2(
-        code2,
+        IR_APPEND(code2),
         var0,
         IR_OP2_shr,
         (ir_operand_t){.is_const = false, .var = var0},
         (ir_operand_t){.is_const = true, .iconst = {.prim_type = IR_PRIM_s32, .constl = 3}}
     );
-    ir_add_jump(code2, code1);
+    ir_add_jump(IR_APPEND(code2), code1);
 
-    ir_add_return1(code3, (ir_operand_t){.is_const = false, .var = var0});
+    ir_add_return1(IR_APPEND(code3), (ir_operand_t){.is_const = false, .var = var0});
 
     ir_func_to_ssa(func);
     ir_optimize(func);

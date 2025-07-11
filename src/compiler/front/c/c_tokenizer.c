@@ -114,7 +114,7 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         } else if ((c | 0x20) >= 'a' && (c | 0x20) <= 'f') {
             // Valid digit a-f / A-F.
             digit = (c | 0x20) - 'a' + 10;
-        } else if (c == '_' || (c | 0x20) >= 'g' && (c | 0x20) <= 'z') {
+        } else if (c == '_' || ((c | 0x20) >= 'g' && (c | 0x20) <= 'z')) {
             // Start of the suffix.
             break;
         } else {
@@ -472,10 +472,11 @@ static void c_block_comment(tokenizer_t *ctx) {
 // Get next token from C tokenizer.
 token_t c_tkn_next(tokenizer_t *ctx) {
     c_tokenizer_t *c_ctx = (c_tokenizer_t *)ctx;
+    pos_t          pos0;
 
 retry:
-    pos_t pos0 = ctx->pos;
-    int   c    = srcfile_getc(ctx->file, &ctx->pos);
+    pos0  = ctx->pos;
+    int c = srcfile_getc(ctx->file, &ctx->pos);
 #define pos1 ctx->pos
 
     if (c == -1) {

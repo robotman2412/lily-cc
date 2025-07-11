@@ -544,7 +544,7 @@ ir_operand_t c_cast_ir_operand(ir_code_t *code, ir_operand_t operand, ir_prim_t 
             return operand;
         }
         ir_var_t *dest = ir_var_create(code->func, type, NULL);
-        ir_add_expr1(code, dest, op1, operand);
+        ir_add_expr1(IR_APPEND(code), dest, op1, operand);
         return (ir_operand_t){
             .is_const = false,
             .var      = dest,
@@ -575,12 +575,12 @@ void c_value_write(
             break;
         case C_LVALUE_PTR:
             // Store to the pointer.
-            ir_add_store(code, tmp, lvalue->lvalue.ptr);
+            ir_add_store(IR_APPEND(code), tmp, lvalue->lvalue.ptr);
             c_clobber_memory(ctx, code, scope, true);
             break;
         case C_LVALUE_VAR:
             // Store to the IR variable.
-            ir_add_expr1(code, lvalue->lvalue.c_var->ir_var, IR_OP1_mov, tmp);
+            ir_add_expr1(IR_APPEND(code), lvalue->lvalue.c_var->ir_var, IR_OP1_mov, tmp);
             // We always store to the register first, copying back to memory can happen later.
             lvalue->lvalue.c_var->register_up_to_date = true;
             lvalue->lvalue.c_var->memory_up_to_date   = false;
@@ -613,9 +613,9 @@ ir_operand_t c_value_addrof(c_compiler_t *ctx, ir_code_t *code, c_value_t const 
         addr.is_const = false;
         addr.var      = ir_var_create(code->func, ptr_prim, NULL);
         if (lvalue->lvalue.c_var->is_global) {
-            ir_add_lea_symbol(code, addr.var, lvalue->lvalue.c_var->symbol, 0);
+            ir_add_lea_symbol(IR_APPEND(code), addr.var, lvalue->lvalue.c_var->symbol, 0);
         } else {
-            ir_add_lea_stack(code, addr.var, lvalue->lvalue.c_var->ir_frame, 0);
+            ir_add_lea_stack(IR_APPEND(code), addr.var, lvalue->lvalue.c_var->ir_frame, 0);
         }
 
     } else {
@@ -640,7 +640,7 @@ ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, 
             // Pointer lvalue is read from memory.
             c_clobber_memory(ctx, code, scope, false);
             ir_var_t *tmp = ir_var_create(code->func, c_type_to_ir_type(ctx, value->c_type->data), NULL);
-            ir_add_load(code, tmp, c_value_addrof(ctx, code, value));
+            ir_add_load(IR_APPEND(code), tmp, c_value_addrof(ctx, code, value));
             return (ir_operand_t){
                 .is_const = false,
                 .var      = tmp,
@@ -658,11 +658,15 @@ ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, 
                 }
                 ir_var_t *addr = ir_var_create(code->func, c_prim_to_ir_type(ctx, ctx->options.size_type), NULL);
                 if (value->lvalue.c_var->is_global) {
-                    ir_add_lea_symbol(code, addr, value->lvalue.c_var->symbol, 0);
+                    ir_add_lea_symbol(IR_APPEND(code), addr, value->lvalue.c_var->symbol, 0);
                 } else {
-                    ir_add_lea_stack(code, addr, value->lvalue.c_var->ir_frame, 0);
+                    ir_add_lea_stack(IR_APPEND(code), addr, value->lvalue.c_var->ir_frame, 0);
                 }
-                ir_add_load(code, value->lvalue.c_var->ir_var, (ir_operand_t){.is_const = false, .var = addr});
+                ir_add_load(
+                    IR_APPEND(code),
+                    value->lvalue.c_var->ir_var,
+                    (ir_operand_t){.is_const = false, .var = addr}
+                );
                 value->lvalue.c_var->register_up_to_date = true;
             }
             // After this point, the variable is guaranteed to be in a register.
@@ -694,12 +698,12 @@ void c_clobber_memory(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, bool
                 if (!var->memory_up_to_date) {
                     ir_var_t *addr = ir_var_create(code->func, c_prim_to_ir_type(ctx, ctx->options.size_type), NULL);
                     if (var->is_global) {
-                        ir_add_lea_symbol(code, addr, var->symbol, 0);
+                        ir_add_lea_symbol(IR_APPEND(code), addr, var->symbol, 0);
                     } else {
-                        ir_add_lea_stack(code, addr, var->ir_frame, 0);
+                        ir_add_lea_stack(IR_APPEND(code), addr, var->ir_frame, 0);
                     }
                     ir_add_store(
-                        code,
+                        IR_APPEND(code),
                         (ir_operand_t){.is_const = false, .var = var->ir_var},
                         (ir_operand_t){.is_const = false, .var = addr}
                     );
@@ -732,9 +736,9 @@ void c_create_branch_consistency(c_compiler_t *ctx, ir_code_t *code, c_scope_t *
         } else if (var->is_global && !var->memory_up_to_date) {
             // Global needs to be copied to memory.
             ir_var_t *addr = ir_var_create(code->func, c_prim_to_ir_type(ctx, ctx->options.size_type), NULL);
-            ir_add_lea_symbol(code, addr, var->symbol, 0);
+            ir_add_lea_symbol(IR_APPEND(code), addr, var->symbol, 0);
             ir_add_store(
-                code,
+                IR_APPEND(code),
                 (ir_operand_t){.is_const = false, .var = var->ir_var},
                 (ir_operand_t){.is_const = false, .var = addr}
             );
@@ -742,8 +746,8 @@ void c_create_branch_consistency(c_compiler_t *ctx, ir_code_t *code, c_scope_t *
         } else if (!var->is_global && !var->register_up_to_date) {
             // Variable needs to be copied to a register.
             ir_var_t *addr = ir_var_create(code->func, c_prim_to_ir_type(ctx, ctx->options.size_type), NULL);
-            ir_add_lea_stack(code, addr, var->ir_frame, 0);
-            ir_add_load(code, var->ir_var, (ir_operand_t){.is_const = false, .var = addr});
+            ir_add_lea_stack(IR_APPEND(code), addr, var->ir_frame, 0);
+            ir_add_load(IR_APPEND(code), var->ir_var, (ir_operand_t){.is_const = false, .var = addr});
             var->register_up_to_date = true;
         }
         // Preventively clobber the location the variable isn't supposed to be in.
@@ -802,13 +806,13 @@ c_compile_expr_t
             };
         }
 
-        return (c_compile_expr_t) {
+        return (c_compile_expr_t){
             .code = code,
             .res  = {
-                .value_type = C_LVALUE_VAR,
-                .c_type     = rc_share(c_var->type),
-                .lvalue     = {
-                    .c_var = c_var,
+                 .value_type = C_LVALUE_VAR,
+                 .c_type     = rc_share(c_var->type),
+                 .lvalue     = {
+                         .c_var = c_var,
                 },
             },
         };
@@ -817,15 +821,14 @@ c_compile_expr_t
         return (c_compile_expr_t){
             .code = code,
             .res  = {
-                .value_type = C_RVALUE,
-                .c_type     = rc_share(&ctx->prim_rcs[expr->subtype]),
-                .rvalue     = {
-                    .is_const = true,
+                 .value_type = C_RVALUE,
+                 .c_type     = rc_share(&ctx->prim_rcs[expr->subtype]),
+                 .rvalue
+                = {.is_const = true,
                     .iconst   = {
-                        .prim_type = c_prim_to_ir_type(ctx, expr->subtype), 
-                        .constl    = expr->ival,
-                    }
-                },
+                          .prim_type = c_prim_to_ir_type(ctx, expr->subtype),
+                          .constl    = expr->ival,
+                   }},
             },
         };
 
@@ -1042,14 +1045,14 @@ c_compile_expr_t
                 // Resulting constant can be evaluated at compile-time.
                 c_value_destroy(lhs);
                 c_value_destroy(rhs);
-                return (c_compile_expr_t) {
+                return (c_compile_expr_t){
                     .code = code,
                     .res  = {
-                        .value_type = C_RVALUE,
-                        .c_type     = type,
-                        .rvalue     = {
-                            .is_const = true,
-                            .iconst   = ir_calc2(c_op2_to_ir_op2(op2), ir_lhs.iconst, ir_rhs.iconst),
+                         .value_type = C_RVALUE,
+                         .c_type     = type,
+                         .rvalue     = {
+                                 .is_const = true,
+                                 .iconst   = ir_calc2(c_op2_to_ir_op2(op2), ir_lhs.iconst, ir_rhs.iconst),
                         },
                     },
                 };
@@ -1057,14 +1060,14 @@ c_compile_expr_t
 
             // Add math instruction.
             ir_var_t *tmpvar = ir_var_create(code->func, c_type_to_ir_type(ctx, res_type->data), NULL);
-            ir_add_expr2(code, tmpvar, c_op2_to_ir_op2(op2), ir_lhs, ir_rhs);
+            ir_add_expr2(IR_APPEND(code), tmpvar, c_op2_to_ir_op2(op2), ir_lhs, ir_rhs);
 
             c_value_t rvalue = {
                 .value_type = C_RVALUE,
                 .c_type     = res_type,
                 .rvalue     = {
-                    .is_const = false,
-                    .var      = tmpvar,
+                        .is_const = false,
+                        .var      = tmpvar,
                 },
             };
 
@@ -1113,7 +1116,7 @@ c_compile_expr_t
             // Add or subtract one.
             ir_var_t *tmpvar = ir_var_create(code->func, c_type_to_ir_type(ctx, res.res.c_type->data), NULL);
             ir_add_expr2(
-                code,
+                IR_APPEND(code),
                 tmpvar,
                 is_inc ? IR_OP2_add : IR_OP2_sub,
                 c_value_read(ctx, code, scope, &res.res),
@@ -1125,8 +1128,8 @@ c_compile_expr_t
                 .value_type = C_RVALUE,
                 .c_type     = rc_share(res.res.c_type),
                 .rvalue     = {
-                    .is_const = false,
-                    .var      = tmpvar,
+                        .is_const = false,
+                        .var      = tmpvar,
                 },
             };
             c_value_write(ctx, code, scope, &res.res, &rvalue);
@@ -1228,14 +1231,14 @@ c_compile_expr_t
                 // Resulting constant can be evaluated at compile-time.
                 rc_t type = rc_share(res.res.c_type);
                 c_value_destroy(res.res);
-                return (c_compile_expr_t) {
+                return (c_compile_expr_t){
                     .code = code,
                     .res  = {
-                        .value_type = C_RVALUE,
-                        .c_type     = type,
-                        .rvalue     = {
-                            .is_const = true,
-                            .iconst   = ir_calc1(c_op1_to_ir_op1(expr->params[0].subtype), ir_value.iconst),
+                         .value_type = C_RVALUE,
+                         .c_type     = type,
+                         .rvalue     = {
+                                 .is_const = true,
+                                 .iconst   = ir_calc1(c_op1_to_ir_op1(expr->params[0].subtype), ir_value.iconst),
                         },
                     },
                 };
@@ -1248,15 +1251,15 @@ c_compile_expr_t
                 ir_prim = c_type_to_ir_type(ctx, res.res.c_type->data);
             }
             ir_var_t *tmpvar = ir_var_create(code->func, ir_prim, NULL);
-            ir_add_expr1(code, tmpvar, c_op1_to_ir_op1(expr->params[0].subtype), ir_value);
+            ir_add_expr1(IR_APPEND(code), tmpvar, c_op1_to_ir_op1(expr->params[0].subtype), ir_value);
 
             // Return temporary value.
             c_value_t rvalue = {
                 .value_type = C_RVALUE,
                 .c_type     = rc_share(res.res.c_type),
                 .rvalue     = {
-                    .is_const = false,
-                    .var      = tmpvar,
+                        .is_const = false,
+                        .var      = tmpvar,
                 },
             };
 
@@ -1293,12 +1296,12 @@ c_compile_expr_t
         ir_prim_t    ir_prim    = c_type_to_ir_type(ctx, res.res.c_type->data);
         ir_operand_t read_value = c_value_read(ctx, code, scope, &res.res);
         ir_var_t    *oldvar     = ir_var_create(code->func, ir_prim, NULL);
-        ir_add_expr1(code, oldvar, IR_OP1_mov, read_value);
+        ir_add_expr1(IR_APPEND(code), oldvar, IR_OP1_mov, read_value);
 
         // Add or subtract one.
         ir_var_t *tmpvar = ir_var_create(code->func, ir_prim, NULL);
         ir_add_expr2(
-            code,
+            IR_APPEND(code),
             tmpvar,
             is_inc ? IR_OP2_add : IR_OP2_sub,
             read_value,
@@ -1310,8 +1313,8 @@ c_compile_expr_t
             .value_type = C_RVALUE,
             .c_type     = res.res.c_type,
             .rvalue     = {
-                .is_const = false,
-                .var      = tmpvar,
+                    .is_const = false,
+                    .var      = tmpvar,
             },
         };
         c_value_write(ctx, code, scope, &res.res, &write_rvalue);
@@ -1321,8 +1324,8 @@ c_compile_expr_t
             .value_type = C_RVALUE,
             .c_type     = rc_share(res.res.c_type),
             .rvalue     = {
-                .is_const = false,
-                .var      = tmpvar,
+                    .is_const = false,
+                    .var      = tmpvar,
             },
         };
         c_value_destroy(res.res);
@@ -1388,26 +1391,26 @@ ir_code_t *
         c_create_branch_consistency(ctx, expr.code, scope, affected);
         if (expr.res.value_type != C_VALUE_ERROR) {
             ir_add_branch(
-                expr.code,
+                IR_APPEND(expr.code),
                 c_cast_ir_operand(expr.code, c_value_read(ctx, expr.code, scope, &expr.res), IR_PRIM_bool),
                 loop_body
             );
             c_value_destroy(expr.res);
         }
-        ir_add_jump(expr.code, after);
+        ir_add_jump(IR_APPEND(expr.code), after);
 
         // Compile loop body.
         loop_body = c_compile_stmt(ctx, prepass, loop_body, scope, &stmt->params[1]);
         /// Body -> condition.
         c_create_branch_consistency(ctx, loop_body, scope, affected);
-        ir_add_jump(loop_body, cond_body);
+        ir_add_jump(IR_APPEND(loop_body), cond_body);
 
         if (stmt->subtype == C_AST_DO_WHILE) {
             // Jump to loop first for do...while.
-            ir_add_jump(code, loop_body);
+            ir_add_jump(IR_APPEND(code), loop_body);
         } else {
             // Jump to condition first for while.
-            ir_add_jump(code, cond_body);
+            ir_add_jump(IR_APPEND(code), cond_body);
         }
 
         code = after;
@@ -1430,10 +1433,10 @@ ir_code_t *
         c_compile_stmt(ctx, prepass, if_body, scope, &stmt->params[1]);
         // If -> after.
         c_create_branch_consistency(ctx, if_body, scope, affected);
-        ir_add_jump(if_body, after);
+        ir_add_jump(IR_APPEND(if_body), after);
         if (expr.res.value_type != C_VALUE_ERROR) {
             ir_add_branch(
-                code,
+                IR_APPEND(code),
                 c_cast_ir_operand(code, c_value_read(ctx, code, scope, &expr.res), IR_PRIM_bool),
                 if_body
             );
@@ -1444,11 +1447,11 @@ ir_code_t *
             c_compile_stmt(ctx, prepass, else_body, scope, &stmt->params[2]);
             // Else -> after.
             c_create_branch_consistency(ctx, else_body, scope, affected);
-            ir_add_jump(else_body, after);
-            ir_add_jump(code, else_body);
+            ir_add_jump(IR_APPEND(else_body), after);
+            ir_add_jump(IR_APPEND(code), else_body);
         } else {
             // If statement.
-            ir_add_jump(code, after);
+            ir_add_jump(IR_APPEND(code), after);
         }
 
         if (expr.res.value_type != C_VALUE_ERROR) {
@@ -1492,15 +1495,15 @@ ir_code_t *
             c_create_branch_consistency(ctx, res.code, scope, affected);
             if (res.res.value_type != C_VALUE_ERROR) {
                 ir_add_branch(
-                    res.code,
+                    IR_APPEND(res.code),
                     c_cast_ir_operand(res.code, c_value_read(ctx, res.code, scope, &res.res), IR_PRIM_bool),
                     for_body
                 );
             }
-            ir_add_jump(res.code, after);
+            ir_add_jump(IR_APPEND(res.code), after);
             c_value_destroy(res.res);
         }
-        ir_add_jump(code, for_cond);
+        ir_add_jump(IR_APPEND(code), for_cond);
 
         // Compile body.
         code = c_compile_stmt(ctx, prepass, for_body, scope, &stmt->params[3]);
@@ -1514,7 +1517,7 @@ ir_code_t *
 
         // Body -> condition consistency.
         c_create_branch_consistency(ctx, code, scope, affected);
-        ir_add_jump(code, for_cond);
+        ir_add_jump(IR_APPEND(code), for_cond);
 
         return after;
 
@@ -1525,12 +1528,12 @@ ir_code_t *
             c_compile_expr_t expr = c_compile_expr(ctx, prepass, code, scope, &stmt->params[0]);
             code                  = expr.code;
             if (expr.res.value_type != C_VALUE_ERROR) {
-                ir_add_return1(code, c_value_read(ctx, code, scope, &expr.res));
+                ir_add_return1(IR_APPEND(code), c_value_read(ctx, code, scope, &expr.res));
                 c_value_destroy(expr.res);
             }
         } else {
             // Without.
-            ir_add_return0(code);
+            ir_add_return0(IR_APPEND(code));
         }
     }
     return code;
@@ -1582,7 +1585,7 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
     c_scope_destroy(scope);
 
     // Add implicit empty return statement.
-    ir_add_return0(code);
+    ir_add_return0(IR_APPEND(code));
 
     // Add function into global scope.
     c_var_t *var   = calloc(1, sizeof(c_var_t));

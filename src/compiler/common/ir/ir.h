@@ -10,6 +10,35 @@
 
 #include <stdio.h>
 
+// Type of IR code placement location.
+typedef enum {
+    // Place at the end of a code block.
+    IR_INSNLOC_APPEND_CODE,
+    // Place after an existing instruction.
+    IR_INSNLOC_AFTER_INSN,
+    // Place before an existing instruction.
+    IR_INSNLOC_BEFORE_INSN,
+} ir_insnloc_type_t;
+
+// Points at which an instruction can be inserted.
+typedef struct {
+    // Type of IR code placement location.
+    ir_insnloc_type_t type;
+    union {
+        // Code to append to the end of.
+        ir_code_t *code;
+        // Instruction to place after.
+        ir_insn_t *insn;
+    };
+} ir_insnloc_t;
+
+// Construct an `ir_insnloc_t` that places at the end of `code_`.
+#define IR_APPEND(code_)      ((ir_insnloc_t){.type = IR_INSNLOC_APPEND_CODE, .code = (code_)})
+// Construct an `ir_insnloc_t` that places after `insn_`.
+#define IR_AFTER_INSN(insn_)  ((ir_insnloc_t){.type = IR_INSNLOC_AFTER_INSN, .insn = (insn_)})
+// Construct an `ir_insnloc_t` that places before `insn_`.
+#define IR_BEFORE_INSN(insn_) ((ir_insnloc_t){.type = IR_INSNLOC_BEFORE_INSN, .insn = (insn_)})
+
 
 
 // Create a new IR function.
@@ -46,37 +75,37 @@ void       ir_insn_delete(ir_insn_t *insn);
 
 // Add a combinator function to a code block.
 // Takes ownership of the `from` array.
-void ir_add_combinator(ir_code_t *code, ir_var_t *dest, size_t from_len, ir_combinator_t *from);
+void ir_add_combinator(ir_insnloc_t code, ir_var_t *dest, size_t from_len, ir_combinator_t *from);
 // Add an expression to a code block.
-void ir_add_expr1(ir_code_t *code, ir_var_t *dest, ir_op1_type_t oper, ir_operand_t operand);
+void ir_add_expr1(ir_insnloc_t code, ir_var_t *dest, ir_op1_type_t oper, ir_operand_t operand);
 // Add an expression to a code block.
-void ir_add_expr2(ir_code_t *code, ir_var_t *dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs);
+void ir_add_expr2(ir_insnloc_t code, ir_var_t *dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs);
 // Add an undefined variable.
-void ir_add_undefined(ir_code_t *code, ir_var_t *dest);
+void ir_add_undefined(ir_insnloc_t code, ir_var_t *dest);
 
 // Add a load effective address of a stack frame to a code block.
-void ir_add_lea_stack(ir_code_t *code, ir_var_t *dest, ir_frame_t *frame, uint64_t offset);
+void ir_add_lea_stack(ir_insnloc_t code, ir_var_t *dest, ir_frame_t *frame, uint64_t offset);
 // Add a load effective address of a symbol to a code block.
-void ir_add_lea_symbol(ir_code_t *code, ir_var_t *dest, char const *symbol, uint64_t offset);
+void ir_add_lea_symbol(ir_insnloc_t code, ir_var_t *dest, char const *symbol, uint64_t offset);
 // Add a memory load to a code block.
-void ir_add_load(ir_code_t *code, ir_var_t *dest, ir_operand_t addr);
+void ir_add_load(ir_insnloc_t code, ir_var_t *dest, ir_operand_t addr);
 // Add a memory store to a code block.
-void ir_add_store(ir_code_t *code, ir_operand_t src, ir_operand_t addr);
+void ir_add_store(ir_insnloc_t code, ir_operand_t src, ir_operand_t addr);
 
 // Add a direct (by symbol) function call.
 // Takes ownership of `params`.
-void ir_add_call_direct(ir_code_t *from, char const *symbol, size_t params_len, ir_operand_t *params);
+void ir_add_call_direct(ir_insnloc_t from, char const *symbol, size_t params_len, ir_operand_t *params);
 // Add an indirect (by pointer) function call.
 // Takes ownership of `params`.
-void ir_add_call_ptr(ir_code_t *from, ir_operand_t funcptr, size_t params_len, ir_operand_t *params);
+void ir_add_call_ptr(ir_insnloc_t from, ir_operand_t funcptr, size_t params_len, ir_operand_t *params);
 // Add an unconditional jump.
-void ir_add_jump(ir_code_t *from, ir_code_t *to);
+void ir_add_jump(ir_insnloc_t from, ir_code_t *to);
 // Add a conditional branch.
-void ir_add_branch(ir_code_t *from, ir_operand_t cond, ir_code_t *to);
+void ir_add_branch(ir_insnloc_t from, ir_operand_t cond, ir_code_t *to);
 // Add a return without value.
-void ir_add_return0(ir_code_t *from);
+void ir_add_return0(ir_insnloc_t from);
 // Add a return with value.
-void ir_add_return1(ir_code_t *from, ir_operand_t value);
+void ir_add_return1(ir_insnloc_t from, ir_operand_t value);
 
 
 

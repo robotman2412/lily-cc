@@ -151,18 +151,28 @@ operand_rule_t const RV_OP_RULES_L[] = {
     };
 
 // Define a store instruction.
-#define RV_INSN_STORE(_name, ext, op_maj, funct3, membits, allow_s, allow_u) \
-    insn_proto_t const rv_insn_##_name = {                                                                       \
-        .name         = #_name,                                                                                  \
-        .cookie       = RV_COOKIE(ext, op_maj, RV_ENC_S, funct3, 0, 0),                                          \
-        .operands_len = 3,                                                                                       \
-        .operands     = RV_OP_RULES_S(membits, allow_s, allow_u),                                                \
-        .tree         = &NODE_STORE(&NODE_EXPR2(IR_OP2_add, &NODE_OPERAND_0, &NODE_OPERAND_1), &NODE_OPERAND_2), \
+#define RV_INSN_STORE_NOTREE(_varname, _name, ext, op_maj, funct3, membits, allow_s, allow_u, _tree, _operands_len) \
+    insn_proto_t const rv_insn_##_varname = {                                                           \
+        .name         = #_name,                                                                         \
+        .cookie       = RV_COOKIE(ext, op_maj, RV_ENC_S, funct3, 0, 0),                                 \
+        .operands_len = _operands_len,                                                                  \
+        .operands     = RV_OP_RULES_S(membits, allow_s, allow_u),                                       \
+        .tree         = _tree, \
     };
 
+// Define a store instruction.
+#define RV_INSN_STORE(_name, ext, op_maj, funct3, membits, allow_s, allow_u) \
+    RV_INSN_STORE_NOTREE(_name, _name, ext, op_maj, funct3, membits, allow_s, allow_u,             \
+        &NODE_STORE(&NODE_EXPR2(IR_OP2_add, &NODE_OPERAND_0, &NODE_OPERAND_1), &NODE_OPERAND_2), 3 \
+    )                                                                                              \
+    RV_INSN_STORE_NOTREE(_name##_noadd, _name, ext, op_maj, funct3, membits, allow_s, allow_u,     \
+        &NODE_STORE(&NODE_OPERAND_0, &NODE_OPERAND_1), 2                                           \
+    )
+
+
 // Define a load instruction.
-#define RV_INSN_LOAD(_name, ext, op_maj, funct3, membits, allow_s, allow_u) \
-    insn_proto_t const rv_insn_##_name = {                                                     \
+#define RV_INSN_LOAD_NOTREE(_varname, _name, ext, op_maj, funct3, membits, allow_s, allow_u, _tree, _operands_len) \
+    insn_proto_t const rv_insn_##_varname = {                                                  \
         .name         = #_name,                                                                \
         .cookie       = RV_COOKIE(ext, op_maj, RV_ENC_I, funct3, 0, 0),                        \
         .return_kinds = {                                                                      \
@@ -176,10 +186,19 @@ operand_rule_t const RV_OP_RULES_L[] = {
             .size64  = (membits) == 64,                                                        \
             .size128 = (membits) == 128,                                                       \
         },                                                                                     \
-        .operands_len = 2,                                                                     \
+        .operands_len = _operands_len,                                                         \
         .operands     = RV_OP_RULES_L,                                                         \
-        .tree         = &NODE_LOAD(&NODE_EXPR2(IR_OP2_add, &NODE_OPERAND_0, &NODE_OPERAND_1)), \
+        .tree         = _tree, \
     };
+
+// Define a load instruction.
+#define RV_INSN_LOAD(_name, ext, op_maj, funct3, membits, allow_s, allow_u) \
+    RV_INSN_LOAD_NOTREE(_name, _name, ext, op_maj, funct3, membits, allow_s, allow_u,           \
+        &NODE_LOAD(&NODE_EXPR2(IR_OP2_add, &NODE_OPERAND_0, &NODE_OPERAND_1)), 2                \
+    )                                                                                           \
+    RV_INSN_LOAD_NOTREE(_name##_noadd, _name, ext, op_maj, funct3, membits, allow_s, allow_u,   \
+        &NODE_LOAD(&NODE_OPERAND_0), 1                                                          \
+    )
 
 // clang-format on
 
@@ -200,7 +219,9 @@ expr_tree_t const    rv_li_tree    = NODE_EXPR1(IR_OP1_mov, &NODE_OPERAND_0);
 
 // Table of supported RISC-V instructions.
 insn_proto_t const *const rv_insns[] = {
-#define RV_INSN_MISC(name, ...) &rv_insn_##name,
+#define RV_INSN_MISC(name, ...)  &rv_insn_##name,
+#define RV_INSN_LOAD(name, ...)  &rv_insn_##name, &rv_insn_##name##_noadd,
+#define RV_INSN_STORE(name, ...) &rv_insn_##name, &rv_insn_##name##_noadd,
 #include "rv_instructions.inc"
 };
 

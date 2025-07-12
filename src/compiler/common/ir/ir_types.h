@@ -323,6 +323,9 @@ struct ir_mem {
     };
 };
 
+// Maximum number of operands for machine instructions.
+#define IR_MACH_INSN_MAX_OPERANDS 8
+
 // IR machine instruction.
 struct ir_mach_insn {
     ir_insn_t           base;
@@ -333,7 +336,7 @@ struct ir_mach_insn {
     // Destination variable.
     ir_var_t           *dest;
     // Operands to the machine instruction.
-    ir_operand_t        operands[8];
+    ir_operand_t        operands[IR_MACH_INSN_MAX_OPERANDS];
 };
 
 // IR code block.

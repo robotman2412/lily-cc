@@ -6,16 +6,18 @@
 #include "ir.h"
 
 #include "arrays.h"
+#include "insn_proto.h"
 #include "ir/ir_optimizer.h"
 #include "ir_types.h"
 #include "list.h"
+#include "set.h"
 #include "strong_malloc.h"
 
+#include <assert.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 
 
 // Create a new IR function.
@@ -913,7 +915,7 @@ static void ir_emplace_insn(ir_insnloc_t loc, ir_insn_t *insn) {
 
 // Add a combinator function to a code block.
 // Takes ownership of the `from` array.
-void ir_add_combinator(ir_insnloc_t loc, ir_var_t *dest, size_t from_len, ir_combinator_t *from) {
+ir_expr_t *ir_add_combinator(ir_insnloc_t loc, ir_var_t *dest, size_t from_len, ir_combinator_t *from) {
     ir_expr_t *expr             = calloc(1, sizeof(ir_expr_t));
     expr->base.type             = IR_INSN_EXPR;
     expr->type                  = IR_EXPR_COMBINATOR;
@@ -936,10 +938,11 @@ void ir_add_combinator(ir_insnloc_t loc, ir_var_t *dest, size_t from_len, ir_com
     }
     dlist_append(&dest->assigned_at, &expr->dest_node);
     ir_emplace_insn(loc, &expr->base);
+    return expr;
 }
 
 // Add an expression to a code block.
-void ir_add_expr1(ir_insnloc_t loc, ir_var_t *dest, ir_op1_type_t oper, ir_operand_t operand) {
+ir_expr_t *ir_add_expr1(ir_insnloc_t loc, ir_var_t *dest, ir_op1_type_t oper, ir_operand_t operand) {
     ir_expr_t *expr     = calloc(1, sizeof(ir_expr_t));
     expr->base.type     = IR_INSN_EXPR;
     expr->type          = IR_EXPR_UNARY;
@@ -967,10 +970,11 @@ void ir_add_expr1(ir_insnloc_t loc, ir_var_t *dest, ir_op1_type_t oper, ir_opera
     }
     dlist_append(&dest->assigned_at, &expr->dest_node);
     ir_emplace_insn(loc, &expr->base);
+    return expr;
 }
 
 // Add an expression to a code block.
-void ir_add_expr2(ir_insnloc_t loc, ir_var_t *dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs) {
+ir_expr_t *ir_add_expr2(ir_insnloc_t loc, ir_var_t *dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs) {
     ir_expr_t *expr     = calloc(1, sizeof(ir_expr_t));
     expr->base.type     = IR_INSN_EXPR;
     expr->type          = IR_EXPR_BINARY;
@@ -1011,10 +1015,11 @@ void ir_add_expr2(ir_insnloc_t loc, ir_var_t *dest, ir_op2_type_t oper, ir_opera
     }
     dlist_append(&dest->assigned_at, &expr->dest_node);
     ir_emplace_insn(loc, &expr->base);
+    return expr;
 }
 
 // Add an undefined variable.
-void ir_add_undefined(ir_insnloc_t loc, ir_var_t *dest) {
+ir_expr_t *ir_add_undefined(ir_insnloc_t loc, ir_var_t *dest) {
     ir_expr_t *expr = calloc(1, sizeof(ir_expr_t));
     expr->base.type = IR_INSN_EXPR;
     expr->type      = IR_EXPR_UNDEFINED;
@@ -1025,46 +1030,12 @@ void ir_add_undefined(ir_insnloc_t loc, ir_var_t *dest) {
     }
     dlist_append(&dest->assigned_at, &expr->dest_node);
     ir_emplace_insn(loc, &expr->base);
-}
-
-// Add a direct (by label) function call.
-// Takes ownership of `params`.
-void ir_add_call_direct(ir_insnloc_t from, char const *label, size_t params_len, ir_operand_t *params) {
-    ir_flow_t *flow              = calloc(1, sizeof(ir_flow_t));
-    flow->type                   = IR_FLOW_CALL_DIRECT;
-    flow->f_call_direct.label    = strong_strdup(label);
-    flow->f_call_direct.args_len = params_len;
-    flow->f_call_direct.args     = params;
-    for (size_t i = 0; i < params_len; i++) {
-        if (!params[i].is_const) {
-            set_add(&params[i].var->used_at, flow);
-        }
-    }
-    ir_emplace_insn(from, &flow->base);
-}
-
-// Add an indirect (by pointer) function call.
-// Takes ownership of `params`.
-void ir_add_call_ptr(ir_insnloc_t from, ir_operand_t funcptr, size_t params_len, ir_operand_t *params) {
-    ir_flow_t *flow           = calloc(1, sizeof(ir_flow_t));
-    flow->type                = IR_FLOW_CALL_PTR;
-    flow->f_call_ptr.addr     = funcptr;
-    flow->f_call_ptr.args_len = params_len;
-    flow->f_call_ptr.args     = params;
-    if (!funcptr.is_const) {
-        set_add(&funcptr.var->used_at, flow);
-    }
-    for (size_t i = 0; i < params_len; i++) {
-        if (!params[i].is_const) {
-            set_add(&params[i].var->used_at, flow);
-        }
-    }
-    ir_emplace_insn(from, &flow->base);
+    return expr;
 }
 
 
 // Add a load effective address of a stack frame to a code block.
-void ir_add_lea_stack(ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame, uint64_t offset) {
+ir_mem_t *ir_add_lea_stack(ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame, uint64_t offset) {
     ir_mem_t *mem           = calloc(1, sizeof(ir_mem_t));
     mem->base.type          = IR_INSN_MEM;
     mem->type               = IR_MEM_LEA_STACK;
@@ -1077,10 +1048,11 @@ void ir_add_lea_stack(ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame, uint6
     }
     dlist_append(&dest->assigned_at, &mem->dest_node);
     ir_emplace_insn(loc, &mem->base);
+    return mem;
 }
 
 // Add a load effective address of a symbol to a code block.
-void ir_add_lea_symbol(ir_insnloc_t loc, ir_var_t *dest, char const *symbol, uint64_t offset) {
+ir_mem_t *ir_add_lea_symbol(ir_insnloc_t loc, ir_var_t *dest, char const *symbol, uint64_t offset) {
     ir_mem_t *mem            = calloc(1, sizeof(ir_mem_t));
     mem->base.type           = IR_INSN_MEM;
     mem->type                = IR_MEM_LEA_SYMBOL;
@@ -1093,10 +1065,11 @@ void ir_add_lea_symbol(ir_insnloc_t loc, ir_var_t *dest, char const *symbol, uin
     }
     dlist_append(&dest->assigned_at, &mem->dest_node);
     ir_emplace_insn(loc, &mem->base);
+    return mem;
 }
 
 // Add a memory load to a code block.
-void ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_operand_t addr) {
+ir_mem_t *ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_operand_t addr) {
     ir_mem_t *mem    = calloc(1, sizeof(ir_mem_t));
     mem->base.type   = IR_INSN_MEM;
     mem->type        = IR_MEM_LOAD;
@@ -1111,10 +1084,11 @@ void ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_operand_t addr) {
     }
     dlist_append(&dest->assigned_at, &mem->dest_node);
     ir_emplace_insn(loc, &mem->base);
+    return mem;
 }
 
 // Add a memory store to a code block.
-void ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_operand_t addr) {
+ir_mem_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_operand_t addr) {
     ir_mem_t *mem     = calloc(1, sizeof(ir_mem_t));
     mem->base.type    = IR_INSN_MEM;
     mem->type         = IR_MEM_STORE;
@@ -1127,11 +1101,49 @@ void ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_operand_t addr) {
         set_add(&addr.var->used_at, mem);
     }
     ir_emplace_insn(loc, &mem->base);
+    return mem;
 }
 
 
+// Add a direct (by label) function call.
+// Takes ownership of `params`.
+ir_flow_t *ir_add_call_direct(ir_insnloc_t from, char const *label, size_t params_len, ir_operand_t *params) {
+    ir_flow_t *flow              = calloc(1, sizeof(ir_flow_t));
+    flow->type                   = IR_FLOW_CALL_DIRECT;
+    flow->f_call_direct.label    = strong_strdup(label);
+    flow->f_call_direct.args_len = params_len;
+    flow->f_call_direct.args     = params;
+    for (size_t i = 0; i < params_len; i++) {
+        if (!params[i].is_const) {
+            set_add(&params[i].var->used_at, flow);
+        }
+    }
+    ir_emplace_insn(from, &flow->base);
+    return flow;
+}
+
+// Add an indirect (by pointer) function call.
+// Takes ownership of `params`.
+ir_flow_t *ir_add_call_ptr(ir_insnloc_t from, ir_operand_t funcptr, size_t params_len, ir_operand_t *params) {
+    ir_flow_t *flow           = calloc(1, sizeof(ir_flow_t));
+    flow->type                = IR_FLOW_CALL_PTR;
+    flow->f_call_ptr.addr     = funcptr;
+    flow->f_call_ptr.args_len = params_len;
+    flow->f_call_ptr.args     = params;
+    if (!funcptr.is_const) {
+        set_add(&funcptr.var->used_at, flow);
+    }
+    for (size_t i = 0; i < params_len; i++) {
+        if (!params[i].is_const) {
+            set_add(&params[i].var->used_at, flow);
+        }
+    }
+    ir_emplace_insn(from, &flow->base);
+    return flow;
+}
+
 // Add an unconditional jump.
-void ir_add_jump(ir_insnloc_t from, ir_code_t *to) {
+ir_flow_t *ir_add_jump(ir_insnloc_t from, ir_code_t *to) {
     ir_flow_t *flow     = calloc(1, sizeof(ir_flow_t));
     flow->base.type     = IR_INSN_FLOW;
     flow->type          = IR_FLOW_JUMP;
@@ -1139,10 +1151,11 @@ void ir_add_jump(ir_insnloc_t from, ir_code_t *to) {
     set_add(&ir_insnloc_code(from)->succ, to);
     set_add(&to->pred, ir_insnloc_code(from));
     ir_emplace_insn(from, &flow->base);
+    return flow;
 }
 
 // Add a conditional branch.
-void ir_add_branch(ir_insnloc_t from, ir_operand_t cond, ir_code_t *to) {
+ir_flow_t *ir_add_branch(ir_insnloc_t from, ir_operand_t cond, ir_code_t *to) {
     ir_flow_t *flow       = calloc(1, sizeof(ir_flow_t));
     flow->base.type       = IR_INSN_FLOW;
     flow->type            = IR_FLOW_BRANCH;
@@ -1159,18 +1172,20 @@ void ir_add_branch(ir_insnloc_t from, ir_operand_t cond, ir_code_t *to) {
     set_add(&ir_insnloc_code(from)->succ, to);
     set_add(&to->pred, ir_insnloc_code(from));
     ir_emplace_insn(from, &flow->base);
+    return flow;
 }
 
 // Add a return without value.
-void ir_add_return0(ir_insnloc_t from) {
+ir_flow_t *ir_add_return0(ir_insnloc_t from) {
     ir_flow_t *flow = calloc(1, sizeof(ir_flow_t));
     flow->base.type = IR_INSN_FLOW;
     flow->type      = IR_FLOW_RETURN;
     ir_emplace_insn(from, &flow->base);
+    return flow;
 }
 
 // Add a return with value.
-void ir_add_return1(ir_insnloc_t from, ir_operand_t value) {
+ir_flow_t *ir_add_return1(ir_insnloc_t from, ir_operand_t value) {
     ir_flow_t *flow          = calloc(1, sizeof(ir_flow_t));
     flow->base.type          = IR_INSN_FLOW;
     flow->type               = IR_FLOW_RETURN;
@@ -1180,4 +1195,31 @@ void ir_add_return1(ir_insnloc_t from, ir_operand_t value) {
         set_add(&value.var->used_at, flow);
     }
     ir_emplace_insn(from, &flow->base);
+    return flow;
+}
+
+
+// Add a machine instruction.
+ir_mach_insn_t *
+    ir_add_mach_insn(ir_insnloc_t loc, ir_var_t *dest, insn_proto_t const *proto, ir_operand_t const *params) {
+    ir_mach_insn_t *mach = calloc(1, sizeof(ir_mach_insn_t));
+    mach->base.type      = IR_INSN_MACHINE;
+    if (dest) {
+        if (dest->assigned_at.len && ir_insnloc_code(loc)->func->enforce_ssa) {
+            fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
+            abort();
+        }
+        mach->dest = dest;
+        dlist_append(&dest->assigned_at, &mach->dest_node);
+    }
+    mach->prototype = proto;
+    assert(proto->operands_len <= IR_MACH_INSN_MAX_OPERANDS);
+    for (size_t i = 0; i < proto->operands_len; i++) {
+        mach->operands[i] = params[i];
+        if (!params[i].is_const) {
+            set_add(&params[i].var->used_at, mach);
+        }
+    }
+    ir_emplace_insn(loc, &mach->base);
+    return mach;
 }

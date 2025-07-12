@@ -5,6 +5,9 @@
 
 #include "ir/ir_serialization.h"
 
+#include "insn_proto.h"
+#include "ir_types.h"
+
 #include <inttypes.h>
 
 
@@ -127,7 +130,7 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
                     ir_operand_serialize(mem->m_store.addr, to);
                     fputc('\n', to);
                 }
-            } else {
+            } else if (insn->type == IR_INSN_FLOW) {
                 ir_flow_t *flow = (ir_flow_t *)insn;
                 fputs(ir_flow_names[flow->type], to);
                 switch (flow->type) {
@@ -164,6 +167,27 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
                         fputc('\n', to);
                     } break;
                 }
+            } else if (insn->type == IR_INSN_MACHINE) {
+                ir_mach_insn_t *mach = (ir_mach_insn_t *)insn;
+                fputs("mach ", to);
+                fputs(mach->prototype->name, to);
+                if (mach->dest) {
+                    fprintf(to, " %%%s", mach->dest->name);
+                }
+                if (mach->prototype->operands_len) {
+                    if (mach->dest) {
+                        fputc(',', to);
+                    }
+                    fputc(' ', to);
+                    ir_operand_serialize(mach->operands[0], to);
+                }
+                for (size_t i = 1; i < mach->prototype->operands_len; i++) {
+                    fputs(", ", to);
+                    ir_operand_serialize(mach->operands[i], to);
+                }
+                fputc('\n', to);
+            } else {
+                abort();
             }
             insn = (ir_insn_t *)insn->node.next;
         }

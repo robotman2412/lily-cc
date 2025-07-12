@@ -13,7 +13,7 @@
 typedef enum {
     // IR instruction; `expr_node_t`.
     EXPR_TREE_IR_INSN,
-    // Operand an input to the tree from an IR operand.
+    // Operand; an input to the tree from an IR operand.
     EXPR_TREE_OPERAND,
     // IR constant that must exactly match.
     EXPR_TREE_ICONST,
@@ -284,4 +284,4 @@ extern expr_tree_t const NODE_OPERAND_3;
 size_t expr_tree_size(expr_tree_t const *tree);
 
 // Substitute a set of IR instructions with a machine instruction, assuming the instructions match the given prototype.
-void insn_proto_substitute(insn_proto_t const *proto, ir_insn_t *ir_insn);
+ir_mach_insn_t *insn_proto_substitute(insn_proto_t const *proto, ir_insn_t *ir_insn, ir_operand_t const *operands);

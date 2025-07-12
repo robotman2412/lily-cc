@@ -35,7 +35,7 @@ backend_profile_t  *rv_create_profile();
 // Prepare backend for codegen stage.
 void                rv_init_codegen(backend_profile_t *profile);
 // Perform instruction selection.
-insn_proto_t const *rv_isel(backend_profile_t *profile, ir_insn_t const *ir_insn);
+insn_proto_t const *rv_isel(backend_profile_t *profile, ir_insn_t const *ir_insn, ir_operand_t *operands_out);
 
 
 

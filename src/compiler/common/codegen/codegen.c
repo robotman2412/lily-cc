@@ -5,6 +5,8 @@
 
 #include "codegen.h"
 
+#include "cand_tree.h"
+#include "insn_proto.h"
 #include "ir.h"
 #include "ir_types.h"
 #include "list.h"
@@ -26,6 +28,12 @@ static void cg_remove_jumps(ir_func_t *func) {
 
 // Select machine instructions for all IR instructions.
 static void cg_isel(backend_profile_t *profile, ir_code_t *code) {
+    ir_insn_t *cur = container_of(code->insns.tail, ir_insn_t, node);
+    while (cur) {
+        ir_operand_t    params[IR_MACH_INSN_MAX_OPERANDS];
+        ir_mach_insn_t *mach = insn_proto_substitute(profile->backend->isel(profile, cur, params), cur, params);
+        cur                  = container_of(mach->base.node.previous, ir_insn_t, node);
+    }
 }
 
 // Convert an SSA-form IR function completely into executable machine code.

@@ -6,6 +6,7 @@
 #pragma once
 
 #include "insn_proto.h"
+#include "ir_types.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -66,7 +67,7 @@ struct backend {
     // Prepare backend for codegen stage.
     void (*init_codegen)(backend_profile_t *profile);
     // Perform instruction selection.
-    insn_proto_t const *(*isel)(backend_profile_t *profile, ir_insn_t const *ir_insn);
+    insn_proto_t const *(*isel)(backend_profile_t *profile, ir_insn_t const *ir_insn, ir_operand_t *operands_out);
 };
 
 // Information specific to a certain profile for a backend.

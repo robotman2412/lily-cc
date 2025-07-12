@@ -6,6 +6,7 @@
 #pragma once
 
 #include "insn_proto.h"
+#include "ir_types.h"
 
 
 
@@ -77,4 +78,4 @@ struct cand_tree {
 // Generate an instruction selection tree given an instruction set.
 cand_tree_t        *cand_tree_generate(size_t protos_len, insn_proto_t const *const *protos);
 // Match an instruction selection tree against IR in SSA form.
-insn_proto_t const *cand_tree_isel(cand_tree_t const *tree, ir_insn_t const *ir_insn);
+insn_proto_t const *cand_tree_isel(cand_tree_t const *tree, ir_insn_t const *ir_insn, ir_operand_t *operands_out);

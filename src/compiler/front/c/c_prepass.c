@@ -6,6 +6,7 @@
 #include "c_prepass.h"
 
 #include "c_parser.h"
+#include "strong_malloc.h"
 
 
 

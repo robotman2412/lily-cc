@@ -14,6 +14,7 @@ add_compile_options(
     -Wall -Wno-parentheses -Wno-unused-function -Wno-missing-braces
     -Werror=all -Werror=enum-conversion
     -lbsd
+    -DDLIST_CONSISTENCY_CHECK
 )
 
 

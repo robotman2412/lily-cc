@@ -9,12 +9,14 @@
 #include "ir_types.h"
 
 #include <inttypes.h>
+#include <stdio.h>
+#include <string.h>
 
 
 
 // Serialize an IR operand.
 static void ir_operand_serialize(ir_operand_t operand, FILE *to) {
-    if (operand.is_const) {
+    if (operand.type == IR_OPERAND_TYPE_CONST) {
         if (operand.iconst.prim_type == IR_PRIM_bool) {
             fputs(operand.iconst.constl ? "true" : "false", to);
         } else {
@@ -36,6 +38,31 @@ static void ir_operand_serialize(ir_operand_t operand, FILE *to) {
                 fprintf(to, " /* %lf */", dval);
             }
         }
+    } else if (operand.type == IR_OPERAND_TYPE_MEM) {
+        fputc('(', to);
+        switch (operand.mem.rel_type) {
+            case IR_MEMREL_ABS: break;
+            case IR_MEMREL_SYM: fprintf(to, "<%s>", operand.mem.base_sym); break;
+            case IR_MEMREL_FRAME: fprintf(to, "%%%s", operand.mem.base_frame->name); break;
+            case IR_MEMREL_CODE: fprintf(to, "%%%s", operand.mem.base_code->name); break;
+            case IR_MEMREL_VAR: fprintf(to, "%%%s", operand.mem.base_var->name); break;
+        }
+        uint64_t offset = operand.mem.offset;
+        if (operand.mem.rel_type != IR_MEMREL_ABS && operand.mem.offset) {
+            if (operand.mem.offset < 0) {
+                offset = -operand.mem.offset;
+                fputc('-', to);
+            } else {
+                fputc('+', to);
+            }
+        }
+        if (operand.mem.rel_type == IR_MEMREL_ABS || operand.mem.offset) {
+            fprintf(to, "0x%" PRIx64, offset);
+        }
+        fputc(')', to);
+    } else if (operand.type == IR_OPERAND_TYPE_UNDEF) {
+        fputs(ir_prim_names[operand.undef_type], to);
+        fputs("'undefined", to);
     } else {
         fputc('%', to);
         fputs(operand.var->name, to);
@@ -74,121 +101,44 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
         ir_insn_t *insn = (ir_insn_t *)code->insns.head;
         while (insn) {
             fputs("    ", to);
-            if (insn->type == IR_INSN_EXPR) {
-                ir_expr_t *expr = (ir_expr_t *)insn;
-                switch (expr->type) {
-                    case IR_EXPR_COMBINATOR: {
-                        fprintf(to, "phi %%%s", expr->dest->name);
-                        for (size_t i = 0; i < expr->e_combinator.from_len; i++) {
-                            fprintf(to, ", %%%s ", expr->e_combinator.from[i].prev->name);
-                            ir_operand_serialize(expr->e_combinator.from[i].bind, to);
-                        }
-                        fputc('\n', to);
-                    } break;
-                    case IR_EXPR_UNARY: {
-                        fprintf(to, "%s %%%s, ", ir_op1_names[expr->e_unary.oper], expr->dest->name);
-                        ir_operand_serialize(expr->e_unary.value, to);
-                        fputc('\n', to);
-                    } break;
-                    case IR_EXPR_BINARY: {
-                        fprintf(to, "%s %%%s, ", ir_op2_names[expr->e_binary.oper], expr->dest->name);
-                        ir_operand_serialize(expr->e_binary.lhs, to);
-                        fputs(", ", to);
-                        ir_operand_serialize(expr->e_binary.rhs, to);
-                        fputc('\n', to);
-                    } break;
-                    case IR_EXPR_UNDEFINED: {
-                        fprintf(to, "undef %%%s\n", expr->dest->name);
-                    } break;
-                }
-            } else if (insn->type == IR_INSN_MEM) {
-                ir_mem_t *mem = (ir_mem_t *)insn;
-                if (mem->type == IR_MEM_LEA_STACK) {
-                    fprintf(
-                        to,
-                        "lea %%%s, %%%s+%" PRId64 "\n",
-                        mem->m_lea_stack.dest->name,
-                        mem->m_lea_stack.frame->name,
-                        mem->m_lea_stack.offset
-                    );
-                } else if (mem->type == IR_MEM_LEA_SYMBOL) {
-                    fprintf(
-                        to,
-                        "lea %%%s, <%s>+%" PRId64 "\n",
-                        mem->m_lea_symbol.dest->name,
-                        mem->m_lea_symbol.symbol,
-                        mem->m_lea_symbol.offset
-                    );
-                } else if (mem->type == IR_MEM_LOAD) {
-                    fprintf(to, "load %%%s, ", mem->m_load.dest->name);
-                    ir_operand_serialize(mem->m_load.addr, to);
-                    fputc('\n', to);
-                } else if (mem->type == IR_MEM_STORE) {
-                    fputs("store ", to);
-                    ir_operand_serialize(mem->m_store.src, to);
+
+            for (size_t i = 0; i < insn->returns_len; i++) {
+                if (i) {
                     fputs(", ", to);
-                    ir_operand_serialize(mem->m_store.addr, to);
-                    fputc('\n', to);
                 }
-            } else if (insn->type == IR_INSN_FLOW) {
-                ir_flow_t *flow = (ir_flow_t *)insn;
-                fputs(ir_flow_names[flow->type], to);
-                switch (flow->type) {
-                    case IR_FLOW_JUMP: {
-                        fprintf(to, " %%%s\n", flow->f_jump.target->name);
-                    } break;
-                    case IR_FLOW_BRANCH: {
-                        fputc(' ', to);
-                        ir_operand_serialize(flow->f_branch.cond, to);
-                        fprintf(to, ", %%%s\n", flow->f_branch.target->name);
-                    } break;
-                    case IR_FLOW_CALL_DIRECT: {
-                        fprintf(to, " %%%s", flow->f_call_direct.label);
-                        for (size_t i = 0; i < flow->f_call_direct.args_len; i++) {
-                            fputs(", ", to);
-                            ir_operand_serialize(flow->f_call_direct.args[i], to);
-                        }
-                        fputc('\n', to);
-                    } break;
-                    case IR_FLOW_CALL_PTR: {
-                        fputc(' ', to);
-                        ir_operand_serialize(flow->f_call_ptr.addr, to);
-                        for (size_t i = 0; i < flow->f_call_ptr.args_len; i++) {
-                            fputs(", ", to);
-                            ir_operand_serialize(flow->f_call_ptr.args[i], to);
-                        }
-                        fputc('\n', to);
-                    } break;
-                    case IR_FLOW_RETURN: {
-                        if (flow->f_return.has_value) {
-                            fputc(' ', to);
-                            ir_operand_serialize(flow->f_return.value, to);
-                        }
-                        fputc('\n', to);
-                    } break;
-                }
-            } else if (insn->type == IR_INSN_MACHINE) {
-                ir_mach_insn_t *mach = (ir_mach_insn_t *)insn;
-                fputs("mach ", to);
-                fputs(mach->prototype->name, to);
-                if (mach->dest) {
-                    fprintf(to, " %%%s", mach->dest->name);
-                }
-                if (mach->prototype->operands_len) {
-                    if (mach->dest) {
-                        fputc(',', to);
-                    }
-                    fputc(' ', to);
-                    ir_operand_serialize(mach->operands[0], to);
-                }
-                for (size_t i = 1; i < mach->prototype->operands_len; i++) {
-                    fputs(", ", to);
-                    ir_operand_serialize(mach->operands[i], to);
-                }
-                fputc('\n', to);
-            } else {
-                abort();
+                fprintf(to, "%%%s", insn->returns[i]->name);
             }
+
+            if (insn->returns_len) {
+                fputs(" = ", to);
+            }
+
+            switch (insn->type) {
+                case IR_INSN_EXPR2: fputs(ir_op2_names[insn->op2], to); break;
+                case IR_INSN_EXPR1: fputs(ir_op1_names[insn->op1], to); break;
+                case IR_INSN_JUMP: fputs("jump", to); break;
+                case IR_INSN_BRANCH: fputs("branch", to); break;
+                case IR_INSN_LEA: fputs("lea", to); break;
+                case IR_INSN_LOAD: fputs("load", to); break;
+                case IR_INSN_STORE: fputs("store", to); break;
+                case IR_INSN_COMBINATOR: fputs("comb", to); break;
+                case IR_INSN_CALL: fputs("call", to); break;
+                case IR_INSN_RETURN: fputs("return", to); break;
+                case IR_INSN_MACHINE: fprintf(to, "mach %s", insn->prototype->name); break;
+            }
+
+            if (insn->operands_len) {
+                fputc(' ', to);
+            }
+
+            for (size_t i = 0; i < insn->operands_len; i++) {
+                if (i) {
+                    fputs(", ", to);
+                }
+                ir_operand_serialize(insn->operands[i], to);
+            }
+
+            fputc('\n', to);
             insn = (ir_insn_t *)insn->node.next;
         }
 

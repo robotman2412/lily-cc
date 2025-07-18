@@ -24,8 +24,8 @@ char *test_rv_isel() {
         IR_APPEND(func->entry),
         tmp1,
         IR_OP2_add,
-        (ir_operand_t){.is_const = false, .var = func->args[0].var},
-        (ir_operand_t){.is_const = true, .iconst = (ir_const_t){.prim_type = IR_PRIM_s32, .constl = 8000}}
+        (ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = func->args[0].var},
+        (ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = (ir_const_t){.prim_type = IR_PRIM_s32, .constl = 8000}}
     );
 
     // add %tmp2, %tmp1, s32'15
@@ -34,13 +34,13 @@ char *test_rv_isel() {
         IR_APPEND(func->entry),
         tmp2,
         IR_OP2_add,
-        (ir_operand_t){.is_const = false, .var = tmp1},
-        (ir_operand_t){.is_const = true, .iconst = (ir_const_t){.prim_type = IR_PRIM_s32, .constl = 15}}
+        (ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = tmp1},
+        (ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = (ir_const_t){.prim_type = IR_PRIM_s32, .constl = 15}}
     );
 
     // load %tmp3, %tmp2
     ir_var_t *tmp3 = ir_var_create(func, IR_PRIM_s8, "tmp3");
-    ir_add_load(IR_APPEND(func->entry), tmp3, (ir_operand_t){.is_const = false, .var = tmp2});
+    ir_add_load(IR_APPEND(func->entry), tmp3, (ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = tmp2});
 
     backend_profile_t *profile = rv_create_profile();
     profile->backend->init_codegen(profile);

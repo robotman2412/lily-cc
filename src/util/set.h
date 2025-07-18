@@ -7,19 +7,14 @@
 
 #include "hash.h"
 #include "list.h"
-#include "strong_malloc.h"
-
-#include <string.h>
 
 
 
-// Number of buckets in the hash set.
-#define SET_BUCKETS   16
 // Create an empty hash set for C-strings.
-#define STR_SET_EMPTY ((set_t){{0}, 0, (void *)hash_cstr, (void *)strcmp, (void *)strong_strdup, free})
+#define STR_SET_EMPTY ((set_t){NULL, 0, 0, &str_set_vtable})
 // Create an empty hash set for pointers.
 // Whatever is being pointer to is expected to live at least as long as the set.
-#define PTR_SET_EMPTY ((set_t){{0}, 0, hash_ptr, cmp_ptr, dup_nop, del_nop})
+#define PTR_SET_EMPTY ((set_t){NULL, 0, 0, &ptr_set_vtable})
 
 
 
@@ -29,15 +24,25 @@ typedef struct set        set_t;
 typedef struct set_vtable set_vtable_t;
 // Hash set entry.
 typedef struct set_ent    set_ent_t;
+// Option of a pointer that may be NULL.
+typedef struct set_get    set_get_t;
 
 
 
 // Hash set.
 struct set {
     // Hash buckets; array of linked list of set_ent_t.
-    dlist_t buckets[SET_BUCKETS];
+    dlist_t            *buckets;
+    // Current number of buckets.
+    size_t              buckets_len;
     // Current number of elements.
-    size_t  len;
+    size_t              len;
+    // Set vtable.
+    set_vtable_t const *vtable;
+};
+
+// Hash set vtable.
+struct set_vtable {
     // Value hashing function.
     uint32_t (*val_hash)(void const *);
     // Value comparison function; returns 0 if equal.
@@ -58,6 +63,12 @@ struct set_ent {
     void        *value;
 };
 
+// Option of a pointer that may be NULL.
+struct set_get {
+    bool  present;
+    void *value;
+};
+
 
 
 // Iterate over all entries in the set.
@@ -67,11 +78,13 @@ struct set_ent {
 
 // Vtable for string sets.
 extern set_vtable_t const str_set_vtable;
+// Vtable for pointer sets.
+extern set_vtable_t const ptr_set_vtable;
 
 // Remove all entries from a set.
 void             set_clear(set_t *set);
-// Test if an item is in the set.
-bool             set_contains(set_t const *set, void const *value) __attribute__((pure));
+// Get a pointer to an item from the set.
+set_get_t        set_get(set_t const *set, void const *value) __attribute__((pure));
 // Insert an item into the set.
 bool             set_add(set_t *set, void const *value);
 // Add all items from another set to this one.
@@ -93,3 +106,8 @@ set_ent_t const *set_next(set_t const *set, set_ent_t const *ent);
 // Print the pointer of all items in a set.
 void set_dump(set_t const *set);
 #endif
+
+// Test if an item is in the set.
+__attribute__((always_inline)) static inline bool set_contains(set_t const *set, void const *value) {
+    return set_get(set, value).present;
+}

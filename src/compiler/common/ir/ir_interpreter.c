@@ -5,7 +5,10 @@
 
 #include "ir/ir_interpreter.h"
 
+#include "ir_types.h"
+
 #include <stdlib.h>
+#include <string.h>
 
 
 
@@ -19,7 +22,7 @@ int ir_const_ctz(ir_const_t value) {
     if (value.constl) {
         return __builtin_ctzll(value.constl);
     } else {
-        return 64 + __builtin_ctzll(value.constl);
+        return 64 + __builtin_ctzll(value.consth);
     }
 }
 
@@ -416,24 +419,47 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
 
 
 
+// Test whether to `ir_memref_t` are identical.
+static bool ir_memref_identical(ir_memref_t lhs, ir_memref_t rhs) {
+    if (lhs.rel_type != rhs.rel_type) {
+        return false;
+    } else if (lhs.offset != rhs.offset) {
+        return false;
+    }
+    switch (lhs.rel_type) {
+        case IR_MEMREL_ABS: return true;
+        case IR_MEMREL_SYM: return !strcmp(lhs.base_sym, rhs.base_sym);
+        case IR_MEMREL_FRAME: return lhs.base_frame == rhs.base_frame;
+        case IR_MEMREL_CODE: return lhs.base_code == rhs.base_code;
+        case IR_MEMREL_VAR: return lhs.base_var == rhs.base_var;
+    }
+    abort();
+}
+
 // Determine whether two operands are either the same variable or identical.
 // Floats will be compared bitwise.
 bool ir_operand_identical(ir_operand_t lhs, ir_operand_t rhs) {
-    if (lhs.is_const != rhs.is_const)
+    if (lhs.type != rhs.type) {
         return false;
-    else if (lhs.is_const)
-        return lhs.var == rhs.var;
-    else
-        return ir_const_identical(lhs.iconst, rhs.iconst);
+    }
+    switch (lhs.type) {
+        case IR_OPERAND_TYPE_VAR: return lhs.var == rhs.var;
+        case IR_OPERAND_TYPE_UNDEF: return false;
+        case IR_OPERAND_TYPE_MEM: return ir_memref_identical(lhs.mem, rhs.mem);
+        default: return ir_const_identical(lhs.iconst, rhs.iconst);
+    }
 }
 
 // Determines whether two operands are either the same variable or effectively identical after casting.
 // Floats are promoted to f64, then compared bitwise.
 bool ir_operand_lenient_identical(ir_operand_t lhs, ir_operand_t rhs) {
-    if (lhs.is_const != rhs.is_const)
+    if (lhs.type != rhs.type) {
         return false;
-    else if (lhs.is_const)
-        return lhs.var == rhs.var;
-    else
-        return ir_const_lenient_identical(lhs.iconst, rhs.iconst);
+    }
+    switch (lhs.type) {
+        case IR_OPERAND_TYPE_VAR: return lhs.var == rhs.var;
+        case IR_OPERAND_TYPE_UNDEF: return false;
+        case IR_OPERAND_TYPE_MEM: return ir_memref_identical(lhs.mem, rhs.mem);
+        default: return ir_const_lenient_identical(lhs.iconst, rhs.iconst);
+    }
 }

@@ -75,51 +75,41 @@ void       ir_insn_delete(ir_insn_t *insn);
 
 // Add a combinator function to a code block.
 // Takes ownership of the `from` array.
-ir_expr_t *ir_add_combinator(ir_insnloc_t loc, ir_var_t *dest, size_t from_len, ir_combinator_t *from);
+ir_insn_t *ir_add_combinator(ir_insnloc_t loc, ir_var_t *dest, size_t from_len, ir_combinator_t *from);
 // Add an expression to a code block.
-ir_expr_t *ir_add_expr1(ir_insnloc_t loc, ir_var_t *dest, ir_op1_type_t oper, ir_operand_t operand);
+ir_insn_t *ir_add_expr1(ir_insnloc_t loc, ir_var_t *dest, ir_op1_type_t oper, ir_operand_t operand);
 // Add an expression to a code block.
-ir_expr_t *ir_add_expr2(ir_insnloc_t loc, ir_var_t *dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs);
-// Add an undefined variable.
-ir_expr_t *ir_add_undefined(ir_insnloc_t loc, ir_var_t *dest);
+ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_var_t *dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs);
 
 // Add a load effective address of a stack frame to a code block.
-ir_mem_t *ir_add_lea_stack(ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame, uint64_t offset);
+ir_insn_t *ir_add_lea_stack(ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame, uint64_t offset);
 // Add a load effective address of a symbol to a code block.
-ir_mem_t *ir_add_lea_symbol(ir_insnloc_t loc, ir_var_t *dest, char const *symbol, uint64_t offset);
+ir_insn_t *ir_add_lea_symbol(ir_insnloc_t loc, ir_var_t *dest, char const *symbol, uint64_t offset);
 // Add a memory load to a code block.
-ir_mem_t *ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_operand_t addr);
+ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_operand_t addr);
 // Add a memory store to a code block.
-ir_mem_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_operand_t addr);
+ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_operand_t addr);
 
-// Add a direct (by symbol) function call.
-// Takes ownership of `params`.
-ir_flow_t *ir_add_call_direct(ir_insnloc_t from, char const *symbol, size_t params_len, ir_operand_t *params);
-// Add an indirect (by pointer) function call.
-// Takes ownership of `params`.
-ir_flow_t *ir_add_call_ptr(ir_insnloc_t from, ir_operand_t funcptr, size_t params_len, ir_operand_t *params);
+// Add a function call.
+ir_insn_t *ir_add_call(ir_insnloc_t from, ir_memref_t to, size_t params_len, ir_operand_t const *params);
 // Add an unconditional jump.
-ir_flow_t *ir_add_jump(ir_insnloc_t from, ir_code_t *to);
+ir_insn_t *ir_add_jump(ir_insnloc_t from, ir_code_t *to);
 // Add a conditional branch.
-ir_flow_t *ir_add_branch(ir_insnloc_t from, ir_operand_t cond, ir_code_t *to);
+ir_insn_t *ir_add_branch(ir_insnloc_t from, ir_operand_t cond, ir_code_t *to);
 // Add a return without value.
-ir_flow_t *ir_add_return0(ir_insnloc_t from);
+ir_insn_t *ir_add_return0(ir_insnloc_t from);
 // Add a return with value.
-ir_flow_t *ir_add_return1(ir_insnloc_t from, ir_operand_t value);
+ir_insn_t *ir_add_return1(ir_insnloc_t from, ir_operand_t value);
 
 // Add a machine instruction.
-ir_mach_insn_t *
-    ir_add_mach_insn(ir_insnloc_t loc, ir_var_t *dest, insn_proto_t const *proto, ir_operand_t const *params);
+ir_insn_t *ir_add_mach_insn(ir_insnloc_t loc, ir_var_t *dest, insn_proto_t const *proto, ir_operand_t const *operands);
 
 
 
 // If the instruction stores to a variable, returns the variable written to.
 static inline ir_var_t *ir_insn_get_dest(ir_insn_t const *insn) {
-    if (insn->type == IR_INSN_EXPR) {
-        return ((ir_expr_t const *)insn)->dest;
-    } else if (insn->type == IR_INSN_MEM) {
-        ir_mem_t const *mem = (ir_mem_t const *)insn;
-        return mem->type != IR_MEM_STORE ? mem->m_load.dest : NULL;
+    if (insn->returns_len) {
+        return insn->returns[0];
     } else {
         return NULL;
     }

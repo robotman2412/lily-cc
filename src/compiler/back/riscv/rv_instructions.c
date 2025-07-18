@@ -142,12 +142,12 @@ operand_rule_t const RV_OP_RULES_L[] = {
 
 // Define a branch instruction.
 #define RV_INSN_BRANCH(_name, ext, op_maj, funct3, ir_op2, allow_s, allow_u) \
-    insn_proto_t const rv_insn_##_name = {                                                   \
-        .name         = #_name,                                                              \
-        .cookie       = RV_COOKIE(ext, op_maj, RV_ENC_B, funct3, 0, 0),                      \
-        .operands_len = 2,                                                                   \
-        .operands     = RV_OP_RULES2(12, 0, allow_s, allow_u, 0),                            \
-        .tree         = &NODE_BRANCH(&NODE_EXPR2(ir_op2, &NODE_OPERAND_0, &NODE_OPERAND_1)), \
+    insn_proto_t const rv_insn_##_name = {                                                                    \
+        .name         = #_name,                                                                               \
+        .cookie       = RV_COOKIE(ext, op_maj, RV_ENC_B, funct3, 0, 0),                                       \
+        .operands_len = 3,                                                                                    \
+        .operands     = RV_OP_RULES2(12, 0, allow_s, allow_u, 0),                                             \
+        .tree         = &NODE_BRANCH(&NODE_OPERAND_0, &NODE_EXPR2(ir_op2, &NODE_OPERAND_1, &NODE_OPERAND_2)), \
     };
 
 // Define a store instruction.

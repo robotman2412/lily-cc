@@ -20,37 +20,17 @@ typedef struct cand_tree cand_tree_t;
 // IR instruction in a `cand_tree_t`.
 struct isel_node {
     // IR instruction category.
-    ir_insn_type_t insn_type;
+    ir_insn_type_t type;
     union {
-        struct {
-            // Expression subtype.
-            // Allowed: IR_EXPR_BINARY, IR_EXPR_UNARY.
-            ir_expr_type_t type;
-            // Expression operator.
-            union {
-                ir_op1_type_t op1;
-                ir_op2_type_t op2;
-            };
-            // Left-hand side subtree.
-            // Also the operand for unary expressions.
-            cand_tree_t *lhs;
-            // Right-hand side subtree.
-            cand_tree_t *rhs;
-        } expr;
-        struct {
-            // Branch condition; no other types of flow-control are allowed here.
-            cand_tree_t *value;
-        } flow;
-        struct {
-            // Memory subtype.
-            // Allowed: all.
-            ir_mem_type_t type;
-            // Value to store.
-            cand_tree_t  *value;
-            // Load / store pointer.
-            cand_tree_t  *ptr;
-        } mem;
+        // Expression operator.
+        ir_op1_type_t op1;
+        // Expression operator.
+        ir_op2_type_t op2;
     };
+    // Child nodes of the tree.
+    size_t        children_len;
+    // Child nodes of the tree.
+    cand_tree_t **children;
 };
 
 // Tree structure used to make instruction selection decisions.
@@ -61,7 +41,7 @@ struct cand_tree {
     expr_tree_type_t type;
     union {
         // Expression node that describes the operation performed.
-        isel_node_t expr;
+        isel_node_t insn;
         struct {
             // IR constant value to match.
             ir_const_t           iconst;

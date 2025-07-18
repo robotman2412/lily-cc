@@ -23,19 +23,11 @@ char const *const ir_prim_names[] = {
 };
 
 char const *const ir_op2_names[] = {
-#define IR_OP2_DEF(x) #x,
+#define IR_OP2_DEF(x) [IR_OP2_##x] = #x,
 #include "defs/ir_op2.inc"
 };
 
 char const *const ir_op1_names[] = {
-#define IR_OP1_DEF(x) #x,
+#define IR_OP1_DEF(x) [IR_OP1_##x] = #x,
 #include "defs/ir_op1.inc"
-};
-
-char const *const ir_flow_names[] = {
-    [IR_FLOW_JUMP]        = "jump",
-    [IR_FLOW_BRANCH]      = "branch",
-    [IR_FLOW_CALL_DIRECT] = "call_direct",
-    [IR_FLOW_CALL_PTR]    = "call_ptr",
-    [IR_FLOW_RETURN]      = "return",
 };

@@ -6,8 +6,7 @@
 #include "c_compiler.h"
 #include "c_parser.h"
 
-#include <stdio.h>
-#include <stdlib.h>
+#include <string.h>
 
 static void compile_explain_type(char const *value) {
     // Create requisite contexts.

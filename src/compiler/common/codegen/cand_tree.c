@@ -8,10 +8,13 @@
 #include "insn_proto.h"
 #include "ir_interpreter.h"
 #include "ir_types.h"
+#include "set.h"
 #include "strong_malloc.h"
 
 #include <assert.h>
+#include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 
 
 
@@ -64,26 +67,16 @@ static cand_tree_t *isel_copy_subtree(expr_tree_t const *proto_tree, insn_proto_
 
     } else if (proto_tree->type == EXPR_TREE_IR_INSN) {
         // Deep copy.
-        node->expr.insn_type = proto_tree->expr.insn_type;
-        switch (proto_tree->expr.insn_type) {
-            case IR_INSN_EXPR:
-                node->expr.expr.type = proto_tree->expr.expr.type;
-                node->expr.expr.op1  = proto_tree->expr.expr.op1;
-                node->expr.expr.lhs  = isel_copy_subtree(proto_tree->expr.expr.lhs, proto);
-                if (node->expr.expr.type == IR_EXPR_BINARY) {
-                    node->expr.expr.rhs = isel_copy_subtree(proto_tree->expr.expr.rhs, proto);
-                }
-                break;
-
-            case IR_INSN_FLOW: node->expr.flow.value = isel_copy_subtree(proto_tree->expr.flow.value, proto); break;
-
-            case IR_INSN_MEM:
-                node->expr.mem.type  = proto_tree->expr.mem.type;
-                node->expr.mem.ptr   = isel_copy_subtree(proto_tree->expr.mem.ptr, proto);
-                node->expr.mem.value = isel_copy_subtree(proto_tree->expr.mem.value, proto);
-                break;
-
-            default: abort();
+        node->insn.type         = proto_tree->insn.type;
+        node->insn.children_len = proto_tree->insn.children_len;
+        node->insn.children     = strong_calloc(node->insn.children_len, sizeof(void *));
+        if (node->insn.type == IR_INSN_EXPR1) {
+            node->insn.op1 = proto_tree->insn.op1;
+        } else if (node->insn.type == IR_INSN_EXPR2) {
+            node->insn.op2 = proto_tree->insn.op2;
+        }
+        for (size_t i = 0; i < node->insn.children_len; i++) {
+            node->insn.children[i] = isel_copy_subtree(proto_tree->insn.children[i], proto);
         }
 
     } else {
@@ -123,36 +116,15 @@ static void isel_insert_insn(cand_tree_t *tree, expr_tree_t const *proto_tree, i
             return;
 
         } else if (proto_tree->type == EXPR_TREE_IR_INSN) {
-            if (tree->expr.insn_type != proto_tree->expr.insn_type)
+            if (tree->insn.type != proto_tree->insn.type || tree->insn.children_len != proto_tree->insn.children_len
+                || (tree->insn.type == IR_INSN_EXPR1 && tree->insn.op1 != proto_tree->insn.op1)
+                || (tree->insn.type == IR_INSN_EXPR2 && tree->insn.op2 != proto_tree->insn.op2)) {
                 continue;
-            switch (tree->expr.insn_type) {
-                case IR_INSN_EXPR:
-                    if (tree->expr.expr.type != proto_tree->expr.expr.type)
-                        continue;
-                    if (tree->expr.expr.op1 != proto_tree->expr.expr.op1)
-                        continue;
-
-                    // Expression matched; insert its subtrees.
-                    isel_insert_insn((void *)tree->expr.expr.lhs, proto_tree->expr.expr.lhs, proto);
-                    isel_insert_insn((void *)tree->expr.expr.rhs, proto_tree->expr.expr.rhs, proto);
-                    return;
-
-                case IR_INSN_FLOW:
-                    // Flow control matched; insert its subtree.
-                    isel_insert_insn(tree->expr.flow.value, proto_tree->expr.flow.value, proto);
-                    return;
-
-                case IR_INSN_MEM:
-                    if (tree->expr.mem.type != proto_tree->expr.mem.type)
-                        continue;
-
-                    // Memory matched; insert its subtree.
-                    isel_insert_insn(tree->expr.mem.ptr, proto_tree->expr.mem.ptr, proto);
-                    isel_insert_insn(tree->expr.mem.value, proto_tree->expr.mem.value, proto);
-                    return;
-
-                case IR_INSN_MACHINE: abort();
             }
+            for (size_t i = 0; i < tree->insn.children_len; i++) {
+                isel_insert_insn(tree->insn.children[i], proto_tree->insn.children[i], proto);
+            }
+            return;
         }
     }
 
@@ -195,16 +167,17 @@ static size_t tree_isel_match_expr_tree_operand(
     if (tree->type == EXPR_TREE_OPERAND) {
         return tree_isel_set_proto_operand(proto_operands_out, tree, ir_operand);
     } else if (tree->type == EXPR_TREE_ICONST) {
-        return ir_operand->is_const && tree_isel_set_proto_operand(proto_operands_out, tree, ir_operand);
-    } else if (ir_operand->is_const) {
+        return ir_operand->type == IR_OPERAND_TYPE_CONST
+               && tree_isel_set_proto_operand(proto_operands_out, tree, ir_operand);
+    } else if (ir_operand->type == IR_OPERAND_TYPE_CONST) {
         return 0;
     } else {
-        return tree_isel_match_expr_tree_insn(
-            proto_operands_out,
-            tree,
-            &container_of(ir_operand->var->assigned_at.head, ir_expr_t, dest_node)->base,
-            parent_code
-        );
+        set_ent_t const *ent = set_next(&ir_operand->var->assigned_at, NULL);
+        if (ent) {
+            return tree_isel_match_expr_tree_insn(proto_operands_out, tree, ent->value, parent_code);
+        } else {
+            return 1;
+        }
     }
 }
 
@@ -217,88 +190,26 @@ static size_t tree_isel_match_expr_tree_insn(
     ir_insn_t const     *ir_insn,
     ir_code_t const     *parent_code
 ) {
-    if (tree->type != EXPR_TREE_IR_INSN || tree->expr.insn_type != ir_insn->type) {
+    if (tree->type != EXPR_TREE_IR_INSN || tree->insn.type != ir_insn->type
+        || (tree->insn.type == IR_INSN_EXPR1 && tree->insn.op1 != ir_insn->op1)
+        || (tree->insn.type == IR_INSN_EXPR2 && tree->insn.op2 != ir_insn->op2)) {
         return 0;
     }
 
-    switch (tree->expr.insn_type) {
-        case IR_INSN_EXPR: {
-            ir_expr_t const *expr = (ir_expr_t const *)ir_insn;
-            if (expr->type != tree->expr.expr.type || expr->e_unary.oper != tree->expr.expr.op1) {
-                return 0;
-            }
-            if (expr->type == IR_EXPR_UNARY) {
-                size_t a = tree_isel_match_expr_tree_operand(
-                    proto_operands_out,
-                    tree->expr.expr.lhs,
-                    &expr->e_unary.value,
-                    parent_code
-                );
-                return a ? a + 1 : 0;
-            } else {
-                size_t a = tree_isel_match_expr_tree_operand(
-                    proto_operands_out,
-                    tree->expr.expr.lhs,
-                    &expr->e_binary.lhs,
-                    parent_code
-                );
-                size_t b = tree_isel_match_expr_tree_operand(
-                    proto_operands_out,
-                    tree->expr.expr.rhs,
-                    &expr->e_binary.rhs,
-                    parent_code
-                );
-                return a && b ? a + b + 1 : 0;
-            }
-        } break;
-
-        case IR_INSN_FLOW: {
-            ir_flow_t const *flow = (ir_flow_t const *)ir_insn;
-            size_t           a    = tree_isel_match_expr_tree_operand(
-                proto_operands_out,
-                tree->expr.flow.value,
-                &flow->f_branch.cond,
-                parent_code
-            );
-            return a ? a + 1 : 0;
-        } break;
-
-        case IR_INSN_MEM: {
-            ir_mem_t const *mem = (ir_mem_t const *)ir_insn;
-            if (mem->type != tree->expr.mem.type) {
-                return 0;
-            }
-            if (tree->expr.mem.type == IR_MEM_STORE) {
-                size_t a = tree_isel_match_expr_tree_operand(
-                    proto_operands_out,
-                    tree->expr.mem.ptr,
-                    &mem->m_store.addr,
-                    parent_code
-                );
-                size_t b = tree_isel_match_expr_tree_operand(
-                    proto_operands_out,
-                    tree->expr.mem.value,
-                    &mem->m_store.src,
-                    parent_code
-                );
-                return a && b ? a + b + 1 : 0;
-            } else if (tree->expr.mem.type == IR_MEM_LOAD) {
-                size_t a = tree_isel_match_expr_tree_operand(
-                    proto_operands_out,
-                    tree->expr.mem.ptr,
-                    &mem->m_load.addr,
-                    parent_code
-                );
-                return a ? a + 1 : 0;
-            } else if (tree->expr.mem.type == IR_MEM_LEA_STACK || tree->expr.mem.type == IR_MEM_LEA_SYMBOL) {
-                return 1;
-            }
-        } break;
-
-        case IR_INSN_MACHINE: abort();
+    size_t total = 1;
+    for (size_t i = 0; i < tree->insn.children_len; i++) {
+        size_t res = tree_isel_match_expr_tree_operand(
+            proto_operands_out,
+            tree->insn.children[i],
+            &ir_insn->operands[i],
+            parent_code
+        );
+        if (res == 0) {
+            return 0;
+        }
+        total += res;
     }
-
-    abort();
+    return total;
 }
 
 // Test whether a candidate instruction prototypes matches the IR.
@@ -322,10 +233,11 @@ static size_t tree_isel_match_proto(
         operand_rule_t rule = proto->operands[i];
 
         // A non-imm location is (also) available.
-        bool allow_nonconst = rule.location_kinds.reg || rule.location_kinds.mem_abs || rule.location_kinds.mem_ptr
-                              || rule.location_kinds.mem_pcrel;
+        bool allow_nonconst = rule.location_kinds.reg || rule.location_kinds.mem_access;
 
-        if (ir_operands[i]->is_const) {
+        if (ir_operands[i]->type == IR_OPERAND_TYPE_MEM) {
+            // TODO: Validate memory rules.
+        } else if (ir_operands[i]->type == IR_OPERAND_TYPE_CONST) {
             // Validate constant rules.
             bool imm_ok = rule.location_kinds.imm;
             switch (ir_operands[i]->iconst.prim_type) {
@@ -380,7 +292,7 @@ static size_t tree_isel_match_proto(
 // Add instruction selection candidates based on an IR operand.
 static void tree_isel_add_candidates_operand(set_t *candidates, cand_tree_t const *tree, ir_operand_t ir_operand) {
     for (cand_tree_t const *cur = tree; cur; cur = cur->next) {
-        if ((cur->type == EXPR_TREE_ICONST && ir_operand.is_const
+        if ((cur->type == EXPR_TREE_ICONST && ir_operand.type == IR_OPERAND_TYPE_CONST
              && ir_const_lenient_identical(cur->iconst, ir_operand.iconst))
             || cur->type == EXPR_TREE_OPERAND) {
             for (size_t i = 0; i < cur->protos_len; i++) {
@@ -389,55 +301,24 @@ static void tree_isel_add_candidates_operand(set_t *candidates, cand_tree_t cons
         }
     }
 
-    if (!ir_operand.is_const) {
-        tree_isel_add_candidates_insn(
-            candidates,
-            tree,
-            &container_of(ir_operand.var->assigned_at.head, ir_expr_t, dest_node)->base
-        );
+    if (ir_operand.type == IR_OPERAND_TYPE_VAR) {
+        set_ent_t const *ent = set_next(&ir_operand.var->assigned_at, NULL);
+        if (ent) {
+            tree_isel_add_candidates_insn(candidates, tree, ent->value);
+        }
     }
 }
 
 // Add instruction selection candidates based on an IR instruction.
 static void tree_isel_add_candidates_insn(set_t *candidates, cand_tree_t const *tree, ir_insn_t const *ir_insn) {
     for (; tree; tree = tree->next) {
-        if (tree->type != EXPR_TREE_IR_INSN || tree->expr.insn_type != ir_insn->type)
+        if (tree->type != EXPR_TREE_IR_INSN || tree->insn.type != ir_insn->type
+            || (tree->insn.type == IR_INSN_EXPR1 && tree->insn.op1 != ir_insn->op1)
+            || (tree->insn.type == IR_INSN_EXPR2 && tree->insn.op2 != ir_insn->op2)) {
             continue;
-        switch (tree->expr.insn_type) {
-            case IR_INSN_EXPR: {
-                ir_expr_t const *ir_expr = (ir_expr_t const *)ir_insn;
-                if (tree->expr.expr.type != ir_expr->type || tree->expr.expr.op1 != ir_expr->e_unary.oper)
-                    continue;
-                if (tree->expr.expr.type == IR_EXPR_UNARY) {
-                    tree_isel_add_candidates_operand(candidates, tree->expr.expr.lhs, ir_expr->e_unary.value);
-                } else {
-                    tree_isel_add_candidates_operand(candidates, tree->expr.expr.lhs, ir_expr->e_binary.lhs);
-                    tree_isel_add_candidates_operand(candidates, tree->expr.expr.rhs, ir_expr->e_binary.rhs);
-                }
-            } break;
-
-            case IR_INSN_FLOW: {
-                ir_flow_t const *ir_flow = (ir_flow_t const *)ir_insn;
-                tree_isel_add_candidates_operand(candidates, tree->expr.flow.value, ir_flow->f_branch.cond);
-            } break;
-
-            case IR_INSN_MEM: {
-                ir_mem_t const *ir_mem = (ir_mem_t const *)ir_insn;
-                if (tree->expr.mem.type != ir_mem->type)
-                    continue;
-                if (tree->expr.mem.type == IR_MEM_STORE) {
-                    tree_isel_add_candidates_operand(candidates, tree->expr.mem.ptr, ir_mem->m_store.addr);
-                    tree_isel_add_candidates_operand(candidates, tree->expr.mem.value, ir_mem->m_store.src);
-                } else if (tree->expr.mem.type == IR_MEM_LOAD) {
-                    tree_isel_add_candidates_operand(candidates, tree->expr.mem.ptr, ir_mem->m_load.addr);
-                } else if (tree->expr.mem.type == IR_MEM_LEA_STACK || tree->expr.mem.type == IR_MEM_LEA_SYMBOL) {
-                    for (size_t i = 0; i < tree->protos_len; i++) {
-                        set_add(candidates, tree->protos[i]);
-                    }
-                }
-            } break;
-
-            case IR_INSN_MACHINE: abort();
+        }
+        for (size_t i = 0; i < tree->insn.children_len; i++) {
+            tree_isel_add_candidates_operand(candidates, tree->insn.children[i], ir_insn->operands[i]);
         }
     }
 }
@@ -454,11 +335,11 @@ insn_proto_t const *cand_tree_isel(cand_tree_t const *tree, ir_insn_t const *ir_
     // Select the instruction that consumes most IR.
     size_t              max_size = 0;
     insn_proto_t const *best_fit = NULL;
-    ir_operand_t const *best_operand[IR_MACH_INSN_MAX_OPERANDS];
+    ir_operand_t const *best_operand[8];
 
     set_foreach(insn_proto_t, proto, &candidates) {
-        ir_operand_t const *operand_tmp[IR_MACH_INSN_MAX_OPERANDS] = {0};
-        size_t              proto_size = tree_isel_match_proto(proto, ir_insn, ir_insn->parent, operand_tmp);
+        ir_operand_t const *operand_tmp[8] = {0};
+        size_t              proto_size     = tree_isel_match_proto(proto, ir_insn, ir_insn->parent, operand_tmp);
         if (proto_size > max_size) {
             max_size = proto_size;
             best_fit = proto;

@@ -6,6 +6,7 @@
 #pragma once
 
 // Defines how a machine instruction behaves in terms of IR expressions.
+#include <stdlib.h>
 typedef struct insn_proto insn_proto_t;
 
 // IR primitive types.
@@ -19,18 +20,6 @@ typedef enum __attribute__((packed)) {
 #include "arith128.h"
 #include "list.h"
 #include "set.h"
-
-// IR expression types.
-typedef enum __attribute__((packed)) {
-    // Combinator expression.
-    IR_EXPR_COMBINATOR,
-    // Unary expression.
-    IR_EXPR_UNARY,
-    // Binary expression.
-    IR_EXPR_BINARY,
-    // Set to undefined.
-    IR_EXPR_UNDEFINED,
-} ir_expr_type_t;
 
 // Binary IR operators.
 typedef enum __attribute__((packed)) {
@@ -46,44 +35,62 @@ typedef enum __attribute__((packed)) {
     IR_N_OP1,
 } ir_op1_type_t;
 
-// IR control flow types.
-typedef enum __attribute__((packed)) {
-    // Unconditional jump
-    IR_FLOW_JUMP,
-    // Conditional branch.
-    IR_FLOW_BRANCH,
-    // Function call (direct).
-    IR_FLOW_CALL_DIRECT,
-    // Function call (via pointer).
-    IR_FLOW_CALL_PTR,
-    // Return from function.
-    IR_FLOW_RETURN,
-} ir_flow_type_t;
-
-// IR memory access types.
-typedef enum __attribute__((packed)) {
-    // Load effective address of stack frame.
-    IR_MEM_LEA_STACK,
-    // Load effective address of symbol.
-    IR_MEM_LEA_SYMBOL,
-    // Load from memory.
-    IR_MEM_LOAD,
-    // Store to memory.
-    IR_MEM_STORE,
-} ir_mem_type_t;
-
 // Type of IR instruction.
 typedef enum __attribute__((packed)) {
-    // Computation instructions (e.g. `mul` or `slt`).
-    IR_INSN_EXPR,
-    // Control-flow instructions (e.g. `jump` or `return`).
-    IR_INSN_FLOW,
-    // Memory instructions (e.g. `lea` or `store`).
-    IR_INSN_MEM,
+    // 2-operand computation instructions (e.g. `mul` or `slt`).
+    IR_INSN_EXPR2,
+    // 1-operand computation instructions (e.g. `mov` or `bnot`).
+    IR_INSN_EXPR1,
+    // Unconditional jump.
+    // Operands: target.
+    IR_INSN_JUMP,
+    // Conditional branch.
+    // Operands: target, condition.
+    IR_INSN_BRANCH,
+    // Load effective address.
+    // Operands: memory location.
+    IR_INSN_LEA,
+    // Load memory.
+    // Operands: memory location.
+    IR_INSN_LOAD,
+    // Store to memory.
+    // Operands: memory location, value to store.
+    IR_INSN_STORE,
+    // SSA function combinator / PHY node.
+    IR_INSN_COMBINATOR,
+    // Function call.
+    IR_INSN_CALL,
+    // Return from function the specified operands as per ABI.
+    IR_INSN_RETURN,
     // Machine instructions; target architecture-dependent.
     IR_INSN_MACHINE,
 } ir_insn_type_t;
 
+// Type of IR operand.
+typedef enum __attribute__((packed)) {
+    // Constant / immediate value.
+    IR_OPERAND_TYPE_CONST,
+    // Undefined variable.
+    IR_OPERAND_TYPE_UNDEF,
+    // Variable / register.
+    IR_OPERAND_TYPE_VAR,
+    // Memory location.
+    IR_OPERAND_TYPE_MEM,
+} ir_operand_type_t;
+
+// Things for the offset of a memory operand to be relative to.
+typedef enum __attribute__((packed)) {
+    // Absolute (relative to 0).
+    IR_MEMREL_ABS,
+    // Relative to a symbol.
+    IR_MEMREL_SYM,
+    // Relative to a stack frame.
+    IR_MEMREL_FRAME,
+    // Relative to a code block.
+    IR_MEMREL_CODE,
+    // Relative to a register's value.
+    IR_MEMREL_VAR,
+} ir_memrel_t;
 
 
 // IR stack frame.
@@ -94,20 +101,14 @@ typedef struct ir_arg        ir_arg_t;
 typedef struct ir_var        ir_var_t;
 // IR constant.
 typedef struct ir_const      ir_const_t;
-// IR expression operand.
+// IR memory reference.
+typedef struct ir_memref     ir_memref_t;
+// IR instruction operand.
 typedef struct ir_operand    ir_operand_t;
 // IR combinator code block -> variable map.
 typedef struct ir_combinator ir_combinator_t;
 // IR instruction.
 typedef struct ir_insn       ir_insn_t;
-// IR expression instruction.
-typedef struct ir_expr       ir_expr_t;
-// IR control flow instruction.
-typedef struct ir_flow       ir_flow_t;
-// IR memory instruction.
-typedef struct ir_mem        ir_mem_t;
-// IR machine instruction.
-typedef struct ir_mach_insn  ir_mach_insn_t;
 // IR code block.
 typedef struct ir_code       ir_code_t;
 // IR function.
@@ -155,7 +156,7 @@ struct ir_var {
     // Is one of this function's args and if so, which.
     ptrdiff_t    is_arg;
     // Expressions that assign this variable.
-    dlist_t      assigned_at;
+    set_t        assigned_at;
     // instructions that read this variable.
     set_t        used_at;
 };
@@ -180,17 +181,93 @@ struct ir_const {
     };
 };
 
-// IR expression operand.
-struct ir_operand {
-    // Is this a constant?
-    bool is_const;
+#define IR_CONST_BOOL(value) ((ir_const_t){.prim_type = IR_PRIM_bool, .constl = (bool)(value)})
+
+#define IR_CONST_U8(value)   ((ir_const_t){.prim_type = IR_PRIM_u8, .constl = (uint8_t)(value)})
+#define IR_CONST_U16(value)  ((ir_const_t){.prim_type = IR_PRIM_u16, .constl = (uint16_t)(value)})
+#define IR_CONST_U32(value)  ((ir_const_t){.prim_type = IR_PRIM_u32, .constl = (uint32_t)(value)})
+#define IR_CONST_U64(value)  ((ir_const_t){.prim_type = IR_PRIM_u64, .constl = (uint64_t)(value)})
+#define IR_CONST_U128(value) ((ir_const_t){.prim_type = IR_PRIM_u128, .const128 = (value)})
+
+#define IR_CONST_S8(value)   ((ir_const_t){.prim_type = IR_PRIM_s8, .constl = (int8_t)(value)})
+#define IR_CONST_S16(value)  ((ir_const_t){.prim_type = IR_PRIM_s16, .constl = (int16_t)(value)})
+#define IR_CONST_S32(value)  ((ir_const_t){.prim_type = IR_PRIM_s32, .constl = (int32_t)(value)})
+#define IR_CONST_S64(value)  ((ir_const_t){.prim_type = IR_PRIM_s64, .constl = (int64_t)(value)})
+#define IR_CONST_S128(value) ((ir_const_t){.prim_type = IR_PRIM_s128, .const128 = (value)})
+
+#define IR_CONST_F32(value) ((ir_const_t){.prim_type = IR_PRIM_f32, .constf32 = (float)(value)})
+#define IR_CONST_F64(value) ((ir_const_t){.prim_type = IR_PRIM_f64, .constf64 = (double)(value)})
+
+// IR memory reference.
+struct ir_memref {
+    // What the offset is relative to.
+    ir_memrel_t rel_type;
+    // What type of data to load.
+    ir_prim_t   data_type;
     union {
-        // Constant.
-        ir_const_t iconst;
-        // Variable.
-        ir_var_t  *var;
+        // Base address symbol.
+        char const *base_sym;
+        // Base address of stack frame.
+        ir_frame_t *base_frame;
+        // Base address of code block.
+        ir_code_t  *base_code;
+        // Base address IR variable.
+        ir_var_t   *base_var;
+    };
+    // Offset from base.
+    int64_t offset;
+};
+
+// Absolute base address for `ir_memref_t` compound initializer.
+#define IR_BADDR_ABS()        .rel_type = IR_MEMREL_ABS,
+// Symbol base address for `ir_memref_t` compound initializer.
+#define IR_BADDR_SYM(sym)     .rel_type = IR_MEMREL_SYM, .base_sym = (sym),
+// Stack frame base address for `ir_memref_t` compound initializer.
+#define IR_BADDR_FRAME(frame) .rel_type = IR_MEMREL_FRAME, .base_frame = (frame),
+// Code block base address for `ir_memref_t` compound initializer.
+#define IR_BADDR_CODE(code)   .rel_type = IR_MEMREL_CODE, .base_code = (code),
+// Variable base address for `ir_memref_t` compound initializer.
+#define IR_BADDR_VAR(var)     .rel_type = IR_MEMREL_VAR, .base_var = (var),
+
+// Create an `ir_memref_t` without offset.
+#define IR_MEMREF(data_type_, ...) ((ir_memref_t){.data_type = (data_type_), __VA_ARGS__})
+
+
+// IR instruction operand.
+struct ir_operand {
+    // What kind of operand this is.
+    ir_operand_type_t type;
+    union {
+        // Constant / immediate value.
+        ir_const_t  iconst;
+        // Data type of this undefined.
+        ir_prim_t   undef_type;
+        // Variable / register.
+        ir_var_t   *var;
+        // Memory location.
+        ir_memref_t mem;
     };
 };
+
+// Get the data type of an IR operand.
+static inline ir_prim_t ir_operand_prim(ir_operand_t oper) {
+    switch (oper.type) {
+        case IR_OPERAND_TYPE_CONST: return oper.iconst.prim_type;
+        case IR_OPERAND_TYPE_UNDEF: return oper.undef_type;
+        case IR_OPERAND_TYPE_VAR: return oper.var->prim_type;
+        case IR_OPERAND_TYPE_MEM: return oper.mem.data_type;
+    }
+    __builtin_unreachable();
+}
+
+// A constant operand.
+#define IR_OPERAND_CONST(iconst_)     ((ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = (iconst_)})
+// An undefined operand.
+#define IR_OPERAND_UNDEF(undef_type_) ((ir_operand_t){.type = IR_OPERAND_TYPE_UNDEF, .undef_type = (undef_type_)})
+// A variable operand.
+#define IR_OPERAND_VAR(var_)          ((ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = (var_)})
+// A memory location operand.
+#define IR_OPERAND_MEM(mem_)          ((ir_operand_t){.type = IR_OPERAND_TYPE_MEM, .mem = (mem_)})
 
 // IR combinator code block -> variable map.
 struct ir_combinator {
@@ -208,135 +285,34 @@ struct ir_insn {
     ir_code_t     *parent;
     // Distinguishes between the types of instruction.
     ir_insn_type_t type;
-};
-
-// IR expression.
-struct ir_expr {
-    ir_insn_t      base;
-    // Linked list node for variable assignments.
-    dlist_node_t   dest_node;
-    // Expression type.
-    ir_expr_type_t type;
-    // Destination variable.
-    ir_var_t      *dest;
+    union {
+        // Instruction-specific flags.
+        uint32_t      flags;
+        // Computation operator.
+        ir_op1_type_t op1;
+        // Computation operator.
+        ir_op2_type_t op2;
+    };
+    // Number of return values.
+    size_t     returns_len;
+    // Return values.
+    ir_var_t **returns;
     union {
         struct {
-            // Number of combination points.
-            size_t           from_len;
-            // Combination point map.
-            ir_combinator_t *from;
-        } e_combinator;
+            // Number of operands.
+            size_t        operands_len;
+            // Operands.
+            ir_operand_t *operands;
+        };
         struct {
-            // Operator type.
-            ir_op1_type_t oper;
-            // Expression operand.
-            ir_operand_t  value;
-        } e_unary;
-        struct {
-            // Operator type.
-            ir_op2_type_t oper;
-            // First operand.
-            ir_operand_t  lhs;
-            // Second operand.
-            ir_operand_t  rhs;
-        } e_binary;
+            // Number of combinator sources.
+            size_t           combinators_len;
+            // Combinator sources.
+            ir_combinator_t *combinators;
+        };
     };
-};
-
-// IR control flow.
-struct ir_flow {
-    ir_insn_t      base;
-    // Control flow type.
-    ir_flow_type_t type;
-    union {
-        struct {
-            // Jump target.
-            ir_code_t *target;
-        } f_jump;
-        struct {
-            // Branch target if condition is satisfied.
-            ir_code_t   *target;
-            // Branch condition.
-            ir_operand_t cond;
-        } f_branch;
-        struct {
-            // Number of arguments.
-            size_t        args_len;
-            // Function call arguments.
-            ir_operand_t *args;
-            // Destination label.
-            char         *label;
-        } f_call_direct;
-        struct {
-            // Number of arguments.
-            size_t        args_len;
-            // Function call arguments.
-            ir_operand_t *args;
-            // Destination address.
-            ir_operand_t  addr;
-        } f_call_ptr;
-        struct {
-            // Has a return value.
-            bool         has_value;
-            // Return value, if any.
-            ir_operand_t value;
-        } f_return;
-    };
-};
-
-// IR memory instruction.
-struct ir_mem {
-    ir_insn_t     base;
-    // Linked list node for variable assignments.
-    dlist_node_t  dest_node;
-    // Memory instruction type.
-    ir_mem_type_t type;
-    union {
-        struct {
-            // Destination variable.
-            ir_var_t   *dest;
-            // Stack frame this is relative to.
-            ir_frame_t *frame;
-            // Offset from stack frame.
-            uint64_t    offset;
-        } m_lea_stack;
-        struct {
-            // Destination variable.
-            ir_var_t *dest;
-            // Symbol name this is relative to.
-            char     *symbol;
-            // Offset from stack frame.
-            uint64_t  offset;
-        } m_lea_symbol;
-        struct {
-            // Destination variable.
-            ir_var_t    *dest;
-            // Memory address.
-            ir_operand_t addr;
-        } m_load;
-        struct {
-            // Source operand.
-            ir_operand_t src;
-            // Memory address.
-            ir_operand_t addr;
-        } m_store;
-    };
-};
-
-// Maximum number of operands for machine instructions.
-#define IR_MACH_INSN_MAX_OPERANDS 8
-
-// IR machine instruction.
-struct ir_mach_insn {
-    ir_insn_t           base;
-    // Linked list node for variable assignments.
-    dlist_node_t        dest_node;
     // Machine instruction prototye.
     insn_proto_t const *prototype;
-    // Destination variable.
-    ir_var_t           *dest;
-    // Operands to the machine instruction.
-    ir_operand_t        operands[IR_MACH_INSN_MAX_OPERANDS];
 };
 
 // IR code block.

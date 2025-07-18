@@ -18,9 +18,9 @@
 // Remove jumps that go the the next code block linearly.
 static void cg_remove_jumps(ir_func_t *func) {
     dlist_foreach_node(ir_code_t, code, &func->code_list) {
-        ir_flow_t *last_insn = (ir_flow_t *)code->insns.tail;
-        if (last_insn && last_insn->base.type == IR_INSN_FLOW && last_insn->type == IR_FLOW_JUMP
-            && last_insn->f_jump.target == (void *)code->node.next) {
+        ir_insn_t *last_insn = (ir_insn_t *)code->insns.tail;
+        if (last_insn && last_insn->type == IR_INSN_JUMP
+            && last_insn->operands[0].mem.base_code == (void *)code->node.next) {
             ir_insn_delete((ir_insn_t *)last_insn);
         }
     }
@@ -30,9 +30,11 @@ static void cg_remove_jumps(ir_func_t *func) {
 static void cg_isel(backend_profile_t *profile, ir_code_t *code) {
     ir_insn_t *cur = container_of(code->insns.tail, ir_insn_t, node);
     while (cur) {
-        ir_operand_t    params[IR_MACH_INSN_MAX_OPERANDS];
-        ir_mach_insn_t *mach = insn_proto_substitute(profile->backend->isel(profile, cur, params), cur, params);
-        cur                  = container_of(mach->base.node.previous, ir_insn_t, node);
+        ir_operand_t        params[8];
+        insn_proto_t const *proto = profile->backend->isel(profile, cur, params);
+        assert(proto != NULL);
+        ir_insn_t *mach = insn_proto_substitute(proto, cur, params);
+        cur             = container_of(mach->node.previous, ir_insn_t, node);
     }
 }
 

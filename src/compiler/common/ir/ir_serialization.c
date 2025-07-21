@@ -127,15 +127,29 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
                 case IR_INSN_MACHINE: fprintf(to, "mach %s", insn->prototype->name); break;
             }
 
-            if (insn->operands_len) {
-                fputc(' ', to);
-            }
-
-            for (size_t i = 0; i < insn->operands_len; i++) {
-                if (i) {
-                    fputs(", ", to);
+            if (insn->type == IR_INSN_COMBINATOR) {
+                if (insn->combinators_len) {
+                    fputc(' ', to);
                 }
-                ir_operand_serialize(insn->operands[i], to);
+
+                for (size_t i = 0; i < insn->combinators_len; i++) {
+                    if (i) {
+                        fputs(", ", to);
+                    }
+                    printf("%%%s ", insn->combinators[i].prev->name);
+                    ir_operand_serialize(insn->combinators[i].bind, to);
+                }
+            } else {
+                if (insn->operands_len) {
+                    fputc(' ', to);
+                }
+
+                for (size_t i = 0; i < insn->operands_len; i++) {
+                    if (i) {
+                        fputs(", ", to);
+                    }
+                    ir_operand_serialize(insn->operands[i], to);
+                }
             }
 
             fputc('\n', to);

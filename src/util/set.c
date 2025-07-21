@@ -169,6 +169,7 @@ bool set_add(set_t *set, void const *value) {
 }
 
 // Add all items from another set to this one.
+// Returns how many items, if any, are added.
 size_t set_addall(set_t *set, set_t const *other) {
     if (set->vtable != other->vtable) {
         fprintf(stderr, "Error: Sets contain different types\n");
@@ -176,35 +177,90 @@ size_t set_addall(set_t *set, set_t const *other) {
     }
     size_t added = 0;
 
-    for (size_t i = 0; i < set->buckets_len; i++) {
+    if (!other->len) {
+        return 0;
+    } else if (!set->len) {
+        if (!set_resize(set, other->buckets_len)) {
+            return 0;
+        }
+    }
+
+    // For all buckets in `set` ...
+    for (size_t x = 0; x < set->buckets_len; x++) {
         dlist_t tmp = DLIST_EMPTY;
-        dlist_foreach_node(set_ent_t const, other_ent, &other->buckets[i]) {
-            // If the entry exists in this set already, do not add it.
-            dlist_foreach_node(set_ent_t const, this_ent, &set->buckets[i]) {
-                if (other_ent->hash == this_ent->hash && !set->vtable->val_cmp(other_ent->value, this_ent->value)) {
-                    goto skip;
+
+        // ... with all matching buckets in `other` ...
+        size_t inc = set->buckets_len < other->buckets_len ? set->buckets_len : other->buckets_len;
+        for (size_t y = x & (other->buckets_len - 1); y < other->buckets_len; y += inc) {
+            dlist_foreach_node(set_ent_t const, other_ent, &other->buckets[y]) {
+                // ... if the entry exists in this set already, do not add it.
+                dlist_foreach_node(set_ent_t const, this_ent, &set->buckets[x]) {
+                    if (other_ent->hash == this_ent->hash && !set->vtable->val_cmp(other_ent->value, this_ent->value)) {
+                        goto skip;
+                    }
                 }
-            }
 
-            // Allocate a new item.
-            set_ent_t *new_ent = malloc(sizeof(set_ent_t));
-            if (new_ent) {
-                new_ent->node  = DLIST_NODE_EMPTY;
-                new_ent->value = set->vtable->val_dup(other_ent->value);
-                new_ent->hash  = other_ent->hash;
-                dlist_append(&tmp, &new_ent->node);
-                added++;
-                set->len++;
+                // Allocate a new item.
+                set_ent_t *new_ent = malloc(sizeof(set_ent_t));
+                if (new_ent) {
+                    new_ent->node  = DLIST_NODE_EMPTY;
+                    new_ent->value = set->vtable->val_dup(other_ent->value);
+                    new_ent->hash  = other_ent->hash;
+                    dlist_append(&tmp, &new_ent->node);
+                    added++;
+                    set->len++;
+                }
+            skip:;
             }
-
-        skip:;
         }
 
-        dlist_concat(&set->buckets[i], &tmp);
+        dlist_concat(&set->buckets[x], &tmp);
     }
 
     set_auto_resize(set);
     return added;
+}
+
+// Remove all items in another set from this one.
+size_t set_removeall(set_t *set, set_t const *other) {
+    if (set->vtable != other->vtable) {
+        fprintf(stderr, "Error: Sets contain different types\n");
+        abort();
+    }
+    size_t removed = 0;
+
+    if (!other->len || !set->len) {
+        return 0;
+    }
+
+    // For all buckets in `set`...
+    for (size_t x = 0; x < set->buckets_len; x++) {
+        // ... iterate all entries ...
+        set_ent_t *this_ent = (void *)set->buckets[x].head;
+        while (this_ent) {
+            set_ent_t *next = (void *)this_ent->node.next;
+            // ... with all matching buckets in `other` ...
+            size_t     inc  = set->buckets_len < other->buckets_len ? set->buckets_len : other->buckets_len;
+            for (size_t y = x & (other->buckets_len - 1); y < other->buckets_len; y += inc) {
+                // ... compare each entry ...
+                dlist_foreach_node(set_ent_t, other_ent, &other->buckets[y]) {
+                    // ... and remove if they are equal.
+                    if (this_ent->hash == other_ent->hash && !set->vtable->val_cmp(this_ent->value, other_ent->value)) {
+                        dlist_remove(&set->buckets[x], &this_ent->node);
+                        set->vtable->val_del(this_ent->value);
+                        free(this_ent);
+                        removed++;
+                        // If equal,
+                        goto cont;
+                    }
+                }
+            }
+        cont:
+            this_ent = next;
+        }
+    }
+
+    return removed;
 }
 
 // Retain all items also in the other set.
@@ -241,40 +297,12 @@ size_t set_intersect(set_t *set, set_t const *other) {
     return removed;
 }
 
-// Retain all items that are in the array.
-// Returns how many items, if any, are removed.
-size_t set_intersect_array(set_t *set, void const *const *values, size_t values_len) {
-    size_t removed = 0;
-
-    for (size_t i = 0; i < set->buckets_len; i++) {
-        set_ent_t *ent = (void *)set->buckets[i].head;
-        while (ent) {
-            bool keep = false;
-
-            for (size_t j = 0; j < values_len; j++) {
-                if (set->vtable->val_cmp(ent->value, values[j]) == 0) {
-                    keep = true;
-                    break;
-                }
-            }
-
-            set_ent_t *next = (void *)ent->node.next;
-            if (!keep) {
-                dlist_remove(&set->buckets[i], &ent->node);
-                set->vtable->val_del(ent->value);
-                free(ent);
-                removed++;
-            }
-            ent = next;
-        }
-    }
-
-    set_auto_resize(set);
-    return removed;
-}
-
 // Remove an item from the set.
 bool set_remove(set_t *set, void const *value) {
+    if (!set->len) {
+        return false;
+    }
+
     // Figure out which bucket the value is in.
     uint32_t hash   = set->vtable->val_hash(value);
     size_t   bucket = hash & (set->buckets_len - 1);

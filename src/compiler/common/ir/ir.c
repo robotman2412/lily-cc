@@ -17,9 +17,16 @@
 #include <complex.h>
 #include <inttypes.h>
 #include <stdarg.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define free print_ok
+
+void print_ok(void *p) {
+    printf("free(%p)\n", p);
+}
 
 
 // Helper macro for performing an operation on all variables in an IR operand.
@@ -63,7 +70,7 @@ ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_
 }
 
 // Delete an IR function.
-void ir_func_destroy(ir_func_t *func) {
+void ir_func_delete(ir_func_t *func) {
     while (func->code_list.len) {
         ir_code_t *code = (ir_code_t *)func->code_list.head;
         ir_code_delete(code);
@@ -71,6 +78,8 @@ void ir_func_destroy(ir_func_t *func) {
 
     while (func->vars_list.len) {
         ir_var_t *var = (ir_var_t *)func->vars_list.head;
+        assert(var->used_at.len == 0);
+        assert(var->assigned_at.len == 0);
         ir_var_delete(var);
     }
 
@@ -223,6 +232,7 @@ static void create_combinator(ir_code_t *code, ir_var_t *dest) {
     expr->combinators     = strong_calloc(1, code->pred.len * sizeof(ir_combinator_t));
     expr->returns         = strong_malloc(sizeof(void *));
     expr->returns[0]      = dest;
+    expr->returns_len     = 1;
     size_t i              = 0;
     set_foreach(ir_code_t, pred, &code->pred) {
         // TODO: Some way to mark as undefined?
@@ -232,6 +242,7 @@ static void create_combinator(ir_code_t *code, ir_var_t *dest) {
         };
     }
     set_add(&dest->assigned_at, expr);
+    dlist_prepend(&code->insns, &expr->node);
 }
 
 // Search successor nodes depth-first looking for variable usage.
@@ -304,16 +315,18 @@ static void replace_insn_var(ir_insn_t *insn, ir_var_t *from, ir_var_t *to) {
     if (insn->type == IR_INSN_COMBINATOR) {
         return;
     }
-    set_remove(&from->used_at, insn);
     for (size_t i = 0; i < insn->operands_len; i++) {
         if (insn->operands[i].type == IR_OPERAND_TYPE_VAR && insn->operands[i].var == from) {
             insn->operands[i].var = to;
+            set_add(&to->used_at, insn);
         } else if (insn->operands[i].type == IR_OPERAND_TYPE_MEM) {
             if (insn->operands[i].mem.rel_type == IR_MEMREL_VAR && insn->operands[i].mem.base_var == from) {
                 insn->operands[i].mem.base_var = to;
+                set_add(&to->used_at, insn);
             }
         }
     }
+    set_remove(&from->used_at, insn);
 }
 
 // Replace variables in the phi instructions.
@@ -509,7 +522,6 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
         if (insn->type == IR_INSN_COMBINATOR) {
             for (size_t i = 0; i < insn->combinators_len; i++) {
                 if (insn->combinators[i].bind.type == IR_OPERAND_TYPE_VAR && insn->combinators[i].bind.var == var) {
-                    set_remove(&insn->combinators[i].bind.var->used_at, insn);
                     insn->combinators[i].bind = value;
                     ir_mark_used(value, insn);
                 }
@@ -517,7 +529,6 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
         } else {
             for (size_t i = 0; i < insn->operands_len; i++) {
                 if (insn->operands[i].type == IR_OPERAND_TYPE_VAR && insn->operands[i].var == var) {
-                    set_remove(&insn->operands[i].var->used_at, insn);
                     insn->operands[i] = value;
                     ir_mark_used(value, insn);
                 }
@@ -606,6 +617,36 @@ void ir_code_delete(ir_code_t *code) {
 
 // Delete an instruction from the code.
 void ir_insn_delete(ir_insn_t *insn) {
+    // Debug-assert return lengths.
+    switch (insn->type) {
+        case IR_INSN_EXPR2:
+        case IR_INSN_EXPR1:
+        case IR_INSN_LEA:
+        case IR_INSN_LOAD:
+        case IR_INSN_COMBINATOR: assert(insn->returns_len == 1); break;
+        case IR_INSN_JUMP:
+        case IR_INSN_BRANCH:
+        case IR_INSN_STORE:
+        case IR_INSN_CALL:
+        case IR_INSN_RETURN: assert(insn->returns_len == 0); break;
+        case IR_INSN_MACHINE: break;
+    }
+
+    // Debug-assert parameter lengths.
+    switch (insn->type) {
+        case IR_INSN_EXPR2: assert(insn->operands_len == 2); break;
+        case IR_INSN_EXPR1: assert(insn->operands_len == 1); break;
+        case IR_INSN_JUMP: assert(insn->operands_len == 1); break;
+        case IR_INSN_BRANCH: assert(insn->operands_len == 2); break;
+        case IR_INSN_LEA: assert(insn->operands_len == 1); break;
+        case IR_INSN_LOAD: assert(insn->operands_len == 1); break;
+        case IR_INSN_STORE: assert(insn->operands_len == 2); break;
+        case IR_INSN_COMBINATOR: assert(insn->operands_len > 0); break;
+        case IR_INSN_CALL: break;
+        case IR_INSN_RETURN: assert(insn->operands_len <= 1); break;
+        case IR_INSN_MACHINE: break;
+    }
+
     if (insn->type == IR_INSN_COMBINATOR) {
         for (size_t i = 0; i < insn->combinators_len; i++) {
             ir_unmark_used(insn->combinators[i].bind, insn);

@@ -45,7 +45,7 @@ typedef struct {
 // Function argument types are IR_PRIM_S32 by default.
 ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_len, char const *const *args_name);
 // Delete an IR function.
-void       ir_func_destroy(ir_func_t *func);
+void       ir_func_delete(ir_func_t *func);
 
 // Convert non-SSA to SSA form.
 void ir_func_to_ssa(ir_func_t *func);

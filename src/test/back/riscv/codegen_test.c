@@ -48,6 +48,9 @@ char *test_rv_isel() {
     putchar('\n');
     ir_func_serialize(func, stdout);
 
+    ir_func_delete(func);
+    profile->backend->delete_profile(profile);
+
     return TEST_OK;
 }
 LILY_TEST_CASE(test_rv_isel)

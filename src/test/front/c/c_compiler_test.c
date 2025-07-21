@@ -131,7 +131,7 @@ static char *test_c_compile_expr() {
     }
 
 
-    ir_func_destroy(func);
+    ir_func_delete(func);
     tkn_delete(expr_tok);
 
     c_compiler_destroy(cc);
@@ -215,7 +215,7 @@ static char *test_c_compile_func() {
         return TEST_FAIL;
     }
 
-    ir_func_destroy(func);
+    ir_func_delete(func);
     tkn_delete(functest_tok);
     tkn_delete(foobar_tok);
 

@@ -29,6 +29,14 @@ backend_profile_t *rv_create_profile() {
     return (void *)profile;
 }
 
+// Delete a profile for this backend.
+void rv_delete_profile(backend_profile_t *_profile) {
+    rv_profile_t *profile = (void *)_profile;
+    cand_tree_delete(profile->cand_tree);
+    free(profile->base.regclasses);
+    free(profile);
+}
+
 // Prepare backend for codegen stage.
 void rv_init_codegen(backend_profile_t *_profile) {
     rv_profile_t        *profile    = (void *)_profile;
@@ -46,6 +54,7 @@ void rv_init_codegen(backend_profile_t *_profile) {
 
     // Create candidate tree from instruction set.
     profile->cand_tree = cand_tree_generate(protos_len, protos);
+    free(protos);
 
     // Update other codegen-relevant settings.
     profile->ext_enabled[RV_32ONLY] = !profile->ext_enabled[RV_64];
@@ -79,6 +88,7 @@ insn_proto_t const *rv_isel(backend_profile_t *_profile, ir_insn_t const *ir_ins
 backend_t const rv_backend = {
     .id             = "riscv",
     .create_profile = rv_create_profile,
+    .delete_profile = rv_delete_profile,
     .init_codegen   = rv_init_codegen,
     .isel           = rv_isel,
 };

@@ -47,7 +47,7 @@ static void compile(char const *path) {
             ir_optimize(func);
             printf("\n");
             ir_func_serialize(func, stdout);
-            ir_func_destroy(func);
+            ir_func_delete(func);
         } else {
             // Declarations.
             c_compile_decls(cc, NULL, NULL, &cc->global_scope, &decls);

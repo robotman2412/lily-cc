@@ -88,13 +88,14 @@ set_get_t        set_get(set_t const *set, void const *value) __attribute__((pur
 // Insert an item into the set.
 bool             set_add(set_t *set, void const *value);
 // Add all items from another set to this one.
+// Returns how many items, if any, are added.
 size_t           set_addall(set_t *set, set_t const *other);
 // Retain all items also in the other set.
 // Returns how many items, if any, are removed.
 size_t           set_intersect(set_t *set, set_t const *other);
-// Retain all items that are in the array.
+// Remove all items in another set from this one.
 // Returns how many items, if any, are removed.
-size_t           set_intersect_array(set_t *set, void const *const *values, size_t values_len);
+size_t           set_removeall(set_t *set, set_t const *other);
 // Remove an item from the set.
 bool             set_remove(set_t *set, void const *value);
 // Remove all items in another set from this one.

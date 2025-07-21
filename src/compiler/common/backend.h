@@ -68,6 +68,8 @@ struct backend {
     char const *id;
     // Create a copy of the default profile for this type of backend.
     backend_profile_t *(*create_profile)();
+    // Delete a profile for this backend.
+    void (*delete_profile)(backend_profile_t *profile);
     // Prepare backend for codegen stage.
     void (*init_codegen)(backend_profile_t *profile);
     // Perform instruction selection.

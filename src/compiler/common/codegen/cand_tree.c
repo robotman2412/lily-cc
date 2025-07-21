@@ -143,6 +143,23 @@ cand_tree_t *cand_tree_generate(size_t protos_len, insn_proto_t const *const *pr
 
 
 
+// Delete an instruction selection tree.
+void cand_tree_delete(cand_tree_t *tree) {
+    while (tree) {
+        free(tree->protos);
+        if (tree->type == EXPR_TREE_IR_INSN) {
+            for (size_t i = 0; i < tree->insn.children_len; i++) {
+                cand_tree_delete(tree->insn.children[i]);
+            }
+        }
+        cand_tree_t *next = tree->next;
+        free(tree);
+        tree = next;
+    }
+}
+
+
+
 // Helper for `tree_isel_match_expr_tree_operand` to set `proto_operands_out`.
 static bool tree_isel_set_proto_operand(
     ir_operand_t const **proto_operands_out, expr_tree_t const *tree, ir_operand_t const *ir_operand

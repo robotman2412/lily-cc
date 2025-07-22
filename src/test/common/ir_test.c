@@ -73,16 +73,8 @@ static char *test_ir_to_ssa() {
 
     ir_add_return1(IR_APPEND(code3), (ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = var0});
 
-    printf("\nOriginal:\n");
-    ir_func_serialize(func, stdout);
-
     ir_func_to_ssa(func);
-    printf("\n\nSSA form:\n");
-    ir_func_serialize(func, stdout);
-
     ir_optimize(func);
-    printf("\n\nOptimized:\n");
-    ir_func_serialize(func, stdout);
 
     ir_func_delete(func);
     return TEST_OK;

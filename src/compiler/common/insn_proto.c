@@ -75,9 +75,10 @@ static void insn_proto_substitute_del(expr_tree_t const *tree, ir_insn_t *ir_ins
 // Substitute a set of IR instructions with a machine instruction, assuming the instructions match the given prototype.
 ir_insn_t *insn_proto_substitute(insn_proto_t const *proto, ir_insn_t *ir_insn, ir_operand_t const *operands) {
     assert(ir_insn->parent->func->enforce_ssa);
-    ir_insn->parent->func->enforce_ssa = false;
-    ir_insn_t *mach = ir_add_mach_insn(IR_AFTER_INSN(ir_insn), ir_insn_get_dest(ir_insn), proto, operands);
+    ir_func_t *func   = ir_insn->parent->func;
+    func->enforce_ssa = false;
+    ir_insn_t *mach   = ir_add_mach_insn(IR_AFTER_INSN(ir_insn), ir_insn_get_dest(ir_insn), proto, operands);
     insn_proto_substitute_del(proto->tree, ir_insn);
-    ir_insn->parent->func->enforce_ssa = true;
+    func->enforce_ssa = true;
     return mach;
 }

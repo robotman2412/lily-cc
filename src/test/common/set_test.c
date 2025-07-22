@@ -109,6 +109,7 @@ static char *test_multiset() {
 
     set_clear(&a);
     set_clear(&b);
+    set_clear(&c);
 
     return TEST_OK;
 }

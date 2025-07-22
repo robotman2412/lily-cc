@@ -151,6 +151,7 @@ void cand_tree_delete(cand_tree_t *tree) {
             for (size_t i = 0; i < tree->insn.children_len; i++) {
                 cand_tree_delete(tree->insn.children[i]);
             }
+            free(tree->insn.children);
         }
         cand_tree_t *next = tree->next;
         free(tree);
@@ -369,6 +370,8 @@ insn_proto_t const *cand_tree_isel(cand_tree_t const *tree, ir_insn_t const *ir_
             operands_out[i] = *best_operand[i];
         }
     }
+
+    set_clear(&candidates);
 
     return best_fit;
 }

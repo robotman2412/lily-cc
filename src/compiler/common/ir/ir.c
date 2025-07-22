@@ -22,11 +22,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define free print_ok
-
-void print_ok(void *p) {
-    printf("free(%p)\n", p);
-}
 
 
 // Helper macro for performing an operation on all variables in an IR operand.
@@ -357,14 +352,16 @@ static void rename_assignments(ir_func_t *func, ir_code_t *code, ir_var_t *from,
     dlist_foreach_node(ir_insn_t, insn, &code->insns) {
         if (to) {
             replace_insn_var(insn, from, to);
-            for (size_t i = 0; i < insn->returns_len; i++) {
-                if (insn->returns[i] != from) {
-                    continue;
-                }
-                set_remove(&insn->returns[i]->assigned_at, insn);
-                set_add(&to->assigned_at, insn);
-                insn->returns[i] = to;
+        }
+        for (size_t i = 0; i < insn->returns_len; i++) {
+            if (insn->returns[i] != from) {
+                continue;
             }
+            to = ir_var_create(func, from->prim_type, NULL);
+            set_remove(&insn->returns[i]->assigned_at, insn);
+            set_add(&to->assigned_at, insn);
+            set_add(phi_from, to);
+            insn->returns[i] = to;
         }
     }
     set_foreach(ir_code_t, succ, &code->succ) {

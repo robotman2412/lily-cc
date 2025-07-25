@@ -36,9 +36,9 @@ struct isel_node {
 // Tree structure used to make instruction selection decisions.
 struct cand_tree {
     // Next decision node, if any.
-    cand_tree_t     *next;
+    cand_tree_t      *next;
     // Type of structure this matches against.
-    expr_tree_type_t type;
+    match_tree_type_t type;
     union {
         // Expression node that describes the operation performed.
         isel_node_t insn;

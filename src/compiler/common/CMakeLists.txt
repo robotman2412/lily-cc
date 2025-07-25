@@ -6,6 +6,7 @@
 add_library(compiler-common STATIC
     back/backend.c
     back/codegen.c
+    back/match_tree.c
     back/cand_tree.c
     back/insn_proto.c
     front/compiler.c

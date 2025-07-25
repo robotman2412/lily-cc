@@ -6,25 +6,10 @@
 #pragma once
 
 #include "ir_types.h"
+#include "match_tree.h"
 
 
 
-// Types of expression tree.
-typedef enum {
-    // IR instruction; `expr_node_t`.
-    EXPR_TREE_IR_INSN,
-    // Operand; an input to the tree from an IR operand.
-    EXPR_TREE_OPERAND,
-    // IR constant that must exactly match.
-    EXPR_TREE_ICONST,
-} expr_tree_type_t;
-
-
-
-// IR instruction in an `expr_tree_t`.
-typedef struct expr_node     expr_node_t;
-// Describes a tree of IR expressions and constants.
-typedef struct expr_tree     expr_tree_t;
 // Bitset of kinds of operand.
 typedef union operand_kinds  operand_kinds_t;
 // Bitset of kinds of operand storage locations.
@@ -37,37 +22,6 @@ typedef struct operand_rule  operand_rule_t;
 typedef struct insn_proto    insn_proto_t;
 
 
-
-// Node in an `expr_tree_t`.
-struct expr_node {
-    // IR instruction type.
-    ir_insn_type_t type;
-    union {
-        // Expression operator.
-        ir_op1_type_t op1;
-        // Expression operator.
-        ir_op2_type_t op2;
-    };
-    // Child nodes of the tree.
-    size_t                    children_len;
-    // Child nodes of the tree.
-    expr_tree_t const *const *children;
-};
-
-// Describes a tree of IR expressions.
-struct expr_tree {
-    // What kind of node this is.
-    expr_tree_type_t type;
-    union {
-        // Operand index in the parent instruction.
-        // Multiple tree endpoints may have the same index.
-        size_t      operand_index;
-        // Expression node that describes what operation is done for this value.
-        expr_node_t insn;
-        // Constant encoded into the instruction itself.
-        ir_const_t  iconst;
-    };
-};
 
 // Bitset of kinds of operand.
 union operand_kinds {
@@ -157,121 +111,10 @@ struct insn_proto {
     // Constraints on the operands.
     operand_rule_t const *operands;
     // The tree of IR expressions that describe this instruction.
-    expr_tree_t const    *tree;
+    match_tree_t const   *tree;
 };
 
 
-
-// Shorthand for NODE_OPERAND(0).
-extern expr_tree_t const NODE_OPERAND_0;
-// Shorthand for NODE_OPERAND(1).
-extern expr_tree_t const NODE_OPERAND_1;
-// Shorthand for NODE_OPERAND(2).
-extern expr_tree_t const NODE_OPERAND_2;
-// Shorthand for NODE_OPERAND(3).
-extern expr_tree_t const NODE_OPERAND_3;
-
-// clang-format off
-
-#define NODE_CONST(iconst_)                     \
-    (expr_tree_t const) {                       \
-        .type = EXPR_TREE_ICONST,               \
-        .iconst = iconst_,                      \
-    }
-
-#define NODE_OPERAND(operand_index_)            \
-    (expr_tree_t const) {                       \
-        .type = EXPR_TREE_OPERAND,              \
-        .operand_index = operand_index_,        \
-    }
-
-#define NODE_EXPR1(op1_, operand_)              \
-    (expr_tree_t const) {                       \
-        .type = EXPR_TREE_IR_INSN,              \
-        .insn = {                               \
-            .type         = IR_INSN_EXPR1,      \
-            .op1          = (op1_),             \
-            .children_len = 1,                  \
-            .children     =                     \
-            (expr_tree_t const *const[]) {      \
-                (operand_)                      \
-            },                                  \
-        },                                      \
-    }
-
-#define NODE_EXPR2(op2_, lhs_, rhs_)            \
-    (expr_tree_t const) {                       \
-        .type = EXPR_TREE_IR_INSN,              \
-        .insn = {                               \
-            .type         = IR_INSN_EXPR2,      \
-            .op2          = (op2_),             \
-            .children_len = 2,                  \
-            .children     =                     \
-            (expr_tree_t const *const[]) {      \
-                (lhs_), (rhs_)                  \
-            },                                  \
-        },                                      \
-    }
-
-#define NODE_LOAD(ptr_)                         \
-    (expr_tree_t const) {                       \
-        .type = EXPR_TREE_IR_INSN,              \
-        .insn = {                               \
-            .type         = IR_INSN_LOAD,       \
-            .children_len = 1,                  \
-            .children     =                     \
-            (expr_tree_t const *const[]) {      \
-                (ptr_)                          \
-            },                                  \
-        },                                      \
-    }
-
-#define NODE_STORE(ptr_, value_)                \
-    (expr_tree_t const) {                       \
-        .type = EXPR_TREE_IR_INSN,              \
-        .insn = {                               \
-            .type         = IR_INSN_STORE,      \
-            .children_len = 2,                  \
-            .children     =                     \
-            (expr_tree_t const *const[]) {      \
-                (ptr_), (value_)                \
-            },                                  \
-        },                                      \
-    }
-
-#define NODE_BRANCH(target_, cond_)             \
-    (expr_tree_t const) {                       \
-        .type = EXPR_TREE_IR_INSN,              \
-        .insn = {                               \
-            .type         = IR_INSN_BRANCH,     \
-            .children_len = 2,                  \
-            .children     =                     \
-            (expr_tree_t const *const[]) {      \
-                (target_), (cond_)              \
-            },                                  \
-        },                                      \
-    }
-
-#define NODE_CALL(target_)                      \
-    (expr_tree_t const) {                       \
-        .type = EXPR_TREE_IR_INSN,              \
-        .insn = {                               \
-            .type         = IR_INSN_CALL,       \
-            .children_len = 1,                  \
-            .children     =                     \
-            (expr_tree_t const *const[]) {      \
-                (target_)                       \
-            },                                  \
-        },                                      \
-    }
-
-
-// clang-format on
-
-
-
-// Calculate the number of nodes in an `expr_tree_t`.
-size_t expr_tree_size(expr_tree_t const *tree);
 
 // Substitute a set of IR instructions with a machine instruction, assuming the instructions match the given prototype.
 ir_insn_t *insn_proto_substitute(insn_proto_t const *proto, ir_insn_t *ir_insn, ir_operand_t const *operands);

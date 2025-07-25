@@ -28,7 +28,7 @@ static void tree_isel_add_candidates_insn(set_t *candidates, cand_tree_t const *
 // Returns 0 if the candidate instruction cannot be applied here.
 static size_t tree_isel_match_expr_tree_operand(
     ir_operand_t const **proto_operands_out,
-    expr_tree_t const   *tree,
+    match_tree_t const  *tree,
     ir_operand_t const  *ir_operand,
     ir_code_t const     *parent_code
 );
@@ -37,7 +37,7 @@ static size_t tree_isel_match_expr_tree_operand(
 // Returns 0 if the candidate instruction cannot be applied here.
 static size_t tree_isel_match_expr_tree_insn(
     ir_operand_t const **proto_operands_out,
-    expr_tree_t const   *tree,
+    match_tree_t const  *tree,
     ir_insn_t const     *ir_insn,
     ir_code_t const     *parent_code
 );
@@ -45,7 +45,7 @@ static size_t tree_isel_match_expr_tree_insn(
 
 
 // Generate an instruction selection tree matching a (sub)tree from an instruction prototype.
-static cand_tree_t *isel_copy_subtree(expr_tree_t const *proto_tree, insn_proto_t const *proto) {
+static cand_tree_t *isel_copy_subtree(match_tree_t const *proto_tree, insn_proto_t const *proto) {
     if (!proto_tree) {
         return NULL;
     }
@@ -93,7 +93,7 @@ static void isel_insert_option(cand_tree_t *tree, insn_proto_t const *proto) {
 }
 
 // Add an instruction to an existing tree, assuming it's modifiable.
-static void isel_insert_insn(cand_tree_t *tree, expr_tree_t const *proto_tree, insn_proto_t const *proto) {
+static void isel_insert_insn(cand_tree_t *tree, match_tree_t const *proto_tree, insn_proto_t const *proto) {
     if (!tree || !proto_tree)
         return;
     cand_tree_t **next_ptr = &tree->next;
@@ -163,7 +163,7 @@ void cand_tree_delete(cand_tree_t *tree) {
 
 // Helper for `tree_isel_match_expr_tree_operand` to set `proto_operands_out`.
 static bool tree_isel_set_proto_operand(
-    ir_operand_t const **proto_operands_out, expr_tree_t const *tree, ir_operand_t const *ir_operand
+    ir_operand_t const **proto_operands_out, match_tree_t const *tree, ir_operand_t const *ir_operand
 ) {
     if (proto_operands_out[tree->operand_index]
         && !ir_operand_lenient_identical(*proto_operands_out[tree->operand_index], *ir_operand)) {
@@ -178,7 +178,7 @@ static bool tree_isel_set_proto_operand(
 // Returns 0 if the candidate instruction cannot be applied here.
 static size_t tree_isel_match_expr_tree_operand(
     ir_operand_t const **proto_operands_out,
-    expr_tree_t const   *tree,
+    match_tree_t const  *tree,
     ir_operand_t const  *ir_operand,
     ir_code_t const     *parent_code
 ) {
@@ -204,7 +204,7 @@ static size_t tree_isel_match_expr_tree_operand(
 // Returns 0 if the candidate instruction cannot be applied here.
 static size_t tree_isel_match_expr_tree_insn(
     ir_operand_t const **proto_operands_out,
-    expr_tree_t const   *tree,
+    match_tree_t const  *tree,
     ir_insn_t const     *ir_insn,
     ir_code_t const     *parent_code
 ) {

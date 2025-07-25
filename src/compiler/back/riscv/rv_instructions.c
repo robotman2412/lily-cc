@@ -209,7 +209,7 @@ operand_rule_t const rv_li_rules[] = {{
     .operand_kinds.sint = 1,
     .const_bits         = 32,
 }};
-expr_tree_t const    rv_li_tree    = NODE_EXPR1(IR_OP1_mov, &NODE_OPERAND_0);
+match_tree_t const   rv_li_tree    = NODE_EXPR1(IR_OP1_mov, &NODE_OPERAND_0);
 
 
 

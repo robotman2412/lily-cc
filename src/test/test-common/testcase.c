@@ -29,13 +29,13 @@ static char *heap_sprintf(char const *fmt, ...) {
     return mem;
 }
 
-static void testcase_failed() {
+void testcase_failed() {
     asm("");
 }
 
 char *int_testcase_failed(char const *loc, long long value, char const *real) {
     testcase_failed();
-    return heap_sprintf("%s = %lld; expeted %s", loc, value, real);
+    return heap_sprintf("%s = %lld; expected %s", loc, value, real);
 }
 
 char *char_testcase_failed(char const *loc, int value, char const *real) {

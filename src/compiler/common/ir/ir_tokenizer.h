@@ -5,7 +5,6 @@
 
 #pragma once
 
-// Must be before <stdbool.h> because it contains the identifier `bool`.
 typedef enum {
 #define IR_KEYW_DEF(keyw) IR_KEYW_##keyw,
 #include "defs/ir_keywords.inc"
@@ -17,6 +16,12 @@ typedef enum {
 typedef enum {
     // A comma.
     IR_TKN_COMMA,
+    // An opening parenthesis.
+    IR_TKN_LPAR,
+    // A closing parenthesis.
+    IR_TKN_RPAR,
+    // An undefined of some type.
+    IR_TKN_UNDEF,
 } ir_tokentype_t;
 
 typedef enum {
@@ -24,6 +29,8 @@ typedef enum {
     IR_IDENT_GLOBAL,
     // A function-local identifier.
     IR_IDENT_LOCAL,
+    // An identifier without prefix or suffix.
+    IR_IDENT_BARE,
 } ir_identtype_t;
 
 // List of keywords.

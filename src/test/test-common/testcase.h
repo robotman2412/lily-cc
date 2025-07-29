@@ -34,8 +34,10 @@
 #define RETURN_ON_FALSE(expr)                                                                                          \
     do {                                                                                                               \
         bool tmp = (expr);                                                                                             \
-        if (!tmp)                                                                                                      \
+        if (!tmp) {                                                                                                    \
+            testcase_failed();                                                                                         \
             return "\xff" __FILE_NAME__ ":" STR_OF(__LINE__) ": " #expr;                                               \
+        }                                                                                                              \
     } while (0)
 
 #define EXPECT_INT(expr, val)                                                                                          \
@@ -81,6 +83,7 @@
         }                                                                                                              \
     } while (0)
 
+void  testcase_failed();
 char *int_testcase_failed(char const *loc, long long value, char const *real);
 char *char_testcase_failed(char const *loc, int value, char const *real);
 char *str_testcase_failed(char const *loc, char const *value, size_t value_len, char const *real);

@@ -76,7 +76,7 @@ token_t other_tkn(c_tokentype_t type, pos_t from, pos_t to) {
 
 // Test whether a character is legal as the first in a C identifier.
 bool c_is_first_sym_char(int c) {
-    if (c == '_' || c == '$') {
+    if (c == '_') {
         return true;
     }
     c |= 0x20;
@@ -85,7 +85,7 @@ bool c_is_first_sym_char(int c) {
 
 // Test whether a character is legal in a C identifier.
 bool c_is_sym_char(int c) {
-    if (c == '_' || c == '$') {
+    if (c == '_') {
         return true;
     } else if (c >= '0' && c <= '9') {
         return true;

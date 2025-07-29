@@ -106,7 +106,6 @@ static char *test_c_tkn_basic() {
     EXPECT_CHAR(tkn.ival, 'A');
     tkn_delete(tkn);
 
-
     tkn = c_tkn_next(tkn_ctx); // "\'\"\?\\\a\b\f\n\r\t\v"
     EXPECT_INT(tkn.pos.line, 10);
     EXPECT_INT(tkn.pos.col, 0);
@@ -114,6 +113,7 @@ static char *test_c_tkn_basic() {
     EXPECT_INT(tkn.type, TOKENTYPE_SCONST);
     EXPECT_STR(tkn.strval, "\'\"\?\\\a\b\f\n\r\t\v");
     tkn_delete(tkn);
+
 
     tkn_ctx_delete(tkn_ctx);
     cctx_delete(cctx);

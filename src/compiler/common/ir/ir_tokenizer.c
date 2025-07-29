@@ -5,6 +5,7 @@
 
 // List of keywords.
 // Must be before <stdbool.h> because it contains the identifier `bool`.
+#include "compiler.h"
 char const *const ir_keywords[] = {
 #define IR_KEYW_DEF(keyw) #keyw,
 #include "defs/ir_keywords.inc"
@@ -32,15 +33,8 @@ tokenizer_t *ir_tkn_create(srcfile_t *srcfile) {
 }
 
 
-// Comparator function for searching for keywords.
-static int keyw_comp(void const *_a, void const *_b) {
-    char const *a = *(char const *const *)_a;
-    char const *b = _b;
-    return strcmp(a, b);
-}
-
 // Helper function to create tokens for better readability.
-token_t other_tkn(ir_tokentype_t type, pos_t from, pos_t to) {
+static token_t other_tkn(ir_tokentype_t type, pos_t from, pos_t to) {
     return ((token_t){
         .pos        = pos_between(from, to),
         .type       = TOKENTYPE_OTHER,
@@ -52,18 +46,9 @@ token_t other_tkn(ir_tokentype_t type, pos_t from, pos_t to) {
     });
 }
 
-// Test whether a character is legal as the first in a C identifier.
-bool ir_is_first_sym_char(int c) {
-    if (c == '_' || c == '$') {
-        return true;
-    }
-    c |= 0x20;
-    return c >= 'a' && c <= 'z';
-}
-
-// Test whether a character is legal in a C identifier.
-bool ir_is_sym_char(int c) {
-    if (c == '_' || c == '$') {
+// Test whether a character is legal in an IR identifier.
+static inline bool ir_is_sym_char(int c) {
+    if (c == '_') {
         return true;
     } else if (c >= '0' && c <= '9') {
         return true;
@@ -74,7 +59,7 @@ bool ir_is_sym_char(int c) {
 
 
 // Tokenize numeric constant.
-static token_t ir_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int base) {
+static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos, unsigned int base) {
     uint64_t val      = 0;
     bool     hasdat   = false;
     bool     toolarge = false;
@@ -141,7 +126,7 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int ba
         .type       = TOKENTYPE_ICONST,
         .pos        = pos,
         .ival       = val,
-        .subtype    = 0,
+        .subtype    = prim,
         .strval     = NULL,
         .strval_len = 0,
         .params_len = 0,
@@ -191,18 +176,6 @@ static token_t ir_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first, bool 
                 .params_len = 0,
                 .params     = NULL,
             };
-        } else {
-            pos_t pos = pos_between(start_pos, pos0);
-            cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Unknown keyword `%s`", ptr);
-            return (token_t){
-                .pos        = pos,
-                .type       = TOKENTYPE_GARBAGE,
-                .strval     = ptr,
-                .strval_len = len,
-                .subtype    = 0,
-                .params_len = 0,
-                .params     = NULL,
-            };
         }
     }
 
@@ -211,7 +184,7 @@ static token_t ir_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first, bool 
         .type       = TOKENTYPE_IDENT,
         .strval     = ptr,
         .strval_len = len,
-        .subtype    = 0,
+        .subtype    = IR_IDENT_BARE,
         .params_len = 0,
         .params     = NULL,
     };
@@ -389,9 +362,10 @@ static void ir_block_comment(tokenizer_t *ctx) {
 
 // Get next token from IR tokenizer.
 token_t ir_tkn_next(tokenizer_t *ctx) {
+    pos_t pos0;
 retry:
-    pos_t pos0 = ctx->pos;
-    int   c    = srcfile_getc(ctx->file, &ctx->pos);
+    pos0  = ctx->pos;
+    int c = srcfile_getc(ctx->file, &ctx->pos);
 #define pos1 ctx->pos
 
     if (c == -1) {
@@ -411,6 +385,21 @@ retry:
         goto retry;
     }
 
+    // Comments.
+    if (c == '/') {
+        pos_t pos2 = pos1;
+        int   c1   = srcfile_getc(ctx->file, &pos2);
+        if (c1 == '/') {
+            ctx->pos = pos2;
+            ir_line_comment(ctx);
+            goto retry;
+        } else if (c1 == '*') {
+            ctx->pos = pos2;
+            ir_block_comment(ctx);
+            goto retry;
+        }
+    }
+
     // Strings.
     if (c == '\'') {
         return ir_tkn_str(ctx, pos0, true);
@@ -421,17 +410,18 @@ retry:
     // Identifiers.
     if (c == '%') {
         c             = srcfile_getc(ctx->file, &pos1);
-        token_t ident = ir_tkn_ident(ctx, pos1, c, false);
+        token_t ident = ir_tkn_ident(ctx, pos0, c, false);
         ident.subtype = IR_IDENT_LOCAL;
         return ident;
     } else if (c == '<') {
         c             = srcfile_getc(ctx->file, &pos1);
-        token_t ident = ir_tkn_ident(ctx, pos1, c, false);
+        token_t ident = ir_tkn_ident(ctx, pos0, c, false);
         ident.subtype = IR_IDENT_GLOBAL;
         pos_t pos2    = pos1;
         c             = srcfile_getc(ctx->file, &pos2);
         if (c == '>') {
-            ctx->pos = pos2;
+            ctx->pos  = pos2;
+            ident.pos = pos_between(pos0, pos2);
         } else {
             cctx_diagnostic(ctx->cctx, pos1, DIAG_ERR, "Expected `>`");
         }
@@ -450,6 +440,7 @@ retry:
             // If not, just the keyword.
             return kw;
         }
+        ctx->pos = pos2;
 
         // Numeric constants.
         ir_prim_t prim = kw.subtype - IR_KEYW_s8 + IR_PRIM_s8;
@@ -457,50 +448,69 @@ retry:
             prim = 0;
             cctx_diagnostic(ctx->cctx, kw.pos, DIAG_ERR, "Expected a type for numeric literal");
         }
-        pos2 = ctx->pos;
-        c    = srcfile_getc(ctx->file, &ctx->pos);
-        if (c == '0') {
+        c = srcfile_getc(ctx->file, &ctx->pos);
+        if (c == '?') {
+            // Undefined value.
+            token_t tkn = other_tkn(IR_TKN_UNDEF, pos0, ctx->pos);
+            tkn.ival    = prim;
+            return tkn;
+
+        } else if (c == '0') {
             // Hex, binary, octal.
             pos_t pos3 = ctx->pos;
             int   c2   = srcfile_getc(ctx->file, &pos3);
             if (c2 == 'x' || c2 == 'X') {
                 // Hexadecimal.
                 ctx->pos = pos3;
-                return ir_tkn_numeric(ctx, pos2, 16);
+                return ir_tkn_numeric(ctx, prim, pos0, 16);
             } else if (c2 == 'b' || c2 == 'B') {
                 // Binary.
                 ctx->pos = pos3;
-                return ir_tkn_numeric(ctx, pos2, 2);
+                return ir_tkn_numeric(ctx, prim, pos0, 2);
             } else if (c2 == 'o' || c2 == 'O') {
                 // Binary.
                 ctx->pos = pos3;
-                return ir_tkn_numeric(ctx, pos2, 8);
+                return ir_tkn_numeric(ctx, prim, pos0, 8);
             } else if (c2 >= '0' && c2 <= '9') {
                 // Decimal.
-                return ir_tkn_numeric(ctx, pos2, 10);
+                return ir_tkn_numeric(ctx, prim, pos0, 10);
             } else {
                 // Just a zero.
                 return (token_t){
                     .type = TOKENTYPE_ICONST,
-                    .pos  = pos_between(pos2, ctx->pos),
+                    .pos  = pos_between(pos0, ctx->pos),
                     .ival = 0,
                 };
             }
+
         } else if (c >= '1' && c <= '9') {
             // Decimal.
             ctx->pos = pos0;
-            return ir_tkn_numeric(ctx, pos0, 10);
+            return ir_tkn_numeric(ctx, prim, pos0, 10);
+
+        } else {
+            // Invalid constant.
+            return (token_t){
+                .pos        = pos_between(pos0, pos1),
+                .type       = TOKENTYPE_GARBAGE,
+                .strval     = NULL,
+                .ival       = 0,
+                .params_len = 0,
+                .params     = NULL,
+            };
         }
     }
 
     // Single-character tokens.
     switch (c) {
         case ',': return other_tkn(IR_TKN_COMMA, pos0, pos1);
+        case '(': return other_tkn(IR_TKN_LPAR, pos0, pos1);
+        case ')': return other_tkn(IR_TKN_RPAR, pos0, pos1);
     }
 
     // At this point, it's garbage.
     return (token_t){
-        .pos        = pos1,
+        .pos        = pos_between(pos0, pos1),
         .type       = TOKENTYPE_GARBAGE,
         .strval     = NULL,
         .ival       = 0,

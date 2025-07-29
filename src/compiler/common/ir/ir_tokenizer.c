@@ -83,7 +83,7 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int ba
     pos_t pos0 = ctx->pos;
     pos_t pos1;
     while (1) {
-        int digit;
+        unsigned int digit;
         pos1  = pos0;
         int c = srcfile_getc(ctx->file, &pos1);
         if (c >= '0' && c <= '9') {
@@ -250,6 +250,7 @@ static int ir_str_hex(tokenizer_t *ctx, pos_t start_pos, int min_w, int max_w) {
 
 // Octal parsing helper for strings.
 static int ir_str_octal(tokenizer_t *ctx, pos_t start_pos, int first, int max_w) {
+    (void)start_pos;
     int   value = first - '0';
     pos_t pos0  = ctx->pos;
     pos_t pos1;

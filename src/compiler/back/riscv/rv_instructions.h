@@ -7,6 +7,10 @@
 
 #include "insn_proto.h"
 #include "rv_misc.h"
+#include "sub_tree.h"
+
+#include <stddef.h>
+#include <stdint.h>
 
 
 
@@ -74,8 +78,13 @@ extern insn_proto_t const *const rv_insns[];
 // Number of supported RISC-V instructions.
 extern size_t const              rv_insns_len;
 
+// Table of supported RISC-V substitution patterns.
+extern insn_sub_t const *const rv_insn_subs[];
+// Number of supported RISC-V substitution patterns.
+extern size_t const            rv_insn_subs_len;
+
 // clang-format off
-#define RV_INSN_MISC(name, ...) \
+#define RV_INSN_BASE(name, ...) \
     extern insn_proto_t const rv_insn_##name;
 #include "rv_instructions.inc"
 // clang-format on

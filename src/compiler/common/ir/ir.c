@@ -382,7 +382,7 @@ void ir_func_to_ssa(ir_func_t *func) {
     opt_dead_code(func);
 
     size_t      nodes_len = func->code_list.len;
-    dom_node_t *nodes     = calloc(sizeof(dom_node_t), nodes_len);
+    dom_node_t *nodes     = calloc(nodes_len, sizeof(dom_node_t));
 
     compute_dominance(func, nodes_len, nodes);
 
@@ -665,18 +665,6 @@ void ir_insn_delete(ir_insn_t *insn) {
 
 
 
-// Get the code that an `ir_insnloc_t` describes.
-static ir_code_t *ir_insnloc_code(ir_insnloc_t loc) {
-    switch (loc.type) {
-        case IR_INSNLOC_APPEND_CODE: return loc.code;
-        case IR_INSNLOC_AFTER_INSN:
-        case IR_INSNLOC_BEFORE_INSN: return loc.insn->parent;
-    }
-    abort();
-}
-
-
-
 // Is a jump, branch or return?
 static bool ir_is_jbr(ir_insn_t const *insn) {
     return insn->type == IR_INSN_BRANCH || insn->type == IR_INSN_JUMP || insn->type == IR_INSN_RETURN;
@@ -698,10 +686,10 @@ static void ir_emplace_insn(ir_insnloc_t loc, ir_insn_t *insn) {
         } break;
         case IR_INSNLOC_AFTER_INSN: {
             prev = loc.insn;
-            next = container_of(prev->node.next, ir_insn_t, node);
+            next = container_of(loc.insn->node.next, ir_insn_t, node);
         } break;
         case IR_INSNLOC_BEFORE_INSN: {
-            prev = container_of(prev->node.previous, ir_insn_t, node);
+            prev = container_of(loc.insn->node.previous, ir_insn_t, node);
             next = loc.insn;
         } break;
     }
@@ -849,12 +837,24 @@ ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_var_t *dest, ir_op2_type_t oper, ir
 
 // Add a load effective address of a stack frame to a code block.
 ir_insn_t *ir_add_lea_stack(ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame, uint64_t offset) {
-    return ir_create_insn_va(loc, IR_INSN_LEA, dest, 1, IR_OPERAND_MEM(IR_MEMREF(IR_PRIM_u8, IR_BADDR_FRAME(frame))));
+    return ir_create_insn_va(
+        loc,
+        IR_INSN_LEA,
+        dest,
+        1,
+        IR_OPERAND_MEM(IR_MEMREF(IR_PRIM_u8, IR_BADDR_FRAME(frame), .offset = offset))
+    );
 }
 
 // Add a load effective address of a symbol to a code block.
 ir_insn_t *ir_add_lea_symbol(ir_insnloc_t loc, ir_var_t *dest, char const *symbol, uint64_t offset) {
-    return ir_create_insn_va(loc, IR_INSN_LEA, dest, 1, IR_OPERAND_MEM(IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(symbol))));
+    return ir_create_insn_va(
+        loc,
+        IR_INSN_LEA,
+        dest,
+        1,
+        IR_OPERAND_MEM(IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(symbol), .offset = offset))
+    );
 }
 
 // Add a memory load to a code block.
@@ -918,10 +918,12 @@ ir_insn_t *ir_add_return1(ir_insnloc_t loc, ir_operand_t value) {
 
 
 // Add a machine instruction.
-ir_insn_t *ir_add_mach_insn(ir_insnloc_t loc, ir_var_t *dest, insn_proto_t const *proto, ir_operand_t const *operands) {
-    ir_operand_t *operands_copy = calloc(proto->operands_len, sizeof(ir_operand_t));
-    memcpy(operands_copy, operands, proto->operands_len * sizeof(ir_operand_t));
-    ir_insn_t *insn = ir_create_insn(loc, IR_INSN_MACHINE, dest, proto->operands_len, operands_copy);
+ir_insn_t *ir_add_mach_insn(
+    ir_insnloc_t loc, ir_var_t *dest, insn_proto_t const *proto, size_t operands_len, ir_operand_t const *operands
+) {
+    ir_operand_t *operands_copy = calloc(operands_len, sizeof(ir_operand_t));
+    memcpy(operands_copy, operands, operands_len * sizeof(ir_operand_t));
+    ir_insn_t *insn = ir_create_insn(loc, IR_INSN_MACHINE, dest, operands_len, operands_copy);
     insn->prototype = proto;
     return insn;
 }

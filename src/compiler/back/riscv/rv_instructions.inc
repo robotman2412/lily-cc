@@ -7,82 +7,80 @@
 
 
 
+#ifndef RV_INSN_BASE
+// Base instruction that does not come with a substitution and match tree.
+#define RV_INSN_BASE(name, ext, op_maj, funct3, funct7, funct12, encoding)
+#endif
+
 #ifndef RV_INSN_MISC
-// Define some other intstruction not common enough to have a dedicated macro.
-#define RV_INSN_MISC(name, ext, op_maj, funct3, funct7, funct12, allow_s, allow_u, encoding, n_operand, operand_rules, tree)
+// Define some other instruction not common enough to have a dedicated macro.
+#define RV_INSN_MISC(name, ext, op_maj, funct3, funct7, funct12, allow_s, allow_u, encoding, n_operand, operand_rules, match_tree, sub_tree) \
+    RV_INSN_BASE(name, ext, op_maj, funct3, funct7, funct12, encoding)
 #endif
 
 #ifndef RV_INSN_PSEUDO
 // Define a pseudo-instruction.
-#define RV_INSN_PSEUDO(name, ext, allow_s, allow_u, encoding, n_operand, operand_rules, tree) \
-    RV_INSN_MISC(name, ext, 0, 0, 0, 0, allow_s, allow_u, encoding, n_operand, operand_rules, tree)
+#define RV_INSN_PSEUDO(name, ext, allow_s, allow_u, encoding, n_operand, operand_rules, m_tree, s_tree) \
+    RV_INSN_MISC(name, ext, 0, 0, 0, 0, allow_s, allow_u, encoding, n_operand, operand_rules, m_tree, s_tree)
 #endif
 
 #ifndef RV_INSN_NOIR
 // Define an instruction without an IR representation.
 #define RV_INSN_NOIR(name, ext, op_maj, funct3, funct7, funct12, encoding) \
-    RV_INSN_MISC(name, ext, op_maj, funct3, funct7, funct12, 0, 0, encoding, 0, NULL, NULL)
+    RV_INSN_BASE(name, ext, op_maj, funct3, funct7, funct12, encoding)
 #endif
 
 #ifndef RV_INSN_ALU_RI
 // Define a register-immediate ALU instruction.
 #define RV_INSN_ALU_RI(name, ext, op_maj, funct3, ir_op2, immbits, allow_s, allow_u) \
-    RV_INSN_MISC(name, ext, op_maj, funct3, 0, 0, allow_s, allow_u, RV_ENC_I, 0, NULL, NULL)
+    RV_INSN_MISC(name, ext, op_maj, funct3, 0, 0, allow_s, allow_u, RV_ENC_I, 0, NULL, NULL, NULL)
 #endif
 
 #ifndef RV_INSN_ALU_RR
 // Define a register-register ALU instruction.
 #define RV_INSN_ALU_RR(name, ext, op_maj, funct3, funct7, ir_op2, allow_s, allow_u) \
-    RV_INSN_MISC(name, ext, op_maj, funct3, funct7, 0, allow_s, allow_u, RV_ENV_R, 0, NULL, NULL)
+    RV_INSN_MISC(name, ext, op_maj, funct3, funct7, 0, allow_s, allow_u, RV_ENV_R, 0, NULL, NULL, NULL)
 #endif
 
 #ifndef RV_INSN_ALU
 // Define an ALU instruction.
 #define RV_INSN_ALU(name, ext, op_maj, funct3, funct7, ir_op2, immbits, is_ri, allow_s, allow_u) \
-    RV_INSN_MISC(name, ext, op_maj, funct3, funct7, 0, allow_s, allow_u, (op_maj) & 2 ? RV_ENC_I : RV_ENV_R, 0, NULL, NULL)
+    RV_INSN_MISC(name, ext, op_maj, funct3, funct7, 0, allow_s, allow_u, (op_maj) & 2 ? RV_ENC_I : RV_ENV_R, 0, NULL, NULL, NULL)
 #endif
 
 #ifndef RV_INSN_ALU_CMP
 // Define an ALU comparison instruction.
 #define RV_INSN_ALU_CMP(name, ext, op_maj, funct3, ir_op2, immbits, is_ri, allow_s, allow_u) \
-    RV_INSN_MISC(name, ext, op_maj, funct3, 0, 0, allow_s, allow_u, (op_maj) & 2 ? RV_ENC_I : RV_ENV_R, 0, NULL, NULL)
+    RV_INSN_MISC(name, ext, op_maj, funct3, 0, 0, allow_s, allow_u, (op_maj) & 2 ? RV_ENC_I : RV_ENV_R, 0, NULL, NULL, NULL)
 #endif
 
 #ifndef RV_INSN_BRANCH
 // Define a branch instruction.
 #define RV_INSN_BRANCH(name, ext, op_maj, funct3, ir_op2, allow_s, allow_u) \
-    RV_INSN_MISC(name, ext, op_maj, funct3, 0, 0, allow_s, allow_u, RV_ENC_I, 0, NULL, NULL)
+    RV_INSN_MISC(name, ext, op_maj, funct3, 0, 0, allow_s, allow_u, RV_ENC_I, 0, NULL, NULL, NULL)
 #endif
 
 #ifndef RV_INSN_STORE
 // Define a store instruction.
 #define RV_INSN_STORE(name, ext, op_maj, funct3, bits, allow_s, allow_u) \
-    RV_INSN_MISC(name, ext, op_maj, funct3, 0, 0, allow_s, allow_u, RV_ENC_S, 0, NULL, NULL)
+    RV_INSN_MISC(name, ext, op_maj, funct3, 0, 0, allow_s, allow_u, RV_ENC_S, 0, NULL, NULL, NULL)
 #endif
 
 #ifndef RV_INSN_LOAD
 // Define a load instruction.
 #define RV_INSN_LOAD(name, ext, op_maj, funct3, membits, allow_s, allow_u) \
-    RV_INSN_MISC(name, ext, op_maj, funct3, 0, 0, allow_s, allow_u, RV_ENC_I, 0, NULL, NULL)
+    RV_INSN_MISC(name, ext, op_maj, funct3, 0, 0, allow_s, allow_u, RV_ENC_I, 0, NULL, NULL, NULL)
 #endif
 
 
-
-/* ==== Pseudo-instructions ==== */
-
-//              [ name ]  [ ext ]  [   opcode   ]  [f3 ]  [funct7 ]  [ ir op  ]      imm  ri s  u  [   encoding    ]
-RV_INSN_PSEUDO( li,       RV_BASE,                                                           1, 1, RV_ENC_PSEUDO_LI,  1, rv_li_rules,   &rv_li_tree)
-RV_INSN_PSEUDO( ret,      RV_BASE,                                                           0, 0, RV_ENC_PSEUDO_RET, 0, NULL,          NULL)
-RV_INSN_PSEUDO( j,        RV_BASE,                                                           0, 0, RV_ENC_PSEUDO_J,   1, NULL,          NULL)
-RV_INSN_PSEUDO( jr,       RV_BASE,                                                           0, 0, RV_ENC_PSEUDO_JR,  1, NULL,          NULL)
 
 /* ==== RV32I instructions ==== */
 
 //              [ name ]  [ ext ]  [   opcode   ]  [f3 ]  [funct7 ]  [ ir op  ]      imm  ri s  u  [   encoding    ]
 RV_INSN_NOIR(   lui,      RV_BASE, RV_OP_LUI,      0b000, 0b0000000, 0b000000000000,               RV_ENC_U)
 RV_INSN_NOIR(   auipc,    RV_BASE, RV_OP_LUI,      0b000, 0b0000000, 0b000000000000,               RV_ENC_U)
-RV_INSN_MISC(   jal,      RV_BASE, RV_OP_JAL,      0b000, 0b0000000, 0b000000000000,         1, 0, RV_ENC_J,          1, NULL,          NULL)
-RV_INSN_MISC(   jalr,     RV_BASE, RV_OP_JALR,     0b000, 0b0000000, 0b000000000000,         1, 0, RV_ENC_I,          2, NULL,          NULL)
+RV_INSN_NOIR(   jal,      RV_BASE, RV_OP_JAL,      0b000, 0b0000000, 0b000000000000,               RV_ENC_J)
+RV_INSN_NOIR(   jalr,     RV_BASE, RV_OP_JALR,     0b000, 0b0000000, 0b000000000000,               RV_ENC_I)
 RV_INSN_LOAD(   lb,       RV_BASE, RV_OP_LOAD,     0b000,                              8,    1, 0)
 RV_INSN_LOAD(   lh,       RV_BASE, RV_OP_LOAD,     0b000,                             16,    1, 0)
 RV_INSN_LOAD(   lw,       RV_BASE, RV_OP_LOAD,     0b000,                             32,    1, 0)
@@ -120,6 +118,7 @@ RV_INSN_NOIR(   fence,    RV_BASE, RV_OP_MISC_MEM, 0b000, 0b0000000, 0b000000000
 RV_INSN_NOIR(   ecall,    RV_BASE, RV_OP_SYSTEM,   0b000, 0b0000000, 0b000000000000,               RV_ENC_BITS)
 RV_INSN_NOIR(   ebreak,   RV_BASE, RV_OP_SYSTEM,   0b000, 0b0000000, 0b000000000001,               RV_ENC_BITS)
 
+#undef RV_INSN_BASE
 #undef RV_INSN_MISC
 #undef RV_INSN_PSEUDO
 #undef RV_INSN_NOIR

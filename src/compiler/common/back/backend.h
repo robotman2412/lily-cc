@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include "insn_proto.h"
 #include "ir_types.h"
+#include "sub_tree.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -34,6 +34,8 @@ typedef union regclass         regclass_t;
 typedef struct backend         backend_t;
 // Information specific to a certain configuration of a backend.
 typedef struct backend_profile backend_profile_t;
+// Instruction selection result.
+typedef struct isel            isel_t;
 
 
 
@@ -72,8 +74,12 @@ struct backend {
     void (*delete_profile)(backend_profile_t *profile);
     // Prepare backend for codegen stage.
     void (*init_codegen)(backend_profile_t *profile);
+    // Perform target-specific passes before instruction selection.
+    void (*pre_isel_pass)(backend_profile_t *profile, ir_func_t *func);
     // Perform instruction selection.
-    insn_proto_t const *(*isel)(backend_profile_t *profile, ir_insn_t const *ir_insn, ir_operand_t *operands_out);
+    isel_t (*isel)(backend_profile_t *profile, ir_insn_t const *ir_insn);
+    // Perform target-specific passes after instruction selection.
+    void (*post_isel_pass)(backend_profile_t *profile, ir_func_t *func);
 };
 
 // Information specific to a certain profile for a backend.
@@ -100,6 +106,16 @@ struct backend_profile {
     size_t           gpr_count;
     // Type of data that can be operated on in a register.
     regclass_t      *regclasses;
+};
+
+// Instruction selection result.
+struct isel {
+    // Instruction substitution pattern to use.
+    insn_sub_t const *sub;
+    // Matched operands.
+    ir_operand_t     *operands;
+    // Whether each operand needs to be moved into a register.
+    bool             *operand_regs;
 };
 
 

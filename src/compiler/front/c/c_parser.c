@@ -888,12 +888,16 @@ token_t c_parse_enum_spec(c_parser_t *ctx) {
 
 // Parse a switch statement.
 static token_t c_parse_switch(c_parser_t *ctx) {
-    __builtin_trap();
+    (void)ctx;
+    fprintf(stderr, "[TODO] Create C switch statement parser\n");
+    abort();
 }
 
 // Parse a do...while statement.
 static token_t c_parse_do_while(c_parser_t *ctx) {
-    __builtin_trap();
+    (void)ctx;
+    fprintf(stderr, "[TODO] Create do...while statement parser\n");
+    abort();
 }
 
 // Parse a while statement.
@@ -1027,7 +1031,9 @@ static token_t c_parse_if(c_parser_t *ctx) {
 
 // Parse a goto statement.
 static token_t c_parse_goto(c_parser_t *ctx) {
-    __builtin_trap();
+    (void)ctx;
+    fprintf(stderr, "[TODO] Create goto statement parser\n");
+    abort();
 }
 
 // Parse a return statement.

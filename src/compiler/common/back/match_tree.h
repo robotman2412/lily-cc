@@ -167,6 +167,7 @@ extern match_tree_t const NODE_OPERAND_3;
 // clang-format on
 
 
-
+// Helper function that deletes IR instructions matching `tree`.
+void   match_tree_del(match_tree_t const *tree, ir_insn_t *ir_insn);
 // Calculate the number of nodes in an `match_tree_t.
 size_t match_tree_size(match_tree_t const *tree);

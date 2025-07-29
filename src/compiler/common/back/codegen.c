@@ -8,10 +8,16 @@
 #include "cand_tree.h"
 #include "insn_proto.h"
 #include "ir.h"
+#include "ir/ir_serialization.h"
+#include "ir_interpreter.h"
 #include "ir_types.h"
 #include "list.h"
+#include "match_tree.h"
+#include "set.h"
+#include "sub_tree.h"
 
 #include <assert.h>
+#include <stdio.h>
 
 
 
@@ -28,13 +34,102 @@ static void cg_remove_jumps(ir_func_t *func) {
 
 // Select machine instructions for all IR instructions.
 static void cg_isel(backend_profile_t *profile, ir_code_t *code) {
+    assert(code->func->enforce_ssa);
     ir_insn_t *cur = container_of(code->insns.tail, ir_insn_t, node);
     while (cur) {
-        ir_operand_t        params[8];
-        insn_proto_t const *proto = profile->backend->isel(profile, cur, params);
-        assert(proto != NULL);
-        ir_insn_t *mach = insn_proto_substitute(proto, cur, params);
-        cur             = container_of(mach->node.previous, ir_insn_t, node);
+        if (cur->type != IR_INSN_MACHINE && cur->type != IR_INSN_COMBINATOR) {
+            isel_t res = profile->backend->isel(profile, cur);
+
+            if (res.sub == NULL) {
+                fprintf(stderr, "[BUG] Backend cannot select an instruction for `");
+                ir_insn_serialize(cur, stderr);
+                fprintf(stderr, "`\n");
+                set_t vars = PTR_SET_EMPTY;
+                for (size_t i = 0; i < cur->returns_len; i++) {
+                    set_add(&vars, cur->returns[i]);
+                }
+                for (size_t i = 0; i < cur->operands_len; i++) {
+                    if (cur->operands[i].type == IR_OPERAND_TYPE_VAR) {
+                        set_add(&vars, cur->operands[i].var);
+                    }
+                }
+                set_foreach(ir_var_t, var, &vars) {
+                    fprintf(stderr, "Note: %%%s is %s\n", var->name, ir_prim_names[var->prim_type]);
+                }
+                set_clear(&vars);
+                abort();
+            }
+
+            code->func->enforce_ssa = false;
+
+            // Promote necessary operands into registers.
+            for (size_t i = 0; i < res.sub->operands_len; i++) {
+                if (res.operand_regs[i] && res.operands[i].type != IR_OPERAND_TYPE_VAR) {
+                    ir_var_t *var = ir_var_create(cur->parent->func, ir_operand_prim(res.operands[i]), NULL);
+                    ir_add_expr1(IR_BEFORE_INSN(cur), var, IR_OP1_mov, res.operands[i]);
+                    res.operands[i] = IR_OPERAND_VAR(var);
+                }
+            }
+
+            // Replace IR instructions with the machine instruction prototypes.
+            ir_insn_t *mach = insn_sub_insert(
+                IR_BEFORE_INSN(cur),
+                cur->returns_len ? cur->returns[0] : NULL,
+                res.sub->sub_tree,
+                res.operands
+            );
+            match_tree_del(res.sub->match_tree, cur);
+
+            code->func->enforce_ssa = true;
+            cur                     = mach;
+        }
+        cur = container_of(cur->node.previous, ir_insn_t, node);
+    }
+}
+
+// Normalize operand order of instructions, if possible.
+static void cg_normalize_op_order(ir_insn_t *insn) {
+    // This only deals with expr2 type instructions.
+    if (insn->type != IR_INSN_EXPR2) {
+        return;
+    }
+
+    // Convert subtraction of a constant into addition of the negative of that constant.
+    if (insn->op2 == IR_OP2_sub && insn->operands[1].type == IR_OPERAND_TYPE_CONST) {
+        insn->operands[1].iconst = ir_calc1(IR_OP1_neg, insn->operands[1].iconst);
+        insn->op2                = IR_OP2_add;
+        // No need to commute since the second operand is not a reg operand.
+        return;
+    }
+
+    // Determine whether it's possible to commute arguments; return if not.
+    ir_op2_type_t commuted_op2 = insn->op2;
+    switch (insn->op2) {
+        // Commutable with replacement operator.
+        case IR_OP2_sgt: commuted_op2 = IR_OP2_slt; break;
+        case IR_OP2_sle: commuted_op2 = IR_OP2_sge; break;
+        case IR_OP2_slt: commuted_op2 = IR_OP2_sgt; break;
+        case IR_OP2_sge: commuted_op2 = IR_OP2_sle; break;
+
+        // Commutable with same operator.
+        case IR_OP2_seq:
+        case IR_OP2_sne:
+        case IR_OP2_band:
+        case IR_OP2_bor:
+        case IR_OP2_bxor:
+        case IR_OP2_add:
+        case IR_OP2_mul: break;
+
+        // Not commutable.
+        default: return;
+    }
+
+    // Commute the register to be the first operand if the other operand is not a register.
+    if (insn->operands[0].type != IR_OPERAND_TYPE_VAR && insn->operands[1].type == IR_OPERAND_TYPE_VAR) {
+        ir_operand_t tmp  = insn->operands[0];
+        insn->operands[0] = insn->operands[1];
+        insn->operands[1] = tmp;
+        insn->op2         = commuted_op2;
     }
 }
 
@@ -44,8 +139,27 @@ static void cg_isel(backend_profile_t *profile, ir_code_t *code) {
 // order as written to the eventual executable file.
 void codegen(backend_profile_t *profile, ir_func_t *func) {
     assert(func->enforce_ssa);
+
+    // Remove jumps that go the the next code block linearly.
     cg_remove_jumps(func);
+
+    // Normalize operand order of instructions, if possible.
+    dlist_foreach_node(ir_code_t, code, &func->code_list) {
+        dlist_foreach_node(ir_insn_t, insn, &code->insns) {
+            cg_normalize_op_order(insn);
+        }
+    }
+
+    if (profile->backend->pre_isel_pass) {
+        profile->backend->pre_isel_pass(profile, func);
+    }
+
+    // Select machine instructions.
     dlist_foreach_node(ir_code_t, code, &func->code_list) {
         cg_isel(profile, code);
+    }
+
+    if (profile->backend->post_isel_pass) {
+        profile->backend->post_isel_pass(profile, func);
     }
 }

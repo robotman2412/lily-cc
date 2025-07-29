@@ -5,15 +5,14 @@
 
 #pragma once
 
-#include "insn_proto.h"
-#include "ir_types.h"
-
-
-
 // IR instruction in a `cand_tree_t`.
 typedef struct isel_node isel_node_t;
 // Tree structure used to make instruction selection decisions.
 typedef struct cand_tree cand_tree_t;
+
+#include "backend.h"
+#include "ir_types.h"
+#include "sub_tree.h"
 
 
 
@@ -44,11 +43,11 @@ struct cand_tree {
         isel_node_t insn;
         struct {
             // IR constant value to match.
-            ir_const_t           iconst;
-            // Number of possible instruction prototypes.
-            size_t               protos_len;
-            // Possible instruction prototypes.
-            insn_proto_t const **protos;
+            ir_const_t         iconst;
+            // Number of possible instruction substitutions.
+            size_t             subs_len;
+            // Possible instruction substitutions.
+            insn_sub_t const **subs;
         };
     };
 };
@@ -56,8 +55,9 @@ struct cand_tree {
 
 
 // Generate an instruction selection tree given an instruction set.
-cand_tree_t        *cand_tree_generate(size_t protos_len, insn_proto_t const *const *protos);
+cand_tree_t *cand_tree_generate(size_t rules_len, insn_sub_t const *const *rules);
 // Delete an instruction selection tree.
-void                cand_tree_delete(cand_tree_t *tree);
+void         cand_tree_delete(cand_tree_t *tree);
 // Match an instruction selection tree against IR in SSA form.
-insn_proto_t const *cand_tree_isel(cand_tree_t const *tree, ir_insn_t const *ir_insn, ir_operand_t *operands_out);
+isel_t
+    cand_tree_isel(backend_profile_t *backend, cand_tree_t const *tree, ir_insn_t const *ir_insn, size_t operands_cap);

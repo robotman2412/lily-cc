@@ -10,6 +10,7 @@
 #include "cand_tree.h"
 #include "insn_proto.h"
 #include "rv_instructions.h"
+#include "rv_isel.h"
 #include "rv_misc.h"
 #include "strong_malloc.h"
 
@@ -39,28 +40,30 @@ void rv_delete_profile(backend_profile_t *_profile) {
 
 // Prepare backend for codegen stage.
 void rv_init_codegen(backend_profile_t *_profile) {
-    rv_profile_t        *profile    = (void *)_profile;
-    insn_proto_t const **protos     = NULL;
-    size_t               protos_len = 0;
-    size_t               protos_cap = 0;
+    rv_profile_t      *profile  = (void *)_profile;
+    insn_sub_t const **subs     = NULL;
+    size_t             subs_len = 0;
+    size_t             subs_cap = 0;
 
     // Collect all instruction prototypes enabled in the profile.
-    for (size_t i = 0; i < rv_insns_len; i++) {
-        rv_encoding_t const *cookie = rv_insns[i]->cookie;
-        if (rv_insns[i]->tree && profile->ext_enabled[cookie->ext]) {
-            array_lencap_insert_strong(&protos, sizeof(void *), &protos_len, &protos_cap, &rv_insns[i], protos_len);
+    for (size_t i = 0; i < rv_insn_subs_len; i++) {
+        if (!rv_insn_subs[i]->sub_tree
+            || !profile->ext_enabled[((rv_encoding_t const *)rv_insn_subs[i]->sub_tree->proto->cookie)->ext]) {
+            continue;
         }
+        array_lencap_insert_strong(&subs, sizeof(void *), &subs_len, &subs_cap, &rv_insn_subs[i], subs_len);
     }
 
     // Create candidate tree from instruction set.
-    profile->cand_tree = cand_tree_generate(protos_len, protos);
-    free(protos);
+    profile->cand_tree = cand_tree_generate(subs_len, subs);
+    free(subs);
 
     // Update other codegen-relevant settings.
     profile->ext_enabled[RV_32ONLY] = !profile->ext_enabled[RV_64];
     profile->base.gpr_bits          = profile->ext_enabled[RV_64] ? LILY_64_BITS : LILY_32_BITS;
     profile->base.arith_min_bits    = LILY_32_BITS;
     profile->base.arith_max_bits    = profile->base.gpr_bits;
+    profile->base.ptr_bits          = profile->base.gpr_bits;
     profile->base.has_f32           = profile->ext_enabled[RV_EXT_F];
     profile->base.has_f64           = profile->ext_enabled[RV_EXT_D];
     profile->base.gpr_count         = profile->ext_enabled[RV_EXT_F] ? 63 : 31;
@@ -74,12 +77,6 @@ void rv_init_codegen(backend_profile_t *_profile) {
             profile->base.regclasses[i] = (regclass_t){.f32 = 1, .f64 = profile->ext_enabled[RV_EXT_D]};
         }
     }
-}
-
-// Perform instruction selection for expressions, memory access and branches.
-insn_proto_t const *rv_isel(backend_profile_t *_profile, ir_insn_t const *ir_insn, ir_operand_t *operands_out) {
-    rv_profile_t *profile = (void *)_profile;
-    return cand_tree_isel(profile->cand_tree, ir_insn, operands_out);
 }
 
 

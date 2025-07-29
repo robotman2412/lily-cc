@@ -11,8 +11,8 @@ project(lily-cc)
 add_compile_options(
     -std=gnu17
     -O0 -ggdb
-    -Wall -Wno-parentheses -Wno-unused-function -Wno-missing-braces
-    -Werror=all -Werror=enum-conversion
+    -Wall -Wextra -Wno-type-limits -Wno-unused-function
+    -Werror=all -Werror=extra -Werror=enum-conversion
     -lbsd
     -DDLIST_CONSISTENCY_CHECK
 )

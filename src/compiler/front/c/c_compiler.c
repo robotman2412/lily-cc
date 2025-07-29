@@ -738,6 +738,7 @@ void c_create_branch_consistency(c_compiler_t *ctx, ir_code_t *code, c_scope_t *
 
 // Assume the variables are in the state that would be created by `c_create_branch_consistency`.
 void c_assume_branch_consistency(c_compiler_t *ctx, c_scope_t *scope, set_t const *affected_vars) {
+    (void)ctx;
     if (!affected_vars) {
         return;
     }

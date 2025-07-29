@@ -67,10 +67,10 @@ c_keyw_t     c_keyw_get(tokenizer_t const *ctx, char const *name);
 
 // Test if a token is a certain keyword.
 static inline bool c_tkn_is_keyw(token_t tkn, c_keyw_t keyw) {
-    return tkn.type == TOKENTYPE_KEYWORD && tkn.subtype == keyw;
+    return tkn.type == TOKENTYPE_KEYWORD && (c_keyw_t)tkn.subtype == keyw;
 }
 
 // Test if a token is of a certain type.
 static inline bool c_tkn_is(token_t tkn, c_tokentype_t type) {
-    return tkn.type == TOKENTYPE_OTHER && tkn.subtype == type;
+    return tkn.type == TOKENTYPE_OTHER && (c_tokentype_t)tkn.subtype == type;
 }

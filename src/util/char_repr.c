@@ -60,7 +60,7 @@ size_t format_char_repr(char *out, size_t out_cap, unsigned int value) {
         case '\t': strlcpy(out, "\\t", out_cap); return 2; break;
         case '\v': strlcpy(out, "\\v", out_cap); return 2; break;
         default:
-            if (value < 0x20 || value >= 0x7f && value <= 0xff) {
+            if (value < 0x20 || (value >= 0x7f && value <= 0xff)) {
                 return snprintf(out, out_cap, "\\%03o", value);
             } else if (value >= 0x0100 && value <= 0xffff) {
                 return snprintf(out, out_cap, "\\u%04x", value);

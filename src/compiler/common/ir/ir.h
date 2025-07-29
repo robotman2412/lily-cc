@@ -102,7 +102,9 @@ ir_insn_t *ir_add_return0(ir_insnloc_t from);
 ir_insn_t *ir_add_return1(ir_insnloc_t from, ir_operand_t value);
 
 // Add a machine instruction.
-ir_insn_t *ir_add_mach_insn(ir_insnloc_t loc, ir_var_t *dest, insn_proto_t const *proto, ir_operand_t const *operands);
+ir_insn_t *ir_add_mach_insn(
+    ir_insnloc_t loc, ir_var_t *dest, insn_proto_t const *proto, size_t operands_len, ir_operand_t const *operands
+);
 
 
 
@@ -112,5 +114,15 @@ static inline ir_var_t *ir_insn_get_dest(ir_insn_t const *insn) {
         return insn->returns[0];
     } else {
         return NULL;
+    }
+}
+
+// Get the code that an `ir_insnloc_t` lies within.
+static inline ir_code_t *ir_insnloc_code(ir_insnloc_t loc) {
+    switch (loc.type) {
+        case IR_INSNLOC_APPEND_CODE: return loc.code;
+        case IR_INSNLOC_AFTER_INSN:
+        case IR_INSNLOC_BEFORE_INSN: return loc.insn->parent;
+        default: __builtin_unreachable();
     }
 }

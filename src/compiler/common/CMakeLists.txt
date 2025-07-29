@@ -9,6 +9,7 @@ add_library(compiler-common STATIC
     back/match_tree.c
     back/cand_tree.c
     back/insn_proto.c
+    back/sub_tree.c
     front/compiler.c
     front/tokenizer.c
     ir/ir_interpreter.c

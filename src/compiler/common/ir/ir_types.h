@@ -219,15 +219,15 @@ struct ir_memref {
 };
 
 // Absolute base address for `ir_memref_t` compound initializer.
-#define IR_BADDR_ABS()        .rel_type = IR_MEMREL_ABS,
+#define IR_BADDR_ABS()        .rel_type = IR_MEMREL_ABS
 // Symbol base address for `ir_memref_t` compound initializer.
-#define IR_BADDR_SYM(sym)     .rel_type = IR_MEMREL_SYM, .base_sym = (sym),
+#define IR_BADDR_SYM(sym)     .rel_type = IR_MEMREL_SYM, .base_sym = (sym)
 // Stack frame base address for `ir_memref_t` compound initializer.
-#define IR_BADDR_FRAME(frame) .rel_type = IR_MEMREL_FRAME, .base_frame = (frame),
+#define IR_BADDR_FRAME(frame) .rel_type = IR_MEMREL_FRAME, .base_frame = (frame)
 // Code block base address for `ir_memref_t` compound initializer.
-#define IR_BADDR_CODE(code)   .rel_type = IR_MEMREL_CODE, .base_code = (code),
+#define IR_BADDR_CODE(code)   .rel_type = IR_MEMREL_CODE, .base_code = (code)
 // Variable base address for `ir_memref_t` compound initializer.
-#define IR_BADDR_VAR(var)     .rel_type = IR_MEMREL_VAR, .base_var = (var),
+#define IR_BADDR_VAR(var)     .rel_type = IR_MEMREL_VAR, .base_var = (var)
 
 // Create an `ir_memref_t` without offset.
 #define IR_MEMREF(data_type_, ...) ((ir_memref_t){.data_type = (data_type_), __VA_ARGS__})

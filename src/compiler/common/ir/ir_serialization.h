@@ -10,6 +10,14 @@
 
 #include <stdio.h>
 
+// Serialize an IR constant.
+void ir_const_serialize(ir_const_t iconst, FILE *to);
+// Serialize an IR operand.
+void ir_operand_serialize(ir_operand_t operand, FILE *to);
+// Serialize an IR instruction.
+void ir_insn_serialize(ir_insn_t *insn, FILE *to);
+// Serialize an IR code block.
+void ir_code_serialize(ir_code_t *code, FILE *to);
 // Serialize an IR function.
 void ir_func_serialize(ir_func_t *func, FILE *to);
 

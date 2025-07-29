@@ -31,13 +31,11 @@ struct rv_profile {
 
 
 // Create a copy of the default profile for this type of backend.
-backend_profile_t  *rv_create_profile();
+backend_profile_t *rv_create_profile();
 // Delete a profile for this backend.
-void                rv_delete_profile(backend_profile_t *profile);
+void               rv_delete_profile(backend_profile_t *profile);
 // Prepare backend for codegen stage.
-void                rv_init_codegen(backend_profile_t *profile);
-// Perform instruction selection.
-insn_proto_t const *rv_isel(backend_profile_t *profile, ir_insn_t const *ir_insn, ir_operand_t *operands_out);
+void               rv_init_codegen(backend_profile_t *profile);
 
 
 

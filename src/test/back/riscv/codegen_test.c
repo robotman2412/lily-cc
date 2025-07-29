@@ -18,24 +18,25 @@ char *test_rv_isel() {
     ir_func_t *func   = ir_func_create("test_isel", "code0", 1, (char const *const[]){"a"});
     func->enforce_ssa = true;
 
-    // add %tmp1, %a, s32'433
+    // add %tmp1, %a, s32'0xf00
     ir_var_t *tmp1 = ir_var_create(func, IR_PRIM_s32, "tmp1");
     ir_add_expr2(
         IR_APPEND(func->entry),
         tmp1,
         IR_OP2_add,
         (ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = func->args[0].var},
-        (ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = (ir_const_t){.prim_type = IR_PRIM_s32, .constl = 8000}}
+        (ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = (ir_const_t){.prim_type = IR_PRIM_s32, .constl = 0xf00}}
     );
 
-    // add %tmp2, %tmp1, s32'15
+    // add %tmp2, %tmp1, s32'0xcafebabe
     ir_var_t *tmp2 = ir_var_create(func, IR_PRIM_s32, "tmp2");
     ir_add_expr2(
         IR_APPEND(func->entry),
         tmp2,
         IR_OP2_add,
         (ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = tmp1},
-        (ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = (ir_const_t){.prim_type = IR_PRIM_s32, .constl = 15}}
+        (ir_operand_t){.type   = IR_OPERAND_TYPE_CONST,
+                       .iconst = (ir_const_t){.prim_type = IR_PRIM_s32, .constl = 0xcafebabe}}
     );
 
     // load %tmp3, %tmp2

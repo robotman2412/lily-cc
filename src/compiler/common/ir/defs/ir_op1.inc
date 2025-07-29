@@ -8,13 +8,18 @@
 #define IR_OP1_DEF(keyw)
 #endif
 
+// Move / cast value.
 IR_OP1_DEF(mov)
 
+// Set if equal to zero.
 IR_OP1_DEF(seqz)
+// Set if not equal to zero.
 IR_OP1_DEF(snez)
 
+// Arithmetic negate.
 IR_OP1_DEF(neg)
 
+// Bitwise negate.
 IR_OP1_DEF(bneg)
 
 #undef IR_OP1_DEF

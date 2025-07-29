@@ -28,7 +28,7 @@ static char *test_set_basic() {
     struct {
         void *expect;
         int   count;
-    } expect[]              = {{(void *)1}, {(void *)9}, {(void *)31}};
+    } expect[]              = {{(void *)1, 0}, {(void *)9, 0}, {(void *)31, 0}};
     size_t const expect_len = sizeof(expect) / sizeof(*expect);
 
     set_foreach(void, value, &set) {

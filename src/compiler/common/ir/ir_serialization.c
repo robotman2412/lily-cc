@@ -360,7 +360,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                 if (!entry.var) {
                     cctx_diagnostic(from->cctx, arg.pos, DIAG_ERR, "No such variable: %%%s", arg.strval);
                     has_errors = true;
-                } else if (entry.var->is_arg >= 0) {
+                } else if (entry.var->arg_index >= 0) {
                     cctx_diagnostic(
                         from->cctx,
                         arg.pos,
@@ -370,7 +370,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     );
                     has_errors = true;
                 } else {
-                    entry.var->is_arg = func->args_len;
+                    entry.var->arg_index = func->args_len;
                     array_len_insert_strong(&func->args, sizeof(ir_arg_t), &func->args_len, &entry, func->args_len);
                 }
                 ir_expect_eol(from, &has_errors);

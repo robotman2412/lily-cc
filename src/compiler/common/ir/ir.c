@@ -56,9 +56,9 @@ ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_
     func->args      = strong_calloc(args_len, sizeof(ir_arg_t));
     func->args_len  = args_len;
     for (size_t i = 0; i < args_len; i++) {
-        func->args[i].has_var     = true;
-        func->args[i].var         = ir_var_create(func, IR_PRIM_s32, args_name ? args_name[i] : NULL);
-        func->args[i].var->is_arg = i;
+        func->args[i].has_var        = true;
+        func->args[i].var            = ir_var_create(func, IR_PRIM_s32, args_name ? args_name[i] : NULL);
+        func->args[i].var->arg_index = i;
     }
     func->entry = ir_code_create(func, entry_name);
     return func;
@@ -504,7 +504,7 @@ ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
     var->assigned_at = PTR_SET_EMPTY;
     var->used_at     = PTR_SET_EMPTY;
     var->node        = DLIST_NODE_EMPTY;
-    var->is_arg      = -1;
+    var->arg_index   = -1;
     dlist_append(&func->vars_list, &var->node);
     map_set(&func->var_by_name, var->name, var);
     return var;
@@ -521,10 +521,10 @@ void ir_var_delete(ir_var_t *var) {
     }
     set_clear(&to_delete);
 
-    if (var->is_arg >= 0) {
+    if (var->arg_index >= 0) {
         // Turn function arg into variable-less.
-        var->func->args[var->is_arg].has_var = false;
-        var->func->args[var->is_arg].type    = var->prim_type;
+        var->func->args[var->arg_index].has_var = false;
+        var->func->args[var->arg_index].type    = var->prim_type;
     }
 
     // Delete the variable itself.
@@ -767,7 +767,7 @@ static ir_insn_t *
         insn->returns_len = 1;
     }
     if (dest != NULL) {
-        if (ir_insnloc_code(loc)->func->enforce_ssa && (dest->assigned_at.len || dest->is_arg)) {
+        if (ir_insnloc_code(loc)->func->enforce_ssa && (dest->assigned_at.len || dest->arg_index >= 0)) {
             fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
             abort();
         }
@@ -801,7 +801,7 @@ ir_insn_t *ir_add_combinator(ir_insnloc_t loc, ir_var_t *dest, size_t from_len, 
     insn->combinators_len = from_len;
     insn->combinators     = from;
     insn->returns[0]      = dest;
-    if (ir_insnloc_code(loc)->func->enforce_ssa && (dest->assigned_at.len || dest->is_arg)) {
+    if (ir_insnloc_code(loc)->func->enforce_ssa && (dest->assigned_at.len || dest->arg_index >= 0)) {
         fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
         abort();
     }

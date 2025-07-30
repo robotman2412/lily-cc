@@ -156,7 +156,7 @@ struct ir_var {
     // Variable type.
     ir_prim_t    prim_type;
     // Is one of this function's args and if so, which.
-    ptrdiff_t    is_arg;
+    ptrdiff_t    arg_index;
     // Expressions that assign this variable.
     set_t        assigned_at;
     // instructions that read this variable.

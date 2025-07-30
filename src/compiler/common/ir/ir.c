@@ -10,6 +10,7 @@
 #include "ir/ir_optimizer.h"
 #include "ir_types.h"
 #include "list.h"
+#include "map.h"
 #include "set.h"
 #include "strong_malloc.h"
 
@@ -51,8 +52,7 @@ void ir_mark_used(ir_operand_t operand, ir_insn_t *insn) {
 // Create a new IR function.
 // Function argument types are IR_PRIM_s32 by default.
 ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_len, char const *const *args_name) {
-    ir_func_t *func = strong_calloc(1, sizeof(ir_func_t));
-    func->name      = strong_strdup(name);
+    ir_func_t *func = ir_func_create_empty(name);
     func->args      = strong_calloc(args_len, sizeof(ir_arg_t));
     func->args_len  = args_len;
     for (size_t i = 0; i < args_len; i++) {
@@ -61,6 +61,16 @@ ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_
         func->args[i].var->is_arg = i;
     }
     func->entry = ir_code_create(func, entry_name);
+    return func;
+}
+
+// Create an IR function without operands nor code.
+ir_func_t *ir_func_create_empty(char const *name) {
+    ir_func_t *func     = strong_calloc(1, sizeof(ir_func_t));
+    func->name          = strong_strdup(name);
+    func->code_by_name  = STR_MAP_EMPTY;
+    func->var_by_name   = STR_MAP_EMPTY;
+    func->frame_by_name = STR_MAP_EMPTY;
     return func;
 }
 
@@ -79,7 +89,9 @@ void ir_func_delete(ir_func_t *func) {
     }
 
     while (func->frames_list.len) {
+        // TODO: This should be its own function.
         ir_frame_t *frame = (ir_frame_t *)dlist_pop_front(&func->frames_list);
+        map_remove(&func->frame_by_name, frame->name);
         free(frame->name);
         free(frame);
     }
@@ -222,7 +234,7 @@ static void compute_dominance(ir_func_t *func, size_t nodes_len, dom_node_t *nod
 static void create_combinator(ir_code_t *code, ir_var_t *dest) {
     ir_insn_t *expr       = calloc(1, sizeof(ir_insn_t));
     expr->type            = IR_INSN_COMBINATOR;
-    expr->parent          = code;
+    expr->code            = code;
     expr->combinators_len = code->pred.len;
     expr->combinators     = strong_calloc(1, code->pred.len * sizeof(ir_combinator_t));
     expr->returns         = strong_malloc(sizeof(void *));
@@ -269,13 +281,13 @@ static void insert_combinators(ir_func_t *func, ir_var_t *var, size_t nodes_len,
         code->visited = false;
     }
     set_foreach(ir_insn_t, insn, &var->used_at) {
-        nodes[insn->parent->dfs_index].uses_var = true;
+        nodes[insn->code->dfs_index].uses_var = true;
     }
     set_foreach(ir_insn_t, expr, &var->assigned_at) {
         // The search starts at each definition so that anything before won't be marked as using it.
         // Even though it can be assigned both by memory insns and exprs, this is okay to do.
-        nodes[expr->parent->dfs_index].uses_var = true;
-        var_usage_dfs(expr->parent, nodes);
+        nodes[expr->code->dfs_index].uses_var = true;
+        var_usage_dfs(expr->code, nodes);
     }
 
     // Mark as not having a combinator function.
@@ -284,7 +296,7 @@ static void insert_combinators(ir_func_t *func, ir_var_t *var, size_t nodes_len,
     }
     set_foreach(ir_insn_t, expr, &var->assigned_at) {
         // Same thing; could actually be a mem insn but this works for that too.
-        set_addall(&frontier, &nodes[expr->parent->dfs_index].frontier);
+        set_addall(&frontier, &nodes[expr->code->dfs_index].frontier);
     }
 
     bool changed = true;
@@ -433,6 +445,15 @@ void ir_func_recalc_flow(ir_func_t *func) {
 
 
 
+// Check that a name isn't already in use.
+static void name_free_assert(ir_func_t *func, char *name) {
+    if (map_get(&func->code_by_name, name) || map_get(&func->var_by_name, name)
+        || map_get(&func->frame_by_name, name)) {
+        fprintf(stderr, "[BUG] The name %%%s is already in use\n", name);
+        abort();
+    }
+}
+
 // Create a new stack frame.
 // If `name` is `NULL`, its name will be `frame%zu` where `%zu` is a number.
 ir_frame_t *ir_frame_create(ir_func_t *func, uint64_t size, uint64_t align, char const *name) {
@@ -457,6 +478,8 @@ ir_frame_t *ir_frame_create(ir_func_t *func, uint64_t size, uint64_t align, char
     frame->size  = size;
     frame->align = align;
     frame->node  = DLIST_NODE_EMPTY;
+    name_free_assert(func, frame->name);
+    map_set(&func->frame_by_name, frame->name, frame);
     dlist_append(&func->frames_list, &frame->node);
     return frame;
 }
@@ -475,6 +498,7 @@ ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
         var->name       = calloc(1, len + 1);
         snprintf(var->name, len + 1, fmt, func->vars_list.len);
     }
+    name_free_assert(func, var->name);
     var->prim_type   = type;
     var->func        = func;
     var->assigned_at = PTR_SET_EMPTY;
@@ -482,6 +506,7 @@ ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
     var->node        = DLIST_NODE_EMPTY;
     var->is_arg      = -1;
     dlist_append(&func->vars_list, &var->node);
+    map_set(&func->var_by_name, var->name, var);
     return var;
 }
 
@@ -503,6 +528,7 @@ void ir_var_delete(ir_var_t *var) {
     }
 
     // Delete the variable itself.
+    map_remove(&var->func->var_by_name, var->name);
     dlist_remove(&var->func->vars_list, &var->node);
     free(var->name);
     free(var);
@@ -551,6 +577,8 @@ ir_code_t *ir_code_create(ir_func_t *func, char const *name) {
         code->name      = calloc(1, len + 1);
         snprintf(code->name, len + 1, fmt, func->code_list.len);
     }
+    name_free_assert(func, code->name);
+    map_set(&func->code_by_name, code->name, code);
     dlist_append(&func->code_list, &code->node);
     return code;
 }
@@ -605,6 +633,7 @@ void ir_code_delete(ir_code_t *code) {
         ir_insn_delete((void *)code->insns.head);
     }
     // Release memory.
+    map_remove(&code->func->code_by_name, code->name);
     dlist_remove(&code->func->code_list, &code->node);
     set_clear(&code->pred);
     set_clear(&code->succ);
@@ -659,7 +688,7 @@ void ir_insn_delete(ir_insn_t *insn) {
         set_remove(&insn->returns[i]->assigned_at, insn);
     }
     free(insn->returns);
-    dlist_remove(&insn->parent->insns, &insn->node);
+    dlist_remove(&insn->code->insns, &insn->node);
     free(insn);
 }
 
@@ -702,16 +731,16 @@ static void ir_emplace_insn(ir_insnloc_t loc, ir_insn_t *insn) {
 
     switch (loc.type) {
         case IR_INSNLOC_APPEND_CODE: {
-            insn->parent = loc.code;
+            insn->code = loc.code;
             dlist_append(&loc.code->insns, &insn->node);
         } break;
         case IR_INSNLOC_AFTER_INSN: {
-            insn->parent = loc.insn->parent;
-            dlist_insert_after(&loc.insn->parent->insns, &loc.insn->node, &insn->node);
+            insn->code = loc.insn->code;
+            dlist_insert_after(&loc.insn->code->insns, &loc.insn->node, &insn->node);
         } break;
         case IR_INSNLOC_BEFORE_INSN: {
-            insn->parent = loc.insn->parent;
-            dlist_insert_before(&loc.insn->parent->insns, &loc.insn->node, &insn->node);
+            insn->code = loc.insn->code;
+            dlist_insert_before(&loc.insn->code->insns, &loc.insn->node, &insn->node);
         } break;
     }
 }
@@ -738,7 +767,7 @@ static ir_insn_t *
         insn->returns_len = 1;
     }
     if (dest != NULL) {
-        if (ir_insnloc_code(loc)->func->enforce_ssa && dest->assigned_at.len) {
+        if (ir_insnloc_code(loc)->func->enforce_ssa && (dest->assigned_at.len || dest->is_arg)) {
             fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
             abort();
         }
@@ -772,7 +801,7 @@ ir_insn_t *ir_add_combinator(ir_insnloc_t loc, ir_var_t *dest, size_t from_len, 
     insn->combinators_len = from_len;
     insn->combinators     = from;
     insn->returns[0]      = dest;
-    if (dest->assigned_at.len && ir_insnloc_code(loc)->func->enforce_ssa) {
+    if (ir_insnloc_code(loc)->func->enforce_ssa && (dest->assigned_at.len || dest->is_arg)) {
         fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
         abort();
     }

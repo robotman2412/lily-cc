@@ -76,10 +76,10 @@ static bool strength_reduce_expr(ir_insn_t *expr) {
         i128_t mask = add128(int128(-1, -1), shl128(int128(0, 1), bits));
         if (!(prim & 1)) {
             // Add instructions to extract and copy the sign from the lhs to the output.
-            ir_var_t *tmp1 = ir_var_create(expr->parent->func, prim, NULL);
-            ir_var_t *tmp2 = ir_var_create(expr->parent->func, prim, NULL);
-            ir_var_t *tmp3 = ir_var_create(expr->parent->func, prim, NULL);
-            ir_var_t *tmp4 = ir_var_create(expr->parent->func, prim, NULL);
+            ir_var_t *tmp1 = ir_var_create(expr->code->func, prim, NULL);
+            ir_var_t *tmp2 = ir_var_create(expr->code->func, prim, NULL);
+            ir_var_t *tmp3 = ir_var_create(expr->code->func, prim, NULL);
+            ir_var_t *tmp4 = ir_var_create(expr->code->func, prim, NULL);
 
             ir_const_t shamt1 = {.prim_type = prim, .constl = ir_prim_sizes[prim] * 8 - 1};
             ir_add_expr2(IR_BEFORE_INSN(expr), tmp1, IR_OP2_shr, lhs, IR_OPERAND_CONST(shamt1));
@@ -361,7 +361,7 @@ static void merge_code(ir_code_t *first, ir_code_t *second) {
 
     // Transfer all instructions from second to first.
     dlist_foreach_node(ir_insn_t, insn, &second->insns) {
-        insn->parent = first;
+        insn->code = first;
     }
     dlist_concat(&first->insns, &second->insns);
 

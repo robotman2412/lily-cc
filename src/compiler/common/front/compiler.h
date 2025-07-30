@@ -147,7 +147,7 @@ struct token {
     // Length of string constant value.
     size_t      strval_len;
     // Integer constant value.
-    uint64_t    ival;
+    uint64_t    ival, ivalh;
     // Number of parameters for AST node.
     size_t      params_len;
     // Parameters for AST node.

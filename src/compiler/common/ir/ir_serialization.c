@@ -5,13 +5,20 @@
 
 #include "ir/ir_serialization.h"
 
+#include "arrays.h"
+#include "compiler.h"
 #include "insn_proto.h"
+#include "ir.h"
 #include "ir_interpreter.h"
+#include "ir_tokenizer.h"
 #include "ir_types.h"
 #include "list.h"
+#include "map.h"
+#include "tokenizer.h"
 
 #include <inttypes.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 
@@ -142,6 +149,11 @@ void ir_code_serialize(ir_code_t *code, FILE *to) {
 
 // Serialize an IR function.
 void ir_func_serialize(ir_func_t *func, FILE *to) {
+    if (!func->entry) {
+        fprintf(stderr, "[BUG] IR function <%s> has no entrypoint\n", func->name);
+        abort();
+    }
+
     if (func->enforce_ssa) {
         fputs("ssa_", to);
     }
@@ -168,13 +180,276 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
     dlist_foreach_node(ir_code_t, code, &func->code_list) {
         ir_code_serialize(code, to);
     }
+
+    fprintf(to, "entry %%%s\n", func->entry->name);
 }
 
 
 
+// Helper function that skips past any EOL tokens.
+static void ir_skip_eol(tokenizer_t *from) {
+    while (tkn_peek(from).type == TOKENTYPE_EOL) {
+        tkn_delete(tkn_next(from));
+    }
+}
+
+// Helper function that eats tokens until EOL or EOF.
+static void ir_eat_eol(tokenizer_t *from) {
+    while (1) {
+        token_t tkn = tkn_next(from);
+        tkn_delete(tkn);
+        if (tkn.type == TOKENTYPE_EOF || tkn.type == TOKENTYPE_EOL) {
+            return;
+        }
+    }
+}
+
+// Helper function that expects EOL or EOF.
+static void ir_expect_eol(tokenizer_t *from, bool *has_errors) {
+    token_t tkn = tkn_next(from);
+    if (tkn.type != TOKENTYPE_EOF && tkn.type != TOKENTYPE_EOL) {
+        cctx_diagnostic(from->cctx, tkn.pos, DIAG_ERR, "Expected end-of-line");
+        *has_errors = true;
+        ir_eat_eol(from);
+    }
+    tkn_delete(tkn);
+}
+
+// Tests whether the given local name is free and errors if not.
+static bool ir_check_free_name(ir_func_t *func, bool *has_errors, cctx_t *cctx, token_t name) {
+    if (map_get(&func->code_by_name, name.strval) || map_get(&func->var_by_name, name.strval)
+        || map_get(&func->frame_by_name, name.strval)) {
+        cctx_diagnostic(cctx, name.pos, DIAG_ERR, "The name %%%s is already in use", name.strval);
+        *has_errors = true;
+        return false;
+    }
+    return true;
+}
+
+// Deserialize a single IR instruction from the file.
+ir_insn_t *ir_insn_deserialize(tokenizer_t *from, ir_func_t *func, bool enforce_ssa, ir_code_t *cur_code) {
+    (void)from;
+    (void)func;
+    (void)enforce_ssa;
+    (void)cur_code;
+    abort();
+}
+
 // Deserialize a single IR function from the file.
 // Call multiple times on a single file if you want all the functions.
 ir_func_t *ir_func_deserialize(tokenizer_t *from) {
-    (void)from;
-    abort();
+    ir_skip_eol(from);
+
+    // Parse the function declaration.
+    token_t function = tkn_next(from);
+    if (function.type != TOKENTYPE_KEYWORD
+        || (function.subtype != IR_KEYW_ssa_function && function.subtype != IR_KEYW_function)) {
+        cctx_diagnostic(from->cctx, function.pos, DIAG_ERR, "Expected `function` or `ssa_function`");
+        return NULL;
+    }
+
+    token_t funcname = tkn_next(from);
+    if (funcname.type != TOKENTYPE_IDENT || funcname.subtype != IR_IDENT_GLOBAL) {
+        cctx_diagnostic(from->cctx, function.pos, DIAG_ERR, "Expected a global identifier");
+        return NULL;
+    }
+
+    // Actually create the function.
+    ir_func_t *func        = ir_func_create_empty(funcname.strval);
+    bool       enforce_ssa = function.subtype == IR_KEYW_ssa_function;
+    bool       has_entry   = false;
+    bool       has_errors  = false;
+    ir_code_t *cur_code    = NULL;
+    while (1) {
+        ir_skip_eol(from);
+        token_t const tkn = tkn_peek(from);
+        if (tkn.type == TOKENTYPE_EOF
+            || (tkn.type == TOKENTYPE_KEYWORD
+                && (tkn.subtype == IR_KEYW_function || tkn.subtype == IR_KEYW_ssa_function))) {
+            // End of this function.
+            break;
+        }
+
+        if (tkn.type == TOKENTYPE_KEYWORD && tkn.subtype == IR_KEYW_code) {
+            tkn_next(from);
+            // Create a new code block.
+            token_t const name = tkn_next(from);
+            if (name.type != TOKENTYPE_IDENT || name.subtype != IR_IDENT_LOCAL) {
+                cctx_diagnostic(from->cctx, name.pos, DIAG_ERR, "Expected a local identifier");
+                ir_eat_eol(from);
+                has_errors = true;
+            } else {
+                if (ir_check_free_name(func, &has_errors, from->cctx, name)) {
+                    cur_code = ir_code_create(func, name.strval);
+                }
+                ir_expect_eol(from, &has_errors);
+            }
+            tkn_delete(name);
+
+        } else if (tkn.type == TOKENTYPE_KEYWORD && tkn.subtype == IR_KEYW_entry) {
+            tkn_next(from);
+            // Set the function's entrypoint.
+            token_t const name = tkn_next(from);
+            if (name.type != TOKENTYPE_IDENT || name.subtype != IR_IDENT_LOCAL) {
+                cctx_diagnostic(from->cctx, name.pos, DIAG_ERR, "Expected a local identifier");
+                ir_eat_eol(from);
+                has_errors = true;
+            } else {
+                if (has_entry) {
+                    cctx_diagnostic(
+                        from->cctx,
+                        pos_between(tkn.pos, name.pos),
+                        DIAG_ERR,
+                        "Function entrypoint specified twice"
+                    );
+                    has_errors = true;
+                }
+                has_entry   = true;
+                func->entry = map_get(&func->code_by_name, name.strval);
+                if (!func->entry) {
+                    cctx_diagnostic(from->cctx, name.pos, DIAG_ERR, "No such code block: %%%s", name.strval);
+                    has_errors = true;
+                }
+                ir_expect_eol(from, &has_errors);
+            }
+            tkn_delete(name);
+
+        } else if (tkn.type == TOKENTYPE_KEYWORD && tkn.subtype == IR_KEYW_var) {
+            tkn_next(from);
+            // Create a new variable.
+            token_t const name = tkn_next(from);
+            if (name.type != TOKENTYPE_IDENT || name.subtype != IR_IDENT_LOCAL) {
+                cctx_diagnostic(from->cctx, name.pos, DIAG_ERR, "Expected a local identifier");
+                ir_eat_eol(from);
+                has_errors = true;
+            } else {
+                token_t const prim = tkn_next(from);
+                if (prim.type != TOKENTYPE_KEYWORD || prim.subtype < IR_KEYW_s8 || prim.subtype >= IR_KEYW_comb) {
+                    cctx_diagnostic(from->cctx, prim.pos, DIAG_ERR, "Expected a type");
+                    ir_eat_eol(from);
+                    has_errors = true;
+                } else {
+                    if (ir_check_free_name(func, &has_errors, from->cctx, name)) {
+                        ir_var_create(func, prim.subtype, name.strval);
+                    }
+                    ir_expect_eol(from, &has_errors);
+                }
+                tkn_delete(prim);
+            }
+            tkn_delete(name);
+
+        } else if (tkn.type == TOKENTYPE_KEYWORD && tkn.subtype == IR_KEYW_arg) {
+            tkn_next(from);
+            // Make a function argument.
+            token_t const arg = tkn_next(from);
+            if (arg.type == TOKENTYPE_KEYWORD && arg.subtype >= IR_KEYW_s8 && arg.subtype <= IR_KEYW_f64) {
+                // An ignored argument; just has the type.
+                ir_arg_t entry = {
+                    .has_var = false,
+                    .type    = arg.subtype - IR_KEYW_s8 + IR_PRIM_s8,
+                };
+                array_len_insert_strong(&func->args, sizeof(ir_arg_t), &func->args_len, &entry, func->args_len);
+                ir_expect_eol(from, &has_errors);
+
+            } else if (arg.type == TOKENTYPE_IDENT) {
+                // A normal argument; has a variable.
+                ir_arg_t entry = {
+                    .has_var = true,
+                    .var     = map_get(&func->var_by_name, arg.strval),
+                };
+                if (!entry.var) {
+                    cctx_diagnostic(from->cctx, arg.pos, DIAG_ERR, "No such variable: %%%s", arg.strval);
+                    has_errors = true;
+                } else if (entry.var->is_arg >= 0) {
+                    cctx_diagnostic(
+                        from->cctx,
+                        arg.pos,
+                        DIAG_ERR,
+                        "Variable is already used as an argument: %%%s",
+                        arg.strval
+                    );
+                    has_errors = true;
+                } else {
+                    entry.var->is_arg = func->args_len;
+                    array_len_insert_strong(&func->args, sizeof(ir_arg_t), &func->args_len, &entry, func->args_len);
+                }
+                ir_expect_eol(from, &has_errors);
+
+            } else {
+                cctx_diagnostic(from->cctx, arg.pos, DIAG_ERR, "Expected a local identifier or a type");
+                ir_eat_eol(from);
+                has_errors = true;
+            }
+            tkn_delete(arg);
+
+        } else if (tkn.type == TOKENTYPE_KEYWORD && tkn.subtype == IR_KEYW_frame) {
+            tkn_next(from);
+            // Make a new stack frame.
+            token_t const name = tkn_next(from);
+            if (name.type != TOKENTYPE_IDENT || name.subtype != IR_IDENT_LOCAL) {
+                cctx_diagnostic(from->cctx, name.pos, DIAG_ERR, "Expected a local identifier");
+                ir_eat_eol(from);
+                has_errors = true;
+            } else {
+                token_t const size = tkn_next(from);
+                if (size.type != TOKENTYPE_ICONST || size.subtype > IR_PRIM_u64 || size.ival >> 63) {
+                    cctx_diagnostic(
+                        from->cctx,
+                        size.pos,
+                        DIAG_ERR,
+                        "Expected a positive numeric constant no bigger than 64-bit"
+                    );
+                    ir_eat_eol(from);
+                    has_errors = true;
+                } else {
+                    token_t const align = tkn_next(from);
+                    if (align.type != TOKENTYPE_ICONST || align.subtype > IR_PRIM_u64 || align.ival >> 63) {
+                        cctx_diagnostic(
+                            from->cctx,
+                            align.pos,
+                            DIAG_ERR,
+                            "Expected a positive numeric constant no bigger than 64-bit"
+                        );
+                        ir_eat_eol(from);
+                        has_errors = true;
+                    } else {
+                        if (ir_check_free_name(func, &has_errors, from->cctx, name)) {
+                            ir_frame_create(func, size.ival, align.ival, name.strval);
+                        }
+                        ir_expect_eol(from, &has_errors);
+                    }
+                }
+            }
+            tkn_delete(name);
+        } else {
+            has_errors |= !ir_insn_deserialize(from, func, enforce_ssa, cur_code);
+        }
+        tkn_delete(tkn);
+    }
+
+    func->enforce_ssa = enforce_ssa;
+    return func;
+}
+
+// Helper to deserialize a single IR function from a string.
+// Returns NULL if there are any syntax errors.
+ir_func_t *ir_func_deserialize_str(char const *data, size_t data_len, char const *virt_filename) {
+    cctx_t      *cctx    = cctx_create();
+    srcfile_t   *srcfile = srcfile_create(cctx, virt_filename, data, data_len);
+    tokenizer_t *tctx    = ir_tkn_create(srcfile);
+
+    ir_func_t *res = ir_func_deserialize(tctx);
+
+    if (cctx->diagnostics.len && res) {
+        ir_func_delete(res);
+        res = NULL;
+    }
+    dlist_foreach_node(diagnostic_t, diag, &cctx->diagnostics) {
+        print_diagnostic(diag);
+    }
+
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
+
+    return res;
 }

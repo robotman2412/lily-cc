@@ -29,6 +29,7 @@ IR_KEYW_DEF(code)
 IR_KEYW_DEF(var)
 IR_KEYW_DEF(arg)
 IR_KEYW_DEF(frame)
+IR_KEYW_DEF(entry)
 
 IR_KEYW_DEF(true)
 IR_KEYW_DEF(false)
@@ -36,8 +37,7 @@ IR_KEYW_DEF(false)
 #define IR_PRIM_DEF(x) IR_KEYW_DEF(x)
 #include "ir_primitives.inc"
 
-IR_KEYW_DEF(phi)
-IR_KEYW_DEF(undef)
+IR_KEYW_DEF(comb)
 
 #define IR_OP1_DEF(x) IR_KEYW_DEF(x)
 #include "ir_op1.inc"

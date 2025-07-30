@@ -44,6 +44,8 @@ typedef struct {
 // Create a new IR function.
 // Function argument types are IR_PRIM_S32 by default.
 ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_len, char const *const *args_name);
+// Create an IR function without operands nor code.
+ir_func_t *ir_func_create_empty(char const *name);
 // Delete an IR function.
 void       ir_func_delete(ir_func_t *func);
 
@@ -122,7 +124,7 @@ static inline ir_code_t *ir_insnloc_code(ir_insnloc_t loc) {
     switch (loc.type) {
         case IR_INSNLOC_APPEND_CODE: return loc.code;
         case IR_INSNLOC_AFTER_INSN:
-        case IR_INSNLOC_BEFORE_INSN: return loc.insn->parent;
+        case IR_INSNLOC_BEFORE_INSN: return loc.insn->code;
         default: __builtin_unreachable();
     }
 }

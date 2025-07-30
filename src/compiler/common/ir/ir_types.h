@@ -6,6 +6,8 @@
 #pragma once
 
 // Defines how a machine instruction behaves in terms of IR expressions.
+#include "map.h"
+
 #include <stdlib.h>
 typedef struct insn_proto insn_proto_t;
 
@@ -282,7 +284,7 @@ struct ir_insn {
     // Code block's instruction list node.
     dlist_node_t   node;
     // Parent code block.
-    ir_code_t     *parent;
+    ir_code_t     *code;
     // Distinguishes between the types of instruction.
     ir_insn_type_t type;
     union {
@@ -353,6 +355,12 @@ struct ir_func {
     dlist_t    vars_list;
     // Unordered list of stack frames.
     dlist_t    frames_list;
+    // Map from name to code blocks.
+    map_t      code_by_name;
+    // Map from name to variables.
+    map_t      var_by_name;
+    // Map from name to frames.
+    map_t      frame_by_name;
     // Enforce the SSA form.
     bool       enforce_ssa;
 };

@@ -65,7 +65,7 @@ static void cg_isel(backend_profile_t *profile, ir_code_t *code) {
             // Promote necessary operands into registers.
             for (size_t i = 0; i < res.sub->operands_len; i++) {
                 if (res.operand_regs[i] && res.operands[i].type != IR_OPERAND_TYPE_VAR) {
-                    ir_var_t *var = ir_var_create(cur->parent->func, ir_operand_prim(res.operands[i]), NULL);
+                    ir_var_t *var = ir_var_create(cur->code->func, ir_operand_prim(res.operands[i]), NULL);
                     ir_add_expr1(IR_BEFORE_INSN(cur), var, IR_OP1_mov, res.operands[i]);
                     res.operands[i] = IR_OPERAND_VAR(var);
                 }

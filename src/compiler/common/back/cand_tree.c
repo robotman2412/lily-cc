@@ -247,7 +247,7 @@ static size_t tree_isel_match_proto(
     ir_operand_t const **ir_operands,
     bool                *ir_to_regs
 ) {
-    if (ir_insn->parent != parent_code) {
+    if (ir_insn->code != parent_code) {
         return 0;
     }
 
@@ -428,7 +428,7 @@ isel_t
     set_foreach(insn_sub_t, proto, &candidates) {
         ir_operand_t const **operand_tmp = calloc(operands_cap, sizeof(void *));
         bool                *reg_tmp     = calloc(operands_cap, sizeof(bool));
-        size_t proto_size = tree_isel_match_proto(profile, proto, ir_insn, ir_insn->parent, operand_tmp, reg_tmp);
+        size_t proto_size = tree_isel_match_proto(profile, proto, ir_insn, ir_insn->code, operand_tmp, reg_tmp);
         if (proto_size > max_size) {
             max_size = proto_size;
             best_fit = proto;

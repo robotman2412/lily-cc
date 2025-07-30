@@ -506,6 +506,7 @@ retry:
         case ',': return other_tkn(IR_TKN_COMMA, pos0, pos1);
         case '(': return other_tkn(IR_TKN_LPAR, pos0, pos1);
         case ')': return other_tkn(IR_TKN_RPAR, pos0, pos1);
+        case '=': return other_tkn(IR_TKN_ASSIGN, pos0, pos1);
     }
 
     // At this point, it's garbage.

@@ -22,6 +22,8 @@ typedef enum {
     IR_TKN_RPAR,
     // An undefined of some type.
     IR_TKN_UNDEF,
+    // A variable assignment; equals symbol.
+    IR_TKN_ASSIGN,
 } ir_tokentype_t;
 
 typedef enum {

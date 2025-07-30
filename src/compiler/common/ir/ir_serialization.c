@@ -16,6 +16,7 @@
 #include "map.h"
 #include "tokenizer.h"
 
+#include <asm-generic/errno-base.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -226,13 +227,283 @@ static bool ir_check_free_name(ir_func_t *func, bool *has_errors, cctx_t *cctx, 
     return true;
 }
 
+// Deserialize a single IR operand from the file.
+bool ir_operand_deserialize(tokenizer_t *from, ir_func_t *func, ir_operand_t *operand_out, pos_t *pos_out) {
+    bool res = false;
+
+    token_t const tkn = tkn_next(from);
+    *pos_out          = tkn.pos;
+    if (tkn.type == TOKENTYPE_IDENT && tkn.subtype == IR_IDENT_LOCAL) {
+        // Variable.
+        ir_var_t *var = map_get(&func->var_by_name, tkn.strval);
+        if (!var) {
+            cctx_diagnostic(from->cctx, tkn.pos, DIAG_ERR, "No such variable: %%%s", tkn.strval);
+        } else {
+            operand_out->type = IR_OPERAND_TYPE_VAR;
+            operand_out->var  = var;
+        }
+
+    } else if (tkn.type == TOKENTYPE_ICONST) {
+        // Numeric constant.
+        operand_out->type             = IR_OPERAND_TYPE_CONST;
+        operand_out->iconst.prim_type = tkn.subtype;
+        operand_out->iconst.constl    = tkn.ival;
+        operand_out->iconst.consth    = tkn.ivalh;
+
+    } else if (tkn.type == TOKENTYPE_KEYWORD && tkn.subtype == IR_KEYW_true) {
+        // True constant.
+        *operand_out = IR_OPERAND_CONST(IR_CONST_BOOL(true));
+
+    } else if (tkn.type == TOKENTYPE_KEYWORD && tkn.subtype == IR_KEYW_false) {
+        // False constant.
+        *operand_out = IR_OPERAND_CONST(IR_CONST_BOOL(false));
+
+    } else if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == IR_TKN_UNDEF) {
+        // Undefined operand.
+        operand_out->type       = IR_OPERAND_TYPE_UNDEF;
+        operand_out->undef_type = tkn.ival;
+
+    } else if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == IR_TKN_LPAR) {
+        // TODO: Memory operand.
+        fprintf(stderr, "[TODO] Memory operand deserialization not implemented yet\n");
+        abort();
+
+    } else {
+        cctx_diagnostic(from->cctx, tkn.pos, DIAG_ERR, "Expected an operand");
+    }
+
+    tkn_delete(tkn);
+    return res;
+}
+
 // Deserialize a single IR instruction from the file.
 ir_insn_t *ir_insn_deserialize(tokenizer_t *from, ir_func_t *func, bool enforce_ssa, ir_code_t *cur_code) {
-    (void)from;
-    (void)func;
-    (void)enforce_ssa;
-    (void)cur_code;
-    abort();
+    ir_var_t **returns     = NULL;
+    size_t     returns_len = 0;
+    size_t     returns_cap = 0;
+
+    ir_operand_t *operands     = NULL;
+    size_t        operands_len = 0;
+    size_t        operands_cap = 0;
+
+    pos_t *operands_pos     = NULL;
+    size_t operands_pos_len = 0;
+    size_t operands_pos_cap = 0;
+
+    ir_insn_t *insn = NULL;
+
+    // Parse returns list.
+    token_t peek = tkn_peek(from);
+    if (peek.type == TOKENTYPE_IDENT && peek.subtype == IR_IDENT_LOCAL) {
+        ir_var_t *var = map_get(&func->var_by_name, peek.strval);
+        if (!var) {
+            cctx_diagnostic(from->cctx, peek.pos, DIAG_ERR, "No such variable: %%%s", peek.strval);
+            goto error;
+        } else if (enforce_ssa && (var->assigned_at.len || var->arg_index >= 0)) {
+            cctx_diagnostic(from->cctx, peek.pos, DIAG_ERR, "SSA IR variable assigned twice: %%%s", peek.strval);
+            goto error;
+        }
+        tkn_next(from);
+        array_lencap_insert_strong(&returns, sizeof(ir_var_t *), &returns_len, &returns_cap, &var, returns_len);
+        tkn_delete(peek);
+
+        while (1) {
+            token_t const tkn = tkn_next(from);
+            if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == IR_TKN_ASSIGN) {
+                break;
+            } else if (tkn.type != TOKENTYPE_OTHER || tkn.subtype != IR_TKN_COMMA) {
+                cctx_diagnostic(from->cctx, tkn.pos, DIAG_ERR, "Expected ',' or '=' after return variable");
+                goto error;
+            }
+            tkn_delete(tkn);
+
+            // If it's a comma, expect another identifier.
+            token_t const ident = tkn_peek(from);
+            if (ident.type == TOKENTYPE_IDENT && ident.subtype == IR_IDENT_LOCAL) {
+                var = map_get(&func->var_by_name, peek.strval);
+                if (!var) {
+                    cctx_diagnostic(from->cctx, peek.pos, DIAG_ERR, "No such variable: %%%s", peek.strval);
+                    goto error;
+                } else if (enforce_ssa && (var->assigned_at.len || var->arg_index >= 0)) {
+                    cctx_diagnostic(
+                        from->cctx,
+                        peek.pos,
+                        DIAG_ERR,
+                        "SSA IR variable assigned twice: %%%s",
+                        peek.strval
+                    );
+                    goto error;
+                }
+                array_lencap_insert_strong(&returns, sizeof(ir_var_t *), &returns_len, &returns_cap, &var, returns_len);
+                tkn_delete(ident);
+            } else {
+                cctx_diagnostic(from->cctx, ident.pos, DIAG_ERR, "Expected local identifier after ','");
+                goto error;
+            }
+        }
+    }
+
+    // Parse instruction type.
+    token_t const mnemonic = tkn_next(from);
+    if (mnemonic.type != TOKENTYPE_KEYWORD) {
+        cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected an instruction mnemonic");
+        goto error;
+    }
+
+    // Parse operands.
+    peek = tkn_peek(from);
+    if (peek.type != TOKENTYPE_EOF && peek.type != TOKENTYPE_EOL) {
+        while (1) {
+            ir_operand_t operand;
+            pos_t        pos;
+            if (!ir_operand_deserialize(from, func, &operand, &pos)) {
+                goto error;
+            }
+            array_lencap_insert_strong(
+                &operands,
+                sizeof(ir_operand_t),
+                &operands_len,
+                &operands_cap,
+                &operand,
+                operands_len
+            );
+            array_lencap_insert_strong(
+                &operands_pos,
+                sizeof(pos_t),
+                &operands_pos_len,
+                &operands_pos_cap,
+                &pos,
+                operands_pos_len
+            );
+
+            peek = tkn_peek(from);
+            if (peek.type == TOKENTYPE_EOF || peek.type == TOKENTYPE_EOL) {
+                break;
+            } else if (peek.type == TOKENTYPE_OTHER && peek.subtype == IR_TKN_COMMA) {
+                tkn_next(from);
+            } else {
+                cctx_diagnostic(from->cctx, peek.pos, DIAG_ERR, "Expected ',' or end of line after operand");
+                goto error;
+            }
+        }
+    }
+
+    // Create instruction.
+    switch (mnemonic.subtype) {
+        case IR_KEYW_sgt ... IR_KEYW_bxor:
+            if (operands_len != 2) {
+                cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected two operands");
+                goto error;
+            } else if (returns_len != 1) {
+                cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected one assignment");
+                goto error;
+            }
+            insn = ir_add_expr2(IR_APPEND(cur_code), returns[0], mnemonic.subtype, operands[0], operands[1]);
+            break;
+        case IR_KEYW_mov ... IR_KEYW_bneg:
+            if (operands_len != 1) {
+                cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected one operand");
+                goto error;
+            } else if (returns_len != 1) {
+                cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected one assignment");
+                goto error;
+            }
+            insn = ir_add_expr1(IR_APPEND(cur_code), returns[0], mnemonic.subtype, operands[0]);
+            break;
+        case IR_KEYW_load:
+            if (operands_len != 1) {
+                cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected one operand");
+                goto error;
+            } else if (returns_len != 1) {
+                cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected one assignment");
+                goto error;
+            } else if (operands[0].type != IR_OPERAND_TYPE_MEM) {
+                cctx_diagnostic(from->cctx, operands_pos[0], DIAG_ERR, "Expected a memory operand");
+                goto error;
+            }
+            insn = ir_add_load(IR_APPEND(cur_code), returns[0], operands[0]);
+            break;
+        case IR_KEYW_lea:
+            if (operands_len != 1) {
+                cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected one operand");
+                goto error;
+            } else if (returns_len != 1) {
+                cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected one assignment");
+                goto error;
+            } else if (operands[0].type != IR_OPERAND_TYPE_MEM) {
+                cctx_diagnostic(from->cctx, operands_pos[0], DIAG_ERR, "Expected a memory operand");
+                goto error;
+            }
+            insn = ir_add_load(IR_APPEND(cur_code), returns[0], operands[0]);
+            break;
+        case IR_KEYW_store:
+            if (operands_len != 2) {
+                cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected two operands");
+                goto error;
+            } else if (returns_len != 0) {
+                cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Unexpected assignment");
+                goto error;
+            } else if (operands[1].type != IR_OPERAND_TYPE_MEM) {
+                cctx_diagnostic(from->cctx, operands_pos[1], DIAG_ERR, "Expected a memory operand");
+                goto error;
+            }
+            insn = ir_add_store(IR_APPEND(cur_code), operands[0], operands[1]);
+            break;
+        case IR_KEYW_comb:
+            // TODO: This requires different operand parsing.
+            break;
+        case IR_KEYW_jump:
+            if (operands_len != 1) {
+                cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected one operand");
+                goto error;
+            } else if (returns_len != 0) {
+                cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Unexpected assignment");
+                goto error;
+            } else if (operands[0].type != IR_OPERAND_TYPE_MEM || operands[0].mem.rel_type != IR_MEMREL_CODE) {
+                cctx_diagnostic(from->cctx, operands_pos[0], DIAG_ERR, "Expected a code block memory operand");
+                goto error;
+            }
+            insn = ir_add_jump(IR_APPEND(cur_code), operands[0].mem.base_code);
+            break;
+        case IR_KEYW_branch:
+            if (operands_len != 2) {
+                cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected two operands");
+                goto error;
+            } else if (returns_len != 0) {
+                cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Unexpected assignment");
+                goto error;
+            } else if (ir_operand_prim(operands[0]) != IR_PRIM_bool) {
+                cctx_diagnostic(from->cctx, operands_pos[0], DIAG_ERR, "Expected a boolean operand");
+                goto error;
+            } else if (operands[1].type != IR_OPERAND_TYPE_MEM || operands[1].mem.rel_type != IR_MEMREL_CODE) {
+                cctx_diagnostic(from->cctx, operands_pos[1], DIAG_ERR, "Expected a code block memory operand");
+                goto error;
+            }
+            insn = ir_add_branch(IR_APPEND(cur_code), operands[0], operands[1].mem.base_code);
+            break;
+        case IR_KEYW_return:
+            if (returns_len != 0) {
+                cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Unexpected assignment");
+                goto error;
+            } else if (operands_len >= 2) {
+                cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected one or zero operands");
+            } else if (operands_len == 1) {
+                if (returns_len != 0) {
+                    cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Unexpected assignment");
+                    goto error;
+                }
+                insn = ir_add_return1(IR_APPEND(cur_code), operands[0]);
+            } else {
+                insn = ir_add_return0(IR_APPEND(cur_code));
+            }
+            break;
+    }
+
+error:
+    free(returns);
+    free(operands);
+    free(operands_pos);
+    return insn;
 }
 
 // Deserialize a single IR function from the file.
@@ -424,7 +695,6 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
         } else {
             has_errors |= !ir_insn_deserialize(from, func, enforce_ssa, cur_code);
         }
-        tkn_delete(tkn);
     }
 
     func->enforce_ssa = enforce_ssa;

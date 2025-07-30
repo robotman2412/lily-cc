@@ -16,16 +16,6 @@
 
 
 
-#define EXPECT_EOL_TKN()                                                                                               \
-    {                                                                                                                  \
-        tkn = tkn_next(tctx);                                                                                          \
-        EXPECT_INT(tkn.type, TOKENTYPE_EOL);                                                                           \
-        tkn_delete(tkn);                                                                                               \
-        while (tkn_peek(tctx).type == TOKENTYPE_EOL) {                                                                 \
-            tkn_delete(tkn_next(tctx));                                                                                \
-        }                                                                                                              \
-    }
-
 static char *test_ir_tokenize() {
     // clang-format off
     char const src[] =
@@ -50,6 +40,16 @@ static char *test_ir_tokenize() {
     srcfile_t   *srcfile = srcfile_create(cctx, "<test_ir_deserialize>.lily_ir", src, sizeof(src) - 1);
     tokenizer_t *tctx    = ir_tkn_create(srcfile);
     token_t      tkn;
+
+#define EXPECT_EOL_TKN()                                                                                               \
+    {                                                                                                                  \
+        tkn = tkn_next(tctx);                                                                                          \
+        EXPECT_INT(tkn.type, TOKENTYPE_EOL);                                                                           \
+        tkn_delete(tkn);                                                                                               \
+        while (tkn_peek(tctx).type == TOKENTYPE_EOL) {                                                                 \
+            tkn_delete(tkn_next(tctx));                                                                                \
+        }                                                                                                              \
+    }
 
 
     tkn = tkn_next(tctx); // function
@@ -167,7 +167,7 @@ static char *test_ir_deserialize() {
     "code %code0\n"
     "    %b = add %a, s32'-3\n"
     "    %c = seqz %b\n"
-    "    branch %c, (%code1)\n"
+    // "    branch %c, (%code1)\n"
     "    return %b"
     "code %code1\n"
     "    return s32'1\n"

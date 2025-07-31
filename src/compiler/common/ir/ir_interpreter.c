@@ -153,9 +153,9 @@ ir_const_t ir_cast(ir_prim_t type, ir_const_t value) {
             value = ir_trim_const(value);
 #if defined(__SIZEOF_INT128__) && !defined(LILY_SOFT_INT128)
             if (value.prim_type <= IR_PRIM_u128 && (value.prim_type & 1)) {
-                value.constf64 = value.const128;
+                value.constf64 = value.const128.val;
             } else {
-                value.constf64 = (__int128_t)value.const128;
+                value.constf64 = (__int128_t)value.const128.val;
             }
 #else
             if (value.prim_type == IR_PRIM_s128 || value.prim_type == IR_PRIM_u128) {
@@ -181,9 +181,9 @@ ir_const_t ir_cast(ir_prim_t type, ir_const_t value) {
             value = ir_trim_const(value);
 #if defined(__SIZEOF_INT128__) && !defined(LILY_SOFT_INT128)
             if (value.prim_type <= IR_PRIM_u128 && (value.prim_type & 1)) {
-                value.constf64 = value.const128;
+                value.constf64 = value.const128.val;
             } else {
-                value.constf64 = (__int128_t)value.const128;
+                value.constf64 = (__int128_t)value.const128.val;
             }
 #else
             if (value.prim_type == IR_PRIM_s128 || value.prim_type == IR_PRIM_u128) {

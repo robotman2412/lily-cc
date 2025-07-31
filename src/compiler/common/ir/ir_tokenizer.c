@@ -5,6 +5,7 @@
 
 // List of keywords.
 // Must be before <stdbool.h> because it contains the identifier `bool`.
+#include "arith128.h"
 #include "compiler.h"
 char const *const ir_keywords[] = {
 #define IR_KEYW_DEF(keyw) #keyw,
@@ -59,11 +60,25 @@ static inline bool ir_is_sym_char(int c) {
 
 
 // Tokenize numeric constant.
-static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos, unsigned int base) {
-    uint64_t val      = 0;
-    bool     hasdat   = false;
-    bool     toolarge = false;
-    bool     invalid  = false;
+static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos, unsigned int base, bool is_negative) {
+    i128_t val      = int128(0, 0);
+    bool   hasdat   = false;
+    bool   toolarge = false;
+    bool   invalid  = false;
+
+    if (prim == IR_PRIM_f32 || prim == IR_PRIM_f64) {
+        cctx_diagnostic(ctx->cctx, start_pos, DIAG_ERR, "[TODO] Floating-point constants not supported");
+        return (token_t){
+            .type       = TOKENTYPE_GARBAGE,
+            .pos        = start_pos,
+            .ival       = 0,
+            .subtype    = 0,
+            .strval     = NULL,
+            .strval_len = 0,
+            .params_len = 0,
+            .params     = NULL,
+        };
+    }
 
     pos_t pos0 = ctx->pos;
     pos_t pos1;
@@ -78,9 +93,8 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
             // Valid digit a-z / A-Z.
             digit = (c | 0x20) - 'a' + 10;
         } else if (c == '_') {
-            // Invalid character.
-            invalid = true;
-            digit   = 0;
+            // Spacer.
+            continue;
         } else {
             // End of constant.
             break;
@@ -88,10 +102,11 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
         if (digit >= base) {
             invalid = true;
         }
-        if (val * base + digit < val) {
+        i128_t new_val = add128(mul128(val, int128(0, base)), int128(0, digit));
+        if (cmp128u(new_val, val) < 0) {
             toolarge = true;
         }
-        val    = val * base + digit;
+        val    = new_val;
         hasdat = true;
         pos0   = pos1;
     }
@@ -106,7 +121,7 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
             case 8: ctype = "octal"; break;
             case 10: ctype = "decimal"; break;
             case 16: ctype = "hexadecimal"; break;
-            default: abort();
+            default: __builtin_unreachable();
         }
         cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Invalid %s constant", ctype);
         return (token_t){
@@ -119,13 +134,83 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
             .params_len = 0,
             .params     = NULL,
         };
-    } else if (toolarge) {
-        cctx_diagnostic(ctx->cctx, pos, DIAG_WARN, "Constant is too large and was truncated to %" PRId64, val);
     }
+
+    bool const is_signed = prim <= IR_PRIM_s128 && !(prim & 1);
+    int const  bitcount  = prim == IR_PRIM_bool ? 1 : ir_prim_sizes[prim] * 8;
+
+    // Negate and check for overflow.
+    if (is_signed) {
+        // Check for overflow (signed edition).
+        i128_t const sign_mask = shl128(int128(0, 1), bitcount - 1);
+        i128_t const max_val   = add128(sign_mask, neg128(int128(0, 1)));
+        if (is_negative) {
+            toolarge |= cmp128u(val, sign_mask) > 0;
+        } else {
+            toolarge |= cmp128u(val, max_val) > 0;
+        }
+
+        if (is_negative) {
+            val = neg128(val);
+        }
+
+        // Truncate signed number.
+        if (cmp128u(and128(val, sign_mask), int128(0, 0))) {
+            // Sign-extend.
+            val = or128(val, neg128(sign_mask));
+        } else {
+            // Truncate bits after sign.
+            val = and128(val, max_val);
+        }
+    } else {
+        // Check for overflow (unsigned edition).
+        i128_t const max_val = add128(shl128(int128(0, 1), bitcount), neg128(int128(0, 1)));
+        if (is_negative) {
+            toolarge = true;
+        } else if (cmp128u(val, max_val)) {
+            toolarge = true;
+        }
+
+        if (is_negative) {
+            val = neg128(val);
+        }
+
+        // Truncate unsigned number.
+        val = and128(val, max_val);
+    }
+
+    // If the value is out of range, add a warning showing the actual value used.
+    if (toolarge) {
+        bool   val_u_negative = false;
+        i128_t val_u;
+        if (is_signed && hi64(val) >> 63) {
+            val_u = neg128(val);
+        } else {
+            val_u = val;
+        }
+        char as_dec_str[40];
+        itoa128(val_u, 0, as_dec_str);
+        cctx_diagnostic(
+            ctx->cctx,
+            pos,
+            DIAG_WARN,
+            "Constant is out of range and was truncated to %s%s (0x%.0" PRIx64 "%0*" PRIx64 ")",
+            val_u_negative ? "-" : "",
+            as_dec_str,
+            hi64(val),
+            hi64(val) != 0 ? 16 : 1,
+            lo64(val)
+        );
+    }
+    if (prim == IR_PRIM_bool) {
+        cctx_diagnostic(ctx->cctx, pos, DIAG_WARN, "Consider using `%s` instead", lo64(val) ? "true" : "false");
+    }
+
     return (token_t){
         .type       = TOKENTYPE_ICONST,
         .pos        = pos,
-        .ival       = val,
+        .ival       = lo64(val),
+        .ivalh      = hi64(val),
         .subtype    = prim,
         .strval     = NULL,
         .strval_len = 0,
@@ -454,26 +539,33 @@ retry:
             token_t tkn = other_tkn(IR_TKN_UNDEF, pos0, ctx->pos);
             tkn.ival    = prim;
             return tkn;
-
-        } else if (c == '0') {
+        }
+        bool is_negative = false;
+        if (c == '-') {
+            // Negative numeric constant.
+            is_negative = true;
+            pos2        = ctx->pos;
+            c           = srcfile_getc(ctx->file, &ctx->pos);
+        }
+        if (c == '0') {
             // Hex, binary, octal.
             pos_t pos3 = ctx->pos;
             int   c2   = srcfile_getc(ctx->file, &pos3);
             if (c2 == 'x' || c2 == 'X') {
                 // Hexadecimal.
                 ctx->pos = pos3;
-                return ir_tkn_numeric(ctx, prim, pos0, 16);
+                return ir_tkn_numeric(ctx, prim, pos0, 16, is_negative);
             } else if (c2 == 'b' || c2 == 'B') {
                 // Binary.
                 ctx->pos = pos3;
-                return ir_tkn_numeric(ctx, prim, pos0, 2);
+                return ir_tkn_numeric(ctx, prim, pos0, 2, is_negative);
             } else if (c2 == 'o' || c2 == 'O') {
                 // Binary.
                 ctx->pos = pos3;
-                return ir_tkn_numeric(ctx, prim, pos0, 8);
+                return ir_tkn_numeric(ctx, prim, pos0, 8, is_negative);
             } else if (c2 >= '0' && c2 <= '9') {
                 // Decimal.
-                return ir_tkn_numeric(ctx, prim, pos0, 10);
+                return ir_tkn_numeric(ctx, prim, pos0, 10, is_negative);
             } else {
                 // Just a zero.
                 return (token_t){
@@ -485,8 +577,8 @@ retry:
 
         } else if (c >= '1' && c <= '9') {
             // Decimal.
-            ctx->pos = pos0;
-            return ir_tkn_numeric(ctx, prim, pos0, 10);
+            ctx->pos = pos2;
+            return ir_tkn_numeric(ctx, prim, pos0, 10, is_negative);
 
         } else {
             // Invalid constant.
@@ -507,6 +599,8 @@ retry:
         case '(': return other_tkn(IR_TKN_LPAR, pos0, pos1);
         case ')': return other_tkn(IR_TKN_RPAR, pos0, pos1);
         case '=': return other_tkn(IR_TKN_ASSIGN, pos0, pos1);
+        case '+': return other_tkn(IR_TKN_ADD, pos0, pos1);
+        case '-': return other_tkn(IR_TKN_SUB, pos0, pos1);
     }
 
     // At this point, it's garbage.

@@ -24,6 +24,10 @@ typedef enum {
     IR_TKN_UNDEF,
     // A variable assignment; equals symbol.
     IR_TKN_ASSIGN,
+    // A plus symbol.
+    IR_TKN_ADD,
+    // A minus symbol.
+    IR_TKN_SUB,
 } ir_tokentype_t;
 
 typedef enum {
@@ -34,6 +38,12 @@ typedef enum {
     // An identifier without prefix or suffix.
     IR_IDENT_BARE,
 } ir_identtype_t;
+
+typedef enum {
+    // A memory operand.
+    // Operands: Offset, base (optional).
+    IR_AST_MEMOPERAND,
+} ir_asttype_t;
 
 // List of keywords.
 extern char const *const ir_keywords[];

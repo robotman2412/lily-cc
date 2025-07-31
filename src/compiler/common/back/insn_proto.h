@@ -5,12 +5,12 @@
 
 #pragma once
 
-// Defines how a machine instruction behaves in terms of IR expressions.
+// Defines the prototype for a machine-specific assembly menemonic.
 typedef struct insn_proto insn_proto_t;
 
 
 
-// Defines how a machine instruction behaves in terms of IR expressions.
+// Defines the prototype for a machine-specific assembly menemonic.
 struct insn_proto {
     // Human-readable instruction name.
     char const *name;

@@ -5,6 +5,7 @@
 
 #include "ir/ir_serialization.h"
 
+#include "arith128.h"
 #include "arrays.h"
 #include "compiler.h"
 #include "insn_proto.h"
@@ -17,6 +18,7 @@
 #include "tokenizer.h"
 
 #include <asm-generic/errno-base.h>
+#include <assert.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,26 +28,50 @@
 
 // Serialize an IR constant.
 void ir_const_serialize(ir_const_t iconst, FILE *to) {
+    iconst = ir_trim_const(iconst);
     if (iconst.prim_type == IR_PRIM_bool) {
         fputs(iconst.constl ? "true" : "false", to);
+
+    } else if (iconst.prim_type == IR_PRIM_f32) {
+        fprintf(stderr, "[TODO] ir_const_serialize for f32\n");
+        abort();
+    } else if (iconst.prim_type == IR_PRIM_f64) {
+        fprintf(stderr, "[TODO] ir_const_serialize for f64\n");
+        abort();
     } else {
         fputs(ir_prim_names[iconst.prim_type], to);
-        fputs("'0x", to);
+        fputc('\'', to);
         uint8_t size = ir_prim_sizes[iconst.prim_type];
-        if (size == 16) {
-            fprintf(to, "%016" PRIX64 "%016" PRIX64, iconst.consth, iconst.constl);
+
+        // Print decimal representation.
+        i128_t u_val;
+        if (!(iconst.prim_type & 1) && iconst.consth >> 63) {
+            // Negative number.
+            u_val = neg128(iconst.const128);
+            fputc('-', to);
         } else {
-            uint64_t shamt = 64 - 8 * size;
-            fprintf(to, "%0*" PRIX64, (int)size * 2, iconst.constl << shamt >> shamt);
+            // Positive number.
+            u_val = iconst.const128;
         }
-        if (iconst.prim_type == IR_PRIM_f32) {
-            float fval;
-            memcpy(&fval, &iconst, sizeof(float));
-            fprintf(to, " /* %f */", fval);
-        } else if (iconst.prim_type == IR_PRIM_f64) {
-            double dval;
-            memcpy(&dval, &iconst, sizeof(double));
-            fprintf(to, " /* %lf */", dval);
+        bool nontrivial = cmp128u(u_val, int128(0, 9)) > 0;
+        if (size == 16) {
+            char buf[40];
+            itoa128(u_val, 0, buf);
+            fputs(buf, to);
+        } else {
+            fprintf(to, "%" PRIu64, lo64(u_val));
+        }
+
+        // Print hexadecimal representation.
+        if (nontrivial) {
+            fputs(" /* 0x", to);
+            if (size == 16) {
+                fprintf(to, "%.0" PRIX64 "%0*" PRIX64, iconst.consth, iconst.consth ? 16 : 1, iconst.constl);
+            } else {
+                uint64_t shamt = 64 - 8 * size;
+                fprintf(to, "%" PRIX64, iconst.constl << shamt >> shamt);
+            }
+            fputs(" */", to);
         }
     }
 }
@@ -63,18 +89,15 @@ void ir_operand_serialize(ir_operand_t operand, FILE *to) {
             case IR_MEMREL_CODE: fprintf(to, "%%%s", operand.mem.base_code->name); break;
             case IR_MEMREL_VAR: fprintf(to, "%%%s", operand.mem.base_var->name); break;
         }
-        uint64_t offset = operand.mem.offset;
-        if (operand.mem.rel_type != IR_MEMREL_ABS && operand.mem.offset) {
-            if (operand.mem.offset < 0) {
-                offset = -operand.mem.offset;
-                fputc('-', to);
-            } else {
-                fputc('+', to);
-            }
+
+        // TODO: This implicitly assumes IR pointers to be 64-bit, but that information doesn't exist yet.
+        if (operand.mem.rel_type == IR_MEMREL_ABS) {
+            ir_const_serialize(IR_CONST_U64(operand.mem.offset), to);
+        } else if (operand.mem.offset) {
+            fputs(" + ", to);
+            ir_const_serialize(IR_CONST_S64(operand.mem.offset), to);
         }
-        if (operand.mem.rel_type == IR_MEMREL_ABS || operand.mem.offset) {
-            fprintf(to, "0x%" PRIx64, offset);
-        }
+
         fputc(')', to);
     } else if (operand.type == IR_OPERAND_TYPE_UNDEF) {
         fputs(ir_prim_names[operand.undef_type], to);
@@ -205,15 +228,42 @@ static void ir_eat_eol(tokenizer_t *from) {
     }
 }
 
+// Helper function that eats tokens until EOL, EOF or RPAR.
+static void ir_eat_rpar(tokenizer_t *from) {
+    while (1) {
+        token_t tkn = tkn_next(from);
+        tkn_delete(tkn);
+        if (tkn.type == TOKENTYPE_EOF || tkn.type == TOKENTYPE_EOL
+            || (tkn.type == TOKENTYPE_OTHER && tkn.subtype == IR_TKN_RPAR)) {
+            return;
+        }
+    }
+}
+
+// Helper function that expects RPAR.
+static bool ir_expect_rpar(tokenizer_t *from) {
+    bool    ok  = true;
+    token_t tkn = tkn_next(from);
+    if (tkn.type != TOKENTYPE_OTHER || tkn.subtype != IR_TKN_RPAR) {
+        cctx_diagnostic(from->cctx, tkn.pos, DIAG_ERR, "Expected )");
+        ir_eat_rpar(from);
+        ok = false;
+    }
+    tkn_delete(tkn);
+    return ok;
+}
+
 // Helper function that expects EOL or EOF.
-static void ir_expect_eol(tokenizer_t *from, bool *has_errors) {
+static bool ir_expect_eol(tokenizer_t *from) {
+    bool    ok  = true;
     token_t tkn = tkn_next(from);
     if (tkn.type != TOKENTYPE_EOF && tkn.type != TOKENTYPE_EOL) {
         cctx_diagnostic(from->cctx, tkn.pos, DIAG_ERR, "Expected end-of-line");
-        *has_errors = true;
         ir_eat_eol(from);
+        ok = false;
     }
     tkn_delete(tkn);
+    return ok;
 }
 
 // Tests whether the given local name is free and errors if not.
@@ -241,6 +291,7 @@ bool ir_operand_deserialize(tokenizer_t *from, ir_func_t *func, ir_operand_t *op
         } else {
             operand_out->type = IR_OPERAND_TYPE_VAR;
             operand_out->var  = var;
+            res               = true;
         }
 
     } else if (tkn.type == TOKENTYPE_ICONST) {
@@ -249,24 +300,58 @@ bool ir_operand_deserialize(tokenizer_t *from, ir_func_t *func, ir_operand_t *op
         operand_out->iconst.prim_type = tkn.subtype;
         operand_out->iconst.constl    = tkn.ival;
         operand_out->iconst.consth    = tkn.ivalh;
+        res                           = true;
 
     } else if (tkn.type == TOKENTYPE_KEYWORD && tkn.subtype == IR_KEYW_true) {
         // True constant.
         *operand_out = IR_OPERAND_CONST(IR_CONST_BOOL(true));
+        res          = true;
 
     } else if (tkn.type == TOKENTYPE_KEYWORD && tkn.subtype == IR_KEYW_false) {
         // False constant.
         *operand_out = IR_OPERAND_CONST(IR_CONST_BOOL(false));
+        res          = true;
 
     } else if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == IR_TKN_UNDEF) {
         // Undefined operand.
         operand_out->type       = IR_OPERAND_TYPE_UNDEF;
         operand_out->undef_type = tkn.ival;
+        res                     = true;
 
     } else if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == IR_TKN_LPAR) {
-        // TODO: Memory operand.
-        fprintf(stderr, "[TODO] Memory operand deserialization not implemented yet\n");
-        abort();
+        token_t const base = tkn_next(from);
+        if (base.type == TOKENTYPE_IDENT && base.subtype != IR_IDENT_BARE) {
+            // Relative base address.
+
+        } else if (base.type == TOKENTYPE_ICONST) {
+            // Absolute base address.
+            ir_const_t iconst = {
+                .prim_type = base.subtype,
+                .constl    = base.ival,
+                .consth    = base.ivalh,
+            };
+            if (iconst.prim_type > IR_PRIM_u128) {
+                cctx_diagnostic(from->cctx, base.pos, DIAG_ERR, "Invalid type for addresses");
+            } else {
+                if (iconst.prim_type > IR_PRIM_u64) {
+                    cctx_diagnostic(
+                        from->cctx,
+                        base.pos,
+                        DIAG_WARN,
+                        "[TODO] IR addresses assumed to be 64-bit; this will be truncated"
+                    );
+                }
+                res          = ir_expect_rpar(from);
+                *operand_out = IR_OPERAND_CONST(iconst);
+            }
+
+        } else {
+            cctx_diagnostic(from->cctx, base.pos, DIAG_ERR, "Expected memory base address");
+            if (base.type != TOKENTYPE_OTHER || base.subtype != IR_TKN_RPAR) {
+                ir_eat_rpar(from);
+            }
+        }
+        tkn_delete(base);
 
     } else {
         cctx_diagnostic(from->cctx, tkn.pos, DIAG_ERR, "Expected an operand");
@@ -295,15 +380,17 @@ ir_insn_t *ir_insn_deserialize(tokenizer_t *from, ir_func_t *func, bool enforce_
     // Parse returns list.
     token_t peek = tkn_peek(from);
     if (peek.type == TOKENTYPE_IDENT && peek.subtype == IR_IDENT_LOCAL) {
+        tkn_next(from);
         ir_var_t *var = map_get(&func->var_by_name, peek.strval);
         if (!var) {
             cctx_diagnostic(from->cctx, peek.pos, DIAG_ERR, "No such variable: %%%s", peek.strval);
+            tkn_delete(peek);
             goto error;
         } else if (enforce_ssa && (var->assigned_at.len || var->arg_index >= 0)) {
             cctx_diagnostic(from->cctx, peek.pos, DIAG_ERR, "SSA IR variable assigned twice: %%%s", peek.strval);
+            tkn_delete(peek);
             goto error;
         }
-        tkn_next(from);
         array_lencap_insert_strong(&returns, sizeof(ir_var_t *), &returns_len, &returns_cap, &var, returns_len);
         tkn_delete(peek);
 
@@ -313,6 +400,7 @@ ir_insn_t *ir_insn_deserialize(tokenizer_t *from, ir_func_t *func, bool enforce_
                 break;
             } else if (tkn.type != TOKENTYPE_OTHER || tkn.subtype != IR_TKN_COMMA) {
                 cctx_diagnostic(from->cctx, tkn.pos, DIAG_ERR, "Expected ',' or '=' after return variable");
+                tkn_delete(tkn);
                 goto error;
             }
             tkn_delete(tkn);
@@ -323,6 +411,7 @@ ir_insn_t *ir_insn_deserialize(tokenizer_t *from, ir_func_t *func, bool enforce_
                 var = map_get(&func->var_by_name, peek.strval);
                 if (!var) {
                     cctx_diagnostic(from->cctx, peek.pos, DIAG_ERR, "No such variable: %%%s", peek.strval);
+                    tkn_delete(ident);
                     goto error;
                 } else if (enforce_ssa && (var->assigned_at.len || var->arg_index >= 0)) {
                     cctx_diagnostic(
@@ -332,12 +421,14 @@ ir_insn_t *ir_insn_deserialize(tokenizer_t *from, ir_func_t *func, bool enforce_
                         "SSA IR variable assigned twice: %%%s",
                         peek.strval
                     );
+                    tkn_delete(ident);
                     goto error;
                 }
                 array_lencap_insert_strong(&returns, sizeof(ir_var_t *), &returns_len, &returns_cap, &var, returns_len);
                 tkn_delete(ident);
             } else {
                 cctx_diagnostic(from->cctx, ident.pos, DIAG_ERR, "Expected local identifier after ','");
+                tkn_delete(ident);
                 goto error;
             }
         }
@@ -398,7 +489,13 @@ ir_insn_t *ir_insn_deserialize(tokenizer_t *from, ir_func_t *func, bool enforce_
                 cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected one assignment");
                 goto error;
             }
-            insn = ir_add_expr2(IR_APPEND(cur_code), returns[0], mnemonic.subtype, operands[0], operands[1]);
+            insn = ir_add_expr2(
+                IR_APPEND(cur_code),
+                returns[0],
+                mnemonic.subtype - IR_KEYW_sgt + IR_OP2_sgt,
+                operands[0],
+                operands[1]
+            );
             break;
         case IR_KEYW_mov ... IR_KEYW_bneg:
             if (operands_len != 1) {
@@ -408,7 +505,12 @@ ir_insn_t *ir_insn_deserialize(tokenizer_t *from, ir_func_t *func, bool enforce_
                 cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected one assignment");
                 goto error;
             }
-            insn = ir_add_expr1(IR_APPEND(cur_code), returns[0], mnemonic.subtype, operands[0]);
+            insn = ir_add_expr1(
+                IR_APPEND(cur_code),
+                returns[0],
+                mnemonic.subtype - IR_KEYW_mov + IR_OP1_mov,
+                operands[0]
+            );
             break;
         case IR_KEYW_load:
             if (operands_len != 1) {
@@ -449,9 +551,7 @@ ir_insn_t *ir_insn_deserialize(tokenizer_t *from, ir_func_t *func, bool enforce_
             }
             insn = ir_add_store(IR_APPEND(cur_code), operands[0], operands[1]);
             break;
-        case IR_KEYW_comb:
-            // TODO: This requires different operand parsing.
-            break;
+        // case IR_KEYW_comb: break; // TODO: This requires different operand parsing.
         case IR_KEYW_jump:
             if (operands_len != 1) {
                 cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected one operand");
@@ -487,6 +587,7 @@ ir_insn_t *ir_insn_deserialize(tokenizer_t *from, ir_func_t *func, bool enforce_
                 goto error;
             } else if (operands_len >= 2) {
                 cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Expected one or zero operands");
+                goto error;
             } else if (operands_len == 1) {
                 if (returns_len != 0) {
                     cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "Unexpected assignment");
@@ -497,12 +598,28 @@ ir_insn_t *ir_insn_deserialize(tokenizer_t *from, ir_func_t *func, bool enforce_
                 insn = ir_add_return0(IR_APPEND(cur_code));
             }
             break;
+        default:
+            cctx_diagnostic(from->cctx, mnemonic.pos, DIAG_ERR, "No such instruction");
+            goto error;
+            break;
     }
 
 error:
     free(returns);
     free(operands);
     free(operands_pos);
+
+    if (!insn) {
+        ir_eat_eol(from);
+    } else {
+        bool err  = false;
+        err      |= !ir_expect_eol(from);
+        if (err) {
+            ir_insn_delete(insn);
+            return NULL;
+        }
+    }
+
     return insn;
 }
 
@@ -553,7 +670,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                 if (ir_check_free_name(func, &has_errors, from->cctx, name)) {
                     cur_code = ir_code_create(func, name.strval);
                 }
-                ir_expect_eol(from, &has_errors);
+                has_errors |= !ir_expect_eol(from);
             }
             tkn_delete(name);
 
@@ -581,7 +698,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     cctx_diagnostic(from->cctx, name.pos, DIAG_ERR, "No such code block: %%%s", name.strval);
                     has_errors = true;
                 }
-                ir_expect_eol(from, &has_errors);
+                has_errors |= !ir_expect_eol(from);
             }
             tkn_delete(name);
 
@@ -601,9 +718,9 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     has_errors = true;
                 } else {
                     if (ir_check_free_name(func, &has_errors, from->cctx, name)) {
-                        ir_var_create(func, prim.subtype, name.strval);
+                        ir_var_create(func, prim.subtype - IR_KEYW_s8 + IR_PRIM_s8, name.strval);
                     }
-                    ir_expect_eol(from, &has_errors);
+                    has_errors |= !ir_expect_eol(from);
                 }
                 tkn_delete(prim);
             }
@@ -620,7 +737,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     .type    = arg.subtype - IR_KEYW_s8 + IR_PRIM_s8,
                 };
                 array_len_insert_strong(&func->args, sizeof(ir_arg_t), &func->args_len, &entry, func->args_len);
-                ir_expect_eol(from, &has_errors);
+                has_errors |= !ir_expect_eol(from);
 
             } else if (arg.type == TOKENTYPE_IDENT) {
                 // A normal argument; has a variable.
@@ -644,7 +761,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     entry.var->arg_index = func->args_len;
                     array_len_insert_strong(&func->args, sizeof(ir_arg_t), &func->args_len, &entry, func->args_len);
                 }
-                ir_expect_eol(from, &has_errors);
+                has_errors |= !ir_expect_eol(from);
 
             } else {
                 cctx_diagnostic(from->cctx, arg.pos, DIAG_ERR, "Expected a local identifier or a type");
@@ -687,7 +804,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                         if (ir_check_free_name(func, &has_errors, from->cctx, name)) {
                             ir_frame_create(func, size.ival, align.ival, name.strval);
                         }
-                        ir_expect_eol(from, &has_errors);
+                        has_errors |= !ir_expect_eol(from);
                     }
                 }
             }
@@ -698,6 +815,17 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
     }
 
     func->enforce_ssa = enforce_ssa;
+    if (func->code_list.len == 0) {
+        cctx_diagnostic(from->cctx, pos_between(function.pos, funcname.pos), DIAG_ERR, "Function has no code");
+        has_errors = true;
+    } else if (!has_entry) {
+        cctx_diagnostic(from->cctx, pos_between(function.pos, funcname.pos), DIAG_ERR, "Function has no entrypoint");
+        has_errors = true;
+    }
+    if (has_errors) {
+        ir_func_delete(func);
+        func = NULL;
+    }
     return func;
 }
 

@@ -5,10 +5,12 @@
 
 #pragma once
 
-// Defines how a machine instruction behaves in terms of IR expressions.
 #include "map.h"
 
+#include <endian.h>
 #include <stdlib.h>
+
+// Defines the prototype for a machine-specific assembly menemonic.
 typedef struct insn_proto insn_proto_t;
 
 // IR primitive types.
@@ -173,10 +175,20 @@ struct ir_const {
         // 64-bit float constant.
         double constf64;
         struct {
+#if __BYTE_ORDER == __LITTLE_ENDIAN
             // Low 64 bits of constant.
             uint64_t constl;
             // High 64 bits of constant.
             uint64_t consth;
+#elif __BYTE_ORDER == __BIG_ENDIAN
+            // High 64 bits of constant.
+            uint64_t consth;
+            // Low 64 bits of constant.
+            uint64_t constl;
+#else
+#error                                                                                                                 \
+    "Invalid endianness; Lily-CC requires a machine that is big-endian or little-endian, but the endianness either different or not detected"
+#endif
         };
         // 128-bit constant.
         i128_t const128;

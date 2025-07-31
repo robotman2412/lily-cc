@@ -75,7 +75,7 @@ static char *test_ir_tokenize() {
     EXPECT_INT(tkn.type, TOKENTYPE_ICONST);
     EXPECT_INT(tkn.pos.len, 14);
     EXPECT_INT(tkn.subtype, IR_PRIM_s32);
-    EXPECT_INT(tkn.ival, 0xcafebabeu);
+    EXPECT_INT(tkn.ival, (int)0xcafebabe);
     tkn_delete(tkn);
     EXPECT_EOL_TKN();
 
@@ -168,9 +168,10 @@ static char *test_ir_deserialize() {
     "    %b = add %a, s32'-3\n"
     "    %c = seqz %b\n"
     // "    branch %c, (%code1)\n"
-    "    return %b"
+    "    return %b\n"
     "code %code1\n"
     "    return s32'1\n"
+    "entry %code0\n"
     ;
     // clang-format on
 
@@ -181,8 +182,10 @@ static char *test_ir_deserialize() {
 
     // Try to deserialize this function.
     ir_func_t *func = ir_func_deserialize(tctx);
-    printf("\n");
-    ir_func_serialize(func, stdout);
+    if (func) {
+        printf("\n");
+        ir_func_serialize(func, stdout);
+    }
 
     // Report errors.
     if (cctx->diagnostics.len) {

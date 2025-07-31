@@ -489,6 +489,7 @@ ir_frame_t *ir_frame_create(ir_func_t *func, uint64_t size, uint64_t align, char
 // Create a new variable.
 // If `name` is `NULL`, its name will be `var%zu` where `%zu` is a number.
 ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
+    assert(type < IR_N_PRIM);
     ir_var_t *var = calloc(1, sizeof(ir_var_t));
     if (name) {
         var->name = strong_strdup(name);
@@ -819,6 +820,7 @@ ir_insn_t *ir_add_combinator(ir_insnloc_t loc, ir_var_t *dest, size_t from_len, 
 
 // Add an expression to a code block.
 ir_insn_t *ir_add_expr1(ir_insnloc_t loc, ir_var_t *dest, ir_op1_type_t oper, ir_operand_t operand) {
+    assert(oper < IR_N_OP1);
     if (oper == IR_OP1_snez || oper == IR_OP1_seqz) {
         if (dest->prim_type != IR_PRIM_bool) {
             fprintf(stderr, "[BUG] IR %s must return a boolean\n", ir_op1_names[oper]);
@@ -837,6 +839,7 @@ ir_insn_t *ir_add_expr1(ir_insnloc_t loc, ir_var_t *dest, ir_op1_type_t oper, ir
 
 // Add an expression to a code block.
 ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_var_t *dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs) {
+    assert(oper < IR_N_OP2);
     ir_prim_t lhs_prim = ir_operand_prim(lhs);
     ir_prim_t rhs_prim = ir_operand_prim(rhs);
     if (oper >= IR_OP2_sgt && oper <= IR_OP2_sne) {

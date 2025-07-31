@@ -633,12 +633,15 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
     if (function.type != TOKENTYPE_KEYWORD
         || (function.subtype != IR_KEYW_ssa_function && function.subtype != IR_KEYW_function)) {
         cctx_diagnostic(from->cctx, function.pos, DIAG_ERR, "Expected `function` or `ssa_function`");
+        tkn_delete(function);
         return NULL;
     }
 
     token_t funcname = tkn_next(from);
     if (funcname.type != TOKENTYPE_IDENT || funcname.subtype != IR_IDENT_GLOBAL) {
         cctx_diagnostic(from->cctx, function.pos, DIAG_ERR, "Expected a global identifier");
+        tkn_delete(function);
+        tkn_delete(funcname);
         return NULL;
     }
 
@@ -826,6 +829,8 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
         ir_func_delete(func);
         func = NULL;
     }
+    tkn_delete(function);
+    tkn_delete(funcname);
     return func;
 }
 

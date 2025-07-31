@@ -185,6 +185,7 @@ static char *test_ir_deserialize() {
     if (func) {
         printf("\n");
         ir_func_serialize(func, stdout);
+        ir_func_delete(func);
     }
 
     // Report errors.
@@ -195,6 +196,8 @@ static char *test_ir_deserialize() {
             print_diagnostic(diag);
             diag = (diagnostic_t const *)diag->node.next;
         }
+        tkn_ctx_delete(tctx);
+        cctx_delete(cctx);
         return TEST_FAIL;
     }
 

@@ -426,8 +426,8 @@ isel_t
     bool                *best_reg     = NULL;
 
     set_foreach(insn_sub_t, proto, &candidates) {
-        ir_operand_t const **operand_tmp = calloc(operands_cap, sizeof(void *));
-        bool                *reg_tmp     = calloc(operands_cap, sizeof(bool));
+        ir_operand_t const **operand_tmp = strong_calloc(operands_cap, sizeof(void *));
+        bool                *reg_tmp     = strong_calloc(operands_cap, sizeof(bool));
         size_t proto_size = tree_isel_match_proto(profile, proto, ir_insn, ir_insn->code, operand_tmp, reg_tmp);
         if (proto_size > max_size) {
             max_size = proto_size;

@@ -183,8 +183,8 @@ static char *test_ir_deserialize() {
     // Try to deserialize this function.
     ir_func_t *func = ir_func_deserialize(tctx);
     if (func) {
-        printf("\n");
-        ir_func_serialize(func, stdout);
+        // printf("\n");
+        // ir_func_serialize(func, stdout);
         ir_func_delete(func);
     }
 

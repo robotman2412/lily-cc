@@ -26,15 +26,15 @@
 
 
 // Helper macro for performing an operation on all variables in an IR operand.
-#define FOR_OPERAND_VARS(operand, name, code)                                                                          \
+#define FOR_OPERAND_VARS(operand, name, action)                                                                        \
     ({                                                                                                                 \
         if ((operand).type == IR_OPERAND_TYPE_VAR) {                                                                   \
             ir_var_t *name = (operand).var;                                                                            \
-            code                                                                                                       \
+            action                                                                                                     \
         } else if ((operand).type == IR_OPERAND_TYPE_MEM) {                                                            \
             if ((operand).mem.rel_type == IR_MEMREL_VAR) {                                                             \
                 ir_var_t *name = (operand).mem.base_var;                                                               \
-                code                                                                                                   \
+                action                                                                                                 \
             }                                                                                                          \
         }                                                                                                              \
     })
@@ -58,7 +58,7 @@ ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_
     for (size_t i = 0; i < args_len; i++) {
         func->args[i].has_var        = true;
         func->args[i].var            = ir_var_create(func, IR_PRIM_s32, args_name ? args_name[i] : NULL);
-        func->args[i].var->arg_index = i;
+        func->args[i].var->arg_index = (ptrdiff_t)i;
     }
     func->entry = ir_code_create(func, entry_name);
     return func;
@@ -201,8 +201,8 @@ static void compute_dominance(ir_func_t *func, size_t nodes_len, dom_node_t *nod
             nodes[w].ancestor = p;
         }
 
-        set_foreach(void, _v, &nodes[p].bucket) {
-            size_t v      = (size_t)_v;
+        set_foreach(void, v0, &nodes[p].bucket) {
+            size_t v      = (size_t)v0;
             size_t u      = dom_node_eval(nodes, v);
             nodes[v].idom = nodes[u].semi < nodes[v].semi ? u : nodes[w].parent;
         }
@@ -242,7 +242,6 @@ static void create_combinator(ir_code_t *code, ir_var_t *dest) {
     expr->returns_len     = 1;
     size_t i              = 0;
     set_foreach(ir_code_t, pred, &code->pred) {
-        // TODO: Some way to mark as undefined?
         expr->combinators[i++] = (ir_combinator_t){
             .bind = IR_OPERAND_UNDEF(dest->prim_type),
             .prev = pred,
@@ -302,8 +301,8 @@ static void insert_combinators(ir_func_t *func, ir_var_t *var, size_t nodes_len,
     bool changed = true;
     while (changed) {
         changed = false;
-        set_foreach(void, _index, &frontier) {
-            size_t     index = (size_t)_index;
+        set_foreach(void, index0, &frontier) {
+            size_t     index = (size_t)index0;
             ir_code_t *code  = nodes[index].code;
             if (code->visited || !nodes[index].uses_var) {
                 continue;
@@ -542,24 +541,23 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
         fprintf(stderr, "[BUG] IR variable %%%s asked to be replaced with itself\n", var->name);
         abort();
     }
-    set_foreach(ir_insn_t, insn, &var->used_at) {
+    for (set_ent_t const *ent; (ent = set_next(&var->used_at, NULL));) {
+        ir_insn_t *insn = ent->value;
         if (insn->type == IR_INSN_COMBINATOR) {
             for (size_t i = 0; i < insn->combinators_len; i++) {
                 if (insn->combinators[i].bind.type == IR_OPERAND_TYPE_VAR && insn->combinators[i].bind.var == var) {
-                    insn->combinators[i].bind = value;
-                    ir_mark_used(value, insn);
+                    ir_insn_set_operand(insn, i, value);
                 }
             }
         } else {
             for (size_t i = 0; i < insn->operands_len; i++) {
                 if (insn->operands[i].type == IR_OPERAND_TYPE_VAR && insn->operands[i].var == var) {
-                    insn->operands[i] = value;
-                    ir_mark_used(value, insn);
+                    ir_insn_set_operand(insn, i, value);
                 }
             }
         }
     }
-    set_clear(&var->used_at);
+    assert(var->used_at.len == 0);
 }
 
 // Create a new IR code block.
@@ -677,11 +675,18 @@ void ir_insn_delete(ir_insn_t *insn) {
     if (insn->type == IR_INSN_COMBINATOR) {
         for (size_t i = 0; i < insn->combinators_len; i++) {
             ir_unmark_used(insn->combinators[i].bind, insn);
+            if (insn->combinators[i].bind.type == IR_OPERAND_TYPE_MEM
+                && insn->combinators[i].bind.mem.rel_type == IR_MEMREL_SYM) {
+                free(insn->combinators[i].bind.mem.base_sym);
+            }
         }
         free(insn->combinators);
     } else {
         for (size_t i = 0; i < insn->operands_len; i++) {
             ir_unmark_used(insn->operands[i], insn);
+            if (insn->operands[i].type == IR_OPERAND_TYPE_MEM && insn->operands[i].mem.rel_type == IR_MEMREL_SYM) {
+                free(insn->operands[i].mem.base_sym);
+            }
         }
         free(insn->operands);
     }
@@ -691,6 +696,57 @@ void ir_insn_delete(ir_insn_t *insn) {
     free(insn->returns);
     dlist_remove(&insn->code->insns, &insn->node);
     free(insn);
+}
+
+// Set an IR instruction's operand by index.
+void ir_insn_set_operand(ir_insn_t *insn, size_t index, ir_operand_t operand) {
+    assert(index < insn->operands_len);
+
+    // Clean up old operand.
+    ir_operand_t old = insn->type == IR_INSN_COMBINATOR ? insn->combinators[index].bind : insn->operands[index];
+    if (old.type == IR_OPERAND_TYPE_MEM && old.mem.rel_type == IR_MEMREL_SYM) {
+        free(old.mem.base_sym);
+    }
+    FOR_OPERAND_VARS(old, var, set_remove(&var->used_at, insn););
+
+    // Install new operand.
+    if (operand.type == IR_OPERAND_TYPE_MEM && operand.mem.rel_type == IR_MEMREL_SYM) {
+        operand.mem.base_sym = strong_strdup(operand.mem.base_sym);
+    }
+    FOR_OPERAND_VARS(operand, var, set_add(&var->used_at, insn););
+    if (insn->type == IR_INSN_COMBINATOR) {
+        insn->combinators[index].bind = operand;
+    } else {
+        insn->operands[index] = operand;
+    }
+
+    // Re-add other operands' vars to this insn (in case a var is used in two operands, one of which was just replaced).
+    if (insn->type == IR_INSN_COMBINATOR) {
+        for (size_t i = 0; i < insn->combinators_len; i++) {
+            if (i != index) {
+                FOR_OPERAND_VARS(insn->combinators[i].bind, var, set_add(&var->used_at, insn););
+            }
+        }
+    } else {
+        for (size_t i = 0; i < insn->operands_len; i++) {
+            if (i != index) {
+                FOR_OPERAND_VARS(insn->operands[i], var, set_add(&var->used_at, insn););
+            }
+        }
+    }
+}
+
+// Set an IR instruction's return variable by index.
+void ir_insn_set_return(ir_insn_t *insn, size_t index, ir_var_t *var) {
+    assert(index < insn->returns_len);
+    if (insn->returns[index]) {
+        set_remove(&insn->returns[index]->assigned_at, insn);
+    }
+    insn->returns[index] = var;
+    if (var) {
+        assert(!set_contains(&var->assigned_at, insn));
+        set_add(&var->assigned_at, insn);
+    }
 }
 
 
@@ -777,6 +833,9 @@ static ir_insn_t *
     }
     for (size_t i = 0; i < operands_len; i++) {
         ir_mark_used(insn->operands[i], insn);
+        if (insn->operands[i].type == IR_OPERAND_TYPE_MEM && insn->operands[i].mem.rel_type == IR_MEMREL_SYM) {
+            insn->operands[i].mem.base_sym = strong_strdup(insn->operands[i].mem.base_sym);
+        }
     }
     ir_emplace_insn(loc, insn);
     return insn;
@@ -885,7 +944,7 @@ ir_insn_t *ir_add_lea_symbol(ir_insnloc_t loc, ir_var_t *dest, char const *symbo
         IR_INSN_LEA,
         dest,
         1,
-        IR_OPERAND_MEM(IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(symbol), .offset = offset))
+        IR_OPERAND_MEM(IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM((char *)symbol), .offset = offset))
     );
 }
 
@@ -901,11 +960,21 @@ ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_operand_t addr) {
 
 
 // Add a function call.
-ir_insn_t *ir_add_call(ir_insnloc_t loc, ir_memref_t to, size_t operands_len, ir_operand_t const *operands) {
-    // TODO: IR now supports multiple-return functions but this API doesn't.
+ir_insn_t *ir_add_call(
+    ir_insnloc_t        loc,
+    ir_memref_t         to,
+    size_t              returns_len,
+    ir_var_t          **returns,
+    size_t              operands_len,
+    ir_operand_t const *operands
+) {
     ir_operand_t *operands_copy = strong_calloc(1 + operands_len, sizeof(ir_operand_t));
     operands_copy[0]            = IR_OPERAND_MEM(to);
     memcpy(operands_copy + 1, operands, operands_len * sizeof(ir_operand_t));
+
+    ir_var_t **returns_copy = strong_calloc(returns_len, sizeof(void *));
+    memcpy(returns_copy, returns, returns_len * sizeof(void *));
+
     return ir_create_insn(loc, IR_INSN_CALL, NULL, 1 + operands_len, operands_copy);
 }
 
@@ -948,12 +1017,11 @@ ir_insn_t *ir_add_return1(ir_insnloc_t loc, ir_operand_t value) {
     return ir_create_insn_va(loc, IR_INSN_RETURN, NULL, 1, value);
 }
 
-
 // Add a machine instruction.
 ir_insn_t *ir_add_mach_insn(
     ir_insnloc_t loc, ir_var_t *dest, insn_proto_t const *proto, size_t operands_len, ir_operand_t const *operands
 ) {
-    ir_operand_t *operands_copy = calloc(operands_len, sizeof(ir_operand_t));
+    ir_operand_t *operands_copy = strong_calloc(operands_len, sizeof(ir_operand_t));
     memcpy(operands_copy, operands, operands_len * sizeof(ir_operand_t));
     ir_insn_t *insn = ir_create_insn(loc, IR_INSN_MACHINE, dest, operands_len, operands_copy);
     insn->prototype = proto;

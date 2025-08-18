@@ -90,10 +90,22 @@ struct backend_profile {
     lily_bits_t      arith_min_bits;
     // What the maximum bits for this profile's arithmetic is.
     lily_bits_t      arith_max_bits;
-    // Whether this profile supports hardware f32.
+    // Has insns for f32.
     bool             has_f32;
-    // Whether this profile supports hardware f64.
+    // Has insns for f64.
     bool             has_f64;
+    // Has insns for float square rooot.
+    bool             has_fsqrt;
+    // Has insns for multiply.
+    bool             has_mul;
+    // Has insns for divide.
+    bool             has_div;
+    // Has insns for remainder.
+    bool             has_rem;
+    // Has insns for variable bit shift.
+    bool             has_var_shift;
+    // Has insns for count leading/trailing zeroes.
+    bool             has_count_zeroes;
     // Minimum left shift for memory operands with index registers.
     uint8_t          index_min_shift;
     // Maximum left shift for memory operands with index registers.
@@ -106,6 +118,8 @@ struct backend_profile {
     size_t           gpr_count;
     // Type of data that can be operated on in a register.
     regclass_t      *regclasses;
+    // Smallest bitcount to use for implicit integer arithmetic calls.
+    lily_bits_t      implicit_arith_min_bits;
 };
 
 // Instruction selection result.

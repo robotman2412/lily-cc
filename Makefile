@@ -12,6 +12,10 @@ build:
 	cmake --build build --target lilycc
 	cmake --build build --target lily-explainer
 
+.PHONY: clang-tidy
+clang-tidy:
+	clang-tidy -p build $(shell find src -name '*.c')
+
 .PHONY: build-test
 build-test:
 	cmake -B build src

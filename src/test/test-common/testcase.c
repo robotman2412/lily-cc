@@ -64,5 +64,8 @@ void register_test_case(char *(*function)(), char const *id) {
     testcase_t *ent = malloc(sizeof(testcase_t));
     ent->function   = function;
     ent->id         = id;
-    map_set(&testcases, id, ent);
+    if (!map_set(&testcases, id, ent)) {
+        fprintf(stderr, "Out of memory\n");
+        abort();
+    }
 }

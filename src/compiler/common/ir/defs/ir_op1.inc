@@ -22,4 +22,6 @@ IR_OP1_DEF(neg)
 // Bitwise negate.
 IR_OP1_DEF(bneg)
 
+// TODO: clz, ctz, popcnt, sqrt, abs
+
 #undef IR_OP1_DEF

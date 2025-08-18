@@ -21,6 +21,18 @@ typedef enum __attribute__((packed)) {
     IR_N_PRIM,
 } ir_prim_t;
 
+// Get unsigned counterpart of primitive.
+static inline ir_prim_t ir_prim_as_unsigned(ir_prim_t prim) {
+    switch (prim) {
+        case IR_PRIM_s8: return IR_PRIM_u8;
+        case IR_PRIM_s16: return IR_PRIM_u16;
+        case IR_PRIM_s32: return IR_PRIM_u32;
+        case IR_PRIM_s64: return IR_PRIM_u64;
+        case IR_PRIM_s128: return IR_PRIM_u128;
+        default: return prim;
+    }
+}
+
 #include "arith128.h"
 #include "list.h"
 #include "set.h"
@@ -220,7 +232,7 @@ struct ir_memref {
     ir_prim_t   data_type;
     union {
         // Base address symbol.
-        char const *base_sym;
+        char       *base_sym;
         // Base address of stack frame.
         ir_frame_t *base_frame;
         // Base address of code block.

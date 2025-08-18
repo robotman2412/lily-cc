@@ -5,8 +5,7 @@
 
 #include "codegen.h"
 
-#include "cand_tree.h"
-#include "insn_proto.h"
+#include "backend.h"
 #include "ir.h"
 #include "ir/ir_serialization.h"
 #include "ir_interpreter.h"
@@ -18,6 +17,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 
 
 
@@ -87,6 +87,124 @@ static void cg_isel(backend_profile_t *profile, ir_code_t *code) {
     }
 }
 
+// Replace arithmetic that is not supported with function calls.
+static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
+    assert(insn->type == IR_INSN_EXPR2);
+    assert(insn->returns_len == 1);
+    assert(insn->operands_len == 2);
+    ir_prim_t const prim = insn->returns[0]->prim_type;
+    bool softfloat       = (prim == IR_PRIM_f32 && !profile->has_f32) || (prim == IR_PRIM_f64 && !profile->has_f64);
+
+    insn->code->func->enforce_ssa = false;
+    if (insn->op2 == IR_OP2_add && softfloat) {
+        char buf[32];
+        snprintf(buf, sizeof(buf) - 1, "__lily_add_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
+        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 2, insn->operands);
+        ir_insn_delete(insn);
+    } else if (insn->op2 == IR_OP2_sub && softfloat) {
+        char buf[32];
+        snprintf(buf, sizeof(buf) - 1, "__lily_sub_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
+        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 2, insn->operands);
+        ir_insn_delete(insn);
+    } else if (insn->op2 == IR_OP2_mul && (softfloat || !profile->has_mul)) {
+        char buf[32];
+        snprintf(buf, sizeof(buf) - 1, "__lily_mul_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
+        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 2, insn->operands);
+        ir_insn_delete(insn);
+    } else if (insn->op2 == IR_OP2_div && (softfloat || !profile->has_div)) {
+        char buf[32];
+        snprintf(buf, sizeof(buf) - 1, "__lily_div_%s", ir_prim_names[prim]);
+        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 2, insn->operands);
+        ir_insn_delete(insn);
+    } else if (insn->op2 == IR_OP2_rem && (softfloat || !profile->has_rem)) {
+        char buf[32];
+        snprintf(buf, sizeof(buf) - 1, "__lily_rem_%s", ir_prim_names[prim]);
+        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 2, insn->operands);
+        ir_insn_delete(insn);
+    } else if (insn->op2 == IR_OP2_shr && insn->operands[1].type != IR_OPERAND_TYPE_CONST && !profile->has_var_shift) {
+        char buf[32];
+        snprintf(buf, sizeof(buf) - 1, "__lily_shr_%s", ir_prim_names[prim]);
+        ir_var_t *tmp = ir_var_create(insn->code->func, IR_PRIM_u8, NULL); // __lily_shr_* uses u8 as shift amount
+        ir_add_expr1(IR_AFTER_INSN(insn), tmp, IR_OP1_mov, insn->operands[1]);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
+            1,
+            insn->returns,
+            2,
+            (ir_operand_t const[]){insn->operands[0], IR_OPERAND_VAR(tmp)}
+        );
+        ir_insn_delete(insn);
+    } else if (insn->op2 == IR_OP2_shr && insn->operands[1].type != IR_OPERAND_TYPE_CONST && !profile->has_var_shift) {
+        char buf[32];
+        snprintf(buf, sizeof(buf) - 1, "__lily_shl_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
+        ir_var_t *tmp = ir_var_create(insn->code->func, IR_PRIM_u8, NULL); // __lily_shl_u* uses u8 as shift amount
+        ir_add_expr1(IR_AFTER_INSN(insn), tmp, IR_OP1_mov, insn->operands[1]);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
+            1,
+            insn->returns,
+            2,
+            (ir_operand_t const[]){insn->operands[0], IR_OPERAND_VAR(tmp)}
+        );
+        ir_insn_delete(insn);
+    }
+    // TODO: Float comparisons.
+    insn->code->func->enforce_ssa = true;
+}
+
+// Replace arithmetic that is not supported with function calls.
+static void cg_functionize_expr1(backend_profile_t *profile, ir_insn_t *insn) {
+    assert(insn->type == IR_INSN_EXPR1);
+    assert(insn->returns_len == 1);
+    assert(insn->operands_len == 1);
+    ir_prim_t const prim     = ir_operand_prim(insn->operands[0]);
+    ir_prim_t const ret_prim = insn->returns[0]->prim_type;
+    bool            softfloat
+        = ((prim == IR_PRIM_f32 && !profile->has_f32) || (prim == IR_PRIM_f64 && !profile->has_f64))
+          || ((ret_prim == IR_PRIM_f32 && !profile->has_f32) || (ret_prim == IR_PRIM_f64 && !profile->has_f64));
+
+    insn->code->func->enforce_ssa = false;
+    if (insn->op1 == IR_OP1_mov && ret_prim != prim && softfloat) {
+        char buf[32];
+        if (ret_prim == IR_PRIM_f64 && prim == IR_PRIM_f32) {
+            // Float to float.
+            strcpy(buf, "__lily_fconv_f64");
+        } else if (ret_prim == IR_PRIM_f32 && prim == IR_PRIM_f64) {
+            // Float to float.
+            strcpy(buf, "__lily_fconv_f32");
+        } else if (ret_prim == IR_PRIM_f32 || ret_prim == IR_PRIM_f64) {
+            // Int to float.
+            snprintf(buf, sizeof(buf) - 1, "__lily_itof_%s_%s", ir_prim_names[ret_prim], ir_prim_names[prim]);
+        } else {
+            // Float to int.
+            snprintf(buf, sizeof(buf) - 1, "__lily_ftoi_%s_%s", ir_prim_names[prim], ir_prim_names[ret_prim]);
+        }
+        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 1, insn->operands);
+        ir_insn_delete(insn);
+    } else if (insn->op1 == IR_OP1_neg && softfloat) {
+        char buf[32];
+        snprintf(buf, sizeof(buf) - 1, "__lily_neg_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
+        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 1, insn->operands);
+        ir_insn_delete(insn);
+    }
+    // TODO: Float comparisons.
+    insn->code->func->enforce_ssa = true;
+}
+
+// Replace arithmetic that is not supported with function calls.
+static void cg_functionize_exprs(backend_profile_t *profile, ir_insn_t *insn) {
+    assert(insn->code->func->enforce_ssa);
+    // TODO: Implement for future abs/sqrt/clz/ctz/popcnt IR op1.
+
+    if (insn->type == IR_INSN_EXPR2) {
+        cg_functionize_expr2(profile, insn);
+    } else if (insn->type == IR_INSN_EXPR1) {
+        cg_functionize_expr1(profile, insn);
+    }
+}
+
 // Normalize operand order of instructions, if possible.
 static void cg_normalize_op_order(ir_insn_t *insn) {
     // This only deals with expr2 type instructions.
@@ -142,6 +260,13 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
 
     // Remove jumps that go the the next code block linearly.
     cg_remove_jumps(func);
+
+    // Replace arithmetic that is not supported with function calls.
+    dlist_foreach_node(ir_code_t, code, &func->code_list) {
+        dlist_foreach_node(ir_insn_t, insn, &code->insns) {
+            cg_functionize_exprs(profile, insn);
+        }
+    }
 
     // Normalize operand order of instructions, if possible.
     dlist_foreach_node(ir_code_t, code, &func->code_list) {

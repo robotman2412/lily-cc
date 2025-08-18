@@ -3,8 +3,6 @@
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
-#pragma once
-
 #include "rv_isel.h"
 
 #include "ir_interpreter.h"
@@ -12,6 +10,7 @@
 #include "match_tree.h"
 #include "rv_backend.h"
 #include "rv_instructions.h"
+#include "strong_malloc.h"
 #include "sub_tree.h"
 
 #include <stdio.h>
@@ -79,23 +78,23 @@ static isel_t rv_isel_const_mov(ir_const_t iconst) {
     if (lui && addi) {
         // Use `lui` followed by `addi`.
         res.sub          = &rv_insn_sub_li_lui_addi;
-        res.operands     = calloc(2, sizeof(ir_operand_t));
-        res.operand_regs = calloc(2, sizeof(bool));
+        res.operands     = strong_calloc(2, sizeof(ir_operand_t));
+        res.operand_regs = strong_calloc(2, sizeof(bool));
         res.operands[0]  = IR_OPERAND_CONST(IR_CONST_S32(lui));
         res.operands[1]  = IR_OPERAND_CONST(IR_CONST_S16(addi));
 
     } else if (lui) {
         // Use just `lui`.
         res.sub          = &rv_insn_sub_li_lui;
-        res.operands     = calloc(1, sizeof(ir_operand_t));
-        res.operand_regs = calloc(1, sizeof(bool));
+        res.operands     = strong_calloc(1, sizeof(ir_operand_t));
+        res.operand_regs = strong_calloc(1, sizeof(bool));
         res.operands[0]  = IR_OPERAND_CONST(IR_CONST_S32(lui));
 
     } else {
         // Use just `addi`.
         res.sub          = &rv_insn_sub_li_addi;
-        res.operands     = calloc(1, sizeof(ir_operand_t));
-        res.operand_regs = calloc(1, sizeof(bool));
+        res.operands     = strong_calloc(1, sizeof(ir_operand_t));
+        res.operand_regs = strong_calloc(1, sizeof(bool));
         res.operands[0]  = IR_OPERAND_CONST(IR_CONST_S16(addi));
     }
 

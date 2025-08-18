@@ -60,19 +60,25 @@ ir_frame_t *ir_frame_create(ir_func_t *func, uint64_t size, uint64_t align, char
 
 // Create a new variable.
 // If `name` is `NULL`, its name will be `var%zu` where `%zu` is a number.
-ir_var_t  *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name);
+ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name);
 // Delete an IR variable, removing all assignments and references in the process.
-void       ir_var_delete(ir_var_t *var);
+void      ir_var_delete(ir_var_t *var);
 // Replace all references to a variable with a constant.
 // Does not replace assignments, nor does it delete the variable.
-void       ir_var_replace(ir_var_t *var, ir_operand_t value);
+void      ir_var_replace(ir_var_t *var, ir_operand_t value);
+
 // Create a new IR code block.
 // If `name` is `NULL`, its name will be `code%zu` where `%zu` is a number.
 ir_code_t *ir_code_create(ir_func_t *func, char const *name);
 // Delete an IR code block and all contained instructions.
 void       ir_code_delete(ir_code_t *code);
+
 // Delete an instruction from the code.
-void       ir_insn_delete(ir_insn_t *insn);
+void ir_insn_delete(ir_insn_t *insn);
+// Set an IR instruction's operand by index.
+void ir_insn_set_operand(ir_insn_t *insn, size_t index, ir_operand_t operand);
+// Set an IR instruction's return variable by index.
+void ir_insn_set_return(ir_insn_t *insn, size_t index, ir_var_t *var);
 
 
 // Add a combinator function to a code block.
@@ -93,7 +99,14 @@ ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_operand_t addr);
 ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_operand_t addr);
 
 // Add a function call.
-ir_insn_t *ir_add_call(ir_insnloc_t from, ir_memref_t to, size_t params_len, ir_operand_t const *params);
+ir_insn_t *ir_add_call(
+    ir_insnloc_t        from,
+    ir_memref_t         to,
+    size_t              returns_len,
+    ir_var_t          **returns,
+    size_t              params_len,
+    ir_operand_t const *params
+);
 // Add an unconditional jump.
 ir_insn_t *ir_add_jump(ir_insnloc_t from, ir_code_t *to);
 // Add a conditional branch.

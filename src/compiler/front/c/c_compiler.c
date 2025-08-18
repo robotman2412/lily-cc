@@ -97,7 +97,7 @@ static void c_type_free(c_type_t *type) {
         free(type->func.args);
         free(type->func.arg_names);
         free(type->func.arg_name_tkns);
-    } else if (type->primitive == C_COMP_ARRAY) {
+    } else if (type->primitive == C_COMP_ARRAY) { // NOLINT
         // TODO: An array size could be here.
         rc_delete(type->inner);
     } else if (type->primitive == C_COMP_POINTER) {
@@ -139,7 +139,7 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list) {
                 case C_KEYW_float: has_float = true; break;
                 case C_KEYW_double: has_double = true; break;
                 case C_KEYW_void: has_void = true; break;
-                case C_KEYW__Bool: has_bool = true; break;
+                case C_KEYW__Bool:
                 case C_KEYW_bool: has_bool = true; break;
                 case C_KEYW_signed: has_signed = true; break;
                 case C_KEYW_unsigned: has_unsigned = true; break;
@@ -178,6 +178,7 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list) {
         fprintf(stderr, "[TODO] C compiler doesn't support structs, enums or unions yet\n");
         abort();
         switch (struct_tkn->params[0].subtype) {
+            default: __builtin_unreachable();
             case C_KEYW_struct: type->primitive = C_COMP_STRUCT; break;
             case C_KEYW_union: type->primitive = C_COMP_UNION; break;
             case C_KEYW_enum: type->primitive = C_COMP_ENUM; break;
@@ -299,7 +300,7 @@ rc_t c_compile_decl(c_compiler_t *ctx, token_t const *decl, rc_t spec_qual_type,
                     token_t const *name_tmp;
                     rc_t           list              = c_compile_spec_qual_list(ctx, &param->params[0]);
                     func_type->func.args[i]          = c_compile_decl(ctx, &param->params[1], list, &name_tmp);
-                    func_type->func.arg_names[i]     = strong_strdup(name_tmp->strval);
+                    func_type->func.arg_names[i]     = strong_strdup(name_tmp->strval); // NOLINT.
                     func_type->func.arg_name_tkns[i] = name_tmp;
                 }
             }
@@ -488,7 +489,6 @@ ir_op1_type_t c_op1_to_ir_op1(c_tokentype_t subtype) {
     switch (subtype) {
         case C_TKN_SUB: return IR_OP1_neg;
         case C_TKN_NOT: return IR_OP1_bneg;
-        case C_TKN_LNOT: return IR_OP1_bneg;
         default:
             printf("[BUG] C token %d cannot be converted to IR op1\n", subtype);
             abort();
@@ -511,7 +511,7 @@ ir_prim_t c_prim_to_ir_type(c_compiler_t *ctx, c_prim_t prim) {
         case C_PRIM_ULLONG: return IR_PRIM_u64;
         case C_PRIM_SLLONG: return IR_PRIM_s64;
         case C_PRIM_FLOAT: return IR_PRIM_f32;
-        case C_PRIM_DOUBLE: return IR_PRIM_f64;
+        case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE: return IR_PRIM_f64;
         default: return IR_PRIM_u8;
     }
@@ -1526,8 +1526,11 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
             var->ir_var->prim_type   = c_type_to_ir_type(ctx, var->type->data);
             var->register_up_to_date = true;
             var->pointer_taken       = set_contains(&prepass->pointer_taken, func_type->func.arg_name_tkns[i]);
-            map_set(&scope->locals, func_type->func.arg_names[i], var);
-            map_set(&scope->locals_by_decl, func_type->func.arg_name_tkns[i], var);
+            if (!map_set(&scope->locals, func_type->func.arg_names[i], var)
+                || !map_set(&scope->locals_by_decl, func_type->func.arg_name_tkns[i], var)) {
+                fprintf(stderr, "Out of memory\n");
+                abort();
+            }
         }
     }
 

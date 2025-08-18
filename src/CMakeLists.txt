@@ -13,9 +13,9 @@ add_compile_options(
     -O0 -ggdb
     -Wall -Wextra -Wno-type-limits -Wno-unused-function
     -Werror=all -Werror=extra -Werror=enum-conversion
-    -lbsd
     -DDLIST_CONSISTENCY_CHECK
 )
+add_link_options(-lbsd)
 
 
 add_subdirectory(util)

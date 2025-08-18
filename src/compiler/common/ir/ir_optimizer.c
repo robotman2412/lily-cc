@@ -277,20 +277,12 @@ static bool const_prop_expr(ir_insn_t *expr) {
         ir_var_delete(expr->returns[0]);
         return true;
 
-    } else if (expr->type == IR_INSN_EXPR2 && expr->op2 == IR_OP2_mul && expr->operands[1].type == IR_OPERAND_TYPE_CONST
-               && expr->operands[1].iconst.consth == 0 && expr->operands[1].iconst.constl == 0) {
-        // Multiply by zero (rhs version); replace with constant zero.
-        ir_var_replace(
-            expr->returns[0],
-            (ir_operand_t){.type   = IR_OPERAND_TYPE_CONST,
-                           .iconst = {.prim_type = expr->returns[0]->prim_type, .constl = 0, .consth = 0}}
-        );
-        ir_var_delete(expr->returns[0]);
-        return true;
-
-    } else if (expr->type == IR_INSN_EXPR2 && expr->op2 == IR_OP2_mul && expr->operands[0].type == IR_OPERAND_TYPE_CONST
-               && expr->operands[0].iconst.consth == 0 && expr->operands[0].iconst.constl == 0) {
-        // Multiply by zero (lhs version); replace with constant zero.
+    } else if (expr->type == IR_INSN_EXPR2 && expr->op2 == IR_OP2_mul
+               && ((expr->operands[1].type == IR_OPERAND_TYPE_CONST && expr->operands[1].iconst.consth == 0
+                    && expr->operands[1].iconst.constl == 0)
+                   || (expr->operands[0].type == IR_OPERAND_TYPE_CONST && expr->operands[0].iconst.consth == 0
+                       && expr->operands[0].iconst.constl == 0))) {
+        // Multiply by zero; replace with constant zero.
         ir_var_replace(
             expr->returns[0],
             (ir_operand_t){.type   = IR_OPERAND_TYPE_CONST,

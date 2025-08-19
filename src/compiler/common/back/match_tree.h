@@ -137,6 +137,19 @@ extern match_tree_t const NODE_OPERAND_3;
         },                                      \
     }
 
+#define NODE_JUMP(target_)                      \
+    (match_tree_t const) {                      \
+        .type = EXPR_TREE_IR_INSN,              \
+        .insn = {                               \
+            .type         = IR_INSN_JUMP,       \
+            .children_len = 1,                  \
+            .children     =                     \
+            (match_tree_t const *const[]) {     \
+                (target_)                       \
+            },                                  \
+        },                                      \
+    }
+
 #define NODE_BRANCH(target_, cond_)             \
     (match_tree_t const) {                      \
         .type = EXPR_TREE_IR_INSN,              \
@@ -162,7 +175,6 @@ extern match_tree_t const NODE_OPERAND_3;
             },                                  \
         },                                      \
     }
-
 
 // clang-format on
 

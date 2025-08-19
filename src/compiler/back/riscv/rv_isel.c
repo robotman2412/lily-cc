@@ -65,8 +65,8 @@ static isel_t rv_isel_const_mov(ir_const_t iconst) {
     }
 
     // Determine the operands to the `lui` and `addi` instructions.
-    int32_t lui  = iconst.constl >> 12;
-    int16_t addi = (int16_t)(iconst.constl << 4) >> 4;
+    int32_t lui  = (int32_t)(iconst.constl >> 12);
+    int16_t addi = (int16_t)((iconst.constl << 4) >> 4);
     if (addi < 0) {
         lui++;
     }
@@ -101,6 +101,23 @@ static isel_t rv_isel_const_mov(ir_const_t iconst) {
     return res;
 }
 
+// Instruction substitution for `j`.
+static insn_sub_t const rv_insn_sub_j = {
+    .operands_len = 1,
+    .sub_tree     = &SUB_TREE(&rv_insn_jal, SUB_OPERAND_MATCHED(0)),
+    .match_tree   = &NODE_JUMP(&NODE_OPERAND_0),
+};
+
+// Jump instruction.
+static isel_t rv_isel_jump(ir_operand_t to) {
+    isel_t res;
+    res.sub          = &rv_insn_sub_j;
+    res.operands     = strong_calloc(1, sizeof(ir_operand_t));
+    res.operand_regs = strong_calloc(1, sizeof(bool));
+    res.operands[0]  = to;
+    return res;
+}
+
 // Perform instruction selection for expressions, memory access and branches.
 isel_t rv_isel(backend_profile_t *base_profile, ir_insn_t const *ir_insn) {
     rv_profile_t *profile = (void *)base_profile;
@@ -113,6 +130,9 @@ isel_t rv_isel(backend_profile_t *base_profile, ir_insn_t const *ir_insn) {
             // Register-register mov.
             return rv_isel_rr_mov(ir_insn->operands[0]);
         }
+    } else if (ir_insn->type == IR_INSN_JUMP) {
+        // Jump instruction.
+        return rv_isel_jump(ir_insn->operands[0]);
     }
 
     // Remaining insn patterns are done with tree isel.

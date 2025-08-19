@@ -5,6 +5,7 @@
 
 #include "rv_instructions.h"
 
+#include "match_tree.h"
 #include "sub_tree.h"
 
 
@@ -111,13 +112,7 @@
 
 // Define a branch instruction.
 #define RV_INSN_BRANCH(_name, ext, op_maj, funct3, ir_op2, allow_s, allow_u) \
-    RV_INSN_BASE(_name, ext, op_maj, funct3, 0, 0, RV_ENC_B)                                                                        \
-    insn_sub_t const rv_insn_sub_##_name = {                                                                                        \
-        .operands_len = 3,                                                                                                          \
-        .operands     = RV_OP_RULES2(12, 0, allow_s, allow_u, 0),                                                                   \
-        .match_tree   = &NODE_BRANCH(&NODE_OPERAND_0, &NODE_EXPR2(ir_op2, &NODE_OPERAND_1, &NODE_OPERAND_2)),                       \
-        .sub_tree     = &SUB_TREE(&rv_insn_##_name, SUB_OPERAND_MATCHED(0), SUB_OPERAND_MATCHED(1), SUB_OPERAND_MATCHED(2)), \
-    };
+    RV_INSN_BASE(_name, ext, op_maj, funct3, 0, 0, RV_ENC_B)
 
 // Define a store instruction.
 #define RV_INSN_STORE(_name, ext, op_maj, funct3, membits, allow_s, allow_u) \
@@ -270,11 +265,51 @@
         ),                                                              \
     };
 
+#define RV_INSN_SUB_BRANCH(_name, _insn, ir_op2, _1, _2) \
+    insn_sub_t const rv_insn_sub_##_name = {                                                                                   \
+        .operands_len = 3,                                                                                                     \
+        .operands     = (operand_rule_t const []) {                                                                            \
+            {                                                                                                                  \
+                .location_kinds.mem_abs    = 1,                                                                                \
+                .location_kinds.mem_regrel = 1,                                                                                \
+                .operand_kinds.val         = -1,                                                                               \
+                .operand_sizes.sizeword    = -1,                                                                               \
+            }, {                                                                                                               \
+                .location_kinds.reg     = 1,                                                                                   \
+                .operand_kinds.sint     = 1,                                                                                   \
+                .operand_sizes.sizeword = 1,                                                                                   \
+            }, {                                                                                                               \
+                .location_kinds.reg     = 1,                                                                                   \
+                .operand_kinds.sint     = 1,                                                                                   \
+                .operand_sizes.sizeword = 1,                                                                                   \
+            },                                                                                                                 \
+        },                                                                                                                     \
+        .match_tree   = &NODE_BRANCH(&NODE_OPERAND_0, &NODE_EXPR2(ir_op2, &NODE_OPERAND_1, &NODE_OPERAND_2)),                  \
+        .sub_tree     = &SUB_TREE(&rv_insn_##_insn, SUB_OPERAND_MATCHED(0), SUB_OPERAND_MATCHED(_1), SUB_OPERAND_MATCHED(_2)), \
+    };
+
 // clang-format on
 
-
-
 #include "rv_instructions.inc"
+
+insn_sub_t const rv_insn_sub_branch = {
+    .operands_len = 2,
+    .operands     = (operand_rule_t const[]){{
+            .operand_kinds.bool_    = 1,
+            .location_kinds.reg     = 1,
+            .operand_sizes.sizeword = 1,
+    }},
+    .match_tree   = &NODE_BRANCH(&NODE_OPERAND_0, &NODE_OPERAND_1),
+    .sub_tree
+    = &SUB_TREE(&rv_insn_bne, SUB_OPERAND_MATCHED(0), SUB_OPERAND_MATCHED(1), SUB_OPERAND_CONST(IR_CONST_S32(0))),
+};
+
+RV_INSN_SUB_BRANCH(beq, beq, IR_OP2_seq, 1, 2)
+RV_INSN_SUB_BRANCH(bne, bne, IR_OP2_sne, 1, 2)
+RV_INSN_SUB_BRANCH(blt, blt, IR_OP2_slt, 1, 2)
+RV_INSN_SUB_BRANCH(bge, bge, IR_OP2_sge, 1, 2)
+RV_INSN_SUB_BRANCH(bgt, blt, IR_OP2_sgt, 2, 1)
+RV_INSN_SUB_BRANCH(ble, bge, IR_OP2_sle, 2, 1)
 
 
 
@@ -292,7 +327,15 @@ insn_sub_t const *const rv_insn_subs[] = {
 #define RV_INSN_MISC(name, ...)  &rv_insn_sub_##name,
 #define RV_INSN_LOAD(name, ...)  &rv_insn_sub_##name, &rv_insn_sub_##name##_noadd,
 #define RV_INSN_STORE(name, ...) &rv_insn_sub_##name, &rv_insn_sub_##name##_noadd,
+#define RV_INSN_BRANCH(...)
 #include "rv_instructions.inc"
+    &rv_insn_sub_branch,
+    &rv_insn_sub_beq,
+    &rv_insn_sub_bne,
+    &rv_insn_sub_blt,
+    &rv_insn_sub_bge,
+    &rv_insn_sub_bgt,
+    &rv_insn_sub_ble,
 };
 
 // Number of supported RISC-V substitution patterns.

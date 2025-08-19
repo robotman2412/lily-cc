@@ -262,11 +262,13 @@ static size_t tree_isel_match_proto(
         assert(ir_operands[i] != NULL);
         operand_rule_t rule = proto->operands[i];
 
-        // A non-imm location is (also) available.
-        bool allow_nonconst = rule.location_kinds.reg || rule.location_kinds.mem_access;
-
         if (ir_operands[i]->type == IR_OPERAND_TYPE_MEM) {
             // TODO: Validate memory rules.
+            if (ir_operands[i]->mem.rel_type == IR_MEMREL_VAR && !rule.location_kinds.mem_regrel) {
+                return 0;
+            } else if (ir_operands[i]->mem.rel_type != IR_MEMREL_VAR && !rule.location_kinds.mem_abs) {
+                return 0;
+            }
         } else if (ir_operands[i]->type == IR_OPERAND_TYPE_VAR) {
             // Validate register rules.
             if (!rule.location_kinds.reg) {
@@ -363,7 +365,7 @@ static size_t tree_isel_match_proto(
             } else {
                 // Mark it as needing promotion to a register.
                 ir_to_regs[i] = true;
-                if (!allow_nonconst) {
+                if (!rule.location_kinds.reg) {
                     return 0;
                 }
             }

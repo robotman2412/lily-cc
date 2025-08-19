@@ -57,21 +57,13 @@ union operand_kinds {
 union location_kinds {
     struct {
         // Includes immediate values.
-        uint8_t imm           : 1;
+        uint8_t imm        : 1;
         // Includes registers.
-        uint8_t reg           : 1;
+        uint8_t reg        : 1;
         // Includes absolute memory locations.
-        uint8_t mem_abs       : 1;
-        // Includes PC-relative memory locations.
-        uint8_t mem_pcrel     : 1;
+        uint8_t mem_abs    : 1;
         // Includes register-relative memory locations.
-        uint8_t mem_regrel    : 1;
-        // Allows an index register (according to architecture rules).
-        uint8_t mem_index     : 1;
-        // Allows non-pointer memory access.
-        uint8_t mem_access    : 1;
-        // Allows pointer memory access.
-        uint8_t mem_ptraccess : 1;
+        uint8_t mem_regrel : 1;
     };
     uint8_t val;
 };

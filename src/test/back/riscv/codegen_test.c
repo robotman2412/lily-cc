@@ -39,9 +39,27 @@ char *test_rv_isel() {
                        .iconst = (ir_const_t){.prim_type = IR_PRIM_s32, .constl = 0xcafebabe}}
     );
 
+    // sgt %tmp4, s32'0x1000, %tmp2
+    ir_var_t *tmp4 = ir_var_create(func, IR_PRIM_bool, "tmp4");
+    ir_add_expr2(
+        IR_APPEND(func->entry),
+        tmp4,
+        IR_OP2_slt,
+        IR_OPERAND_CONST(IR_CONST_S32(0x1000)),
+        IR_OPERAND_VAR(tmp2)
+    );
+
+    // branch (%code1), %tmp4
+    ir_code_t *code1 = ir_code_create(func, "code1");
+    ir_add_branch(IR_APPEND(func->entry), IR_OPERAND_VAR(tmp4), code1);
+
+    // jump (%code2)
+    ir_code_t *code2 = ir_code_create(func, "code2");
+    ir_add_jump(IR_APPEND(func->entry), code2);
+
     // load %tmp3, %tmp2
     ir_var_t *tmp3 = ir_var_create(func, IR_PRIM_s8, "tmp3");
-    ir_add_load(IR_APPEND(func->entry), tmp3, (ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = tmp2});
+    ir_add_load(IR_APPEND(code2), tmp3, (ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = tmp2});
 
     backend_profile_t *profile = rv_create_profile();
     profile->backend->init_codegen(profile);

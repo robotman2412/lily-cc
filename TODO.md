@@ -1,6 +1,26 @@
 # lily-cc TODO
 
 ## C frontend
+### Extensions
+- `__attribute__` syntax
+- `[[]]` syntax
+- Hints
+  - `gnu::cold`, `gnu::hot`
+  - `gnu::unused`, `gnu::used`
+  - `gnu::format`
+- Attributes
+  - `gnu::weak`
+  - `gnu::packed`
+  - `gnu::section(x)`
+  - `gnu::aligned(x)`
+  - `gnu::always_inline`
+  - `__attribute__((noderef))` (possibly in `lilyc::` and/or `clang::` C23 namespaces)
+  - `__attribute__((address_space(x)))` (possibly in `lilyc::` and/or `clang::` C23 namespaces)
+- Builtin functions
+  - `__builtin_expect(expr, val)`
+  - `__builtin_unreachable`
+  - `__builtin_clz`, `__builtin_ctz`
+
 ### C tokenizer
 - Comments ✓
 - Identifiers ✓

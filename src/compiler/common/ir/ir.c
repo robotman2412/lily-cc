@@ -948,6 +948,11 @@ ir_insn_t *ir_add_lea_symbol(ir_insnloc_t loc, ir_var_t *dest, char const *symbo
     );
 }
 
+// Add a load effective address.
+ir_insn_t *ir_add_lea(ir_insnloc_t loc, ir_var_t *dest, ir_memref_t memref) {
+    return ir_create_insn_va(loc, IR_INSN_LEA, dest, 1, IR_OPERAND_MEM(memref));
+}
+
 // Add a memory load to a code block.
 ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_operand_t addr) {
     return ir_create_insn_va(loc, IR_INSN_LOAD, dest, 1, addr);

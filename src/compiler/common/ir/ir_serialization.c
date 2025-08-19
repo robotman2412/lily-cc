@@ -536,7 +536,7 @@ ir_insn_t *ir_insn_deserialize(tokenizer_t *from, ir_func_t *func, bool enforce_
                 cctx_diagnostic(from->cctx, operands_pos[0], DIAG_ERR, "Expected a memory operand");
                 goto error;
             }
-            insn = ir_add_load(IR_APPEND(cur_code), returns[0], operands[0]);
+            insn = ir_add_lea(IR_APPEND(cur_code), returns[0], operands[0].mem);
             break;
         case IR_KEYW_store:
             if (operands_len != 2) {
@@ -761,7 +761,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     );
                     has_errors = true;
                 } else {
-                    entry.var->arg_index = func->args_len;
+                    entry.var->arg_index = (ptrdiff_t)func->args_len;
                     array_len_insert_strong(&func->args, sizeof(ir_arg_t), &func->args_len, &entry, func->args_len);
                 }
                 has_errors |= !ir_expect_eol(from);

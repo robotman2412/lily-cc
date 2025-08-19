@@ -93,6 +93,8 @@ ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_var_t *dest, ir_op2_type_t oper, ir
 ir_insn_t *ir_add_lea_stack(ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame, uint64_t offset);
 // Add a load effective address of a symbol to a code block.
 ir_insn_t *ir_add_lea_symbol(ir_insnloc_t loc, ir_var_t *dest, char const *symbol, uint64_t offset);
+// Add a load effective address.
+ir_insn_t *ir_add_lea(ir_insnloc_t loc, ir_var_t *dest, ir_memref_t memref);
 // Add a memory load to a code block.
 ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_operand_t addr);
 // Add a memory store to a code block.

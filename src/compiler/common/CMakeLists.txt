@@ -13,6 +13,7 @@ add_library(compiler-common STATIC
     front/compiler.c
     front/tokenizer.c
     ir/ir_interpreter.c
+    ir/ir_parser.c
     ir/ir_optimizer.c
     ir/ir_serialization.c
     ir/ir_tokenizer.c

@@ -50,8 +50,7 @@ IR_KEYW_DEF(branch)
 IR_KEYW_DEF(load)
 IR_KEYW_DEF(store)
 IR_KEYW_DEF(lea)
-IR_KEYW_DEF(call_direct)
-IR_KEYW_DEF(call_ptr)
+IR_KEYW_DEF(call)
 IR_KEYW_DEF(return)
 
 #undef IR_KEYW_DEF

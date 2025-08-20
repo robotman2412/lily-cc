@@ -116,7 +116,14 @@ token_t ir_parse_memoperand(tokenizer_t *from) {
         if (peek.type == TOKENTYPE_OTHER && peek.subtype == IR_TKN_RPAR) {
             res = base;
         } else if (peek.type == TOKENTYPE_OTHER && (peek.subtype == IR_TKN_ADD || peek.subtype == IR_TKN_SUB)) {
-            abort(); // TODO.
+            tkn_next(from);
+            token_t off = tkn_next(from);
+            if (off.type != TOKENTYPE_ICONST) {
+                cctx_diagnostic(from->cctx, off.pos, DIAG_ERR, "Expected number");
+                res = ast_from_va(IR_AST_GARBAGE, 3, off, peek, base);
+            } else {
+                res = ast_from_va(IR_AST_MEMOPERAND, 3, off, peek, base);
+            }
         } else {
             res = ast_from_va(IR_AST_GARBAGE, 1, base);
         }
@@ -135,38 +142,169 @@ token_t ir_parse_memoperand(tokenizer_t *from) {
 
 // Parse an instruction.
 token_t ir_parse_insn(tokenizer_t *from) {
-    (void)from;
-    abort();
+    pos_t pos0, pos1;
+    bool  garbage = false;
+
+    token_t peek = tkn_peek(from);
+    pos0         = peek.pos;
+    token_t returns;
+    if (peek.type != TOKENTYPE_KEYWORD) {
+        returns        = ir_parse_ret_list(from);
+        token_t assign = tkn_next(from);
+        if (assign.type != TOKENTYPE_OTHER || assign.subtype != IR_TKN_ASSIGN) {
+            cctx_diagnostic(from->cctx, assign.pos, DIAG_ERR, "Expected =");
+        }
+        if (returns.subtype == IR_AST_GARBAGE) {
+            garbage = true;
+        }
+    } else {
+        returns = ast_from_va(IR_AST_LIST, 0);
+    }
+
+    token_t insn = tkn_next(from);
+    if (insn.type == TOKENTYPE_IDENT && insn.subtype == IR_IDENT_BARE) {
+        cctx_diagnostic(from->cctx, insn.pos, DIAG_ERR, "Unrecognised instruction");
+        garbage = true;
+    } else if (insn.type != TOKENTYPE_KEYWORD) {
+        cctx_diagnostic(from->cctx, insn.pos, DIAG_ERR, "Expected instruction mnemonic");
+        garbage = true;
+    } else {
+        switch (insn.subtype) {
+            default:
+                garbage = true;
+                cctx_diagnostic(from->cctx, insn.pos, DIAG_ERR, "Unrecognised instruction");
+                break;
+            case IR_KEYW_comb:
+#define IR_OP2_DEF(x) case IR_KEYW_##x:
+#include "defs/ir_op2.inc"
+#define IR_OP1_DEF(x) case IR_KEYW_##x:
+#include "defs/ir_op1.inc"
+            case IR_KEYW_jump:
+            case IR_KEYW_branch:
+            case IR_KEYW_load:
+            case IR_KEYW_store:
+            case IR_KEYW_lea:
+            case IR_KEYW_call:
+            case IR_KEYW_return: break; // Valid instruction mnemonic.
+        }
+    }
+    pos1 = insn.pos;
+
+    peek = tkn_peek(from);
+    token_t params;
+    if (peek.type != TOKENTYPE_EOL && peek.type != TOKENTYPE_EOF) {
+        if (insn.subtype == IR_KEYW_comb) {
+            params = ir_parse_bind_list(from);
+        } else {
+            params = ir_parse_operand_list(from);
+        }
+        if (params.subtype == IR_AST_GARBAGE) {
+            garbage = true;
+        }
+        pos1 = params.pos;
+    } else {
+        params = ast_from_va(IR_AST_LIST, 0);
+    }
+
+    return tkn_with_pos(
+        ast_from_va(garbage ? IR_AST_GARBAGE : IR_AST_INSN, 3, returns, insn, params),
+        pos_including(pos0, pos1)
+    );
 }
 
 // Parse a variable definition.
 token_t ir_parse_var(tokenizer_t *from) {
-    (void)from;
-    abort();
+    token_t const keyw = tkn_next(from);
+    if (keyw.type != TOKENTYPE_KEYWORD || keyw.subtype != IR_KEYW_var) {
+        cctx_diagnostic(from->cctx, keyw.pos, DIAG_ERR, "Expected `var`");
+        return ast_from_va(IR_AST_GARBAGE, 1, keyw);
+    }
+    tkn_delete(keyw);
+    token_t ident = tkn_next(from);
+    if (ident.type != TOKENTYPE_IDENT || ident.subtype != IR_IDENT_LOCAL) {
+        cctx_diagnostic(from->cctx, ident.pos, DIAG_ERR, "Expected %%identifier");
+        return ast_from_va(IR_AST_GARBAGE, 1, ident);
+    }
+    token_t type = tkn_next(from);
+    if (ident.type != TOKENTYPE_KEYWORD || ident.subtype < IR_KEYW_s8 || ident.subtype > IR_KEYW_f64) {
+        cctx_diagnostic(from->cctx, ident.pos, DIAG_ERR, "Expected type");
+        return ast_from_va(IR_AST_GARBAGE, 2, ident, type);
+    }
+    return ast_from_va(IR_AST_VAR, 2, ident, type);
 }
 
 // Parse a code block definition.
 token_t ir_parse_code(tokenizer_t *from) {
-    (void)from;
-    abort();
+    token_t const keyw = tkn_next(from);
+    if (keyw.type != TOKENTYPE_KEYWORD || keyw.subtype != IR_KEYW_code) {
+        cctx_diagnostic(from->cctx, keyw.pos, DIAG_ERR, "Expected `code`");
+        return ast_from_va(IR_AST_GARBAGE, 1, keyw);
+    }
+    tkn_delete(keyw);
+    token_t ident = tkn_next(from);
+    if (ident.type != TOKENTYPE_IDENT || ident.subtype != IR_IDENT_LOCAL) {
+        cctx_diagnostic(from->cctx, ident.pos, DIAG_ERR, "Expected %%identifier");
+        return ast_from_va(IR_AST_GARBAGE, 1, ident);
+    }
+    return ast_from_va(IR_AST_CODE, 1, ident);
 }
 
 // Parse an argument definition.
 token_t ir_parse_arg(tokenizer_t *from) {
-    (void)from;
-    abort();
+    token_t const keyw = tkn_next(from);
+    if (keyw.type != TOKENTYPE_KEYWORD || keyw.subtype != IR_KEYW_arg) {
+        cctx_diagnostic(from->cctx, keyw.pos, DIAG_ERR, "Expected `arg`");
+        return ast_from_va(IR_AST_GARBAGE, 1, keyw);
+    }
+    tkn_delete(keyw);
+    token_t ident = tkn_next(from);
+    if (ident.type != TOKENTYPE_IDENT || ident.subtype != IR_IDENT_LOCAL) {
+        cctx_diagnostic(from->cctx, ident.pos, DIAG_ERR, "Expected %%identifier");
+        return ast_from_va(IR_AST_GARBAGE, 1, ident);
+    }
+    return ast_from_va(IR_AST_ARG, 1, ident);
 }
 
 // Parse an entrypoint definition.
 token_t ir_parse_entry(tokenizer_t *from) {
-    (void)from;
-    abort();
+    token_t const keyw = tkn_next(from);
+    if (keyw.type != TOKENTYPE_KEYWORD || keyw.subtype != IR_KEYW_entry) {
+        cctx_diagnostic(from->cctx, keyw.pos, DIAG_ERR, "Expected `entry`");
+        return ast_from_va(IR_AST_GARBAGE, 1, keyw);
+    }
+    tkn_delete(keyw);
+    token_t ident = tkn_next(from);
+    if (ident.type != TOKENTYPE_IDENT || ident.subtype != IR_IDENT_LOCAL) {
+        cctx_diagnostic(from->cctx, ident.pos, DIAG_ERR, "Expected %%identifier");
+        return ast_from_va(IR_AST_GARBAGE, 1, ident);
+    }
+    return ast_from_va(IR_AST_ENTRY, 1, ident);
 }
 
 // Parse a stack frame definition.
 token_t ir_parse_frame(tokenizer_t *from) {
-    (void)from;
-    abort();
+    token_t const keyw = tkn_next(from);
+    if (keyw.type != TOKENTYPE_KEYWORD || keyw.subtype != IR_KEYW_var) {
+        cctx_diagnostic(from->cctx, keyw.pos, DIAG_ERR, "Expected `frame`");
+        return ast_from_va(IR_AST_GARBAGE, 1, keyw);
+    }
+    tkn_delete(keyw);
+    token_t ident = tkn_next(from);
+    if (ident.type != TOKENTYPE_IDENT || ident.subtype != IR_IDENT_LOCAL) {
+        cctx_diagnostic(from->cctx, ident.pos, DIAG_ERR, "Expected %%identifier");
+        return ast_from_va(IR_AST_GARBAGE, 1, ident);
+    }
+    token_t size = tkn_next(from);
+    if (ident.type != TOKENTYPE_ICONST) {
+        cctx_diagnostic(from->cctx, ident.pos, DIAG_ERR, "Expected number");
+        return ast_from_va(IR_AST_GARBAGE, 2, ident, size);
+    }
+    token_t align = tkn_next(from);
+    if (ident.type != TOKENTYPE_ICONST) {
+        cctx_diagnostic(from->cctx, ident.pos, DIAG_ERR, "Expected number");
+        return ast_from_va(IR_AST_GARBAGE, 3, ident, size, align);
+    }
+    return ast_from_va(IR_AST_FRAME, 3, ident, size, align);
 }
 
 // Parse a combinator instruction binding.

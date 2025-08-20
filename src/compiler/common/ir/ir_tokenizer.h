@@ -43,7 +43,7 @@ typedef enum {
     // Garbage.
     IR_AST_GARBAGE,
     // A memory operand.
-    // Operands: Offset, base (optional).
+    // Operands: Offset, add/sub token (optional), base (optional).
     IR_AST_MEMOPERAND,
     // An instruction.
     // Operands: Returns list, mnemonic, operands list.

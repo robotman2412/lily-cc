@@ -15,8 +15,10 @@
 
 
 char *test_rv_isel() {
-    ir_func_t *func   = ir_func_create("test_isel", "code0", 1, (char const *const[]){"a"});
-    func->enforce_ssa = true;
+    ir_func_t *func       = ir_func_create("test_isel", "code0", 1);
+    func->args[0].has_var = true;
+    func->args[0].var     = ir_var_create(func, IR_PRIM_s32, "a");
+    func->enforce_ssa     = true;
 
     // add %tmp1, %a, s32'0xf00
     ir_var_t *tmp1 = ir_var_create(func, IR_PRIM_s32, "tmp1");
@@ -57,9 +59,9 @@ char *test_rv_isel() {
     ir_code_t *code2 = ir_code_create(func, "code2");
     ir_add_jump(IR_APPEND(func->entry), code2);
 
-    // load %tmp3, %tmp2
+    // load %tmp3, (%tmp2)
     ir_var_t *tmp3 = ir_var_create(func, IR_PRIM_s8, "tmp3");
-    ir_add_load(IR_APPEND(code2), tmp3, (ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = tmp2});
+    ir_add_load(IR_APPEND(code2), tmp3, IR_MEMREF(IR_PRIM_s8, IR_BADDR_VAR(tmp2)));
 
     backend_profile_t *profile = rv_create_profile();
     profile->backend->init_codegen(profile);

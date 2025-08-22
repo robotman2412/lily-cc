@@ -43,7 +43,7 @@ typedef struct {
 
 // Create a new IR function.
 // Function argument types are IR_PRIM_S32 by default.
-ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_len, char const *const *args_name);
+ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_len);
 // Create an IR function without operands nor code.
 ir_func_t *ir_func_create_empty(char const *name);
 // Delete an IR function.
@@ -96,9 +96,9 @@ ir_insn_t *ir_add_lea_symbol(ir_insnloc_t loc, ir_var_t *dest, char const *symbo
 // Add a load effective address.
 ir_insn_t *ir_add_lea(ir_insnloc_t loc, ir_var_t *dest, ir_memref_t memref);
 // Add a memory load to a code block.
-ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_operand_t addr);
+ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_memref_t memref);
 // Add a memory store to a code block.
-ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_operand_t addr);
+ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_memref_t memref);
 
 // Add a function call.
 ir_insn_t *ir_add_call(
@@ -117,6 +117,8 @@ ir_insn_t *ir_add_branch(ir_insnloc_t from, ir_operand_t cond, ir_code_t *to);
 ir_insn_t *ir_add_return0(ir_insnloc_t from);
 // Add a return with value.
 ir_insn_t *ir_add_return1(ir_insnloc_t from, ir_operand_t value);
+// Add a return.
+ir_insn_t *ir_add_return(ir_insnloc_t from, size_t values_len, ir_operand_t const *values);
 
 // Add a machine instruction.
 ir_insn_t *ir_add_mach_insn(

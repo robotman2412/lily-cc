@@ -33,7 +33,7 @@ static char *test_c_compile_type() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         c_tkn_debug_print(decl);
@@ -46,7 +46,7 @@ static char *test_c_compile_type() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         if (inner) {
@@ -62,7 +62,7 @@ static char *test_c_compile_type() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         if (inner) {
@@ -108,14 +108,14 @@ static char *test_c_compile_expr() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         c_tkn_debug_print(expr_tok);
         return TEST_FAIL;
     }
 
-    ir_func_t       *func = ir_func_create("c_compile_expr", NULL, 0, NULL);
+    ir_func_t       *func = ir_func_create("c_compile_expr", NULL, 0);
     c_compile_expr_t expr = c_compile_expr(cc, &dummy_prepass, (ir_code_t *)func->code_list.head, NULL, &expr_tok);
     c_value_destroy(expr.res);
 
@@ -123,7 +123,7 @@ static char *test_c_compile_expr() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         ir_func_serialize(func, stdout);
@@ -180,7 +180,7 @@ static char *test_c_compile_func() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         c_tkn_debug_print(foobar_tok);
@@ -193,7 +193,7 @@ static char *test_c_compile_func() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         c_tkn_debug_print(functest_tok);
@@ -208,7 +208,7 @@ static char *test_c_compile_func() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         ir_func_serialize(func, stdout);

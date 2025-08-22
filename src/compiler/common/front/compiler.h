@@ -170,14 +170,19 @@ void          cctx_delete(cctx_t *ctx);
 diagnostic_t *cctx_diagnostic(cctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const *fmt, ...)
     __attribute__((format(printf, 4, 5)));
 // Print a diagnostic.
-void print_diagnostic(diagnostic_t const *diag);
+void print_diagnostic(diagnostic_t const *diag, FILE *to);
 
 // Open or get a source file from compiler context.
 srcfile_t *srcfile_open(cctx_t *ctx, char const *path);
 // Create a source file from binary data.
 srcfile_t *srcfile_create(cctx_t *ctx, char const *virt_path, void const *data, size_t len);
+// Read a character from a source file and update offset.
+int        srcfile_getc_raw(srcfile_t *file, int *offset);
 // Read a character from a source file and update position.
 int        srcfile_getc(srcfile_t *file, pos_t *pos);
+// Try to seek to the previous character in a source file.
+// Will stop at the beginnings of lines.
+bool       srcfile_seekprev(srcfile_t *file, pos_t *pos);
 
 // Create an empty AST token with a position.
 token_t ast_empty(int subtype, pos_t pos);

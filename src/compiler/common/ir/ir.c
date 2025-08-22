@@ -51,14 +51,13 @@ void ir_mark_used(ir_operand_t operand, ir_insn_t *insn) {
 
 // Create a new IR function.
 // Function argument types are IR_PRIM_s32 by default.
-ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_len, char const *const *args_name) {
+ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_len) {
     ir_func_t *func = ir_func_create_empty(name);
     func->args      = strong_calloc(args_len, sizeof(ir_arg_t));
     func->args_len  = args_len;
     for (size_t i = 0; i < args_len; i++) {
-        func->args[i].has_var        = true;
-        func->args[i].var            = ir_var_create(func, IR_PRIM_s32, args_name ? args_name[i] : NULL);
-        func->args[i].var->arg_index = (ptrdiff_t)i;
+        func->args[i].has_var = false;
+        func->args[i].type    = IR_PRIM_s32;
     }
     func->entry = ir_code_create(func, entry_name);
     return func;
@@ -537,22 +536,56 @@ void ir_var_delete(ir_var_t *var) {
 // Replace all references to a variable with a constant.
 // Does not replace assignments, nor does it delete the variable.
 void ir_var_replace(ir_var_t *var, ir_operand_t value) {
+    assert(value.type != IR_OPERAND_TYPE_MEM);
     if (value.type == IR_OPERAND_TYPE_VAR && value.var == var) {
         fprintf(stderr, "[BUG] IR variable %%%s asked to be replaced with itself\n", var->name);
         abort();
     }
+    ir_prim_t const value_prim = ir_operand_prim(value);
     for (set_ent_t const *ent; (ent = set_next(&var->used_at, NULL));) {
         ir_insn_t *insn = ent->value;
-        if (insn->type == IR_INSN_COMBINATOR) {
-            for (size_t i = 0; i < insn->combinators_len; i++) {
-                if (insn->combinators[i].bind.type == IR_OPERAND_TYPE_VAR && insn->combinators[i].bind.var == var) {
-                    ir_insn_set_operand(insn, i, value);
-                }
-            }
-        } else {
-            for (size_t i = 0; i < insn->operands_len; i++) {
-                if (insn->operands[i].type == IR_OPERAND_TYPE_VAR && insn->operands[i].var == var) {
-                    ir_insn_set_operand(insn, i, value);
+        for (size_t i = 0; i < insn->combinators_len; i++) {
+            ir_operand_t const *operand
+                = insn->type == IR_INSN_COMBINATOR ? &insn->combinators[i].bind : &insn->operands[i];
+            if (operand->type == IR_OPERAND_TYPE_VAR && operand->var == var) {
+                ir_insn_set_operand(insn, i, value);
+            } else if (operand->type == IR_OPERAND_TYPE_MEM && operand->mem.rel_type == IR_MEMREL_VAR
+                       && operand->mem.base_var == var) {
+                switch (value.type) {
+                    case IR_OPERAND_TYPE_CONST:
+                        // Make it absolute and add the constant to the offset.
+                        ir_insn_set_operand(
+                            insn,
+                            i,
+                            IR_OPERAND_MEM(IR_MEMREF(
+                                value_prim,
+                                IR_BADDR_ABS(),
+                                .offset = operand->mem.offset + (int64_t)value.iconst.constl
+                            ))
+                        );
+                        break;
+
+                    case IR_OPERAND_TYPE_UNDEF:
+                        // Since there's no undefined address base, make this a null deref instead.
+                        ir_insn_set_operand(
+                            insn,
+                            i,
+                            IR_OPERAND_MEM(IR_MEMREF(value_prim, IR_BADDR_ABS(), .offset = 0))
+                        );
+                        break;
+
+                    case IR_OPERAND_TYPE_VAR:
+                        // Simply replace the variable.
+                        ir_insn_set_operand(
+                            insn,
+                            i,
+                            IR_OPERAND_MEM(
+                                IR_MEMREF(value_prim, IR_BADDR_VAR(value.var), .offset = operand->mem.offset)
+                            )
+                        );
+                        break;
+
+                    case IR_OPERAND_TYPE_MEM: __builtin_unreachable();
                 }
             }
         }
@@ -954,13 +987,13 @@ ir_insn_t *ir_add_lea(ir_insnloc_t loc, ir_var_t *dest, ir_memref_t memref) {
 }
 
 // Add a memory load to a code block.
-ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_operand_t addr) {
-    return ir_create_insn_va(loc, IR_INSN_LOAD, dest, 1, addr);
+ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_memref_t memref) {
+    return ir_create_insn_va(loc, IR_INSN_LOAD, dest, 1, IR_OPERAND_MEM(memref));
 }
 
 // Add a memory store to a code block.
-ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_operand_t addr) {
-    return ir_create_insn_va(loc, IR_INSN_STORE, NULL, 2, addr, src);
+ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_memref_t memref) {
+    return ir_create_insn_va(loc, IR_INSN_STORE, NULL, 2, IR_OPERAND_MEM(memref), src);
 }
 
 
@@ -1018,8 +1051,14 @@ ir_insn_t *ir_add_return0(ir_insnloc_t loc) {
 
 // Add a return with value.
 ir_insn_t *ir_add_return1(ir_insnloc_t loc, ir_operand_t value) {
-    // TODO: Again, the IR supports multiple-return but this API does not.
     return ir_create_insn_va(loc, IR_INSN_RETURN, NULL, 1, value);
+}
+
+// Add a return.
+ir_insn_t *ir_add_return(ir_insnloc_t loc, size_t operands_len, ir_operand_t const *operands) {
+    ir_operand_t *operands_copy = strong_calloc(operands_len, sizeof(ir_operand_t));
+    memcpy(operands_copy, operands, operands_len * sizeof(ir_operand_t));
+    return ir_create_insn(loc, IR_INSN_RETURN, NULL, operands_len, operands_copy);
 }
 
 // Add a machine instruction.

@@ -246,6 +246,9 @@ static char *test_c_tkn_errors() {
     EXPECT_INT(diag->pos.len, 1);
     EXPECT_INT(diag->lvl, DIAG_ERR);
     EXPECT_STR(diag->msg, "Character constant spans end of line");
+    diag = (diagnostic_t *)diag->node.next;
+    RETURN_ON_FALSE(diag);
+    EXPECT_STR(diag->msg, "Empty character constant");
 
     // "
     diag = (diagnostic_t *)diag->node.next;

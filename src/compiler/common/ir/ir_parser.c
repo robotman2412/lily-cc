@@ -58,19 +58,6 @@ static void ir_until_list_next(tokenizer_t *from) {
     }
 }
 
-// Helper function that expects RPAR.
-static bool ir_expect_rpar(tokenizer_t *from) {
-    bool    ok  = true;
-    token_t tkn = tkn_next(from);
-    if (tkn.type != TOKENTYPE_OTHER || tkn.subtype != IR_TKN_RPAR) {
-        cctx_diagnostic(from->cctx, tkn.pos, DIAG_ERR, "Expected )");
-        ir_eat_rpar(from);
-        ok = false;
-    }
-    tkn_delete(tkn);
-    return ok;
-}
-
 // Helper function that expects EOL or EOF.
 static bool ir_expect_eol(tokenizer_t *from) {
     bool    ok  = true;
@@ -107,6 +94,13 @@ token_t ir_parse_memoperand(tokenizer_t *from) {
         return ast_from_va(IR_AST_GARBAGE, 1, lpar);
     }
 
+    bool          has_type = false;
+    token_t const type     = tkn_peek(from);
+    if (type.type == TOKENTYPE_KEYWORD && type.subtype >= IR_KEYW_s8 && type.subtype <= IR_KEYW_f64) {
+        tkn_next(from);
+        has_type = true;
+    }
+
     token_t       res;
     token_t const base = tkn_next(from);
     if (base.type == TOKENTYPE_ICONST) {
@@ -114,7 +108,7 @@ token_t ir_parse_memoperand(tokenizer_t *from) {
     } else if (base.type == TOKENTYPE_IDENT && (base.subtype == IR_IDENT_LOCAL || base.subtype == IR_IDENT_GLOBAL)) {
         token_t const peek = tkn_peek(from);
         if (peek.type == TOKENTYPE_OTHER && peek.subtype == IR_TKN_RPAR) {
-            res = base;
+            res = ast_from_va(IR_AST_MEMOPERAND, 1, base);
         } else if (peek.type == TOKENTYPE_OTHER && (peek.subtype == IR_TKN_ADD || peek.subtype == IR_TKN_SUB)) {
             tkn_next(from);
             token_t off = tkn_next(from);
@@ -135,6 +129,10 @@ token_t ir_parse_memoperand(tokenizer_t *from) {
     token_t rpar = tkn_next(from);
     if (rpar.type != TOKENTYPE_OTHER || rpar.subtype != IR_TKN_RPAR) {
         cctx_diagnostic(from->cctx, rpar.pos, DIAG_ERR, "Expected )");
+    }
+
+    if (has_type) {
+        array_len_insert_strong(&res.params, sizeof(token_t), &res.params_len, &type, 0);
     }
 
     return tkn_with_pos(res, pos_including(lpar.pos, rpar.pos));
@@ -226,8 +224,8 @@ token_t ir_parse_var(tokenizer_t *from) {
         return ast_from_va(IR_AST_GARBAGE, 1, ident);
     }
     token_t type = tkn_next(from);
-    if (ident.type != TOKENTYPE_KEYWORD || ident.subtype < IR_KEYW_s8 || ident.subtype > IR_KEYW_f64) {
-        cctx_diagnostic(from->cctx, ident.pos, DIAG_ERR, "Expected type");
+    if (type.type != TOKENTYPE_KEYWORD || type.subtype < IR_KEYW_s8 || type.subtype > IR_KEYW_f64) {
+        cctx_diagnostic(from->cctx, type.pos, DIAG_ERR, "Expected type");
         return ast_from_va(IR_AST_GARBAGE, 2, ident, type);
     }
     return ast_from_va(IR_AST_VAR, 2, ident, type);
@@ -385,12 +383,62 @@ token_t ir_parse_operand(tokenizer_t *from) {
 
 // Parse an IR statement.
 token_t ir_parse_stmt(tokenizer_t *from) {
-    (void)from;
-    abort();
+    ir_skip_eol(from);
+    token_t peek = tkn_peek(from);
+    token_t res;
+    if (peek.type == TOKENTYPE_KEYWORD) {
+        switch (peek.subtype) {
+            case IR_KEYW_var: res = ir_parse_var(from); break;
+            case IR_KEYW_code: res = ir_parse_code(from); break;
+            case IR_KEYW_arg: res = ir_parse_arg(from); break;
+            case IR_KEYW_entry: res = ir_parse_entry(from); break;
+            case IR_KEYW_frame: res = ir_parse_frame(from); break;
+            default: res = ir_parse_insn(from); break;
+        }
+    } else {
+        res = ir_parse_insn(from);
+    }
+    ir_expect_eol(from);
+    return res;
 }
 
 // Parse an IR function.
 token_t ir_parse_func(tokenizer_t *from) {
-    (void)from;
-    abort();
+    ir_skip_eol(from);
+
+    token_t keyw = tkn_next(from);
+    if (keyw.type != TOKENTYPE_KEYWORD || (keyw.subtype != IR_KEYW_ssa_function && keyw.subtype != IR_KEYW_function)) {
+        cctx_diagnostic(from->cctx, keyw.pos, DIAG_ERR, "Expected `ssa_function` or `function`");
+        return ast_from_va(IR_AST_GARBAGE, 1, keyw);
+    }
+
+    token_t ident = tkn_next(from);
+    if (ident.type != TOKENTYPE_IDENT || ident.subtype != IR_IDENT_GLOBAL) {
+        cctx_diagnostic(from->cctx, ident.pos, DIAG_ERR, "Expected global identifier");
+        return ast_from_va(IR_AST_GARBAGE, 1, ident);
+    }
+
+    size_t   arr_len = 0;
+    size_t   arr_cap = 16;
+    token_t *arr     = strong_calloc(arr_cap, sizeof(token_t));
+    bool     garbage = false;
+
+    while (1) {
+        token_t peek = tkn_peek(from);
+        if (peek.type == TOKENTYPE_EOF) {
+            break;
+        }
+        if (peek.type == TOKENTYPE_KEYWORD
+            && (peek.subtype == IR_KEYW_ssa_function || peek.subtype == IR_KEYW_function)) {
+            break;
+        }
+        token_t stmt = ir_parse_stmt(from);
+        if (stmt.subtype == IR_AST_GARBAGE) {
+            garbage = true;
+        }
+        array_lencap_insert_strong(&arr, sizeof(token_t), &arr_len, &arr_cap, &stmt, arr_len);
+        ir_skip_eol(from);
+    }
+
+    return ast_from_va(garbage ? IR_AST_GARBAGE : IR_AST_FUNCTION, 3, keyw, ident, ast_from(IR_AST_LIST, arr_len, arr));
 }

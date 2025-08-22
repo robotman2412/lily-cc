@@ -7,6 +7,8 @@
 // Must be before <stdbool.h> because it contains the identifier `bool`.
 #include "arith128.h"
 #include "compiler.h"
+
+#include <stdio.h>
 char const *const ir_keywords[] = {
 #define IR_KEYW_DEF(keyw) #keyw,
 #include "defs/ir_keywords.inc"
@@ -227,21 +229,16 @@ static token_t ir_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first, bool 
     ptr[0]     = first;
 
     pos_t pos0 = ctx->pos;
-    pos_t pos1;
     while (1) {
-        pos1  = pos0;
-        int c = srcfile_getc(ctx->file, &pos1);
+        pos_t pos1 = pos0;
+        int   c    = srcfile_getc(ctx->file, &pos1);
         if (!ir_is_sym_char(c)) {
             // End of identifier.
             break;
         }
-        if (len == cap - 1) {
-            // Even longer name, allocate more memory.
-            cap *= 2;
-            ptr  = strong_realloc(ptr, cap);
-        }
-        ptr[len++] = c;
-        pos0       = pos1;
+        uint8_t tmp = c;
+        array_lencap_insert_strong(&ptr, 1, &len, &cap, &tmp, len);
+        pos0 = pos1;
     }
     ptr[len] = 0;
     ctx->pos = pos0;

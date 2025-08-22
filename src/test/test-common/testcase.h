@@ -62,7 +62,7 @@
     do {                                                                                                               \
         char const *expr_tmp = (expr);                                                                                 \
         char const *val_tmp  = (val);                                                                                  \
-        if (strcmp(expr_tmp, val_tmp)) {                                                                               \
+        if (strcmp(expr_tmp, val_tmp) != 0) {                                                                          \
             return str_testcase_failed(                                                                                \
                 __FILE_NAME__ ":" STR_OF(__LINE__) ": " #expr,                                                         \
                 expr_tmp,                                                                                              \
@@ -78,7 +78,7 @@
         size_t      expr_len_tmp = (expr_len);                                                                         \
         char const *val_tmp      = (val);                                                                              \
         size_t      val_len_tmp  = (val_len);                                                                          \
-        if (expr_len_tmp != val_len_tmp || memcmp(expr_tmp, val_tmp, expr_len_tmp)) {                                  \
+        if (expr_len_tmp != val_len_tmp || memcmp(expr_tmp, val_tmp, expr_len_tmp) != 0) {                             \
             return str_testcase_failed(__FILE_NAME__ ":" STR_OF(__LINE__) ": " #expr, expr_tmp, expr_len_tmp, #val);   \
         }                                                                                                              \
     } while (0)

@@ -6,8 +6,11 @@
 #include "compiler.h"
 
 #include "arrays.h"
+#include "color.h"
+#include "utf8.h"
 
 #include <stdarg.h>
+#include <stdio.h>
 #include <string.h>
 
 
@@ -104,25 +107,107 @@ diagnostic_t *cctx_diagnostic(cctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const
     return diag;
 }
 
+// Helper function that determines what
+
 // Print a diagnostic.
-void print_diagnostic(diagnostic_t const *diag) {
-    char const *prefix[] = {
-        [DIAG_ERR]  = "\033[31merror",
-        [DIAG_WARN] = "\033[33mwarning",
-        [DIAG_INFO] = "\033[34minfo",
-        [DIAG_HINT] = "\033[35mhint",
+void print_diagnostic(diagnostic_t const *diag, FILE *to) {
+    char const *const color[] = {
+        [DIAG_ERR]  = ANSI_RED_FG,
+        [DIAG_WARN] = ANSI_YELLOW_FG,
+        [DIAG_INFO] = ANSI_BLUE_FG,
+        [DIAG_HINT] = ANSI_MAGENTA_FG,
     };
-    if (diag->pos.srcfile) {
-        printf(
-            "\033[34;1m%s:%d:%d: %s: \033[0m%s\033[0m\n",
-            diag->pos.srcfile->path,
-            diag->pos.line + 1,
-            diag->pos.col + 1,
-            prefix[diag->lvl],
-            diag->msg
-        );
+    char const *const prefix[] = {
+        [DIAG_ERR]  = "error",
+        [DIAG_WARN] = "warning",
+        [DIAG_INFO] = "info",
+        [DIAG_HINT] = "hint",
+    };
+    color_fputs(ANSI_BLUE_FG ANSI_BOLD, to);
+    if (!diag->pos.srcfile) {
+        fprintf(to, "???:?:?: ");
     } else {
-        printf("\033[34;1m???:?:?: %s: \033[0m%s\033[0m\n", prefix[diag->lvl], diag->msg);
+        fprintf(to, "%s:%d:%d: ", diag->pos.srcfile->path, diag->pos.line + 1, diag->pos.col + 1);
+    }
+    color_fputs(color[diag->lvl], to);
+    fprintf(to, "%s: ", prefix[diag->lvl]);
+    color_fputs(ANSI_DEFAULT, to);
+    fprintf(to, "%s\n", diag->msg);
+
+    if (!diag->pos.srcfile) {
+        // Unknown position; can only report message.
+        return;
+    }
+
+    // Find line starting point (or at most 80 characters before `diag->pos`).
+    pos_t pos = diag->pos;
+    for (int i = 0; i < 80; i++) {
+        if (!srcfile_seekprev(diag->pos.srcfile, &pos)) {
+            break;
+        }
+    }
+
+    // Print all the characters, splitting at each line ending and drawing a squiggly line underneath.
+    // Extend until the next end-of-line (or at most 80 characters past `diag->pos`).
+    int  min_chars  = diag->pos.col - pos.col + diag->pos.len;
+    int  max_chars  = min_chars + 80;
+    int  off        = pos.off;
+    int  line       = pos.line + 1;
+    int  line_start = off;
+    bool draw       = false;
+    fprintf(to, "%5d | ", line);
+    for (int x = 0; x < max_chars; x++) {
+        // The bit that prints the line.
+        if (off == diag->pos.off + diag->pos.len) {
+            color_fputs(ANSI_DEFAULT, to);
+        } else if (off == diag->pos.off) {
+            color_fputs(ANSI_BOLD ANSI_RED_FG, to);
+        }
+        int c = srcfile_getc_raw(pos.srcfile, &off);
+        if (c < 0) {
+            break;
+        }
+        char buf[4];
+        fwrite(buf, 1, utf8_encode(buf, 4, c), to);
+
+        // The bit that prints the arrow.
+        if (c == '\n' || x >= max_chars) {
+            if (draw) {
+                color_fputs(ANSI_DEFAULT, to);
+            }
+            fputs("      | ", to);
+            if (draw) {
+                color_fputs(ANSI_BOLD ANSI_RED_FG, to);
+            }
+            for (int y = line_start; y < off; y++) {
+                if (y == diag->pos.off + diag->pos.len) {
+                    color_fputs(ANSI_DEFAULT, to);
+                    fputc(' ', to);
+                    draw = false;
+                } else if (y == diag->pos.off) {
+                    color_fputs(ANSI_BOLD ANSI_RED_FG, to);
+                    fputc('^', to);
+                    draw = true;
+                } else {
+                    fputc(draw ? '~' : ' ', to);
+                }
+            }
+            if (draw) {
+                color_fputs(ANSI_DEFAULT, to);
+            }
+            fputc('\n', to);
+
+            line_start = off;
+            if (x >= min_chars) {
+                break;
+            }
+
+            line++;
+            fprintf(to, "%5d | ", line);
+            if (draw) {
+                color_fputs(ANSI_BOLD ANSI_RED_FG, to);
+            }
+        }
     }
 }
 
@@ -195,24 +280,68 @@ err0:
     return NULL;
 }
 
-// Read a character from a source file and update position.
-static int srcfile_getc_raw(srcfile_t *file, int *off) {
+// Read a raw byte from a source file.
+// Returns -1 on EOF.
+static int srcfile_read_raw_byte(srcfile_t *file, int off) {
     if (file->is_ram_file) {
-        if (*off >= file->content_len) {
+        if (off >= file->content_len) {
             return -1;
         }
-        char val = file->content[*off];
-        (*off)++;
-        return val;
+        return file->content[off];
     } else {
-        if (file->fd_off != *off) {
-            fseek(file->fd, *off, SEEK_SET);
+        if (file->fd_off != off) {
+            fseek(file->fd, off, SEEK_SET);
+            file->fd_off = off;
         }
         int val = fgetc(file->fd);
-        if (val != -1)
-            (*off)++;
+        if (val != -1) {
+            file->fd_off = off + 1;
+        }
         return val;
     }
+}
+
+// Read a character from a source file and update offset.
+int srcfile_getc_raw(srcfile_t *file, int *off) {
+    // Read first UTF-8 byte.
+    int val  = 0;
+    int head = srcfile_read_raw_byte(file, *off);
+    if (head < 0) {
+        return -1;
+    }
+    ++*off;
+
+    // Determine number of UTF-8 bytes after this one to read.
+    size_t size;
+    if ((head & 0xf4) == 0xf0) {
+        size = 3;
+        val  = head & 0x07;
+    } else if ((head & 0xf0) == 0xe0) {
+        size = 2;
+        val  = head & 0x0f;
+    } else if ((head & 0xe0) == 0xc0) {
+        size = 1;
+        val  = head & 0x1f;
+    } else if ((head & 0x80) == 0x00) {
+        size = 0;
+        val  = head;
+    } else {
+        size = 0;
+        val  = 0xfffd;
+    }
+
+    // Try to read this amount of remaining bytes.
+    for (; size; --size) {
+        int data = srcfile_read_raw_byte(file, *off);
+        if (data < 0 || (data & 0xc0) != 0x80) {
+            val = 0xfffd;
+            break;
+        }
+        ++*off;
+        val = (val << 6) | (data & 0x3f);
+    }
+
+    return val;
 }
 
 // Read a character from a source file and update position.
@@ -237,6 +366,53 @@ int srcfile_getc(srcfile_t *file, pos_t *pos) {
     }
 }
 
+// Try to seek to the previous character in a source file.
+static bool srcfile_seekprev_raw(srcfile_t *file, int *off) {
+    if (file->is_ram_file) {
+        if (*off == 0) {
+            return false;
+        }
+        (*off)--;
+        while (*off > 0 && ((unsigned char)file->content[*off] & 0xC0) == 0x80) {
+            (*off)--;
+        }
+        return true;
+    } else {
+        if (*off == 0) {
+            return false;
+        }
+        (*off)--;
+        int c;
+        do {
+            fseek(file->fd, *off, SEEK_SET);
+            c = fgetc(file->fd);
+            if (*off == 0 || ((unsigned char)c & 0xC0) != 0x80) {
+                break;
+            }
+            (*off)--;
+        } while (*off > 0);
+        return true;
+    }
+}
+
+// Try to seek to the previous character in a source file.
+// Will stop at the beginnings of lines.
+bool srcfile_seekprev(srcfile_t *file, pos_t *pos) {
+    int tmp_off = pos->off;
+    if (!srcfile_seekprev_raw(file, &tmp_off)) {
+        return false;
+    }
+
+    int tmp_off_2 = tmp_off;
+    int c         = srcfile_getc_raw(file, &tmp_off_2);
+    if (c == '\n') {
+        return false;
+    }
+
+    pos->col--;
+    pos->off = tmp_off;
+    return true;
+}
 
 
 // Create an empty AST token with a position.

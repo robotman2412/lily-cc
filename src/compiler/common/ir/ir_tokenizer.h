@@ -39,40 +39,6 @@ typedef enum {
     IR_IDENT_BARE,
 } ir_identtype_t;
 
-typedef enum {
-    // Garbage.
-    IR_AST_GARBAGE,
-    // A memory operand.
-    // Operands: Offset, add/sub token (optional), base (optional).
-    IR_AST_MEMOPERAND,
-    // An instruction.
-    // Operands: Returns list, mnemonic, operands list.
-    IR_AST_INSN,
-    // A variable definition.
-    // Operands: Name, type.
-    IR_AST_VAR,
-    // A code block definition.
-    // Operands: Name.
-    IR_AST_CODE,
-    // An argument definition.
-    // Operands: Name / type.
-    IR_AST_ARG,
-    // An entrypoint definition.
-    // Operands: Name.
-    IR_AST_ENTRY,
-    // A stack frame definition.
-    // Operands: Name, size, alignment.
-    IR_AST_FRAME,
-    // A combinator instruction binding.
-    // Operands (unordered): Predecessor, operand.
-    IR_AST_BIND,
-    // A complete function.
-    // Operands: Function keyword, name, statements list.
-    IR_AST_FUNCTION,
-    // A return / operands / bindings list.
-    IR_AST_LIST,
-} ir_asttype_t;
-
 // List of keywords.
 extern char const *const ir_keywords[];
 

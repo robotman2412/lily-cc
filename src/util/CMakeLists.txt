@@ -7,6 +7,7 @@ add_library(util STATIC
     arith128.c
     arrays.c
     char_repr.c
+    color.c
     hash.c
     list.c
     map.c

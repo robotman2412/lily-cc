@@ -6,7 +6,9 @@
 #include "c_tokenizer.h"
 
 #include "c_compiler.h"
+#include "compiler.h"
 #include "strong_malloc.h"
+#include "utf8.h"
 
 #include <arrays.h>
 #include <inttypes.h>
@@ -359,8 +361,9 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
     char  *ptr = strong_malloc(cap);
 
     while (1) {
-        pos_t pos0 = ctx->pos;
-        int   c    = srcfile_getc(ctx->file, &ctx->pos);
+        pos_t pos0    = ctx->pos;
+        int   c       = srcfile_getc(ctx->file, &ctx->pos);
+        bool  as_utf8 = false;
         if (c == -1 || c == '\n') {
             cctx_diagnostic(
                 ctx->cctx,
@@ -383,7 +386,8 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
                 c = c_str_hex(ctx, start_pos, 8, 8);
             } else if (c == 'u') {
                 // 4-hexit unicode point.
-                c = c_str_hex(ctx, start_pos, 4, 4);
+                as_utf8 = true;
+                c       = c_str_hex(ctx, start_pos, 4, 4);
             } else if (c == 'x') {
                 // Hexadecimal (of any length (because of course that's logical (it isn't))).
                 c = c_str_hex(ctx, start_pos, 1, 32767);
@@ -413,18 +417,31 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
                 }
             }
         }
-        array_lencap_insert_strong(&ptr, 1, &len, &cap, &c, len);
+        if (as_utf8) {
+            uint8_t utf8_len = utf8_encode(NULL, 0, c);
+            array_lencap_resize_strong(&ptr, 1, &len, &cap, len + utf8_len);
+            utf8_encode(ptr - utf8_len, utf8_len, c);
+        } else {
+            uint8_t tmp = c;
+            array_lencap_insert_strong(&ptr, 1, &len, &cap, &tmp, len);
+        }
     }
 
+    pos_t pos = pos_between(start_pos, ctx->pos);
     if (is_char) {
         uint64_t val = 0;
         for (size_t i = 0; i < len; i++) {
             val <<= 8;
             val  |= ptr[i];
         }
+        if (len == 0) {
+            cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Empty character constant");
+        } else if (len > 1) {
+            cctx_diagnostic(ctx->cctx, pos, DIAG_WARN, "Multi-character character constant");
+        }
         free(ptr);
         return (token_t){
-            .pos        = pos_between(start_pos, ctx->pos),
+            .pos        = pos,
             .type       = TOKENTYPE_CCONST,
             .ival       = val,
             .strval     = NULL,
@@ -435,7 +452,7 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
     } else {
         array_lencap_insert_strong(&ptr, 1, &len, &cap, "", len);
         return (token_t){
-            .pos        = pos_between(start_pos, ctx->pos),
+            .pos        = pos,
             .type       = TOKENTYPE_SCONST,
             .strval     = ptr,
             .strval_len = len - 1,

@@ -164,14 +164,14 @@ static char *test_ir_deserialize() {
     "    var %a s32\n"
     "    var %b s32\n"
     "    var %c bool\n"
+    "    entry %code0\n"
     "code %code0\n"
     "    %b = add %a, s32'-3\n"
     "    %c = seqz %b\n"
-    // "    branch %c, (%code1)\n"
+    "    branch (%code1), %c\n"
     "    return %b\n"
     "code %code1\n"
     "    return s32'1\n"
-    "entry %code0\n"
     ;
     // clang-format on
 
@@ -193,7 +193,7 @@ static char *test_ir_deserialize() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         tkn_ctx_delete(tctx);
@@ -212,12 +212,11 @@ LILY_TEST_CASE(test_ir_deserialize)
 
 
 static char *test_ir_append() {
-    char const *const arg_names[] = {
-        "myparam",
-    };
-    ir_func_t *func = ir_func_create("myfunc", "entry", 1, arg_names);
-    ir_code_t *cur  = func->entry;
-    ir_var_t  *var1 = ir_var_create(func, IR_PRIM_bool, "var1");
+    ir_func_t *func       = ir_func_create("myfunc", "entry", 1);
+    func->args[0].has_var = true;
+    func->args[0].var     = ir_var_create(func, IR_PRIM_f32, "myparam");
+    ir_code_t *cur        = func->entry;
+    ir_var_t  *var1       = ir_var_create(func, IR_PRIM_bool, "var1");
 
     ir_add_expr1(
         IR_APPEND(cur),
@@ -234,7 +233,7 @@ LILY_TEST_CASE(test_ir_append)
 
 
 static char *test_ir_to_ssa() {
-    ir_func_t *func = ir_func_create("ir_to_ssa", NULL, 0, NULL);
+    ir_func_t *func = ir_func_create("ir_to_ssa", NULL, 0);
 
     ir_var_t *var0 = ir_var_create(func, IR_PRIM_s32, NULL);
     ir_var_t *var1 = ir_var_create(func, IR_PRIM_s32, NULL);

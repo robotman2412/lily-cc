@@ -58,6 +58,8 @@
     - `__STDC_HOSTED__` - `0` with freestanding, `1` with hosted
     - `__STDC_VERSION__` - `yyyymmL` (e.g. `202311L`) format C standard version
     - `__TIME__` - `"hh:mm:ss"` format compile time
+    - `__FUNCTION__` - current function name
+    - `__COUNTER__` - increments every time it is expanded, starting at 0
 
 ### C parser and AST builder
 - Research C syntax

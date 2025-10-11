@@ -6,10 +6,49 @@
 
 
 
+// Undef any macros that may conflict.
+#ifdef bool
+#define C_KEYWORDS_INC_BOOL_WAS_DEFINED
+#undef bool
+#endif
+
+#ifdef true
+#define C_KEYWORDS_INC_TRUE_WAS_DEFINED
+#undef true
+#endif
+
+#ifdef false
+#define C_KEYWORDS_INC_FALSE_WAS_DEFINED
+#undef false
+#endif
+
+#ifdef asm
+#define C_KEYWORDS_INC_ASM_WAS_DEFINED
+#undef asm
+#endif
+
+#ifdef typeof
+#define C_KEYWORDS_INC_TYPEOF_WAS_DEFINED
+#undef typeof
+#endif
+
+#ifdef inline
+#define C_KEYWORDS_INC_INLINE_WAS_DEFINED
+#undef inline
+#endif
+
+#ifdef restrict
+#define C_KEYWORDS_INC_RESTRICT_WAS_DEFINED
+#undef restrict
+#endif
+
+
+
 #ifndef C_KEYW_DEF
 // Primary spelling of a keyword
 #define C_KEYW_DEF(since, deprecated, keyw)
 #endif
+
 #ifndef C_ALT_KEYW_DEF
 // Alternate spelling of a keyword
 #define C_ALT_KEYW_DEF(main_spelling, alt_spelling)
@@ -84,3 +123,39 @@ C_KEYW_DEF(C_STD_min, C_STD_inf, while)
 
 #undef C_KEYW_DEF
 #undef C_ALT_KEYW_DEF
+
+// Redefine all those macros.
+#ifdef C_KEYWORDS_INC_BOOL_WAS_DEFINED
+#define bool _Bool
+#undef C_KEYWORDS_INC_BOOL_WAS_DEFINED
+#endif
+
+#ifdef C_KEYWORDS_INC_TRUE_WAS_DEFINED
+#define true 1
+#undef C_KEYWORDS_INC_TRUE_WAS_DEFINED
+#endif
+
+#ifdef C_KEYWORDS_INC_FALSE_WAS_DEFINED
+#define false 0
+#undef C_KEYWORDS_INC_FALSE_WAS_DEFINED
+#endif
+
+#ifdef C_KEYWORDS_INC_ASM_WAS_DEFINED
+#define asm __asm__
+#undef C_KEYWORDS_INC_ASM_WAS_DEFINED
+#endif
+
+#ifdef C_KEYWORDS_INC_TYPEOF_WAS_DEFINED
+#define typeof __typeof__
+#undef C_KEYWORDS_INC_TYPEOF_WAS_DEFINED
+#endif
+
+#ifdef C_KEYWORDS_INC_INLINE_WAS_DEFINED
+#define inline __inline__
+#undef C_KEYWORDS_INC_INLINE_WAS_DEFINED
+#endif
+
+#ifdef C_KEYWORDS_INC_RESTRICT_WAS_DEFINED
+#define restrict __restrict__
+#undef C_KEYWORDS_INC_RESTRICT_WAS_DEFINED
+#endif

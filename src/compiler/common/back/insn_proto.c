@@ -3,4 +3,4 @@
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
-#include "codegen.h"
+#include "insn_proto.h"

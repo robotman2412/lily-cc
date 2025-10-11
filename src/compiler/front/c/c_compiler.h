@@ -80,6 +80,16 @@ typedef enum {
     C_RVALUE,
 } c_value_type_t;
 
+// Where a C variable is to be stored.
+typedef enum {
+    // Variable is stored in a register / IR variable (local; no pointer taken).
+    C_VAR_STORAGE_REG,
+    // Variable is stored in a stack frame (local; pointer possibly taken).
+    C_VAR_STORAGE_FRAME,
+    // Variable is stored at a symbol (global; pointer taken by definition).
+    C_VAR_STORAGE_GLOBAL,
+} c_var_storage_t;
+
 
 
 // C variable.
@@ -101,27 +111,17 @@ typedef struct c_compile_expr c_compile_expr_t;
 
 // C variable.
 struct c_var {
-    // Is a global variable?
-    bool      is_global;
-    // Has a pointer been taken of this variable?
-    bool      pointer_taken;
-    // Is the memory copy up-to-date?
-    // This isn't problematic because branching paths force
-    // local variables into register and globals into memory.
-    bool      memory_up_to_date;
-    // Is the register copy up-to-date?
-    // This isn't problematic because branching paths force
-    // local variables into register and globals into memory.
-    bool      register_up_to_date;
+    // Where the variable is to be stored.
+    c_var_storage_t storage;
     // Variable type (refcount ptr of `c_var_t`).
-    rc_t      type;
-    // Variable's IR register.
-    ir_var_t *ir_var;
+    rc_t            type;
     union {
-        // Local variable's stack frame.
-        ir_frame_t *ir_frame;
+        // Local (no pointer taken) variable's IR variable.
+        ir_var_t   *reg;
+        // Local (pointer taken) variable's stack frame.
+        ir_frame_t *frame;
         // Global/static local variable's symbol.
-        char       *symbol;
+        char       *sym;
     };
 };
 
@@ -178,15 +178,15 @@ struct c_type {
 struct c_value {
     // Type of value that this is.
     c_value_type_t value_type;
-    // Refcount pointer of `c_type_t`; C type of this value.
+    // Refcount pointer of `c_type_t`; C type of this value (may be more restrictive than that of `c_var`).
     rc_t           c_type;
     // Representation of the value.
     union {
         union {
-            // The pointer at which the variable is to be stored.
-            ir_operand_t ptr;
-            // Associated C variable, if any.
-            c_var_t     *c_var;
+            // The location at which the variable is to be stored.
+            ir_memref_t memref;
+            // The IR variable associated.
+            ir_var_t   *ir_var;
         } lvalue;
         // IR operand that holds the current rvalue.
         ir_operand_t rvalue;
@@ -276,25 +276,13 @@ ir_prim_t     c_type_to_ir_type(c_compiler_t *ctx, c_type_t *type);
 ir_operand_t  c_cast_ir_operand(ir_code_t *code, ir_operand_t operand, ir_prim_t type);
 
 // Clean up an lvalue or rvalue.
-void c_value_destroy(c_value_t value);
+void         c_value_destroy(c_value_t value);
 // Write to an lvalue.
-void c_value_write(
-    c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, c_value_t const *lvalue, c_value_t const *rvalue
-);
+void         c_value_write(c_compiler_t *ctx, ir_code_t *code, c_value_t const *lvalue, c_value_t const *rvalue);
 // Get the address of an lvalue.
-ir_operand_t c_value_addrof(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
+ir_memref_t  c_value_memref(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
 // Read a value for scalar arithmetic.
-ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, c_value_t const *value);
-
-// Clobber memory in the current scope.
-// If `do_load` is `true`, clobbered variables will be loaded. Otherwise, they will be stored.
-void c_clobber_memory(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, bool do_load);
-// Transfer affected local variables to registers and global variables to memory.
-// Only applies to variables that are aliased by a pointer.
-// Used before/after branching paths such as if statements.
-void c_create_branch_consistency(c_compiler_t *ctx, ir_code_t *code, c_scope_t *scope, set_t const *affected_vars);
-// Assume the variables are in the state that would be created by `c_create_branch_consistency`.
-void c_assume_branch_consistency(c_compiler_t *ctx, c_scope_t *scope, set_t const *affected_vars);
+ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
 
 // Compile an expression into IR.
 c_compile_expr_t

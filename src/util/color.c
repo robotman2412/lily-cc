@@ -3,6 +3,12 @@
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
-#pragma once
 
-#include "insn_proto.h"
+#include "color.h"
+
+
+
+#ifndef LILY_DISABLE_COLOR
+// Whether to enable color.
+bool do_color = true;
+#endif

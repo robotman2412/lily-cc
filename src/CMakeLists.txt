@@ -11,10 +11,11 @@ project(lily-cc)
 add_compile_options(
     -std=gnu17
     -O0 -ggdb
-    -Wall -Wno-parentheses -Wno-unused-function -Wno-missing-braces
-    -Werror=all -Werror=enum-conversion
-    -lbsd
+    -Wall -Wextra -Wno-type-limits -Wno-unused-function
+    -Werror=all -Werror=extra -Werror=enum-conversion
+    -DDLIST_CONSISTENCY_CHECK
 )
+add_link_options(-lbsd)
 
 
 add_subdirectory(util)

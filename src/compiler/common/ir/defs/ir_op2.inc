@@ -46,4 +46,6 @@ IR_OP2_DEF(bor)
 // Bitwise XOR.
 IR_OP2_DEF(bxor)
 
+// TODO: min, max
+
 #undef IR_OP2_DEF

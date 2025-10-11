@@ -12,7 +12,7 @@
 // Strong malloc; abort if out of memory.
 void *strong_malloc(size_t size);
 // Strong calloc; abort if out of memory.
-void *strong_calloc(size_t size, size_t count);
+void *strong_calloc(size_t nmemb, size_t size);
 // Strong realloc; abort if out of memory.
 void *strong_realloc(void *ptr, size_t size);
 // Strong stdup; abort if out of memory.

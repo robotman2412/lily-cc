@@ -6,7 +6,9 @@
 #include "c_tokenizer.h"
 
 #include "c_compiler.h"
+#include "compiler.h"
 #include "strong_malloc.h"
+#include "utf8.h"
 
 #include <arrays.h>
 #include <inttypes.h>
@@ -55,9 +57,9 @@ tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std) {
 
 
 // Comparator function for searching for keywords.
-static int keyw_comp(void const *_a, void const *_b) {
-    char const *a = *(char const *const *)_a;
-    char const *b = _b;
+static int keyw_comp(void const *a0, void const *b0) {
+    char const *a = *(char const *const *)a0;
+    char const *b = b0;
     return strcmp(a, b);
 }
 
@@ -76,7 +78,7 @@ token_t other_tkn(c_tokentype_t type, pos_t from, pos_t to) {
 
 // Test whether a character is legal as the first in a C identifier.
 bool c_is_first_sym_char(int c) {
-    if (c == '_' || c == '$') {
+    if (c == '_') {
         return true;
     }
     c |= 0x20;
@@ -85,9 +87,7 @@ bool c_is_first_sym_char(int c) {
 
 // Test whether a character is legal in a C identifier.
 bool c_is_sym_char(int c) {
-    if (c == '_' || c == '$') {
-        return true;
-    } else if (c >= '0' && c <= '9') {
+    if (c == '_' || (c >= '0' && c <= '9')) {
         return true;
     }
     c |= 0x20;
@@ -95,8 +95,8 @@ bool c_is_sym_char(int c) {
 }
 
 
-// Tokenize numeric constant.
-static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int base) {
+// Tokenize integer constant.
+static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int base) {
     uint64_t val      = 0;
     bool     hasdat   = false;
     bool     toolarge = false;
@@ -105,7 +105,7 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
     pos_t pos0 = ctx->pos;
     pos_t pos1;
     while (1) {
-        int digit;
+        unsigned int digit;
         pos1  = pos0;
         int c = srcfile_getc(ctx->file, &pos1);
         if (c >= '0' && c <= '9') {
@@ -114,9 +114,6 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         } else if ((c | 0x20) >= 'a' && (c | 0x20) <= 'f') {
             // Valid digit a-f / A-F.
             digit = (c | 0x20) - 'a' + 10;
-        } else if (c == '_' || (c | 0x20) >= 'g' && (c | 0x20) <= 'z') {
-            // Start of the suffix.
-            break;
         } else {
             // End of constant.
             break;
@@ -231,7 +228,7 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         .type       = TOKENTYPE_ICONST,
         .pos        = pos,
         .ival       = val,
-        .subtype    = c_prim - u_suffix,
+        .subtype    = (int)c_prim - u_suffix,
         .strval     = NULL,
         .strval_len = 0,
         .params_len = 0,
@@ -261,7 +258,7 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
             cap *= 2;
             ptr  = strong_realloc(ptr, cap);
         }
-        ptr[len++] = c;
+        ptr[len++] = (char)c;
         pos0       = pos1;
     }
     ptr[len] = 0;
@@ -333,6 +330,7 @@ static int c_str_hex(tokenizer_t *ctx, pos_t start_pos, int min_w, int max_w) {
 
 // Octal parsing helper for strings.
 static int c_str_octal(tokenizer_t *ctx, pos_t start_pos, int first, int max_w) {
+    (void)start_pos;
     int   value = first - '0';
     pos_t pos0  = ctx->pos;
     pos_t pos1;
@@ -358,8 +356,9 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
     char  *ptr = strong_malloc(cap);
 
     while (1) {
-        pos_t pos0 = ctx->pos;
-        int   c    = srcfile_getc(ctx->file, &ctx->pos);
+        pos_t pos0    = ctx->pos;
+        int   c       = srcfile_getc(ctx->file, &ctx->pos);
+        bool  as_utf8 = false;
         if (c == -1 || c == '\n') {
             cctx_diagnostic(
                 ctx->cctx,
@@ -382,7 +381,8 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
                 c = c_str_hex(ctx, start_pos, 8, 8);
             } else if (c == 'u') {
                 // 4-hexit unicode point.
-                c = c_str_hex(ctx, start_pos, 4, 4);
+                as_utf8 = true;
+                c       = c_str_hex(ctx, start_pos, 4, 4);
             } else if (c == 'x') {
                 // Hexadecimal (of any length (because of course that's logical (it isn't))).
                 c = c_str_hex(ctx, start_pos, 1, 32767);
@@ -412,18 +412,31 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
                 }
             }
         }
-        array_lencap_insert_strong(&ptr, 1, &len, &cap, &c, len);
+        if (as_utf8) {
+            uint8_t utf8_len = utf8_encode(NULL, 0, c);
+            array_lencap_resize_strong(&ptr, 1, &len, &cap, len + utf8_len);
+            utf8_encode(ptr - utf8_len, utf8_len, c);
+        } else {
+            uint8_t tmp = c;
+            array_lencap_insert_strong(&ptr, 1, &len, &cap, &tmp, len);
+        }
     }
 
+    pos_t pos = pos_between(start_pos, ctx->pos);
     if (is_char) {
         uint64_t val = 0;
         for (size_t i = 0; i < len; i++) {
             val <<= 8;
             val  |= ptr[i];
         }
+        if (len == 0) {
+            cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Empty character constant");
+        } else if (len > 1) {
+            cctx_diagnostic(ctx->cctx, pos, DIAG_WARN, "Multi-character character constant");
+        }
         free(ptr);
         return (token_t){
-            .pos        = pos_between(start_pos, ctx->pos),
+            .pos        = pos,
             .type       = TOKENTYPE_CCONST,
             .ival       = val,
             .strval     = NULL,
@@ -434,7 +447,7 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
     } else {
         array_lencap_insert_strong(&ptr, 1, &len, &cap, "", len);
         return (token_t){
-            .pos        = pos_between(start_pos, ctx->pos),
+            .pos        = pos,
             .type       = TOKENTYPE_SCONST,
             .strval     = ptr,
             .strval_len = len - 1,
@@ -472,10 +485,11 @@ static void c_block_comment(tokenizer_t *ctx) {
 // Get next token from C tokenizer.
 token_t c_tkn_next(tokenizer_t *ctx) {
     c_tokenizer_t *c_ctx = (c_tokenizer_t *)ctx;
+    pos_t          pos0;
 
 retry:
-    pos_t pos0 = ctx->pos;
-    int   c    = srcfile_getc(ctx->file, &ctx->pos);
+    pos0  = ctx->pos;
+    int c = srcfile_getc(ctx->file, &ctx->pos);
 #define pos1 ctx->pos
 
     if (c == -1) {
@@ -504,34 +518,27 @@ retry:
         if (c2 == 'x' || c2 == 'X') {
             // Hexadecimal.
             ctx->pos = pos2;
-            return c_tkn_numeric(ctx, pos0, 16);
+            return c_tkn_integer(ctx, pos0, 16);
         } else if (c2 == 'b' || c2 == 'B') {
             // GNU extension: Binary.
             ctx->pos = pos2;
-            return c_tkn_numeric(ctx, pos0, 2);
-        } else if (c2 >= '0' && c2 <= '9') {
-            // Octal.
-            return c_tkn_numeric(ctx, pos0, 8);
+            return c_tkn_integer(ctx, pos0, 2);
         } else {
-            // Just a zero.
-            return (token_t){
-                .type    = TOKENTYPE_ICONST,
-                .pos     = pos_between(pos0, pos1),
-                .ival    = 0,
-                .subtype = C_PRIM_SINT,
-            };
+            // Octal.
+            ctx->pos = pos0;
+            return c_tkn_integer(ctx, pos0, 8);
         }
     }
 
     // Decimal constants.
     if (c >= '1' && c <= '9') {
         ctx->pos = pos0;
-        return c_tkn_numeric(ctx, pos0, 10);
+        return c_tkn_integer(ctx, pos0, 10);
     }
 
     // Identifiers.
     if (c_is_sym_char(c)) {
-        return c_tkn_ident(ctx, pos0, c);
+        return c_tkn_ident(ctx, pos0, (char)c);
     }
 
     // Single-character tokens.
@@ -547,6 +554,7 @@ retry:
         case '{': return other_tkn(C_TKN_LCURL, pos0, pos1);
         case '}': return other_tkn(C_TKN_RCURL, pos0, pos1);
         case '~': return other_tkn(C_TKN_NOT, pos0, pos1);
+        default: break;
     }
 
     // Possibly multi-character tokens.

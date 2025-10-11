@@ -21,7 +21,7 @@ static char *test_c_expr_basic() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         return TEST_FAIL;
@@ -121,7 +121,7 @@ static char *test_c_expr_call() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         c_tkn_debug_print(expr);
@@ -149,7 +149,7 @@ static char *test_c_expr_deref() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         return TEST_FAIL;
@@ -177,7 +177,7 @@ static char *test_c_expr_cast() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         c_tkn_debug_print(token);
@@ -208,7 +208,7 @@ static char *test_c_type_funcptr() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         c_tkn_debug_print(token);
@@ -244,7 +244,7 @@ static char *test_c_type_struct() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         c_tkn_debug_print(token);
@@ -281,7 +281,7 @@ static char *test_c_type_enum() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         c_tkn_debug_print(token);
@@ -312,7 +312,7 @@ static char *test_c_stmt_decl() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         c_tkn_debug_print(decl);
@@ -356,7 +356,7 @@ static char *test_c_stmt_ctrl() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         c_tkn_debug_print(decl);
@@ -392,7 +392,7 @@ static char *test_c_function() {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
         c_tkn_debug_print(decl);

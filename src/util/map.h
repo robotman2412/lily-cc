@@ -8,17 +8,13 @@
 #include "hash.h"
 #include "list.h"
 
-#include <string.h>
 
 
-
-// Number of buckets in the hash map.
-#define MAP_BUCKETS   16
 // Create an empty hash map with C-string keys.
-#define STR_MAP_EMPTY ((map_t){{0}, 0, (void *)hash_cstr, (void *)strcmp, (void *)strdup, free})
+#define STR_MAP_EMPTY ((map_t){NULL, 0, 0, &str_map_vtable})
 // Create an empty hash map with pointer keys.
 // Whatever is being pointer to is expected to live at least as long as the map.
-#define PTR_MAP_EMPTY ((map_t){{0}, 0, hash_ptr, cmp_ptr, dup_nop, del_nop})
+#define PTR_MAP_EMPTY ((map_t){NULL, 0, 0, &ptr_map_vtable})
 
 // Iterate over all entries in the map.
 #define map_foreach(varname, map)                                                                                      \
@@ -27,26 +23,24 @@
 
 
 // Hash map.
-typedef struct map     map_t;
+typedef struct map        map_t;
 // Hash map entry.
-typedef struct map_ent map_ent_t;
+typedef struct map_ent    map_ent_t;
+// Hash map vtable.
+typedef struct map_vtable map_vtable_t;
 
 
 
 // Hash map.
 struct map {
     // Hash buckets; array of linked list of map_ent_t.
-    dlist_t buckets[MAP_BUCKETS];
+    dlist_t            *buckets;
+    // Current number of buckets.
+    size_t              buckets_len;
     // Current number of elements.
-    size_t  len;
-    // Key hashing function.
-    uint32_t (*key_hash)(void const *);
-    // Key comparison function; returns 0 if equal.
-    int (*key_cmp)(void const *, void const *);
-    // Key duplication function.
-    void *(*key_dup)(void const *);
-    // Key deletion function.
-    void (*key_del)(void *);
+    size_t              len;
+    // Map vtable.
+    map_vtable_t const *vtable;
 };
 
 // Hash map entry.
@@ -60,6 +54,23 @@ struct map_ent {
     // Value.
     void        *value;
 };
+
+// Hash map vtable.
+struct map_vtable {
+    // Key hashing function.
+    uint32_t (*key_hash)(void const *);
+    // Key comparison function; returns 0 if equal.
+    int (*key_cmp)(void const *, void const *);
+    // Key duplication function.
+    void *(*key_dup)(void const *);
+    // Key deletion function.
+    void (*key_del)(void *);
+};
+
+// Vtable for string maps.
+extern map_vtable_t const str_map_vtable;
+// Vtable for pointer maps.
+extern map_vtable_t const ptr_map_vtable;
 
 
 

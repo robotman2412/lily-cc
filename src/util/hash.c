@@ -46,5 +46,6 @@ void *dup_nop(void const *a) {
 
 
 // No-op delete function; does absolutely nothing.
-void del_nop(void *) {
+void del_nop(void *_) {
+    (void)_;
 }

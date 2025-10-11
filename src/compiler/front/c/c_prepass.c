@@ -6,6 +6,7 @@
 #include "c_prepass.h"
 
 #include "c_parser.h"
+#include "strong_malloc.h"
 
 
 
@@ -162,6 +163,9 @@ void c_prepass_decls(c_prepass_t *prepass, c_prescope_t *scope, c_prebranch_t *b
 
 // Pre-compilation pass for a single direct (abstract) declarator.
 void c_prepass_decl(c_prepass_t *prepass, c_prescope_t *scope, c_prebranch_t *branch, token_t const *decl) {
+    (void)prepass;
+    (void)scope;
+    (void)branch;
     while (1) {
         if (decl->type == TOKENTYPE_IDENT) {
             if (!map_get(&scope->locals, decl->strval)) {

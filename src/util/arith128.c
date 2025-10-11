@@ -5,6 +5,10 @@
 
 #include "arith128.h"
 
+#include <inttypes.h>
+#include <stdio.h>
+#include <string.h>
+
 #if !defined(__SIZEOF_INT128__) || defined(LILY_SOFT_INT128)
 
 typedef struct {
@@ -157,3 +161,63 @@ i128_t rem128s(i128_t lhs, i128_t rhs) {
 }
 
 #endif
+
+
+
+// Convert a 128-bit integer to decimal (unsigned).
+// Assumes a buffer of at least 40 bytes is provided.
+void itoa128(i128_t n, int decimals, char buf[static 40]) {
+    if (decimals > 39) {
+        decimals = 39;
+    } else if (decimals < 1) {
+        decimals = 1;
+    }
+
+    // 64-bit or smaller is done the easy way.
+    if (hi64(n) == 0) {
+        snprintf(buf, 39, "%0*" PRIu64, decimals, lo64(n));
+        return;
+    }
+
+    // Need to manually do 128-bit double dabble.
+    i128_t   dd_buf_lo = int128(0, hi64(n) >> 63);
+    uint32_t dd_buf_hi = 0;
+    n                  = shl128(n, 1);
+    for (int i = 0; i < 127; i++) {
+        // Do addition for BCD digits >= 5 with some clever bit masks.
+        // The topmost digit is excluded because it can never be 1.
+        uint32_t ge5_32  = 0x01111111 & ((dd_buf_hi >> 3) | ((dd_buf_hi >> 2) & ((dd_buf_hi >> 1) | dd_buf_hi)));
+        dd_buf_hi       += ge5_32 | (ge5_32 << 1);
+
+        // Same idea expanded to 128-bit arithmetic.
+        i128_t ge5_128 = and128(
+            int128(0x1111111111111111, 0x1111111111111111),
+            or128(shr128u(dd_buf_lo, 3), and128(shr128u(dd_buf_lo, 2), or128(shr128u(dd_buf_lo, 1), dd_buf_lo)))
+        );
+        dd_buf_lo = add128(dd_buf_lo, or128(ge5_128, shl128(ge5_128, 1)));
+
+        // Then shift everything left by one bit.
+        dd_buf_hi <<= 1;
+        dd_buf_hi  |= lo64(shr128u(dd_buf_lo, 127)) & 1;
+        dd_buf_lo   = shl128(dd_buf_lo, 1);
+        dd_buf_lo   = or128(dd_buf_lo, shr128u(n, 127));
+        n           = shl128(n, 1);
+    }
+
+    // Convert to ASCII decimal.
+    for (int i = 0; i < 7; i++) {
+        buf[6 - i] = (dd_buf_hi >> i * 4 & 0x0f) + '0';
+    }
+    for (int i = 0; i < 32; i++) {
+        buf[38 - i] = (lo64(shr128u(dd_buf_lo, i * 4)) & 0x0f) + '0';
+    }
+
+    // Remove unused decimal places.
+    int leading_zeroes = 0;
+    for (; leading_zeroes < 39 && buf[leading_zeroes] == '0'; leading_zeroes++);
+    int const max_leading_zeroes = 39 - decimals;
+    if (leading_zeroes > max_leading_zeroes) {
+        int remove = leading_zeroes - max_leading_zeroes;
+        memmove(buf, buf + remove, 40 - remove);
+    }
+}

@@ -6,8 +6,7 @@
 #include "c_compiler.h"
 #include "c_parser.h"
 
-#include <stdio.h>
-#include <stdlib.h>
+#include <string.h>
 
 static void compile_explain_type(char const *value) {
     // Create requisite contexts.
@@ -46,10 +45,12 @@ static void compile_explain_type(char const *value) {
     // Print diagnostics.
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
+        fflush(stdout);
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
+        fflush(stderr);
     }
     if (type_rc) {
         c_type_explain(type_rc->data, stdout);

@@ -5,9 +5,57 @@
 
 #include "ir/ir_interpreter.h"
 
+#include "arith128.h"
+#include "ir_types.h"
+
 #include <stdlib.h>
+#include <string.h>
 
 
+
+// Count how many bits are needed to represent the value.
+int ir_count_bits(ir_const_t iconst, bool allow_s, bool allow_u) {
+    if (iconst.prim_type == IR_PRIM_f32 || iconst.prim_type == IR_PRIM_f64) {
+        printf("[BUG] ir_count_bits with float value\n");
+        abort();
+    }
+
+    i128_t value = ir_trim_const(iconst).const128;
+    int    sign  = cmp128s(value, int128(0, 0));
+    if (sign == 0) {
+        return 0;
+    }
+
+    if (sign < 0 && allow_s) {
+        value = bneg128(value);
+    }
+    int bits;
+    if (hi64(value)) {
+        bits = 128 - __builtin_clzll(hi64(value));
+    } else {
+        bits = 64 - __builtin_clzll(lo64(value));
+    }
+
+    if (sign > 0 && !allow_u) {
+        bits++;
+    }
+
+    return bits;
+}
+
+// Count number of leading zeroes. Interprets all values as 128-bit.
+int ir_const_clz(ir_const_t value) {
+    if (value.prim_type == IR_PRIM_f32 || value.prim_type == IR_PRIM_f64) {
+        printf("[BUG] ir_const_clz with float value\n");
+        abort();
+    }
+
+    if (value.consth) {
+        return __builtin_clzll(value.consth);
+    } else {
+        return 64 + __builtin_clzll(value.constl);
+    }
+}
 
 // Count number of trailing zeroes.
 int ir_const_ctz(ir_const_t value) {
@@ -19,7 +67,7 @@ int ir_const_ctz(ir_const_t value) {
     if (value.constl) {
         return __builtin_ctzll(value.constl);
     } else {
-        return 64 + __builtin_ctzll(value.constl);
+        return 64 + __builtin_ctzll(value.consth);
     }
 }
 
@@ -51,7 +99,7 @@ int ir_const_popcnt(ir_const_t value) {
 
 // Whether a constant is negative.
 bool ir_const_is_negative(ir_const_t value) {
-    if (value.prim_type == IR_PRIM_bool) {
+    if (value.prim_type == IR_PRIM_bool) { // NOLINT.
         return false;
     } else if (value.prim_type == IR_PRIM_f32) {
         return value.constf32 < 0;
@@ -108,15 +156,15 @@ bool ir_const_lenient_identical(ir_const_t lhs, ir_const_t rhs) {
 ir_const_t ir_trim_const(ir_const_t value) {
     uint8_t bytes;
     switch (value.prim_type) {
-        case IR_PRIM_s8: bytes = 1; break;
+        case IR_PRIM_s8:
         case IR_PRIM_u8: bytes = 1; break;
-        case IR_PRIM_s16: bytes = 2; break;
+        case IR_PRIM_s16:
         case IR_PRIM_u16: bytes = 2; break;
-        case IR_PRIM_s32: bytes = 4; break;
+        case IR_PRIM_s32:
         case IR_PRIM_u32: bytes = 4; break;
         case IR_PRIM_s64: value.consth = -((int64_t)value.constl < 0); return value;
         case IR_PRIM_u64: value.consth = 0; return value;
-        case IR_PRIM_s128: return value;
+        case IR_PRIM_s128:
         case IR_PRIM_u128: return value;
         case IR_PRIM_bool:
             value.constl &= 1;
@@ -126,7 +174,7 @@ ir_const_t ir_trim_const(ir_const_t value) {
         case IR_PRIM_f64: bytes = 8; break;
         default: abort();
     }
-    value.constl &= (1llu << (8 * bytes)) - 1;
+    value.constl &= (1llu << (8 * bytes % 64)) - 1; // Intentional overflow.
     value.consth  = 0;
     if (!(value.prim_type & 1) && (value.constl & (1llu << (8 * bytes - 1)))) {
         value.consth  = -1llu;
@@ -150,9 +198,9 @@ ir_const_t ir_cast(ir_prim_t type, ir_const_t value) {
             value = ir_trim_const(value);
 #if defined(__SIZEOF_INT128__) && !defined(LILY_SOFT_INT128)
             if (value.prim_type <= IR_PRIM_u128 && (value.prim_type & 1)) {
-                value.constf64 = value.const128;
+                value.constf64 = (double)value.const128.val;
             } else {
-                value.constf64 = (__int128_t)value.const128;
+                value.constf64 = (double)(__int128_t)value.const128.val;
             }
 #else
             if (value.prim_type == IR_PRIM_s128 || value.prim_type == IR_PRIM_u128) {
@@ -173,14 +221,14 @@ ir_const_t ir_cast(ir_prim_t type, ir_const_t value) {
         return value;
     } else if (type == IR_PRIM_f64) {
         if (type == IR_PRIM_f32) {
-            value.constf32 = value.constf64;
+            value.constf32 = (float)value.constf64;
         } else {
             value = ir_trim_const(value);
 #if defined(__SIZEOF_INT128__) && !defined(LILY_SOFT_INT128)
             if (value.prim_type <= IR_PRIM_u128 && (value.prim_type & 1)) {
-                value.constf64 = value.const128;
+                value.constf64 = (double)value.const128.val;
             } else {
-                value.constf64 = (__int128_t)value.const128;
+                value.constf64 = (double)(__int128_t)value.const128.val;
             }
 #else
             if (value.prim_type == IR_PRIM_s128 || value.prim_type == IR_PRIM_u128) {
@@ -297,10 +345,10 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
             case IR_OP2_sge: out.constl = lhs.constf64 >= rhs.constf64; break;
             case IR_OP2_seq: out.constl = lhs.constf64 == rhs.constf64; break;
             case IR_OP2_sne: out.constl = lhs.constf64 != rhs.constf64; break;
-            case IR_OP2_add: out.constf32 = lhs.constf64 + rhs.constf64; break;
-            case IR_OP2_sub: out.constf32 = lhs.constf64 - rhs.constf64; break;
-            case IR_OP2_mul: out.constf32 = lhs.constf64 * rhs.constf64; break;
-            case IR_OP2_div: out.constf32 = lhs.constf64 / rhs.constf64; break;
+            case IR_OP2_add: out.constf64 = lhs.constf64 + rhs.constf64; break;
+            case IR_OP2_sub: out.constf64 = lhs.constf64 - rhs.constf64; break;
+            case IR_OP2_mul: out.constf64 = lhs.constf64 * rhs.constf64; break;
+            case IR_OP2_div: out.constf64 = lhs.constf64 / rhs.constf64; break;
             default:
                 fprintf(stderr, "[BUG] Invalid op2 type for f64: %s\n", ir_op2_names[oper]);
                 abort();
@@ -335,8 +383,8 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
             case IR_OP2_mul: out.const128 = mul128(lhs.const128, rhs.const128); break;
             case IR_OP2_div: out.const128 = div128u(lhs.const128, rhs.const128); break;
             case IR_OP2_rem: out.const128 = rem128u(lhs.const128, rhs.const128); break;
-            case IR_OP2_shl: out.const128 = shl128(lhs.const128, rhs.constl); break;
-            case IR_OP2_shr: out.const128 = shr128u(lhs.const128, rhs.constl); break;
+            case IR_OP2_shl: out.const128 = shl128(lhs.const128, (uint8_t)rhs.constl); break;
+            case IR_OP2_shr: out.const128 = shr128u(lhs.const128, (uint8_t)rhs.constl); break;
             case IR_OP2_band: out.const128 = and128(lhs.const128, rhs.const128); break;
             case IR_OP2_bor: out.const128 = or128(lhs.const128, rhs.const128); break;
             case IR_OP2_bxor: out.const128 = xor128(lhs.const128, rhs.const128); break;
@@ -356,8 +404,8 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
             case IR_OP2_mul: out.const128 = mul128(lhs.const128, rhs.const128); break;
             case IR_OP2_div: out.const128 = div128s(lhs.const128, rhs.const128); break;
             case IR_OP2_rem: out.const128 = rem128s(lhs.const128, rhs.const128); break;
-            case IR_OP2_shl: out.const128 = shl128(lhs.const128, rhs.constl); break;
-            case IR_OP2_shr: out.const128 = shr128s(lhs.const128, rhs.constl); break;
+            case IR_OP2_shl: out.const128 = shl128(lhs.const128, (uint8_t)rhs.constl); break;
+            case IR_OP2_shr: out.const128 = shr128s(lhs.const128, (uint8_t)rhs.constl); break;
             case IR_OP2_band: out.const128 = and128(lhs.const128, rhs.const128); break;
             case IR_OP2_bor: out.const128 = or128(lhs.const128, rhs.const128); break;
             case IR_OP2_bxor: out.const128 = xor128(lhs.const128, rhs.const128); break;
@@ -412,4 +460,50 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
         return out;
     }
     abort();
+}
+
+
+
+// Test whether to `ir_memref_t` are identical.
+static bool ir_memref_identical(ir_memref_t lhs, ir_memref_t rhs) {
+    if (lhs.base_type != rhs.base_type || lhs.offset != rhs.offset) {
+        return false;
+    }
+    switch (lhs.base_type) {
+        case IR_MEMBASE_ABS: return true;
+        case IR_MEMBASE_SYM: return !strcmp(lhs.base_sym, rhs.base_sym);
+        case IR_MEMBASE_FRAME: return lhs.base_frame == rhs.base_frame;
+        case IR_MEMBASE_CODE: return lhs.base_code == rhs.base_code;
+        case IR_MEMBASE_VAR: return lhs.base_var == rhs.base_var;
+        case IR_MEMBASE_REG: return lhs.base_regno == rhs.base_regno;
+    }
+    abort();
+}
+
+// Determine whether two operands are either the same variable or identical.
+// Floats will be compared bitwise.
+bool ir_operand_identical(ir_operand_t lhs, ir_operand_t rhs) {
+    if (lhs.type != rhs.type) {
+        return false;
+    }
+    switch (lhs.type) {
+        case IR_OPERAND_TYPE_VAR: return lhs.var == rhs.var;
+        case IR_OPERAND_TYPE_UNDEF: return false;
+        case IR_OPERAND_TYPE_MEM: return ir_memref_identical(lhs.mem, rhs.mem);
+        default: return ir_const_identical(lhs.iconst, rhs.iconst);
+    }
+}
+
+// Determines whether two operands are either the same variable or effectively identical after casting.
+// Floats are promoted to f64, then compared bitwise.
+bool ir_operand_lenient_identical(ir_operand_t lhs, ir_operand_t rhs) {
+    if (lhs.type != rhs.type) {
+        return false;
+    }
+    switch (lhs.type) {
+        case IR_OPERAND_TYPE_VAR: return lhs.var == rhs.var;
+        case IR_OPERAND_TYPE_UNDEF: return false;
+        case IR_OPERAND_TYPE_MEM: return ir_memref_identical(lhs.mem, rhs.mem);
+        default: return ir_const_lenient_identical(lhs.iconst, rhs.iconst);
+    }
 }

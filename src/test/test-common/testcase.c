@@ -29,13 +29,13 @@ static char *heap_sprintf(char const *fmt, ...) {
     return mem;
 }
 
-static void testcase_failed() {
+void testcase_failed() {
     asm("");
 }
 
 char *int_testcase_failed(char const *loc, long long value, char const *real) {
     testcase_failed();
-    return heap_sprintf("%s = %lld; expeted %s", loc, value, real);
+    return heap_sprintf("%s = %lld; expected %s", loc, value, real);
 }
 
 char *char_testcase_failed(char const *loc, int value, char const *real) {
@@ -64,5 +64,8 @@ void register_test_case(char *(*function)(), char const *id) {
     testcase_t *ent = malloc(sizeof(testcase_t));
     ent->function   = function;
     ent->id         = id;
-    map_set(&testcases, id, ent);
+    if (!map_set(&testcases, id, ent)) {
+        fprintf(stderr, "Out of memory\n");
+        abort();
+    }
 }

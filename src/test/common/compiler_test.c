@@ -35,7 +35,7 @@ static char *test_srcfile_ram() {
             off++;
             if (off == 12)
                 off++;
-            EXPECT_CHAR(c, *(data_exp++));
+            EXPECT_CHAR(c, (unsigned char)*(data_exp++));
         }
     }
 

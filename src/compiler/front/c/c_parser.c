@@ -11,8 +11,6 @@
 
 
 
-// Parse a parameter list.
-static token_t c_parse_param_list(c_parser_t *ctx);
 // Parse a direct (abstract) declaration.
 static token_t c_parse_ddecl(c_parser_t *ctx, bool requires_name, bool allows_name, bool is_typedef);
 // Parse an (abstract) declaration.
@@ -343,22 +341,21 @@ token_t c_parse_expr(c_parser_t *ctx) {
         pop_temporary_value;                                                                                           \
     })
     // Is this a specific type of token?
-#define is_tkn(depth, _subtype)                                                                                        \
-    (stack_len > depth && stack[stack_len - depth - 1].type == TOKENTYPE_OTHER                                         \
-     && stack[stack_len - depth - 1].subtype == _subtype)
+#define is_tkn(depth, subtype_)                                                                                        \
+    (stack_len > (depth) && stack[stack_len - (depth) - 1].type == TOKENTYPE_OTHER                                     \
+     && stack[stack_len - (depth) - 1].subtype == (subtype_))
     // Is this a specific type of AST node?
-#define is_ast(depth, _subtype)                                                                                        \
-    (stack_len > depth && stack[stack_len - depth - 1].type == TOKENTYPE_AST                                           \
-     && stack[stack_len - depth - 1].subtype == _subtype)
+#define is_ast(depth, subtype_)                                                                                        \
+    (stack_len > (depth) && stack[stack_len - (depth) - 1].type == TOKENTYPE_AST                                       \
+     && stack[stack_len - (depth) - 1].subtype == (subtype_))
     // Is this eligible as an operand?
-#define is_operand(depth) (stack_len > depth && is_operand_tkn(stack[stack_len - depth - 1]))
+#define is_operand(depth) (stack_len > (depth) && is_operand_tkn(stack[stack_len - (depth) - 1]))
 
     while (1) {
         peek          = tkn_peek(ctx->tkn_ctx);
         bool can_push = is_pushable_expr_tkn(peek);
 
         if (is_tkn(0, C_TKN_LBRAC)) { // Recursively parse indexing.
-            token_t tmp = tkn_peek(ctx->tkn_ctx);
             token_t idx = c_parse_expr(ctx);
             if (idx.type == TOKENTYPE_AST && idx.subtype == C_AST_GARBAGE) {
                 push(idx);
@@ -368,7 +365,7 @@ token_t c_parse_expr(c_parser_t *ctx) {
                 push(idx);
                 goto err;
             }
-            tmp = tkn_peek(ctx->tkn_ctx);
+            token_t tmp = tkn_peek(ctx->tkn_ctx);
             if (tmp.type != TOKENTYPE_OTHER || tmp.subtype != C_TKN_RBRAC) {
                 cctx_diagnostic(ctx->tkn_ctx->cctx, tmp.pos, DIAG_ERR, "Expected ]");
                 push(idx);
@@ -421,8 +418,9 @@ token_t c_parse_expr(c_parser_t *ctx) {
             push(ast_from_va(C_AST_EXPR_PREFIX, 2, op, val));
 
         } else if (is_operand(2) && is_operand(0) && oper_precedence(stack[stack_len - 2], false) >= 0
-                   && (!can_push || oper_precedence(stack[stack_len - 2], false) >= oper_precedence(peek, false)
-                   )) { // Reduce infix.
+                   && (!can_push
+                       || oper_precedence(stack[stack_len - 2], false)
+                              >= oper_precedence(peek, false))) { // Reduce infix.
             token_t rhs = pop();
             token_t op  = pop();
             token_t lhs = pop();
@@ -449,7 +447,7 @@ token_t c_parse_expr(c_parser_t *ctx) {
         return ast_from(C_AST_GARBAGE, stack_len, stack);
     } else {
         // Valid expression.
-        token_t tmp = *stack;
+        token_t tmp = *stack; // NOLINT.
         free(stack);
         return tmp;
     }
@@ -463,8 +461,8 @@ token_t c_parse_type_name(c_parser_t *ctx) {
         cctx_diagnostic(ctx->tkn_ctx->cctx, spec_qual.pos, DIAG_ERR, "`typedef` not allowed here");
     }
     token_t peek = tkn_peek(ctx->tkn_ctx);
-    if (peek.type == TOKENTYPE_OTHER
-            && (peek.subtype == C_TKN_MUL || peek.subtype == C_TKN_LBRAC || peek.subtype == C_TKN_LPAR)
+    if ((peek.type == TOKENTYPE_OTHER
+         && (peek.subtype == C_TKN_MUL || peek.subtype == C_TKN_LBRAC || peek.subtype == C_TKN_LPAR))
         || peek.subtype == TOKENTYPE_IDENT) {
         token_t decl       = c_parse_decl(ctx, false, false, false);
         bool    is_garbage = spec_qual.subtype == C_AST_GARBAGE || decl.subtype == C_AST_GARBAGE;
@@ -694,7 +692,7 @@ token_t c_parse_spec_qual_list(c_parser_t *ctx, bool *is_typedef_out) {
         if (is_type_specifier(peek) || is_type_qualifier(peek)
             || (peek.type == TOKENTYPE_IDENT
                 && (set_contains(&ctx->type_names, peek.strval)
-                    || ctx->func_body && set_contains(&ctx->local_type_names, peek.strval)))) {
+                    || (ctx->func_body && set_contains(&ctx->local_type_names, peek.strval))))) {
             if (peek.type == TOKENTYPE_KEYWORD && peek.subtype == C_KEYW_typedef && is_typedef_out) {
                 *is_typedef_out = true;
             }
@@ -887,12 +885,16 @@ token_t c_parse_enum_spec(c_parser_t *ctx) {
 
 // Parse a switch statement.
 static token_t c_parse_switch(c_parser_t *ctx) {
-    __builtin_trap();
+    (void)ctx;
+    fprintf(stderr, "[TODO] Create C switch statement parser\n");
+    abort();
 }
 
 // Parse a do...while statement.
 static token_t c_parse_do_while(c_parser_t *ctx) {
-    __builtin_trap();
+    (void)ctx;
+    fprintf(stderr, "[TODO] Create do...while statement parser\n");
+    abort();
 }
 
 // Parse a while statement.
@@ -1026,7 +1028,9 @@ static token_t c_parse_if(c_parser_t *ctx) {
 
 // Parse a goto statement.
 static token_t c_parse_goto(c_parser_t *ctx) {
-    __builtin_trap();
+    (void)ctx;
+    fprintf(stderr, "[TODO] Create goto statement parser\n");
+    abort();
 }
 
 // Parse a return statement.

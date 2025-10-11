@@ -83,6 +83,7 @@
     - `sizeof` and `alignof`
     - Operators ✓
     - Function calls ✓
+- Configurable parsing recursion limit
 
 ### C compiler
 - Types in expressions
@@ -103,14 +104,15 @@
 
 ## Generic codegen
 - Generic optimizations
-    - Known-value optimizations ✓
+    - Constant propagation ✓
     - Loop unrolling
-- IR support for memory
+    - Calculation deduplication
+    - Strength reduction ✓
+    - Mem2reg pass
+- IR support for memory ✓
     - Concept of stack frame ✓
-    - Concept of stack variable within such a frame
     - Instruction to get stack variable pointer ✓
     - Memory load/store ✓
-- Generic instruction selection code
 
 
 ## Backends

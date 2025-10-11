@@ -86,14 +86,11 @@
     - Loop unrolling
     - Calculation deduplication
     - Strength reduction ✓
-- IR support for memory
+    - Mem2reg pass
+- IR support for memory ✓
     - Concept of stack frame ✓
-    - Concept of stack variable within such a frame
     - Instruction to get stack variable pointer ✓
     - Memory load/store ✓
-    - Tying IR variables to stack frames
-    - Marking IR variables (when interpreted as pointers) as aliasing things
-- Generic instruction selection code
 
 
 ## Backends

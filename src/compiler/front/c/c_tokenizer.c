@@ -95,8 +95,8 @@ bool c_is_sym_char(int c) {
 }
 
 
-// Tokenize numeric constant.
-static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int base) {
+// Tokenize integer constant.
+static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int base) {
     uint64_t val      = 0;
     bool     hasdat   = false;
     bool     toolarge = false;
@@ -114,9 +114,6 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         } else if ((c | 0x20) >= 'a' && (c | 0x20) <= 'f') {
             // Valid digit a-f / A-F.
             digit = (c | 0x20) - 'a' + 10;
-        } else if (c == '_' || ((c | 0x20) >= 'g' && (c | 0x20) <= 'z')) {
-            // Start of the suffix.
-            break;
         } else {
             // End of constant.
             break;
@@ -231,7 +228,7 @@ static token_t c_tkn_numeric(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         .type       = TOKENTYPE_ICONST,
         .pos        = pos,
         .ival       = val,
-        .subtype    = c_prim - u_suffix,
+        .subtype    = (int)c_prim - u_suffix,
         .strval     = NULL,
         .strval_len = 0,
         .params_len = 0,
@@ -261,7 +258,7 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
             cap *= 2;
             ptr  = strong_realloc(ptr, cap);
         }
-        ptr[len++] = c;
+        ptr[len++] = (char)c;
         pos0       = pos1;
     }
     ptr[len] = 0;
@@ -521,27 +518,27 @@ retry:
         if (c2 == 'x' || c2 == 'X') {
             // Hexadecimal.
             ctx->pos = pos2;
-            return c_tkn_numeric(ctx, pos0, 16);
+            return c_tkn_integer(ctx, pos0, 16);
         } else if (c2 == 'b' || c2 == 'B') {
             // GNU extension: Binary.
             ctx->pos = pos2;
-            return c_tkn_numeric(ctx, pos0, 2);
+            return c_tkn_integer(ctx, pos0, 2);
         } else {
             // Octal.
             ctx->pos = pos0;
-            return c_tkn_numeric(ctx, pos0, 8);
+            return c_tkn_integer(ctx, pos0, 8);
         }
     }
 
     // Decimal constants.
     if (c >= '1' && c <= '9') {
         ctx->pos = pos0;
-        return c_tkn_numeric(ctx, pos0, 10);
+        return c_tkn_integer(ctx, pos0, 10);
     }
 
     // Identifiers.
     if (c_is_sym_char(c)) {
-        return c_tkn_ident(ctx, pos0, c);
+        return c_tkn_ident(ctx, pos0, (char)c);
     }
 
     // Single-character tokens.
@@ -557,6 +554,7 @@ retry:
         case '{': return other_tkn(C_TKN_LCURL, pos0, pos1);
         case '}': return other_tkn(C_TKN_RCURL, pos0, pos1);
         case '~': return other_tkn(C_TKN_NOT, pos0, pos1);
+        default: break;
     }
 
     // Possibly multi-character tokens.

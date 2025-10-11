@@ -273,7 +273,7 @@ static bool const_prop_expr(ir_insn_t *expr) {
     } else if (expr->type == IR_INSN_EXPR1 && expr->operands[0].type != IR_OPERAND_TYPE_CONST
                && expr->returns[0]->prim_type == expr->operands[0].var->prim_type && expr->op1 == IR_OP1_mov) {
         // Move between two variables of the same type; replace the destination.
-        ir_var_replace(expr->returns[0], (ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .var = expr->operands[0].var});
+        ir_var_replace(expr->returns[0], IR_OPERAND_VAR(expr->operands[0].var));
         ir_var_delete(expr->returns[0]);
         return true;
 

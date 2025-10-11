@@ -112,10 +112,10 @@ diagnostic_t *cctx_diagnostic(cctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const
 // Print a diagnostic.
 void print_diagnostic(diagnostic_t const *diag, FILE *to) {
     char const *const color[] = {
-        [DIAG_ERR]  = ANSI_RED_FG,
-        [DIAG_WARN] = ANSI_YELLOW_FG,
-        [DIAG_INFO] = ANSI_BLUE_FG,
-        [DIAG_HINT] = ANSI_MAGENTA_FG,
+        [DIAG_ERR]  = ANSI_BOLD  ANSI_RED_FG,
+        [DIAG_WARN] = ANSI_BOLD ANSI_YELLOW_FG,
+        [DIAG_INFO] = ANSI_BOLD ANSI_BLUE_FG,
+        [DIAG_HINT] = ANSI_BOLD ANSI_MAGENTA_FG,
     };
     char const *const prefix[] = {
         [DIAG_ERR]  = "error",
@@ -161,7 +161,7 @@ void print_diagnostic(diagnostic_t const *diag, FILE *to) {
         if (off == diag->pos.off + diag->pos.len) {
             color_fputs(ANSI_DEFAULT, to);
         } else if (off == diag->pos.off) {
-            color_fputs(ANSI_BOLD ANSI_RED_FG, to);
+            color_fputs(color[diag->lvl], to);
         }
         int c = srcfile_getc_raw(pos.srcfile, &off);
         if (c < 0) {
@@ -177,7 +177,7 @@ void print_diagnostic(diagnostic_t const *diag, FILE *to) {
             }
             fputs("      | ", to);
             if (draw) {
-                color_fputs(ANSI_BOLD ANSI_RED_FG, to);
+                color_fputs(color[diag->lvl], to);
             }
             for (int y = line_start; y < off; y++) {
                 if (y == diag->pos.off + diag->pos.len) {
@@ -185,7 +185,7 @@ void print_diagnostic(diagnostic_t const *diag, FILE *to) {
                     fputc(' ', to);
                     draw = false;
                 } else if (y == diag->pos.off) {
-                    color_fputs(ANSI_BOLD ANSI_RED_FG, to);
+                    color_fputs(color[diag->lvl], to);
                     fputc('^', to);
                     draw = true;
                 } else {
@@ -205,7 +205,7 @@ void print_diagnostic(diagnostic_t const *diag, FILE *to) {
             line++;
             fprintf(to, "%5d | ", line);
             if (draw) {
-                color_fputs(ANSI_BOLD ANSI_RED_FG, to);
+                color_fputs(color[diag->lvl], to);
             }
         }
     }

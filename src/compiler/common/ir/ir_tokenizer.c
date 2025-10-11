@@ -51,9 +51,7 @@ static token_t other_tkn(ir_tokentype_t type, pos_t from, pos_t to) {
 
 // Test whether a character is legal in an IR identifier.
 static inline bool ir_is_sym_char(int c) {
-    if (c == '_') {
-        return true;
-    } else if (c >= '0' && c <= '9') {
+    if (c == '_' || (c >= '0' && c <= '9')) {
         return true;
     }
     c |= 0x20;
@@ -167,9 +165,7 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
     } else {
         // Check for overflow (unsigned edition).
         i128_t const max_val = add128(shl128(int128(0, 1), bitcount), neg128(int128(0, 1)));
-        if (is_negative) {
-            toolarge = true;
-        } else if (cmp128u(val, max_val)) {
+        if (is_negative || cmp128u(val, max_val) > 0) {
             toolarge = true;
         }
 
@@ -182,16 +178,34 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
     }
 
     // If the value is out of range, add a warning showing the actual value used.
-    if (toolarge) {
+    if (prim == IR_PRIM_bool) {
+        cctx_diagnostic(
+            ctx->cctx,
+            pos,
+            DIAG_ERR,
+            "Invalid bool constant; use `%s` instead",
+            lo64(val) || hi64(val) ? "true" : "false"
+        );
+        val = int128(0, lo64(val) || hi64(val));
+    } else if (toolarge) {
         bool   val_u_negative = false;
         i128_t val_u;
         if (is_signed && hi64(val) >> 63) {
-            val_u = neg128(val);
+            val_u          = neg128(val);
+            val_u_negative = true;
         } else {
             val_u = val;
         }
         char as_dec_str[40];
         itoa128(val_u, 0, as_dec_str);
+
+        i128_t val_trunc;
+        if (ir_prim_sizes[prim] == 8) {
+            val_trunc = int128(0, lo64(val));
+        } else if (ir_prim_sizes[prim] < 16) {
+            val_trunc = int128(0, lo64(val) % (1llu << (8 * ir_prim_sizes[prim])));
+        }
+
         cctx_diagnostic(
             ctx->cctx,
             pos,
@@ -199,13 +213,10 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
             "Constant is out of range and was truncated to %s%s (0x%.0" PRIx64 "%0*" PRIx64 ")",
             val_u_negative ? "-" : "",
             as_dec_str,
-            hi64(val),
-            hi64(val) != 0 ? 16 : 1,
-            lo64(val)
+            hi64(val_trunc),
+            hi64(val_trunc) != 0 ? 16 : 1,
+            lo64(val_trunc)
         );
-    }
-    if (prim == IR_PRIM_bool) {
-        cctx_diagnostic(ctx->cctx, pos, DIAG_WARN, "Consider using `%s` instead", lo64(val) ? "true" : "false");
     }
 
     return (token_t){
@@ -492,12 +503,12 @@ retry:
     // Identifiers.
     if (c == '%') {
         c             = srcfile_getc(ctx->file, &pos1);
-        token_t ident = ir_tkn_ident(ctx, pos0, c, false);
+        token_t ident = ir_tkn_ident(ctx, pos0, (char)c, false);
         ident.subtype = IR_IDENT_LOCAL;
         return ident;
     } else if (c == '<') {
         c             = srcfile_getc(ctx->file, &pos1);
-        token_t ident = ir_tkn_ident(ctx, pos0, c, false);
+        token_t ident = ir_tkn_ident(ctx, pos0, (char)c, false);
         ident.subtype = IR_IDENT_GLOBAL;
         pos_t pos2    = pos1;
         c             = srcfile_getc(ctx->file, &pos2);
@@ -510,7 +521,7 @@ retry:
         return ident;
     } else if (ir_is_sym_char(c)) {
         // Without a prefix, it's a keyword.
-        token_t kw = ir_tkn_ident(ctx, pos0, c, true);
+        token_t kw = ir_tkn_ident(ctx, pos0, (char)c, true);
         if (kw.type != TOKENTYPE_KEYWORD) {
             return kw;
         }
@@ -598,6 +609,7 @@ retry:
         case '=': return other_tkn(IR_TKN_ASSIGN, pos0, pos1);
         case '+': return other_tkn(IR_TKN_ADD, pos0, pos1);
         case '-': return other_tkn(IR_TKN_SUB, pos0, pos1);
+        default: break;
     }
 
     // At this point, it's garbage.

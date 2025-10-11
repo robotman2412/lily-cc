@@ -5,12 +5,57 @@
 
 #include "ir/ir_interpreter.h"
 
+#include "arith128.h"
 #include "ir_types.h"
 
 #include <stdlib.h>
 #include <string.h>
 
 
+
+// Count how many bits are needed to represent the value.
+int ir_count_bits(ir_const_t iconst, bool allow_s, bool allow_u) {
+    if (iconst.prim_type == IR_PRIM_f32 || iconst.prim_type == IR_PRIM_f64) {
+        printf("[BUG] ir_count_bits with float value\n");
+        abort();
+    }
+
+    i128_t value = ir_trim_const(iconst).const128;
+    int    sign  = cmp128s(value, int128(0, 0));
+    if (sign == 0) {
+        return 0;
+    }
+
+    if (sign < 0 && allow_s) {
+        value = bneg128(value);
+    }
+    int bits;
+    if (hi64(value)) {
+        bits = 128 - __builtin_clzll(hi64(value));
+    } else {
+        bits = 64 - __builtin_clzll(lo64(value));
+    }
+
+    if (sign > 0 && !allow_u) {
+        bits++;
+    }
+
+    return bits;
+}
+
+// Count number of leading zeroes. Interprets all values as 128-bit.
+int ir_const_clz(ir_const_t value) {
+    if (value.prim_type == IR_PRIM_f32 || value.prim_type == IR_PRIM_f64) {
+        printf("[BUG] ir_const_clz with float value\n");
+        abort();
+    }
+
+    if (value.consth) {
+        return __builtin_clzll(value.consth);
+    } else {
+        return 64 + __builtin_clzll(value.constl);
+    }
+}
 
 // Count number of trailing zeroes.
 int ir_const_ctz(ir_const_t value) {
@@ -421,15 +466,16 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
 
 // Test whether to `ir_memref_t` are identical.
 static bool ir_memref_identical(ir_memref_t lhs, ir_memref_t rhs) {
-    if (lhs.rel_type != rhs.rel_type || lhs.offset != rhs.offset) {
+    if (lhs.base_type != rhs.base_type || lhs.offset != rhs.offset) {
         return false;
     }
-    switch (lhs.rel_type) {
-        case IR_MEMREL_ABS: return true;
-        case IR_MEMREL_SYM: return !strcmp(lhs.base_sym, rhs.base_sym);
-        case IR_MEMREL_FRAME: return lhs.base_frame == rhs.base_frame;
-        case IR_MEMREL_CODE: return lhs.base_code == rhs.base_code;
-        case IR_MEMREL_VAR: return lhs.base_var == rhs.base_var;
+    switch (lhs.base_type) {
+        case IR_MEMBASE_ABS: return true;
+        case IR_MEMBASE_SYM: return !strcmp(lhs.base_sym, rhs.base_sym);
+        case IR_MEMBASE_FRAME: return lhs.base_frame == rhs.base_frame;
+        case IR_MEMBASE_CODE: return lhs.base_code == rhs.base_code;
+        case IR_MEMBASE_VAR: return lhs.base_var == rhs.base_var;
+        case IR_MEMBASE_REG: return lhs.base_regno == rhs.base_regno;
     }
     abort();
 }

@@ -32,7 +32,7 @@
             ir_var_t *name = (operand).var;                                                                            \
             action                                                                                                     \
         } else if ((operand).type == IR_OPERAND_TYPE_MEM) {                                                            \
-            if ((operand).mem.rel_type == IR_MEMREL_VAR) {                                                             \
+            if ((operand).mem.base_type == IR_MEMBASE_VAR) {                                                           \
                 ir_var_t *name = (operand).mem.base_var;                                                               \
                 action                                                                                                 \
             }                                                                                                          \
@@ -325,7 +325,7 @@ static void replace_insn_var(ir_insn_t *insn, ir_var_t *from, ir_var_t *to) {
             insn->operands[i].var = to;
             set_add(&to->used_at, insn);
         } else if (insn->operands[i].type == IR_OPERAND_TYPE_MEM) {
-            if (insn->operands[i].mem.rel_type == IR_MEMREL_VAR && insn->operands[i].mem.base_var == from) {
+            if (insn->operands[i].mem.base_type == IR_MEMBASE_VAR && insn->operands[i].mem.base_var == from) {
                 insn->operands[i].mem.base_var = to;
                 set_add(&to->used_at, insn);
             }
@@ -549,7 +549,7 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
                 = insn->type == IR_INSN_COMBINATOR ? &insn->combinators[i].bind : &insn->operands[i];
             if (operand->type == IR_OPERAND_TYPE_VAR && operand->var == var) {
                 ir_insn_set_operand(insn, i, value);
-            } else if (operand->type == IR_OPERAND_TYPE_MEM && operand->mem.rel_type == IR_MEMREL_VAR
+            } else if (operand->type == IR_OPERAND_TYPE_MEM && operand->mem.base_type == IR_MEMBASE_VAR
                        && operand->mem.base_var == var) {
                 switch (value.type) {
                     case IR_OPERAND_TYPE_CONST:
@@ -585,7 +585,8 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
                         );
                         break;
 
-                    case IR_OPERAND_TYPE_MEM: __builtin_unreachable();
+                    case IR_OPERAND_TYPE_MEM:
+                    case IR_OPERAND_TYPE_REG: __builtin_unreachable();
                 }
             }
         }
@@ -604,7 +605,7 @@ ir_code_t *ir_code_create(ir_func_t *func, char const *name) {
     if (name) {
         code->name = strong_strdup(name);
     } else {
-        char const *fmt = "label%zu";
+        char const *fmt = "code%zu";
         size_t      len = snprintf(NULL, 0, fmt, func->code_list.len);
         code->name      = calloc(1, len + 1);
         snprintf(code->name, len + 1, fmt, func->code_list.len);
@@ -709,7 +710,7 @@ void ir_insn_delete(ir_insn_t *insn) {
         for (size_t i = 0; i < insn->combinators_len; i++) {
             ir_unmark_used(insn->combinators[i].bind, insn);
             if (insn->combinators[i].bind.type == IR_OPERAND_TYPE_MEM
-                && insn->combinators[i].bind.mem.rel_type == IR_MEMREL_SYM) {
+                && insn->combinators[i].bind.mem.base_type == IR_MEMBASE_SYM) {
                 free(insn->combinators[i].bind.mem.base_sym);
             }
         }
@@ -717,7 +718,7 @@ void ir_insn_delete(ir_insn_t *insn) {
     } else {
         for (size_t i = 0; i < insn->operands_len; i++) {
             ir_unmark_used(insn->operands[i], insn);
-            if (insn->operands[i].type == IR_OPERAND_TYPE_MEM && insn->operands[i].mem.rel_type == IR_MEMREL_SYM) {
+            if (insn->operands[i].type == IR_OPERAND_TYPE_MEM && insn->operands[i].mem.base_type == IR_MEMBASE_SYM) {
                 free(insn->operands[i].mem.base_sym);
             }
         }
@@ -737,13 +738,13 @@ void ir_insn_set_operand(ir_insn_t *insn, size_t index, ir_operand_t operand) {
 
     // Clean up old operand.
     ir_operand_t old = insn->type == IR_INSN_COMBINATOR ? insn->combinators[index].bind : insn->operands[index];
-    if (old.type == IR_OPERAND_TYPE_MEM && old.mem.rel_type == IR_MEMREL_SYM) {
+    if (old.type == IR_OPERAND_TYPE_MEM && old.mem.base_type == IR_MEMBASE_SYM) {
         free(old.mem.base_sym);
     }
     FOR_OPERAND_VARS(old, var, set_remove(&var->used_at, insn););
 
     // Install new operand.
-    if (operand.type == IR_OPERAND_TYPE_MEM && operand.mem.rel_type == IR_MEMREL_SYM) {
+    if (operand.type == IR_OPERAND_TYPE_MEM && operand.mem.base_type == IR_MEMBASE_SYM) {
         operand.mem.base_sym = strong_strdup(operand.mem.base_sym);
     }
     FOR_OPERAND_VARS(operand, var, set_add(&var->used_at, insn););
@@ -866,7 +867,7 @@ static ir_insn_t *
     }
     for (size_t i = 0; i < operands_len; i++) {
         ir_mark_used(insn->operands[i], insn);
-        if (insn->operands[i].type == IR_OPERAND_TYPE_MEM && insn->operands[i].mem.rel_type == IR_MEMREL_SYM) {
+        if (insn->operands[i].type == IR_OPERAND_TYPE_MEM && insn->operands[i].mem.base_type == IR_MEMBASE_SYM) {
             insn->operands[i].mem.base_sym = strong_strdup(insn->operands[i].mem.base_sym);
         }
     }
@@ -1019,7 +1020,7 @@ ir_insn_t *ir_add_call(
 // Add an unconditional jump.
 ir_insn_t *ir_add_jump(ir_insnloc_t loc, ir_code_t *to) {
     ir_insn_t *insn
-        = ir_create_insn_va(loc, IR_INSN_JUMP, NULL, 1, IR_OPERAND_MEM(IR_MEMREF(IR_PRIM_u8, IR_BADDR_CODE(to))));
+        = ir_create_insn_va(loc, IR_INSN_JUMP, NULL, 1, IR_OPERAND_MEM(IR_MEMREF(IR_N_PRIM, IR_BADDR_CODE(to))));
     set_add(&ir_insnloc_code(loc)->succ, to);
     set_add(&to->pred, ir_insnloc_code(loc));
     return insn;
@@ -1036,7 +1037,7 @@ ir_insn_t *ir_add_branch(ir_insnloc_t loc, ir_operand_t cond, ir_code_t *to) {
         IR_INSN_BRANCH,
         NULL,
         2,
-        IR_OPERAND_MEM(IR_MEMREF(IR_PRIM_u8, IR_BADDR_CODE(to))),
+        IR_OPERAND_MEM(IR_MEMREF(IR_N_PRIM, IR_BADDR_CODE(to))),
         cond
     );
     set_add(&ir_insnloc_code(loc)->succ, to);

@@ -6,7 +6,6 @@
 #pragma once
 
 #include "backend.h"
-#include "cand_tree.h"
 #include "rv_misc.h"
 
 
@@ -22,8 +21,6 @@ struct rv_profile {
     backend_profile_t base;
     // Profile is RV*E.
     bool              is_rve;
-    // Instruction candidate tree.
-    cand_tree_t      *cand_tree;
     // Which extensions are enabled in this profile.
     bool              ext_enabled[RV_N_EXT];
 };
@@ -40,4 +37,6 @@ void               rv_init_codegen(backend_profile_t *profile);
 
 
 // The RISC-V backend.
-extern backend_t const rv_backend;
+extern backend_t const   rv_backend;
+// Table of RISC-V register names.
+extern char const *const rv_reg_names[];

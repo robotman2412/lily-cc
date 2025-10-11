@@ -10,4 +10,7 @@
 
 
 // Perform instruction selection.
-isel_t rv_isel(backend_profile_t *profile, ir_insn_t const *ir_insn);
+ir_insn_t *rv_isel(backend_profile_t *profile, ir_insn_t *ir_insn);
+
+// Post-isel pass that creates instructions for loading immediates where only registers are accepted.
+void rv_post_isel(backend_profile_t *profile, ir_func_t *func);

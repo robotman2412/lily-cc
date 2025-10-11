@@ -11,9 +11,7 @@
 #include "ir_interpreter.h"
 #include "ir_types.h"
 #include "list.h"
-#include "match_tree.h"
 #include "set.h"
-#include "sub_tree.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -35,14 +33,14 @@ static void cg_remove_jumps(ir_func_t *func) {
 // Select machine instructions for all IR instructions.
 static void cg_isel(backend_profile_t *profile, ir_code_t *code) {
     assert(code->func->enforce_ssa);
-    ir_insn_t *cur = container_of(code->insns.tail, ir_insn_t, node);
+    code->func->enforce_ssa = false;
+    ir_insn_t *cur          = container_of(code->insns.tail, ir_insn_t, node);
     while (cur) {
         if (cur->type != IR_INSN_MACHINE && cur->type != IR_INSN_COMBINATOR) {
-            isel_t res = profile->backend->isel(profile, cur);
-
-            if (res.sub == NULL) {
+            ir_insn_t *res = profile->backend->isel(profile, cur);
+            if (!res) {
                 fprintf(stderr, "[BUG] Backend cannot select an instruction for `");
-                ir_insn_serialize(cur, stderr);
+                ir_insn_serialize(cur, profile, stderr);
                 fprintf(stderr, "`\n");
                 set_t vars = PTR_SET_EMPTY;
                 for (size_t i = 0; i < cur->returns_len; i++) {
@@ -57,34 +55,14 @@ static void cg_isel(backend_profile_t *profile, ir_code_t *code) {
                     fprintf(stderr, "Note: %%%s is %s\n", var->name, ir_prim_names[var->prim_type]);
                 }
                 set_clear(&vars);
+                fflush(stderr);
                 abort();
             }
-
-            code->func->enforce_ssa = false;
-
-            // Promote necessary operands into registers.
-            for (size_t i = 0; i < res.sub->operands_len; i++) {
-                if (res.operand_regs[i] && res.operands[i].type != IR_OPERAND_TYPE_VAR) {
-                    ir_var_t *var = ir_var_create(cur->code->func, ir_operand_prim(res.operands[i]), NULL);
-                    ir_add_expr1(IR_BEFORE_INSN(cur), var, IR_OP1_mov, res.operands[i]);
-                    res.operands[i] = IR_OPERAND_VAR(var);
-                }
-            }
-
-            // Replace IR instructions with the machine instruction prototypes.
-            ir_insn_t *mach = insn_sub_insert(
-                IR_BEFORE_INSN(cur),
-                cur->returns_len ? cur->returns[0] : NULL,
-                res.sub->sub_tree,
-                res.operands
-            );
-            match_tree_del(res.sub->match_tree, cur);
-
-            code->func->enforce_ssa = true;
-            cur                     = mach;
+            cur = res;
         }
         cur = container_of(cur->node.previous, ir_insn_t, node);
     }
+    code->func->enforce_ssa = true;
 }
 
 // Replace arithmetic that is not supported with function calls.

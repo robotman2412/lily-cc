@@ -21,6 +21,18 @@ typedef enum __attribute__((packed)) {
     IR_N_PRIM,
 } ir_prim_t;
 
+// Whether a primitive is signed.
+static inline ir_prim_t ir_prim_is_signed(ir_prim_t prim) {
+    switch (prim) {
+        case IR_PRIM_s8:
+        case IR_PRIM_s16:
+        case IR_PRIM_s32:
+        case IR_PRIM_s64:
+        case IR_PRIM_s128: return true;
+        default: return false;
+    }
+}
+
 // Get unsigned counterpart of primitive.
 static inline ir_prim_t ir_prim_as_unsigned(ir_prim_t prim) {
     switch (prim) {
@@ -88,25 +100,29 @@ typedef enum __attribute__((packed)) {
     IR_OPERAND_TYPE_CONST,
     // Undefined variable.
     IR_OPERAND_TYPE_UNDEF,
-    // Variable / register.
+    // Compiler-managed register.
     IR_OPERAND_TYPE_VAR,
     // Memory location.
     IR_OPERAND_TYPE_MEM,
+    // A specific register.
+    IR_OPERAND_TYPE_REG,
 } ir_operand_type_t;
 
 // Things for the offset of a memory operand to be relative to.
 typedef enum __attribute__((packed)) {
     // Absolute (relative to 0).
-    IR_MEMREL_ABS,
+    IR_MEMBASE_ABS,
     // Relative to a symbol.
-    IR_MEMREL_SYM,
+    IR_MEMBASE_SYM,
     // Relative to a stack frame.
-    IR_MEMREL_FRAME,
+    IR_MEMBASE_FRAME,
     // Relative to a code block.
-    IR_MEMREL_CODE,
+    IR_MEMBASE_CODE,
+    // Relative to an IR variable's value.
+    IR_MEMBASE_VAR,
     // Relative to a register's value.
-    IR_MEMREL_VAR,
-} ir_memrel_t;
+    IR_MEMBASE_REG,
+} ir_membase_t;
 
 
 // IR stack frame.
@@ -227,9 +243,9 @@ struct ir_const {
 // IR memory reference.
 struct ir_memref {
     // What the offset is relative to.
-    ir_memrel_t rel_type;
+    ir_membase_t base_type;
     // What type of data to load.
-    ir_prim_t   data_type;
+    ir_prim_t    data_type;
     union {
         // Base address symbol.
         char       *base_sym;
@@ -239,21 +255,23 @@ struct ir_memref {
         ir_code_t  *base_code;
         // Base address IR variable.
         ir_var_t   *base_var;
+        // Base address register.
+        size_t      base_regno;
     };
     // Offset from base.
     int64_t offset;
 };
 
 // Absolute base address for `ir_memref_t` compound initializer.
-#define IR_BADDR_ABS()        .rel_type = IR_MEMREL_ABS
+#define IR_BADDR_ABS()        .base_type = IR_MEMBASE_ABS
 // Symbol base address for `ir_memref_t` compound initializer.
-#define IR_BADDR_SYM(sym)     .rel_type = IR_MEMREL_SYM, .base_sym = (sym)
+#define IR_BADDR_SYM(sym)     .base_type = IR_MEMBASE_SYM, .base_sym = (sym)
 // Stack frame base address for `ir_memref_t` compound initializer.
-#define IR_BADDR_FRAME(frame) .rel_type = IR_MEMREL_FRAME, .base_frame = (frame)
+#define IR_BADDR_FRAME(frame) .base_type = IR_MEMBASE_FRAME, .base_frame = (frame)
 // Code block base address for `ir_memref_t` compound initializer.
-#define IR_BADDR_CODE(code)   .rel_type = IR_MEMREL_CODE, .base_code = (code)
+#define IR_BADDR_CODE(code)   .base_type = IR_MEMBASE_CODE, .base_code = (code)
 // Variable base address for `ir_memref_t` compound initializer.
-#define IR_BADDR_VAR(var)     .rel_type = IR_MEMREL_VAR, .base_var = (var)
+#define IR_BADDR_VAR(var)     .base_type = IR_MEMBASE_VAR, .base_var = (var)
 
 // Create an `ir_memref_t` without offset.
 #define IR_MEMREF(data_type_, ...) ((ir_memref_t){.data_type = (data_type_), __VA_ARGS__})
@@ -272,6 +290,8 @@ struct ir_operand {
         ir_var_t   *var;
         // Memory location.
         ir_memref_t mem;
+        // Register index.
+        size_t      regno;
     };
 };
 
@@ -282,6 +302,7 @@ static inline ir_prim_t ir_operand_prim(ir_operand_t oper) {
         case IR_OPERAND_TYPE_UNDEF: return oper.undef_type;
         case IR_OPERAND_TYPE_VAR: return oper.var->prim_type;
         case IR_OPERAND_TYPE_MEM: return oper.mem.data_type;
+        case IR_OPERAND_TYPE_REG: break;
     }
     __builtin_unreachable();
 }
@@ -294,6 +315,8 @@ static inline ir_prim_t ir_operand_prim(ir_operand_t oper) {
 #define IR_OPERAND_VAR(var_)          ((ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = (var_)})
 // A memory location operand.
 #define IR_OPERAND_MEM(mem_)          ((ir_operand_t){.type = IR_OPERAND_TYPE_MEM, .mem = (mem_)})
+// A register operand.
+#define IR_OPERAND_REG(regno_)        ((ir_operand_t){.type = IR_OPERAND_TYPE_REG, .regno = (regno_)})
 
 // IR combinator code block -> variable map.
 struct ir_combinator {

@@ -264,9 +264,9 @@ static size_t tree_isel_match_proto(
 
         if (ir_operands[i]->type == IR_OPERAND_TYPE_MEM) {
             // TODO: Validate memory rules.
-            if (ir_operands[i]->mem.rel_type == IR_MEMREL_VAR && !rule.location_kinds.mem_regrel) {
+            if (ir_operands[i]->mem.base_type == IR_MEMBASE_VAR && !rule.location_kinds.mem_regrel) {
                 return 0;
-            } else if (ir_operands[i]->mem.rel_type != IR_MEMREL_VAR && !rule.location_kinds.mem_abs) {
+            } else if (ir_operands[i]->mem.base_type != IR_MEMBASE_VAR && !rule.location_kinds.mem_abs) {
                 return 0;
             }
         } else if (ir_operands[i]->type == IR_OPERAND_TYPE_VAR) {
@@ -414,7 +414,7 @@ static void tree_isel_add_candidates_insn(set_t *candidates, cand_tree_t const *
 
 
 // Match an instruction selection tree against IR in SSA form.
-isel_t
+ir_insn_t *
     cand_tree_isel(backend_profile_t *profile, cand_tree_t const *tree, ir_insn_t const *ir_insn, size_t operands_cap) {
     set_t candidates = PTR_SET_EMPTY;
 
@@ -444,19 +444,22 @@ isel_t
         }
     }
 
-    isel_t res = {0};
+    fprintf(stderr, "[TODO] finish cand_tree_isel");
+    abort();
+    (void)best_fit;
+    // isel_t res = {0};
 
-    if (best_fit) {
-        res.sub      = best_fit;
-        res.operands = calloc(best_fit->operands_len, sizeof(ir_operand_t));
-        for (size_t i = 0; i < best_fit->operands_len; i++) {
-            res.operands[i] = *best_operand[i];
-        }
-        res.operand_regs = best_reg;
-        free(best_operand);
-    }
+    // if (best_fit) {
+    //     res.sub      = best_fit;
+    //     res.operands = calloc(best_fit->operands_len, sizeof(ir_operand_t));
+    //     for (size_t i = 0; i < best_fit->operands_len; i++) {
+    //         res.operands[i] = *best_operand[i];
+    //     }
+    //     res.operand_regs = best_reg;
+    //     free(best_operand);
+    // }
 
-    set_clear(&candidates);
+    // set_clear(&candidates);
 
-    return res;
+    // return res;
 }

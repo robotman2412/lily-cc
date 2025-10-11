@@ -151,6 +151,7 @@ token_t ir_parse_insn(tokenizer_t *from) {
         token_t assign = tkn_next(from);
         if (assign.type != TOKENTYPE_OTHER || assign.subtype != IR_TKN_ASSIGN) {
             cctx_diagnostic(from->cctx, assign.pos, DIAG_ERR, "Expected =");
+            garbage = true;
         }
         if (returns.subtype == IR_AST_GARBAGE) {
             garbage = true;
@@ -320,13 +321,23 @@ token_t ir_parse_bind(tokenizer_t *from) {
     return ast_from_va(IR_AST_BIND, 2, tkn_next(from), tkn_next(from));
 }
 
+// Whether a token denotes the end of a list.
+static bool ir_is_list_end_token(token_t tkn) {
+    switch (tkn.type) {
+        case TOKENTYPE_EOL:
+        case TOKENTYPE_EOF: return true;
+        case TOKENTYPE_OTHER: return tkn.subtype == IR_TKN_ASSIGN;
+        default: return false;
+    }
+}
+
 // Helper for parsing comma-separated lists.
 static token_t ir_parse_list(tokenizer_t *from, token_t (*item_parser)(tokenizer_t *)) {
     size_t   arr_len = 1;
     size_t   arr_cap = 2;
     token_t *arr     = strong_calloc(arr_cap, sizeof(token_t));
-    bool     garbage = false;
     arr[0]           = item_parser(from);
+    bool garbage     = arr[0].type == TOKENTYPE_AST && arr[0].subtype == IR_AST_GARBAGE;
 
     while (true) {
         if (arr[arr_len - 1].type == TOKENTYPE_AST && arr[arr_len - 1].subtype == TOKENTYPE_GARBAGE) {
@@ -334,8 +345,7 @@ static token_t ir_parse_list(tokenizer_t *from, token_t (*item_parser)(tokenizer
             garbage = true;
         }
         token_t peek = tkn_peek(from);
-        if (peek.type == TOKENTYPE_EOL || peek.type == TOKENTYPE_EOF
-            || (peek.type == TOKENTYPE_OTHER && peek.subtype == IR_TKN_ASSIGN)) {
+        if (ir_is_list_end_token(peek)) {
             return ast_from(garbage ? IR_AST_GARBAGE : IR_AST_LIST, arr_len, arr);
         }
         ir_expect_comma(from);

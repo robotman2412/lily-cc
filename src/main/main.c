@@ -46,7 +46,7 @@ static void compile(char const *path) {
             ir_func_to_ssa(func);
             ir_optimize(func);
             printf("\n");
-            ir_func_serialize(func, stdout);
+            ir_func_serialize(func, NULL, stdout);
             ir_func_delete(func);
         } else {
             // Declarations.
@@ -59,10 +59,12 @@ static void compile(char const *path) {
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         printf("\n");
+        fflush(stdout);
         while (diag) {
-            print_diagnostic(diag);
+            print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
+        fflush(stderr);
     }
 
     // Clean up.

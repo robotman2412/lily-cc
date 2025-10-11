@@ -59,5 +59,5 @@ cand_tree_t *cand_tree_generate(size_t rules_len, insn_sub_t const *const *rules
 // Delete an instruction selection tree.
 void         cand_tree_delete(cand_tree_t *tree);
 // Match an instruction selection tree against IR in SSA form.
-isel_t
+ir_insn_t *
     cand_tree_isel(backend_profile_t *backend, cand_tree_t const *tree, ir_insn_t const *ir_insn, size_t operands_cap);

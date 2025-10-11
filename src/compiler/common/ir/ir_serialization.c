@@ -20,7 +20,6 @@
 #include "strong_malloc.h"
 #include "tokenizer.h"
 
-#include <asm-generic/errno-base.h>
 #include <assert.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -80,7 +79,7 @@ void ir_const_serialize(ir_const_t iconst, FILE *to) {
 }
 
 // Serialize an IR operand.
-void ir_operand_serialize(ir_operand_t operand, bool show_memop_type, FILE *to) {
+void ir_operand_serialize(ir_operand_t operand, backend_profile_t const *profile_opt, bool show_memop_type, FILE *to) {
     if (operand.type == IR_OPERAND_TYPE_CONST) {
         ir_const_serialize(operand.iconst, to);
     } else if (operand.type == IR_OPERAND_TYPE_MEM) {
@@ -89,16 +88,17 @@ void ir_operand_serialize(ir_operand_t operand, bool show_memop_type, FILE *to) 
         } else {
             fputc('(', to);
         }
-        switch (operand.mem.rel_type) {
-            case IR_MEMREL_ABS: break;
-            case IR_MEMREL_SYM: fprintf(to, "<%s>", operand.mem.base_sym); break;
-            case IR_MEMREL_FRAME: fprintf(to, "%%%s", operand.mem.base_frame->name); break;
-            case IR_MEMREL_CODE: fprintf(to, "%%%s", operand.mem.base_code->name); break;
-            case IR_MEMREL_VAR: fprintf(to, "%%%s", operand.mem.base_var->name); break;
+        switch (operand.mem.base_type) {
+            case IR_MEMBASE_ABS: break;
+            case IR_MEMBASE_SYM: fprintf(to, "<%s>", operand.mem.base_sym); break;
+            case IR_MEMBASE_FRAME: fprintf(to, "%%%s", operand.mem.base_frame->name); break;
+            case IR_MEMBASE_CODE: fprintf(to, "%%%s", operand.mem.base_code->name); break;
+            case IR_MEMBASE_VAR: fprintf(to, "%%%s", operand.mem.base_var->name); break;
+            case IR_MEMBASE_REG: fputs(profile_opt->gpr_names[operand.mem.base_regno], to); break;
         }
 
         // TODO: This implicitly assumes IR pointers to be 64-bit, but that information doesn't exist yet.
-        if (operand.mem.rel_type == IR_MEMREL_ABS) {
+        if (operand.mem.base_type == IR_MEMBASE_ABS) {
             ir_const_serialize(IR_CONST_U64(operand.mem.offset), to);
         } else if (operand.mem.offset) {
             fputs(" + ", to);
@@ -109,14 +109,19 @@ void ir_operand_serialize(ir_operand_t operand, bool show_memop_type, FILE *to) 
     } else if (operand.type == IR_OPERAND_TYPE_UNDEF) {
         fputs(ir_prim_names[operand.undef_type], to);
         fputs("'?", to);
-    } else {
+    } else if (operand.type == IR_OPERAND_TYPE_REG) {
+        fputc('$', to);
+        fputs(profile_opt->gpr_names[operand.regno], to);
+    } else if (operand.type == IR_OPERAND_TYPE_VAR) {
         fputc('%', to);
         fputs(operand.var->name, to);
+    } else {
+        __builtin_unreachable();
     }
 }
 
 // Serialize an IR instruction.
-void ir_insn_serialize(ir_insn_t *insn, FILE *to) {
+void ir_insn_serialize(ir_insn_t *insn, backend_profile_t const *profile_opt, FILE *to) {
     for (size_t i = 0; i < insn->returns_len; i++) {
         if (i) {
             fputs(", ", to);
@@ -152,7 +157,7 @@ void ir_insn_serialize(ir_insn_t *insn, FILE *to) {
                 fputs(", ", to);
             }
             printf("%%%s ", insn->combinators[i].prev->name);
-            ir_operand_serialize(insn->combinators[i].bind, true, to);
+            ir_operand_serialize(insn->combinators[i].bind, profile_opt, true, to);
         }
     } else {
         if (insn->operands_len) {
@@ -165,23 +170,23 @@ void ir_insn_serialize(ir_insn_t *insn, FILE *to) {
             if (i) {
                 fputs(", ", to);
             }
-            ir_operand_serialize(insn->operands[i], !hide_memop_type || i != 0, to);
+            ir_operand_serialize(insn->operands[i], profile_opt, !hide_memop_type || i != 0, to);
         }
     }
 }
 
 // Serialize an IR code block.
-void ir_code_serialize(ir_code_t *code, FILE *to) {
+void ir_code_serialize(ir_code_t *code, backend_profile_t const *profile_opt, FILE *to) {
     fprintf(to, "code %%%s\n", code->name);
     dlist_foreach_node(ir_insn_t, insn, &code->insns) {
         fputs("    ", to);
-        ir_insn_serialize(insn, to);
+        ir_insn_serialize(insn, profile_opt, to);
         fputc('\n', to);
     }
 }
 
 // Serialize an IR function.
-void ir_func_serialize(ir_func_t *func, FILE *to) {
+void ir_func_serialize(ir_func_t *func, backend_profile_t const *profile_opt, FILE *to) {
     if (!func->entry) {
         fprintf(stderr, "[BUG] IR function <%s> has no entrypoint\n", func->name);
         abort();
@@ -190,7 +195,7 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
     if (func->enforce_ssa) {
         fputs("ssa_", to);
     }
-    fprintf(to, "function <%s>\n", func->name);
+    fprintf(to, "function <%s>\n    entry %%%s\n", func->name, func->entry->name);
 
     ir_var_t *var = (ir_var_t *)func->vars_list.head;
     while (var) {
@@ -211,10 +216,8 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
     }
 
     dlist_foreach_node(ir_code_t, code, &func->code_list) {
-        ir_code_serialize(code, to);
+        ir_code_serialize(code, profile_opt, to);
     }
-
-    fprintf(to, "entry %%%s\n", func->entry->name);
 }
 
 
@@ -224,6 +227,9 @@ void ir_func_serialize(ir_func_t *func, FILE *to) {
 ir_func_t *ir_func_deserialize(tokenizer_t *from) {
     // Parse the function declaration.
     token_t const ast = ir_parse_func(from);
+    if (ast.type != TOKENTYPE_AST || ast.subtype != IR_AST_FUNCTION) {
+        return NULL;
+    }
 
     // Actually create the function.
     ir_func_t *func   = ir_func_create_empty(ast.params[1].strval);
@@ -294,14 +300,14 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                 cur_code = map_get(&func->code_by_name, stmt->params[0].strval);
             } break;
             case IR_AST_ARG: {
-                if (ast.params[0].type == TOKENTYPE_IDENT) {
-                    ir_arg_t arg = {.has_var = true, .var = get_by_name(var, ast.params[0])};
+                if (stmt->params[0].type == TOKENTYPE_IDENT) {
+                    ir_arg_t arg = {.has_var = true, .var = get_by_name(var, stmt->params[0])};
                     if (arg.var && arg.var->arg_index < 0) {
                         arg.var->arg_index = (ptrdiff_t)func->args_len;
                         array_len_insert_strong(&func->args, sizeof(ir_arg_t), &func->args_len, &arg, func->args_len);
                     }
                 } else {
-                    ir_arg_t arg = {.has_var = false, .type = ast.params[0].subtype - IR_KEYW_s8 + IR_PRIM_s8};
+                    ir_arg_t arg = {.has_var = false, .type = stmt->params[0].subtype - IR_KEYW_s8 + IR_PRIM_s8};
                     array_len_insert_strong(&func->args, sizeof(ir_arg_t), &func->args_len, &arg, func->args_len);
                 }
             } break;
@@ -371,19 +377,19 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                         }
                         // TODO: Set correct IR primitive type for this memref.
                         if (!base_tkn) {
-                            operand->mem.rel_type = IR_MEMREL_ABS;
+                            operand->mem.base_type = IR_MEMBASE_ABS;
                         } else if (base_tkn->subtype == IR_IDENT_GLOBAL) {
-                            operand->mem.base_sym = base_tkn->strval;
-                            operand->mem.rel_type = IR_MEMREL_SYM;
+                            operand->mem.base_sym  = base_tkn->strval;
+                            operand->mem.base_type = IR_MEMBASE_SYM;
                         } else if (map_get(&func->code_by_name, base_tkn->strval)) {
                             operand->mem.base_code = map_get(&func->code_by_name, base_tkn->strval);
-                            operand->mem.rel_type  = IR_MEMREL_CODE;
+                            operand->mem.base_type = IR_MEMBASE_CODE;
                         } else if (map_get(&func->frame_by_name, base_tkn->strval)) {
                             operand->mem.base_frame = map_get(&func->frame_by_name, base_tkn->strval);
-                            operand->mem.rel_type   = IR_MEMREL_FRAME;
+                            operand->mem.base_type  = IR_MEMBASE_FRAME;
                         } else if (map_get(&func->var_by_name, base_tkn->strval)) {
-                            operand->mem.base_var = map_get(&func->var_by_name, base_tkn->strval);
-                            operand->mem.rel_type = IR_MEMREL_VAR;
+                            operand->mem.base_var  = map_get(&func->var_by_name, base_tkn->strval);
+                            operand->mem.base_type = IR_MEMBASE_VAR;
                         } else {
                             cctx_diagnostic(
                                 from->cctx,
@@ -504,7 +510,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     operand0_jumpdest:
                         // First operand must be a memory operand without offset.
                         if (operands[0].type == IR_OPERAND_TYPE_MEM) {
-                            if (operands[0].mem.rel_type != IR_MEMREL_CODE) {
+                            if (operands[0].mem.base_type != IR_MEMBASE_CODE) {
                                 cctx_diagnostic(
                                     from->cctx,
                                     stmt->params[2].params[0].pos,
@@ -550,7 +556,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     case IR_KEYW_seqz:
                     case IR_KEYW_snez:
                         // Return type must be bool.
-                        if (returns[0]->prim_type != IR_PRIM_bool) {
+                        if (returns[0] && returns[0]->prim_type != IR_PRIM_bool) {
                             cctx_diagnostic(
                                 from->cctx,
                                 stmt->params[0].pos,
@@ -590,7 +596,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     operand_match:
                         // Operand must equal return type.
                         for (size_t i = 0; i < operands_len; i++) {
-                            if (ir_operand_prim(operands[i]) != returns[0]->prim_type) {
+                            if (returns[0] && ir_operand_prim(operands[i]) != returns[0]->prim_type) {
                                 cctx_diagnostic(
                                     from->cctx,
                                     stmt->params[2].params[i].pos,
@@ -656,9 +662,9 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                             ir_add_branch(IR_APPEND(cur_code), operands[1], operands[0].mem.base_code);
                             break;
 
-                        case IR_KEYW_load: ir_add_store(IR_APPEND(cur_code), operands[1], operands[0].mem); break;
+                        case IR_KEYW_load: ir_add_load(IR_APPEND(cur_code), returns[0], operands[0].mem); break;
 
-                        case IR_KEYW_store: ir_add_load(IR_APPEND(cur_code), returns[0], operands[0].mem); break;
+                        case IR_KEYW_store: ir_add_store(IR_APPEND(cur_code), operands[1], operands[0].mem); break;
 
                         case IR_KEYW_lea: ir_add_lea(IR_APPEND(cur_code), returns[0], operands[0].mem); break;
 

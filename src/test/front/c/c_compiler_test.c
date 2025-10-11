@@ -126,7 +126,7 @@ static char *test_c_compile_expr() {
             print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
-        ir_func_serialize(func, stdout);
+        ir_func_serialize(func, NULL, stdout);
         return TEST_FAIL;
     }
 
@@ -211,7 +211,7 @@ static char *test_c_compile_func() {
             print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
-        ir_func_serialize(func, stdout);
+        ir_func_serialize(func, NULL, stdout);
         return TEST_FAIL;
     }
 

@@ -129,7 +129,7 @@ ir_insn_t *ir_add_mach_insn(
 
 // If the instruction stores to a variable, returns the variable written to.
 static inline ir_var_t *ir_insn_get_dest(ir_insn_t const *insn) {
-    if (insn->returns_len) {
+    if (insn->returns_len == 1) {
         return insn->returns[0];
     } else {
         return NULL;

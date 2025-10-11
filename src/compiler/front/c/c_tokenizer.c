@@ -57,9 +57,9 @@ tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std) {
 
 
 // Comparator function for searching for keywords.
-static int keyw_comp(void const *_a, void const *_b) {
-    char const *a = *(char const *const *)_a;
-    char const *b = _b;
+static int keyw_comp(void const *a0, void const *b0) {
+    char const *a = *(char const *const *)a0;
+    char const *b = b0;
     return strcmp(a, b);
 }
 
@@ -87,9 +87,7 @@ bool c_is_first_sym_char(int c) {
 
 // Test whether a character is legal in a C identifier.
 bool c_is_sym_char(int c) {
-    if (c == '_') {
-        return true;
-    } else if (c >= '0' && c <= '9') {
+    if (c == '_' || (c >= '0' && c <= '9')) {
         return true;
     }
     c |= 0x20;
@@ -528,17 +526,10 @@ retry:
             // GNU extension: Binary.
             ctx->pos = pos2;
             return c_tkn_numeric(ctx, pos0, 2);
-        } else if (c2 >= '0' && c2 <= '9') {
-            // Octal.
-            return c_tkn_numeric(ctx, pos0, 8);
         } else {
-            // Just a zero.
-            return (token_t){
-                .type    = TOKENTYPE_ICONST,
-                .pos     = pos_between(pos0, pos1),
-                .ival    = 0,
-                .subtype = C_PRIM_SINT,
-            };
+            // Octal.
+            ctx->pos = pos0;
+            return c_tkn_numeric(ctx, pos0, 8);
         }
     }
 

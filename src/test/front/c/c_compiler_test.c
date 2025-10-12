@@ -3,6 +3,7 @@
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
+#include "c_compiler.h"
 #include "c_parser.h"
 #include "testcase.h"
 
@@ -14,18 +15,18 @@ static char *test_c_compile_type() {
     srcfile_t   *src      = srcfile_create(cctx, "<c_compile_type>", source, sizeof(source) - 1);
     tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
-    c_compiler_t cc       = {
-        .cctx = cctx,
-        .options = {
+
+    c_compiler_t *cc = c_compiler_create(
+        cctx,
+        (c_options_t){
             .c_std          = C_STD_def,
             .char_is_signed = true,
             .short16        = true,
             .int32          = true,
             .long64         = true,
             .size_type      = C_PRIM_ULONG,
-        },
-        .typedefs = STR_MAP_EMPTY,
-    };
+        }
+    );
 
     token_t decl = c_parse_decls(&pctx, false);
 
@@ -40,7 +41,7 @@ static char *test_c_compile_type() {
         return TEST_FAIL;
     }
 
-    rc_t inner = c_compile_spec_qual_list(&cc, &decl.params[0]);
+    rc_t inner = c_compile_spec_qual_list(cc, &decl.params[0], &cc->global_scope);
 
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
@@ -56,7 +57,7 @@ static char *test_c_compile_type() {
         return TEST_FAIL;
     }
 
-    rc_t full = c_compile_decl(&cc, &decl.params[1], inner, NULL);
+    rc_t full = c_compile_decl(cc, &decl.params[1], &cc->global_scope, inner, NULL);
 
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
@@ -74,6 +75,7 @@ static char *test_c_compile_type() {
 
     tkn_delete(decl);
     rc_delete(full);
+    c_compiler_destroy(cc);
     tkn_ctx_delete(tctx);
     cctx_delete(cctx);
     return TEST_OK;
@@ -82,20 +84,21 @@ LILY_TEST_CASE(test_c_compile_type)
 
 
 static char *test_c_compile_expr() {
-    char const    source[] = "1 + 2 * 3";
-    cctx_t       *cctx     = cctx_create();
-    srcfile_t    *src      = srcfile_create(cctx, "<c_compile_expr>", source, sizeof(source) - 1);
-    tokenizer_t  *tctx     = c_tkn_create(src, C_STD_def);
-    c_parser_t    pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
-    c_compiler_t *cc       = c_compiler_create(
+    char const   source[] = "1 + 2 * 3";
+    cctx_t      *cctx     = cctx_create();
+    srcfile_t   *src      = srcfile_create(cctx, "<c_compile_expr>", source, sizeof(source) - 1);
+    tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
+    c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
+
+    c_compiler_t *cc = c_compiler_create(
         cctx,
         (c_options_t){
-                  .c_std          = C_STD_def,
-                  .char_is_signed = true,
-                  .short16        = true,
-                  .int32          = true,
-                  .long64         = true,
-                  .size_type      = C_PRIM_ULONG,
+            .c_std          = C_STD_def,
+            .char_is_signed = true,
+            .short16        = true,
+            .int32          = true,
+            .long64         = true,
+            .size_type      = C_PRIM_ULONG,
         }
     );
     c_prepass_t dummy_prepass = {

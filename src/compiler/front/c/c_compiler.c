@@ -7,10 +7,17 @@
 
 #include "c_parser.h"
 #include "c_prepass.h"
+#include "c_tokenizer.h"
+#include "compiler.h"
 #include "ir.h"
 #include "ir/ir_interpreter.h"
 #include "ir_types.h"
+#include "map.h"
+#include "refcount.h"
 #include "strong_malloc.h"
+
+#include <stdio.h>
+#include <stdlib.h>
 
 
 // Guards against actual cleanup happening for the fake RC types.
@@ -27,26 +34,11 @@ c_compiler_t *c_compiler_create(cctx_t *cctx, c_options_t options) {
     cc->options                     = options;
     cc->global_scope.locals         = STR_MAP_EMPTY;
     cc->global_scope.locals_by_decl = PTR_MAP_EMPTY;
-
-    cc->prim_types[C_PRIM_BOOL].size    = 1;
-    cc->prim_types[C_PRIM_UCHAR].size   = 1;
-    cc->prim_types[C_PRIM_SCHAR].size   = 1;
-    cc->prim_types[C_PRIM_USHORT].size  = options.short16 ? 2 : 1;
-    cc->prim_types[C_PRIM_SSHORT].size  = options.short16 ? 2 : 1;
-    cc->prim_types[C_PRIM_UINT].size    = options.int32 ? 4 : 2;
-    cc->prim_types[C_PRIM_SINT].size    = options.int32 ? 4 : 2;
-    cc->prim_types[C_PRIM_ULONG].size   = options.long64 ? 8 : 4;
-    cc->prim_types[C_PRIM_SLONG].size   = options.long64 ? 8 : 4;
-    cc->prim_types[C_PRIM_ULLONG].size  = 8;
-    cc->prim_types[C_PRIM_SLLONG].size  = 8;
-    cc->prim_types[C_PRIM_FLOAT].size   = 4;
-    cc->prim_types[C_PRIM_DOUBLE].size  = 8;
-    cc->prim_types[C_PRIM_LDOUBLE].size = 8;
-    cc->prim_types[C_PRIM_VOID].size    = 0;
+    cc->global_scope.typedefs       = STR_MAP_EMPTY;
+    cc->global_scope.structs        = STR_MAP_EMPTY;
 
     for (size_t i = 0; i < C_N_PRIM; i++) {
         cc->prim_types[i].primitive = i;
-        cc->prim_types[i].align     = cc->prim_types[i].size;
         cc->prim_rcs[i].refcount    = 1;
         cc->prim_rcs[i].data        = &cc->prim_types[i];
         cc->prim_rcs[i].cleanup     = c_compiler_t_fake_cleanup;
@@ -68,25 +60,6 @@ void c_compiler_destroy(c_compiler_t *cc) {
 
 
 
-// Recursively calculate the layout of a `c_type_t`.
-static void c_type_calc_layout(c_compiler_t *ctx, c_type_t *type) {
-    if (type->primitive == C_COMP_POINTER) {
-        c_type_calc_layout(ctx, type->inner->data);
-        type->size  = ctx->prim_types[ctx->options.size_type].size;
-        type->align = ctx->prim_types[ctx->options.size_type].align;
-    } else if (type->primitive == C_COMP_ARRAY) {
-        c_type_calc_layout(ctx, type->inner->data);
-        type->align = ((c_type_t *)type->inner->data)->align;
-        type->size  = ((c_type_t *)type->inner->data)->size * 1; // TODO: Array bounds.
-    } else if (type->primitive == C_COMP_STRUCT || type->primitive == C_COMP_UNION) {
-        printf("TODO: Calculate inner layout of structs and unions.\n");
-        abort();
-    } else {
-        type->size  = ctx->prim_types[type->primitive].size;
-        type->align = ctx->prim_types[type->primitive].align;
-    }
-}
-
 // Clean up a `c_type_t`.
 static void c_type_free(c_type_t *type) {
     if (type->primitive == C_COMP_FUNCTION) {
@@ -107,9 +80,60 @@ static void c_type_free(c_type_t *type) {
     free(type);
 }
 
+// Compile the body of an enum definition.
+static void
+    c_compile_enum_body(c_compiler_t *ctx, token_t const *body, size_t body_len, c_scope_t *scope, c_comp_t *comp) {
+    comp->variants_len = body_len;
+    comp->variants     = calloc(body_len, sizeof(c_enumvar_t));
+
+    // TODO: Packed enums support.
+    int cur = 0;
+    for (size_t i = 0; i < body_len; i++, cur++) {
+        token_t const *name = &body[i].params[0];
+        if (body[i].params_len == 2) {
+            // Enum variant with specific index.
+            c_compile_expr_t res = c_compile_expr(ctx, NULL, NULL, scope, &body[i].params[1]);
+            if (res.res.value_type == C_RVALUE) {
+                cur = (int)ir_cast(c_prim_to_ir_type(ctx, C_PRIM_SINT), res.res.rvalue.iconst).constl;
+            }
+        }
+        if (map_get(&scope->locals, name->strval)) {
+            cctx_diagnostic(ctx->cctx, name->pos, DIAG_ERR, "Redefinition of %s", name->strval);
+            continue;
+        } else {
+            c_var_t *var      = strong_calloc(1, sizeof(c_var_t));
+            var->storage      = C_VAR_STORAGE_ENUM_VARIANT;
+            var->type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]);
+            var->enum_variant = cur;
+            map_set(&scope->locals, name->strval, var);
+            map_set(&scope->locals_by_decl, name, var);
+        }
+    }
+
+    comp->align = comp->size = ctx->options.int32 ? 4 : 2;
+}
+
+// Compile the body of a struct/union definition.
+static void
+    c_compile_struct_body(c_compiler_t *ctx, token_t const *body, size_t body_len, c_scope_t *scope, c_comp_t *comp) {
+    (void)ctx;
+    (void)body;
+    (void)body_len;
+    (void)scope;
+    (void)comp;
+    fprintf(stderr, "[TODO] c_compile_enum_body\n");
+    abort();
+}
+
+// Compile a C enum/struct/union specification.
+// Returns a refcount pointer of `c_comp_t`.
+static rc_t c_compile_struct_spec(c_compiler_t *ctx, token_t const *struct_spec, c_scope_t *scope) {
+}
+
+
 // Create a C type from a specifier-qualifer list.
 // Returns a refcount pointer of `c_type_t`.
-rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list) {
+rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t *scope) {
     token_t const *struct_tkn   = NULL;
     int            n_long       = 0;
     bool           has_int      = false;
@@ -176,14 +200,7 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list) {
 
     // C type parsing is messy, can't do much about that.
     if (struct_tkn) {
-        fprintf(stderr, "[TODO] C compiler doesn't support structs, enums or unions yet\n");
-        abort();
-        switch (struct_tkn->params[0].subtype) {
-            default: __builtin_unreachable();
-            case C_KEYW_struct: type->primitive = C_COMP_STRUCT; break;
-            case C_KEYW_union: type->primitive = C_COMP_UNION; break;
-            case C_KEYW_enum: type->primitive = C_COMP_ENUM; break;
-        }
+        rc_t struct_rc = c_compile_struct_spec(ctx, struct_tkn, scope);
     } else if (has_char) {
         if (has_unsigned || (!has_signed && !ctx->options.char_is_signed)) {
             type->primitive = C_PRIM_UCHAR;
@@ -251,17 +268,17 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list) {
     if (!struct_tkn
         && (n_long || has_int || has_short || has_char || has_float || has_double || has_void || has_bool
             || has_unsigned || has_signed)) {
-        cctx_diagnostic(ctx->cctx, list->pos, DIAG_ERR, "Invalid primitive type");
+        cctx_diagnostic(ctx->cctx, list->pos, DIAG_ERR, "Invalid combination of type specifiers");
     }
-
-    c_type_calc_layout(ctx, type);
 
     return rc;
 }
 
 // Create a C type and get the name from an (abstract) declarator.
 // Takes ownership of the `spec_qual_type` share passed.
-rc_t c_compile_decl(c_compiler_t *ctx, token_t const *decl, rc_t spec_qual_type, token_t const **name_out) {
+rc_t c_compile_decl(
+    c_compiler_t *ctx, token_t const *decl, c_scope_t *scope, rc_t spec_qual_type, token_t const **name_out
+) {
     rc_t cur = spec_qual_type;
     if (name_out) {
         *name_out = NULL;
@@ -275,7 +292,6 @@ rc_t c_compile_decl(c_compiler_t *ctx, token_t const *decl, rc_t spec_qual_type,
             if (name_out) {
                 *name_out = decl;
             }
-            c_type_calc_layout(ctx, cur->data);
             return cur;
 
         } else if (decl->type == TOKENTYPE_AST && decl->subtype == C_AST_NOP) {
@@ -296,11 +312,11 @@ rc_t c_compile_decl(c_compiler_t *ctx, token_t const *decl, rc_t spec_qual_type,
             for (size_t i = 0; i < decl->params_len - 1; i++) {
                 token_t const *param = &decl->params[i + 1];
                 if (param->subtype == C_AST_SPEC_QUAL_LIST) {
-                    func_type->func.args[i] = c_compile_spec_qual_list(ctx, param);
+                    func_type->func.args[i] = c_compile_spec_qual_list(ctx, param, scope);
                 } else {
                     token_t const *name_tmp;
-                    rc_t           list              = c_compile_spec_qual_list(ctx, &param->params[0]);
-                    func_type->func.args[i]          = c_compile_decl(ctx, &param->params[1], list, &name_tmp);
+                    rc_t           list              = c_compile_spec_qual_list(ctx, &param->params[0], scope);
+                    func_type->func.args[i]          = c_compile_decl(ctx, &param->params[1], scope, list, &name_tmp);
                     func_type->func.arg_names[i]     = strong_strdup(name_tmp->strval); // NOLINT.
                     func_type->func.arg_name_tkns[i] = name_tmp;
                 }
@@ -320,7 +336,6 @@ rc_t c_compile_decl(c_compiler_t *ctx, token_t const *decl, rc_t spec_qual_type,
                 decl = &decl->params[0];
             } else {
                 // No inner node.
-                c_type_calc_layout(ctx, next->data);
                 return next;
             }
 
@@ -330,8 +345,6 @@ rc_t c_compile_decl(c_compiler_t *ctx, token_t const *decl, rc_t spec_qual_type,
             rc_t      next       = rc_new_strong(strong_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
             c_type_t *next_type  = next->data;
             next_type->primitive = C_COMP_POINTER;
-            next_type->size      = ctx->prim_types[ctx->options.size_type].size;
-            next_type->align     = ctx->prim_types[ctx->options.size_type].align;
             next_type->inner     = cur;
 
             if (decl->params_len > 1 && decl->params[1].type == TOKENTYPE_AST
@@ -366,6 +379,9 @@ rc_t c_compile_decl(c_compiler_t *ctx, token_t const *decl, rc_t spec_qual_type,
             }
 
             cur = next;
+        } else if (decl->type == TOKENTYPE_AST && decl->subtype == C_AST_GARBAGE) {
+            rc_delete(cur);
+            return NULL;
         } else {
             abort();
         }
@@ -375,28 +391,41 @@ rc_t c_compile_decl(c_compiler_t *ctx, token_t const *decl, rc_t spec_qual_type,
 
 
 // Create a new scope.
-c_scope_t *c_scope_create(c_scope_t *parent) {
-    c_scope_t *new_scope      = strong_calloc(1, sizeof(c_scope_t));
-    new_scope->parent         = parent;
-    new_scope->depth          = parent->depth + 1;
-    new_scope->locals         = STR_MAP_EMPTY;
-    new_scope->locals_by_decl = PTR_MAP_EMPTY;
+c_scope_t c_scope_create(c_scope_t *parent) {
+    c_scope_t new_scope      = {0};
+    new_scope.parent         = parent;
+    new_scope.depth          = parent->depth + 1;
+    new_scope.locals         = STR_MAP_EMPTY;
+    new_scope.locals_by_decl = PTR_MAP_EMPTY;
+    new_scope.typedefs       = STR_MAP_EMPTY;
+    new_scope.structs        = STR_MAP_EMPTY;
     return new_scope;
 }
 
 // Clean up a scope.
-void c_scope_destroy(c_scope_t *scope) {
-    map_ent_t const *ent = map_next(&scope->locals, NULL);
+void c_scope_destroy(c_scope_t scope) {
+    // Delete local variables.
+    map_ent_t const *ent = map_next(&scope.locals, NULL);
     while (ent) {
-        // TODO: This probably needs to be changed with struct support.
         c_var_t *local = ent->value;
         rc_delete(local->type);
         free(local);
-        ent = map_next(&scope->locals, ent);
+        ent = map_next(&scope.locals, ent);
     }
-    map_clear(&scope->locals);
-    map_clear(&scope->locals_by_decl);
-    free(scope);
+    map_clear(&scope.locals);
+    map_clear(&scope.locals_by_decl);
+
+    // Delete typedefs.
+    map_foreach(ent, &scope.typedefs) {
+        rc_delete(ent->value);
+    }
+    map_clear(&scope.typedefs);
+
+    // Delete enums, structs and unions.
+    map_foreach(ent, &scope.structs) {
+        rc_delete(ent->value);
+    }
+    map_clear(&scope.structs);
 }
 
 // Look up a variable in scope.
@@ -427,10 +456,10 @@ c_var_t *c_scope_lookup_by_decl(c_scope_t *scope, token_t const *decl) {
 
 // Create a type that is a pointer to an existing type.
 rc_t c_type_pointer(c_compiler_t *ctx, rc_t inner) {
+    (void)ctx;
     c_type_t *data  = strong_calloc(1, sizeof(c_type_t));
     data->primitive = C_COMP_POINTER;
     data->inner     = inner;
-    data->size      = ctx->prim_types[ctx->options.size_type].size;
     return rc_new_strong(data, (void (*)(void *))c_type_free);
 }
 
@@ -457,6 +486,45 @@ rc_t c_type_promote(c_compiler_t *ctx, c_tokentype_t oper, rc_t a_rc, rc_t b_rc)
         // Otherwise, merely drop stuff like `volatile` and `const`.
         return rc_share(&ctx->prim_rcs[tmp->primitive]);
     }
+}
+
+// Get the alignment and size of a C type.
+bool c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out, uint64_t *align_out) {
+    c_prim_t prim = type->primitive;
+    if (prim == C_COMP_POINTER) {
+        prim = ctx->options.size_type;
+    }
+    switch (prim) {
+        case C_PRIM_BOOL:
+        case C_PRIM_UCHAR:
+        case C_PRIM_SCHAR: *align_out = *size_out = 1;
+        case C_PRIM_USHORT:
+        case C_PRIM_SSHORT: *align_out = *size_out = ctx->options.short16 ? 2 : 1;
+        case C_PRIM_UINT:
+        case C_PRIM_SINT: *align_out = *size_out = ctx->options.int32 ? 4 : 2;
+        case C_PRIM_ULONG:
+        case C_PRIM_SLONG: *align_out = *size_out = ctx->options.long64 ? 8 : 4;
+        case C_PRIM_ULLONG:
+        case C_PRIM_SLLONG: *align_out = *size_out = 8;
+        case C_PRIM_FLOAT: *align_out = *size_out = 4;
+        case C_PRIM_DOUBLE:
+        case C_PRIM_LDOUBLE: *align_out = *size_out = 8;
+        case C_PRIM_VOID: *align_out = 1; *size_out = 0;
+        case C_COMP_STRUCT:
+        case C_COMP_ENUM:
+        case C_COMP_UNION: {
+            c_comp_t *comp = type->comp->data;
+            if (comp->align == 0) {
+                return false;
+            }
+            *size_out  = comp->size;
+            *align_out = comp->align;
+        } break;
+        case C_COMP_POINTER: __builtin_unreachable();
+        case C_COMP_ARRAY: return false;
+        case C_COMP_FUNCTION: return false;
+    }
+    return true;
 }
 
 // Convert C binary operator to IR binary operator.
@@ -553,6 +621,9 @@ ir_operand_t c_cast_ir_operand(ir_code_t *code, ir_operand_t operand, ir_prim_t 
 // Clean up an lvalue or rvalue.
 void c_value_destroy(c_value_t value) {
     rc_delete(value.c_type);
+    if (value.value_type == C_LVALUE_MEM && value.lvalue.memref.base_type == IR_MEMBASE_SYM) {
+        free(value.lvalue.memref.base_sym);
+    }
 }
 
 // Write to an lvalue.
@@ -567,7 +638,7 @@ void c_value_write(c_compiler_t *ctx, ir_code_t *code, c_value_t const *lvalue, 
             printf("[BUG] c_value_write called with an `rvalue` destination");
             abort();
             break;
-        case C_LVALUE_PTR:
+        case C_LVALUE_MEM:
             // Store to the pointer.
             ir_add_store(IR_APPEND(code), tmp, lvalue->lvalue.memref);
             break;
@@ -592,7 +663,7 @@ ir_memref_t c_value_memref(c_compiler_t *ctx, ir_code_t *code, c_value_t const *
     }
 
     ir_memref_t memref;
-    if (lvalue->value_type == C_LVALUE_PTR) {
+    if (lvalue->value_type == C_LVALUE_MEM) {
         // Directly use the pointer from the lvalue.
         memref = lvalue->lvalue.memref;
 
@@ -619,7 +690,7 @@ ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *v
         case C_RVALUE:
             // Rvalues don't need any reading because they're already in an `ir_operand_t`.
             return value->rvalue;
-        case C_LVALUE_PTR: {
+        case C_LVALUE_MEM: {
             // Pointer lvalue is read from memory.
             ir_var_t *tmp = ir_var_create(code->func, c_type_to_ir_type(ctx, value->c_type->data), NULL);
             ir_add_load(IR_APPEND(code), tmp, c_value_memref(ctx, code, value));
@@ -631,6 +702,49 @@ ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *v
     }
 }
 
+// Create a local variable in a function.
+c_var_t *c_var_create(
+    c_compiler_t *ctx, c_prepass_t *prepass, ir_func_t *func, rc_t type_rc, token_t const *name_tkn, c_scope_t *scope
+) {
+    c_type_t *type = type_rc->data;
+
+    // Enforce that it is a complete type.
+    size_t size, align;
+    if (!c_type_get_size(ctx, type, &size, &align)) {
+        c_comp_t   *comp = type->comp->data;
+        char const *comp_var;
+        switch (comp->type) {
+            case C_COMP_TYPE_ENUM: comp_var = "enum"; break;
+            case C_COMP_TYPE_STRUCT: comp_var = "struct"; break;
+            case C_COMP_TYPE_UNION: comp_var = "union"; break;
+        }
+        cctx_diagnostic(ctx->cctx, name_tkn->pos, DIAG_ERR, "Use of incomplete type %s %s", comp_var, comp->name);
+        return NULL;
+    }
+
+    if (map_get(&scope->locals, name_tkn->strval)
+        || (scope->local_exclusive && scope->parent && map_get(&scope->parent->locals, name_tkn->strval))) {
+        cctx_diagnostic(ctx->cctx, name_tkn->pos, DIAG_ERR, "Redefinition of %s", name_tkn->strval);
+        return NULL;
+    }
+
+    // Can create a valid local variable.
+    c_var_t *var = calloc(1, sizeof(c_var_t));
+
+    if (set_contains(&prepass->pointer_taken, name_tkn)) {
+        var->storage = C_VAR_STORAGE_FRAME;
+        var->frame   = ir_frame_create(func, size, align, NULL);
+    } else {
+        var->storage = C_VAR_STORAGE_REG;
+        var->ir_var  = ir_var_create(func, c_type_to_ir_type(ctx, type), NULL);
+    }
+
+    map_set(&scope->locals, name_tkn->strval, var);
+    map_set(&scope->locals_by_decl, name_tkn, var);
+
+    return var;
+}
+
 
 
 // Compile an expression into IR.
@@ -638,7 +752,6 @@ c_compile_expr_t
     c_compile_expr(c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *code, c_scope_t *scope, token_t const *expr) {
     if (expr->type == TOKENTYPE_IDENT) {
         // Look up variable in scope.
-        // TODO: Implement enums here.
         c_var_t *c_var = c_scope_lookup(scope, expr->strval);
         if (!c_var) {
             cctx_diagnostic(ctx->cctx, expr->pos, DIAG_ERR, "Identifier %s is undefined", expr->strval);
@@ -648,13 +761,49 @@ c_compile_expr_t
             };
         }
 
+        if (c_var->storage == C_VAR_STORAGE_ENUM_VARIANT) {
+            // Enum variants looked up like this provide an rvalue.
+            ir_const_t iconst = {
+                .prim_type = c_prim_to_ir_type(ctx, C_PRIM_SINT),
+                .constl    = c_var->enum_variant,
+            };
+            return (c_compile_expr_t){
+                .code = code,
+                .res  = {
+                     .value_type = C_RVALUE,
+                     .c_type     = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
+                     .rvalue     = IR_OPERAND_CONST(iconst),
+                },
+            };
+        }
+
+        if (!code) {
+            cctx_diagnostic(ctx->cctx, expr->pos, DIAG_ERR, "Cannot access a variable in a constant expression");
+            return (c_compile_expr_t){0};
+        }
+
+        // This is an actual variable and so an lvalue.
+        c_value_t res;
+        res.c_type = rc_share(c_var->type);
+        switch (c_var->storage) {
+            case C_VAR_STORAGE_REG:
+                res.value_type    = C_LVALUE_VAR;
+                res.lvalue.ir_var = c_var->ir_var;
+                break;
+            case C_VAR_STORAGE_FRAME:
+                res.value_type    = C_LVALUE_MEM;
+                res.lvalue.memref = IR_MEMREF(c_type_to_ir_type(ctx, c_var->type->data), IR_BADDR_FRAME(c_var->frame));
+                break;
+            case C_VAR_STORAGE_GLOBAL:
+                res.value_type = C_LVALUE_MEM;
+                res.lvalue.memref
+                    = IR_MEMREF(c_type_to_ir_type(ctx, c_var->type->data), IR_BADDR_SYM(strong_strdup(c_var->sym)));
+                break;
+            case C_VAR_STORAGE_ENUM_VARIANT: __builtin_unreachable();
+        }
         return (c_compile_expr_t){
             .code = code,
-            .res  = {
-                 .value_type = C_LVALUE_VAR,
-                 .c_type     = rc_share(c_var->type),
-                 .lvalue     = {.ir_var = c_var->reg},
-            },
+            .res  = res,
         };
 
     } else if (expr->type == TOKENTYPE_ICONST || expr->type == TOKENTYPE_CCONST) {
@@ -668,6 +817,7 @@ c_compile_expr_t
                          .iconst = {
                              .prim_type = c_prim_to_ir_type(ctx, expr->subtype),
                              .constl    = expr->ival,
+                             .consth    = expr->ivalh,
                     },
                 },
             },
@@ -694,6 +844,11 @@ c_compile_expr_t
         return c_compile_expr(ctx, prepass, code, scope, &expr->params[expr->params_len - 1]);
 
     } else if (expr->subtype == C_AST_EXPR_CALL) {
+        if (!code) {
+            cctx_diagnostic(ctx->cctx, expr->pos, DIAG_ERR, "Cannot call a function in a constant expression");
+            return (c_compile_expr_t){0};
+        }
+
         ir_operand_t funcptr;
         rc_t         functype_rc;
         if (expr->params[0].type != TOKENTYPE_IDENT) {
@@ -882,6 +1037,15 @@ c_compile_expr_t
             ir_operand_t ir_lhs = c_cast_ir_operand(code, c_value_read(ctx, code, &lhs), ir_prim);
             ir_operand_t ir_rhs = c_cast_ir_operand(code, c_value_read(ctx, code, &rhs), ir_prim);
 
+            ir_op2_type_t ir_op2 = c_op2_to_ir_op2(op2);
+            if ((ir_op2 == IR_OP2_div || ir_op2 == IR_OP2_rem) && ir_calc1(IR_OP1_seqz, ir_rhs.iconst).constl) {
+                cctx_diagnostic(ctx->cctx, expr->pos, DIAG_ERR, "Constant division by zero");
+                return (c_compile_expr_t){
+                    .code = code,
+                    .res  = (c_value_t){0},
+                };
+            }
+
             if (ir_lhs.type == IR_OPERAND_TYPE_CONST && ir_rhs.type == IR_OPERAND_TYPE_CONST) {
                 // Resulting constant can be evaluated at compile-time.
                 c_value_destroy(lhs);
@@ -891,14 +1055,14 @@ c_compile_expr_t
                     .res  = {
                          .value_type = C_RVALUE,
                          .c_type     = type,
-                         .rvalue     = IR_OPERAND_CONST(ir_calc2(c_op2_to_ir_op2(op2), ir_lhs.iconst, ir_rhs.iconst)),
+                         .rvalue     = IR_OPERAND_CONST(ir_calc2(ir_op2, ir_lhs.iconst, ir_rhs.iconst)),
                     },
                 };
             }
 
             // Add math instruction.
             ir_var_t *tmpvar = ir_var_create(code->func, c_type_to_ir_type(ctx, res_type->data), NULL);
-            ir_add_expr2(IR_APPEND(code), tmpvar, c_op2_to_ir_op2(op2), ir_lhs, ir_rhs);
+            ir_add_expr2(IR_APPEND(code), tmpvar, ir_op2, ir_lhs, ir_rhs);
 
             c_value_t rvalue = {
                 .value_type = C_RVALUE,
@@ -990,8 +1154,6 @@ c_compile_expr_t
             // Create pointer type.
             c_type_t *ptr_type  = strong_calloc(1, sizeof(c_type_t));
             ptr_type->primitive = C_COMP_POINTER;
-            ptr_type->size      = ctx->prim_types[ctx->options.size_type].size;
-            ptr_type->align     = ctx->prim_types[ctx->options.size_type].align;
             ptr_type->inner     = rc_share(res.res.c_type);
             rc_t ptr_rc         = rc_new_strong(ptr_type, (void (*)(void *))c_type_free);
 
@@ -1034,7 +1196,7 @@ c_compile_expr_t
 
             // Create pointer lvalue.
             c_value_t rvalue = {
-                .value_type    = C_LVALUE_PTR,
+                .value_type    = C_LVALUE_MEM,
                 .c_type        = rc_share(type->inner),
                 .lvalue.memref = c_value_memref(ctx, code, &res.res),
             };
@@ -1170,11 +1332,11 @@ ir_code_t *
     c_compile_stmt(c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *code, c_scope_t *scope, token_t const *stmt) {
     if (stmt->subtype == C_AST_STMTS) {
         // Multiple statements in scope.
-        c_scope_t *new_scope = c_scope_create(scope);
+        c_scope_t new_scope = c_scope_create(scope);
 
         // Compile statements in this scope.
         for (size_t i = 0; i < stmt->params_len; i++) {
-            code = c_compile_stmt(ctx, prepass, code, new_scope, &stmt->params[i]);
+            code = c_compile_stmt(ctx, prepass, code, &new_scope, &stmt->params[i]);
         }
 
         // Clean up the scope.
@@ -1328,13 +1490,13 @@ ir_code_t *
 
 // Compile a C function definition into IR.
 ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t *prepass) {
-    rc_t inner_type = c_compile_spec_qual_list(ctx, &def->params[0]);
+    rc_t inner_type = c_compile_spec_qual_list(ctx, &def->params[0], &ctx->global_scope);
     if (!inner_type) {
         return NULL;
     }
 
     token_t const *name;
-    rc_t           func_type_rc = c_compile_decl(ctx, &def->params[1], inner_type, &name);
+    rc_t           func_type_rc = c_compile_decl(ctx, &def->params[1], &ctx->global_scope, inner_type, &name);
     if (!name) {
         // A diagnostic will already have been created; skip this.
         rc_delete(func_type_rc);
@@ -1344,30 +1506,30 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
 
     // Create function and scope.
     ir_func_t *func  = ir_func_create(name->strval, NULL, func_type->func.args_len);
-    c_scope_t *scope = c_scope_create(&ctx->global_scope);
+    c_scope_t  scope = c_scope_create(&ctx->global_scope);
 
     // Bring parameters into scope.
     for (size_t i = 0; i < func_type->func.args_len; i++) {
         if (func_type->func.arg_names[i]) {
-            c_type_t *c_type = (c_type_t *)func_type->func.args[i]->data;
-            c_var_t  *var    = calloc(1, sizeof(c_var_t));
-            var->type        = rc_share(func_type->func.args[i]);
-
-            if (set_contains(&prepass->pointer_taken, func_type->func.arg_name_tkns[i])) {
-                var->storage       = C_VAR_STORAGE_FRAME;
-                var->frame         = ir_frame_create(func, c_type->size, c_type->align, NULL);
-                func->args[i].type = c_type_to_ir_type(ctx, func_type->func.args[i]->data);
-            } else {
-                var->storage = C_VAR_STORAGE_REG;
-                var->reg     = ir_var_create(func, c_type_to_ir_type(ctx, func_type->func.args[i]->data), NULL);
-                func->args[i].has_var = true;
-                func->args[i].var     = var->reg;
+            c_var_t *var = c_var_create(
+                ctx,
+                prepass,
+                func,
+                rc_share(func_type->func.args[i]),
+                func_type->func.arg_name_tkns[i],
+                &scope
+            );
+            if (!var) {
+                // A diagnostic will have already been created.
+                continue;
             }
 
-            if (!map_set(&scope->locals, func_type->func.arg_names[i], var)
-                || !map_set(&scope->locals_by_decl, func_type->func.arg_name_tkns[i], var)) {
-                fprintf(stderr, "Out of memory\n");
-                abort();
+            if (var->storage == C_VAR_STORAGE_REG) {
+                func->args[i].has_var = true;
+                func->args[i].var     = var->ir_var;
+            } else {
+                func->args[i].has_var = false;
+                func->args[i].type    = c_type_to_ir_type(ctx, func_type->func.args[i]->data);
             }
         } else {
             func->args[i].type = c_type_to_ir_type(ctx, func_type->func.args[i]->data);
@@ -1378,7 +1540,7 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
     token_t const *body = &def->params[2];
     ir_code_t     *code = (ir_code_t *)func->code_list.head;
     for (size_t i = 0; i < body->params_len; i++) {
-        code = c_compile_stmt(ctx, prepass, code, scope, &body->params[i]);
+        code = c_compile_stmt(ctx, prepass, code, &scope, &body->params[i]);
     }
 
     c_scope_destroy(scope);
@@ -1401,14 +1563,18 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
 ir_code_t *
     c_compile_decls(c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *code, c_scope_t *scope, token_t const *decls) {
     // TODO: Typedef support.
-    rc_t inner_type = c_compile_spec_qual_list(ctx, &decls->params[0]);
+    rc_t inner_type = c_compile_spec_qual_list(ctx, &decls->params[0], scope);
     if (!inner_type) {
         return code;
     }
 
     for (size_t i = 1; i < decls->params_len; i++) {
         token_t const *name      = NULL;
-        rc_t           decl_type = c_compile_decl(ctx, &decls->params[i], rc_share(inner_type), &name);
+        rc_t           decl_type = c_compile_decl(ctx, &decls->params[i], scope, rc_share(inner_type), &name);
+        if (!decl_type) {
+            // A diagnostic will already have been created; skip this.
+            continue;
+        }
         if (!name) {
             // A diagnostic will already have been created; skip this.
             rc_delete(decl_type);
@@ -1416,21 +1582,34 @@ ir_code_t *
         }
 
         // Create the C variable.
-        c_var_t  *var         = calloc(1, sizeof(c_var_t));
-        c_type_t *c_decl_type = decl_type->data;
-        var->type             = decl_type;
-        if (scope->depth == 0) {
-            var->storage = C_VAR_STORAGE_GLOBAL;
-            var->sym     = strong_strdup(name->strval);
-        } else if (set_contains(&prepass->pointer_taken, name)) {
-            var->storage = C_VAR_STORAGE_FRAME;
-            var->frame   = code ? ir_frame_create(code->func, c_decl_type->size, c_decl_type->size, NULL) : NULL;
-        } else {
-            var->storage = C_VAR_STORAGE_REG;
-            var->reg     = code ? ir_var_create(code->func, c_type_to_ir_type(ctx, decl_type->data), NULL) : NULL;
+        c_var_t *var = c_var_create(ctx, prepass, code->func, rc_share(decl_type), decl_type->data, scope);
+        if (!var) {
+            // A diagnostic will have already been created.
+            rc_delete(decl_type);
+            continue;
         }
-        map_set(&scope->locals, name->strval, var);
-        map_set(&scope->locals_by_decl, name, var);
+
+        // if (map_get(&scope->locals, name->strval)) {
+        //     cctx_diagnostic(ctx->cctx, name->pos, DIAG_ERR, "Redefinition of %s", name->strval);
+        //     continue;
+        // }
+
+        // // Create the C variable.
+        // c_var_t  *var         = calloc(1, sizeof(c_var_t));
+        // c_type_t *c_decl_type = decl_type->data;
+        // var->type             = decl_type;
+        // if (scope->depth == 0) {
+        //     var->storage = C_VAR_STORAGE_GLOBAL;
+        //     var->sym     = strong_strdup(name->strval);
+        // } else if (set_contains(&prepass->pointer_taken, name)) {
+        //     var->storage = C_VAR_STORAGE_FRAME;
+        //     var->frame   = code ? ir_frame_create(code->func, c_decl_type->size, c_decl_type->size, NULL) : NULL;
+        // } else {
+        //     var->storage = C_VAR_STORAGE_REG;
+        //     var->ir_var  = code ? ir_var_create(code->func, c_type_to_ir_type(ctx, decl_type->data), NULL) : NULL;
+        // }
+        // map_set(&scope->locals, name->strval, var);
+        // map_set(&scope->locals_by_decl, name, var);
 
         // If the declaration has an assignment, compile it too.
         if (decls->params[i].type == TOKENTYPE_AST && decls->params[i].subtype == C_AST_ASSIGN_DECL) {
@@ -1444,11 +1623,12 @@ ir_code_t *
             if (res.res.value_type != C_VALUE_ERROR) {
                 ir_operand_t tmp = c_value_read(ctx, code, &res.res);
                 switch (var->storage) {
-                    case C_VAR_STORAGE_REG: ir_add_expr1(IR_APPEND(code), var->reg, IR_OP1_mov, tmp); break;
+                    case C_VAR_STORAGE_REG: ir_add_expr1(IR_APPEND(code), var->ir_var, IR_OP1_mov, tmp); break;
                     case C_VAR_STORAGE_FRAME:
                         ir_add_store(IR_APPEND(code), tmp, IR_MEMREF(ir_operand_prim(tmp), IR_BADDR_FRAME(var->frame)));
                         break;
                     case C_VAR_STORAGE_GLOBAL: abort(); break;
+                    case C_VAR_STORAGE_ENUM_VARIANT: __builtin_unreachable();
                 }
                 c_value_destroy(res.res);
             }

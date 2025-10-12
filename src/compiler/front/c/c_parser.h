@@ -61,6 +61,9 @@ typedef enum {
     // Assignment declarator.
     // Args: Declarator, expression.
     C_AST_ASSIGN_DECL,
+    // Enum variant.
+    // Args: Identifier, expression (optional).
+    C_AST_ENUM_VARIANT,
     // Function definition.
     // Args: Type specifier/qualifier list, declarator, body.
     C_AST_FUNC_DEF,

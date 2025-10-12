@@ -6,15 +6,18 @@
 #include "c_parser.h"
 
 #include "arrays.h"
+#include "c_tokenizer.h"
 #include "char_repr.h"
+#include "compiler.h"
 #include "strong_malloc.h"
+#include "tokenizer.h"
 
 
 
 // Parse a direct (abstract) declaration.
-static token_t c_parse_ddecl(c_parser_t *ctx, bool requires_name, bool allows_name, bool is_typedef);
+static token_t c_parse_ddecl(c_parser_t *ctx, bool allows_name, bool is_typedef);
 // Parse an (abstract) declaration.
-static token_t c_parse_decl(c_parser_t *ctx, bool requires_name, bool allows_name, bool is_typedef);
+static token_t c_parse_decl(c_parser_t *ctx, bool allows_name, bool is_typedef);
 // Parse a type qualifier list.
 static token_t c_parse_type_qual_list(c_parser_t *ctx);
 // Parse a pointer and its qualifier list.
@@ -37,9 +40,9 @@ static token_t c_parse_goto(c_parser_t *ctx);
 // Parse a return statement.
 static token_t c_parse_return(c_parser_t *ctx);
 
-// Eat tokens up to an including the next semicolon,
-// or stop before next closing curly bracket.
-static void c_eat_semic(tokenizer_t *ctx);
+// Eat tokens up to an including the next delimiter,
+// or stop before next curly bracket.
+static void c_eat_delim(tokenizer_t *ctx, bool include_comma);
 
 
 #ifndef NDEBUG
@@ -61,6 +64,7 @@ char const *const c_asttype_name[] = {
     [C_AST_SPEC_QUAL_LIST] = "C_AST_SPEC_QUAL_LIST",
     [C_AST_DECLS]          = "C_AST_DECLS",
     [C_AST_ASSIGN_DECL]    = "C_AST_ASSIGN_DECL",
+    [C_AST_ENUM_VARIANT]   = "C_AST_ENUM_VARIANT",
     [C_AST_FUNC_DEF]       = "C_AST_FUNC_DEF",
     [C_AST_STMTS]          = "C_AST_STMTS",
     [C_AST_FOR_LOOP]       = "C_AST_FOR_LOOP",
@@ -267,13 +271,11 @@ static bool is_spec_qual_list_tkn(c_parser_t *ctx, token_t token) {
     if (token.type == TOKENTYPE_IDENT) {
         return set_contains(&ctx->type_names, token.strval)
                || (ctx->func_body && set_contains(&ctx->local_type_names, token.strval));
-    } else if (token.type == TOKENTYPE_AST
-               && (token.subtype == C_AST_NAMED_STRUCT || token.subtype == C_AST_ANON_STRUCT)) {
-        return true;
     } else if (token.type != TOKENTYPE_KEYWORD) {
         return false;
     }
-    return is_type_specifier(token) || is_type_qualifier(token);
+    return is_type_specifier(token) || is_type_qualifier(token) || token.subtype == C_KEYW_enum
+           || token.subtype == C_KEYW_struct || token.subtype == C_KEYW_union;
 }
 
 // Is this AST node a type?
@@ -464,7 +466,7 @@ token_t c_parse_type_name(c_parser_t *ctx) {
     if ((peek.type == TOKENTYPE_OTHER
          && (peek.subtype == C_TKN_MUL || peek.subtype == C_TKN_LBRAC || peek.subtype == C_TKN_LPAR))
         || peek.subtype == TOKENTYPE_IDENT) {
-        token_t decl       = c_parse_decl(ctx, false, false, false);
+        token_t decl       = c_parse_decl(ctx, false, false);
         bool    is_garbage = spec_qual.subtype == C_AST_GARBAGE || decl.subtype == C_AST_GARBAGE;
         return ast_from_va(is_garbage ? C_AST_GARBAGE : C_AST_TYPE_NAME, 2, spec_qual, decl);
     } else {
@@ -473,10 +475,9 @@ token_t c_parse_type_name(c_parser_t *ctx) {
 }
 
 // Parse a direct (abstract) declaration.
-static token_t c_parse_ddecl(c_parser_t *ctx, bool requires_name, bool allows_name, bool is_typedef) {
-    allows_name   |= requires_name;
-    token_t peek   = tkn_peek(ctx->tkn_ctx);
-    token_t peek1  = tkn_peek_n(ctx->tkn_ctx, 1);
+static token_t c_parse_ddecl(c_parser_t *ctx, bool allows_name, bool is_typedef) {
+    token_t peek  = tkn_peek(ctx->tkn_ctx);
+    token_t peek1 = tkn_peek_n(ctx->tkn_ctx, 1);
     token_t inner;
 
     if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LPAR && peek1.type == TOKENTYPE_OTHER
@@ -485,7 +486,7 @@ static token_t c_parse_ddecl(c_parser_t *ctx, bool requires_name, bool allows_na
         token_t lpar = peek;
         tkn_next(ctx->tkn_ctx);
 
-        inner = c_parse_decl(ctx, requires_name, allows_name, is_typedef);
+        inner = c_parse_decl(ctx, allows_name, is_typedef);
         if (inner.type == TOKENTYPE_AST && inner.subtype == C_AST_GARBAGE) {
             return inner;
         }
@@ -511,13 +512,7 @@ static token_t c_parse_ddecl(c_parser_t *ctx, bool requires_name, bool allows_na
 
     } else if (peek.type != TOKENTYPE_OTHER || (peek.subtype != C_TKN_LBRAC && peek.subtype != C_TKN_LPAR)) {
         // Garbaj.
-        cctx_diagnostic(
-            ctx->tkn_ctx->cctx,
-            peek.pos,
-            DIAG_ERR,
-            "Expected ( or [%s",
-            requires_name ? " or identifier" : ""
-        );
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ( or [");
         pos_t pos = peek.pos;
         pos.len   = 0;
         return ast_empty(C_AST_GARBAGE, pos);
@@ -576,7 +571,7 @@ static token_t c_parse_ddecl(c_parser_t *ctx, bool requires_name, bool allows_na
                     if (peek.type == TOKENTYPE_OTHER && (peek.subtype == C_TKN_RPAR || peek.subtype == C_TKN_COMMA)) {
                         array_lencap_insert_strong(&args, sizeof(token_t), &args_len, &args_cap, &param_qual, args_len);
                     } else {
-                        token_t param_decl = c_parse_decl(ctx, false, true, false);
+                        token_t param_decl = c_parse_decl(ctx, true, false);
                         token_t param      = ast_from_va(C_AST_DECLS, 2, param_qual, param_decl);
                         array_lencap_insert_strong(&args, sizeof(token_t), &args_len, &args_cap, &param, args_len);
                         peek = tkn_peek(ctx->tkn_ctx);
@@ -604,13 +599,12 @@ static token_t c_parse_ddecl(c_parser_t *ctx, bool requires_name, bool allows_na
 }
 
 // Parse an (abstract) declaration.
-static token_t c_parse_decl(c_parser_t *ctx, bool requires_name, bool allows_name, bool is_typedef) {
+static token_t c_parse_decl(c_parser_t *ctx, bool allows_name, bool is_typedef) {
     token_t peek = tkn_peek(ctx->tkn_ctx);
     if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_MUL) {
         // If no `*`, there is required to be a direct decl.
-        return c_parse_ddecl(ctx, requires_name, allows_name, is_typedef);
+        return c_parse_ddecl(ctx, allows_name, is_typedef);
     }
-    allows_name |= requires_name;
 
     // Parse the pointer before the ddecl.
     token_t pointer = c_parse_pointer(ctx);
@@ -622,20 +616,11 @@ static token_t c_parse_decl(c_parser_t *ctx, bool requires_name, bool allows_nam
         empty = false;
     }
     if (empty) {
-        // Nothing after the pointer.
-        if (requires_name) {
-            // There should be a ddecl here.
-            cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected * or [ or ( or an identifier");
-            pointer.subtype = C_AST_GARBAGE;
-            return pointer;
-        } else {
-            // That should be the end of the abstract declarator.
-            return pointer;
-        }
+        return pointer;
     }
 
     // Something after the pointer; parse the ddecl and add it.
-    ast_append_param(&pointer, c_parse_ddecl(ctx, requires_name, allows_name, is_typedef));
+    ast_append_param(&pointer, c_parse_ddecl(ctx, allows_name, is_typedef));
     return pointer;
 }
 
@@ -728,14 +713,19 @@ token_t c_parse_decls(c_parser_t *ctx, bool allow_func_body) {
     bool     is_typedef;
     *args = c_parse_spec_qual_list(ctx, &is_typedef);
 
-    // TODO: Decls are actually allowed to be empty.
-    token_t peek;
+    // Decls are actually allowed to be empty.
+    token_t peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_SEMIC) {
+        tkn_next(ctx->tkn_ctx);
+        return ast_from(C_AST_DECLS, args_len, args);
+    }
+
     do {
         if (args_len >= 2) {
             tkn_next(ctx->tkn_ctx);
             allow_func_body = false;
         }
-        token_t decl = c_parse_decl(ctx, true, true, is_typedef);
+        token_t decl = c_parse_decl(ctx, true, is_typedef);
         peek         = tkn_peek(ctx->tkn_ctx);
         if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_ASSIGN) {
             tkn_next(ctx->tkn_ctx);
@@ -773,7 +763,7 @@ token_t c_parse_decls(c_parser_t *ctx, bool allow_func_body) {
     } else if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_SEMIC) {
         // Should have been a semicolon here.
         cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ;");
-        c_eat_semic(ctx->tkn_ctx);
+        c_eat_delim(ctx->tkn_ctx, false);
     } else {
         tkn_next(ctx->tkn_ctx);
     }
@@ -842,7 +832,7 @@ token_t c_parse_enum_spec(c_parser_t *ctx) {
         named = true;
 
         if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_LCURL) {
-            // Just a struct/enum name; don't parse args.
+            // Just a enum/struct/union name; don't parse args.
             return ast_from(C_AST_NAMED_STRUCT, args_len, args);
         }
     }
@@ -863,10 +853,26 @@ token_t c_parse_enum_spec(c_parser_t *ctx) {
             break;
         } else {
             tkn_next(ctx->tkn_ctx);
-            array_lencap_insert_strong(&args, sizeof(token_t), &args_len, &args_cap, &peek, args_len);
-            peek = tkn_peek(ctx->tkn_ctx);
+            token_t ident = peek;
+            peek          = tkn_peek(ctx->tkn_ctx);
+            if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_ASSIGN) {
+                // Enum variant with specific index.
+                tkn_next(ctx->tkn_ctx);
+                token_t expr = c_parse_expr(ctx);
+                if (expr.type != TOKENTYPE_AST || expr.subtype != C_AST_GARBAGE) {
+                    token_t ast = ast_from_va(C_AST_ENUM_VARIANT, 2, ident, expr);
+                    array_lencap_insert_strong(&args, sizeof(token_t), &args_len, &args_cap, &ast, args_len);
+                }
+
+                peek = tkn_peek(ctx->tkn_ctx);
+            } else {
+                // Enum variant with implicit index.
+                token_t ast = ast_from_va(C_AST_ENUM_VARIANT, 1, ident);
+                array_lencap_insert_strong(&args, sizeof(token_t), &args_len, &args_cap, &ast, args_len);
+            }
             if (peek.type != TOKENTYPE_OTHER || (peek.subtype != C_TKN_COMMA && peek.subtype != C_TKN_RCURL)) {
                 cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ,");
+                c_eat_delim(ctx->tkn_ctx, true);
             } else if (peek.subtype == C_TKN_COMMA) {
                 tkn_next(ctx->tkn_ctx);
             }
@@ -1042,7 +1048,7 @@ static token_t c_parse_return(c_parser_t *ctx) {
         peek         = tkn_peek(ctx->tkn_ctx);
         if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_SEMIC) {
             cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ;");
-            c_eat_semic(ctx->tkn_ctx);
+            c_eat_delim(ctx->tkn_ctx, false);
         } else {
             tkn_next(ctx->tkn_ctx);
         }
@@ -1075,6 +1081,7 @@ token_t c_parse_stmt(c_parser_t *ctx) {
             case C_KEYW_return: return c_parse_return(ctx);
             default: {
                 cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected a statement");
+                c_eat_delim(ctx->tkn_ctx, false);
                 pos_t pos = peek.pos;
                 pos.len   = 0;
                 return ast_empty(C_AST_GARBAGE, pos);
@@ -1085,7 +1092,7 @@ token_t c_parse_stmt(c_parser_t *ctx) {
         peek         = tkn_peek(ctx->tkn_ctx);
         if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_SEMIC) {
             cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ;");
-            c_eat_semic(ctx->tkn_ctx);
+            c_eat_delim(ctx->tkn_ctx, false);
         } else {
             tkn_next(ctx->tkn_ctx);
         }
@@ -1111,20 +1118,26 @@ token_t c_parse_stmts(c_parser_t *ctx) {
 
 
 
-// Eat tokens up to an including the next semicolon,
-// or stop before next right curly bracket.
-static void c_eat_semic(tokenizer_t *tkn_ctx) {
-    token_t peek = tkn_peek(tkn_ctx);
+// Eat tokens up to an including the next delimiter,
+// or stop before next curly bracket.
+static void c_eat_delim(tokenizer_t *tkn_ctx, bool include_comma) {
+    token_t peek    = tkn_peek(tkn_ctx);
+    bool    tooketh = false;
     while (1) {
-        if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_RCURL) {
+        if (peek.type == TOKENTYPE_OTHER && (peek.subtype == C_TKN_RCURL || peek.subtype == C_TKN_LCURL)) {
+            if (!tooketh) {
+                tkn_next(tkn_ctx);
+            }
             return;
-        } else if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_SEMIC) {
+        } else if (peek.type == TOKENTYPE_OTHER
+                   && (peek.subtype == C_TKN_SEMIC || (include_comma && peek.subtype == C_TKN_COMMA))) {
             tkn_next(tkn_ctx);
             return;
         } else {
             tkn_next(tkn_ctx);
             peek = tkn_peek(tkn_ctx);
         }
+        tooketh = true;
     }
 }
 

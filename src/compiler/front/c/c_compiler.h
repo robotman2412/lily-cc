@@ -73,7 +73,7 @@ typedef enum {
     // Represents a missing value caused by compilation error.
     C_VALUE_ERROR,
     // Lvalue by pointer + offset.
-    C_LVALUE_PTR,
+    C_LVALUE_MEM,
     // Lvalue by c_var_t.
     C_LVALUE_VAR,
     // Rvalue.
@@ -88,7 +88,16 @@ typedef enum {
     C_VAR_STORAGE_FRAME,
     // Variable is stored at a symbol (global; pointer taken by definition).
     C_VAR_STORAGE_GLOBAL,
+    // Variable is an enum variant.
+    C_VAR_STORAGE_ENUM_VARIANT
 } c_var_storage_t;
+
+// Distinguishes between enum, struct and union for `c_struct_t`.
+typedef enum {
+    C_COMP_TYPE_ENUM,
+    C_COMP_TYPE_STRUCT,
+    C_COMP_TYPE_UNION,
+} c_comp_type_t;
 
 
 
@@ -100,6 +109,12 @@ typedef struct c_scope        c_scope_t;
 typedef struct c_type         c_type_t;
 // C value.
 typedef struct c_value        c_value_t;
+// C compound type (enum/struct/union) layout.
+typedef struct c_comp         c_comp_t;
+// C enum variant definition.
+typedef struct c_enumvar      c_enumvar_t;
+// C struct/union field delcaration.
+typedef struct c_field        c_field_t;
 // C compiler options.
 typedef struct c_options      c_options_t;
 // C compiler context.
@@ -117,11 +132,13 @@ struct c_var {
     rc_t            type;
     union {
         // Local (no pointer taken) variable's IR variable.
-        ir_var_t   *reg;
+        ir_var_t   *ir_var;
         // Local (pointer taken) variable's stack frame.
         ir_frame_t *frame;
         // Global/static local variable's symbol.
         char       *sym;
+        // Enum variant index.
+        int         enum_variant;
     };
 };
 
@@ -138,16 +155,16 @@ struct c_scope {
     map_t      locals_by_decl;
     // Local variable map (entry type is `c_var_t`).
     map_t      locals;
+    // Map of typedefs (entry type is `rc_t` of `c_type_t`).
+    map_t      typedefs;
+    // Map of enums, structs and unions (entry type is `rc_t` of `c_type_t`).
+    map_t      structs;
 };
 
 // C type.
 struct c_type {
     // Primitive type.
     c_prim_t primitive;
-    // Size of this type; 0 for incomplete types.
-    uint64_t size;
-    // Alignment of this type; must be a power of 2.
-    uint64_t align;
     // Is volatile?
     bool     is_volatile;
     // Is const?
@@ -159,6 +176,8 @@ struct c_type {
     union {
         // Inner type of pointers and arrays.
         rc_t inner;
+        // Compound type of enums, structs and unions.
+        rc_t comp;
         struct {
             // Function return type.
             rc_t            return_type;
@@ -193,6 +212,38 @@ struct c_value {
     };
 };
 
+// C compound type (enum/struct/union) layout.
+struct c_comp {
+    // What compound type this is.
+    c_comp_type_t type;
+    // Name of this compound type.
+    char         *name;
+    // Size of this type.
+    uint64_t      size;
+    // Alignment of this type; must be a power of 2; 0 for incomplete types.
+    uint64_t      align;
+    union {
+        struct {
+            // Struct/union fields.
+            c_field_t *fields;
+            // Number of fields.
+            size_t     fields_len;
+        };
+        struct {
+            // Enum variants.
+            c_enumvar_t *variants;
+            // Number of enum variants.
+            size_t       variants_len;
+        };
+    };
+};
+
+// C enum variant definition.
+struct c_enumvar {};
+
+// C struct/union field delcaration.
+struct c_field {};
+
 // C compiler options.
 struct c_options {
     // Current C standard.
@@ -219,8 +270,6 @@ struct c_compiler {
     c_type_t    prim_types[C_N_PRIM];
     // Fake refcount ptrs to `c_type_t` for all C primitive types.
     struct rc_t prim_rcs[C_N_PRIM];
-    // Map of global typedefs (entry type is `c_type_t`).
-    map_t       typedefs;
     // Global scope.
     c_scope_t   global_scope;
     // Generic compiler context.
@@ -231,7 +280,7 @@ struct c_compiler {
 struct c_compile_expr {
     // Result of expression.
     c_value_t  res;
-    // Code path linearly after the expression.
+    // Code path linearly after the expression if it exists.
     ir_code_t *code;
 };
 
@@ -244,19 +293,21 @@ void          c_compiler_destroy(c_compiler_t *cc);
 
 // Create a C type from a specifier-qualifer list.
 // Returns a refcount pointer of `c_type_t`.
-rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list);
+rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t *scope);
 // Create a C type and get the name from an (abstract) declarator.
 // Takes ownership of the `spec_qual_type` share passed.
-rc_t c_compile_decl(c_compiler_t *ctx, token_t const *decl, rc_t spec_qual_type, token_t const **name_out);
+rc_t c_compile_decl(
+    c_compiler_t *ctx, token_t const *decl, c_scope_t *scope, rc_t spec_qual_type, token_t const **name_out
+);
 
 // Create a new scope.
-c_scope_t *c_scope_create(c_scope_t *parent);
+c_scope_t c_scope_create(c_scope_t *parent);
 // Clean up a scope.
-void       c_scope_destroy(c_scope_t *scope);
+void      c_scope_destroy(c_scope_t scope);
 // Look up a variable in scope.
-c_var_t   *c_scope_lookup(c_scope_t *scope, char const *ident);
+c_var_t  *c_scope_lookup(c_scope_t *scope, char const *ident);
 // Look up a variable in scope by declaration token.
-c_var_t   *c_scope_lookup_by_decl(c_scope_t *scope, token_t const *decl);
+c_var_t  *c_scope_lookup_by_decl(c_scope_t *scope, token_t const *decl);
 
 // Create a type that is a pointer to an existing type.
 rc_t          c_type_pointer(c_compiler_t *ctx, rc_t inner);
@@ -264,6 +315,9 @@ rc_t          c_type_pointer(c_compiler_t *ctx, rc_t inner);
 // Note: This does not take ownership of the refcount ptr;
 // It will call `rc_share` on the callers behalf only if necessary.
 rc_t          c_type_promote(c_compiler_t *ctx, c_tokentype_t oper, rc_t a, rc_t b);
+// Get the alignment and size of a C type.
+// Returns false if it is an incomplete type and the layout is therefor unknown.
+bool          c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out, uint64_t *align_out);
 // Convert C binary operator to IR binary operator.
 ir_op2_type_t c_op2_to_ir_op2(c_tokentype_t subtype);
 // Convert C unary operator to IR unary operator.
@@ -283,6 +337,10 @@ void         c_value_write(c_compiler_t *ctx, ir_code_t *code, c_value_t const *
 ir_memref_t  c_value_memref(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
 // Read a value for scalar arithmetic.
 ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
+// Create a local variable in a function.
+c_var_t     *c_var_create(
+        c_compiler_t *ctx, c_prepass_t *prepass, ir_func_t *func, rc_t type_rc, token_t const *name_tkn, c_scope_t *scope
+    );
 
 // Compile an expression into IR.
 c_compile_expr_t

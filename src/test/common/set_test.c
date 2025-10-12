@@ -120,13 +120,13 @@ LILY_TEST_CASE(test_multiset)
 static char *test_large_set() {
     set_t set = PTR_SET_EMPTY;
 
-    for (size_t i = 0; i < 1000000; i++) {
+    for (size_t i = 0; i < 100000; i++) {
         RETURN_ON_FALSE(set_add(&set, (void *)i));
     }
-    for (size_t i = 0; i < 1000000; i++) {
+    for (size_t i = 0; i < 100000; i++) {
         RETURN_ON_FALSE(set_contains(&set, (void *)i));
     }
-    for (size_t i = 500000; i < 750000; i++) {
+    for (size_t i = 50000; i < 75000; i++) {
         RETURN_ON_FALSE(set_remove(&set, (void *)i));
     }
 

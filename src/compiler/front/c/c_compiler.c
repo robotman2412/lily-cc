@@ -83,9 +83,6 @@ static void c_type_free(c_type_t *type) {
 // Compile the body of an enum definition.
 static void
     c_compile_enum_body(c_compiler_t *ctx, token_t const *body, size_t body_len, c_scope_t *scope, c_comp_t *comp) {
-    comp->variants_len = body_len;
-    comp->variants     = calloc(body_len, sizeof(c_enumvar_t));
-
     // TODO: Packed enums support.
     int cur = 0;
     for (size_t i = 0; i < body_len; i++, cur++) {
@@ -107,6 +104,11 @@ static void
             var->enum_variant = cur;
             map_set(&scope->locals, name->strval, var);
             map_set(&scope->locals_by_decl, name, var);
+
+            c_enumvar_t *enumvar = strong_calloc(1, sizeof(c_enumvar_t));
+            enumvar->name        = strong_strdup(name->strval);
+            enumvar->ordinal     = cur;
+            map_set(&comp->variants, enumvar->name, enumvar);
         }
     }
 
@@ -121,13 +123,107 @@ static void
     (void)body_len;
     (void)scope;
     (void)comp;
-    fprintf(stderr, "[TODO] c_compile_enum_body\n");
+    // TODO: Nested struct/union definitions.
+    fprintf(stderr, "[TODO] c_compile_struct_body\n");
     abort();
+}
+
+// Delete a compound type.
+static void c_comp_free(c_comp_t *comp) {
+    if (comp->type == C_COMP_TYPE_ENUM) {
+        map_foreach(ent, &comp->variants) {
+            c_enumvar_t *value = ent->value;
+            free(value->name);
+            free(value);
+        }
+        map_clear(&comp->variants);
+    } else {
+        map_foreach(ent, &comp->fields) {
+            c_field_t *value = ent->value;
+            free(value->name);
+            rc_delete(value->type_rc);
+            free(value);
+        }
+        map_clear(&comp->fields);
+    }
+    free(comp);
 }
 
 // Compile a C enum/struct/union specification.
 // Returns a refcount pointer of `c_comp_t`.
-static rc_t c_compile_struct_spec(c_compiler_t *ctx, token_t const *struct_spec, c_scope_t *scope) {
+static rc_t c_compile_comp_spec(c_compiler_t *ctx, token_t const *struct_spec, c_scope_t *scope) {
+    token_t const *name;
+    token_t const *body;
+    size_t         body_len;
+    if (struct_spec->subtype == C_AST_NAMED_STRUCT) {
+        name     = &struct_spec->params[1];
+        body     = &struct_spec->params[2];
+        body_len = struct_spec->params_len - 2;
+    } else {
+        name     = NULL;
+        body     = &struct_spec->params[1];
+        body_len = struct_spec->params_len - 1;
+    }
+
+    // What tag type this specifier has.
+    c_comp_type_t comp_type;
+    switch (struct_spec->params[0].subtype) {
+        case C_KEYW_enum: comp_type = C_COMP_TYPE_ENUM; break;
+        case C_KEYW_struct: comp_type = C_COMP_TYPE_STRUCT; break;
+        case C_KEYW_union: comp_type = C_COMP_TYPE_UNION; break;
+        default: __builtin_unreachable();
+    }
+
+    // Get or create the compound type.
+    rc_t      comp_rc = NULL;
+    c_comp_t *comp;
+    if (name) {
+        comp_rc = map_get(&scope->structs, name->strval);
+        if (comp_rc) {
+            comp_rc = rc_share(comp_rc);
+        }
+    }
+    if (!comp_rc) {
+        comp         = strong_calloc(1, sizeof(c_comp_t));
+        comp_rc      = rc_new_strong(comp, (void (*)(void *))c_comp_free);
+        comp->name   = name ? strong_strdup(name->strval) : NULL;
+        comp->type   = comp_type;
+        comp->fields = STR_MAP_EMPTY;
+        if (name) {
+            map_set(&scope->structs, name, rc_share(comp_rc));
+        }
+    } else {
+        comp = comp_rc->data;
+    }
+
+    // Assert that the tag type matches.
+    if (comp->type != comp_type) {
+        static char const *const names[] = {
+            [C_COMP_TYPE_ENUM]   = "an enum",
+            [C_COMP_TYPE_STRUCT] = "a struct",
+            [C_COMP_TYPE_UNION]  = "a union",
+        };
+        cctx_diagnostic(
+            ctx->cctx,
+            name->pos, // Non-NULL because it's impossible to get this error with anonymous structs
+            DIAG_ERR,
+            "Use of %s (which is %s) as %s",
+            name->strval,
+            names[comp->type],
+            names[comp_type]
+        );
+        rc_delete(comp_rc);
+        return NULL;
+    }
+
+    // Finally compile the body with the appropriate type.
+    if (comp_type == C_COMP_TYPE_ENUM) {
+        c_compile_enum_body(ctx, body, body_len, scope, comp);
+    } else {
+        c_compile_struct_body(ctx, body, body_len, scope, comp);
+    }
+
+    return comp_rc;
 }
 
 
@@ -146,8 +242,8 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
     bool           has_unsigned = false;
     bool           has_signed   = false;
 
-    rc_t      rc   = rc_new_strong(strong_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
-    c_type_t *type = rc->data;
+    rc_t      type_rc = rc_new_strong(strong_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
+    c_type_t *type    = type_rc->data;
 
     // Turn the list into a more manageable format.
     for (size_t i = 0; i < list->params_len; i++) {
@@ -200,7 +296,19 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
 
     // C type parsing is messy, can't do much about that.
     if (struct_tkn) {
-        rc_t struct_rc = c_compile_struct_spec(ctx, struct_tkn, scope);
+        rc_t comp_rc = c_compile_comp_spec(ctx, struct_tkn, scope);
+        if (!comp_rc) {
+            rc_delete(type_rc);
+            return NULL;
+        }
+        c_comp_t *comp = comp_rc->data;
+        type->comp     = comp_rc;
+        switch (comp->type) {
+            case C_COMP_TYPE_ENUM: type->primitive = C_COMP_ENUM; break;
+            case C_COMP_TYPE_STRUCT: type->primitive = C_COMP_STRUCT; break;
+            case C_COMP_TYPE_UNION: type->primitive = C_COMP_UNION; break;
+        }
+
     } else if (has_char) {
         if (has_unsigned || (!has_signed && !ctx->options.char_is_signed)) {
             type->primitive = C_PRIM_UCHAR;
@@ -271,7 +379,7 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
         cctx_diagnostic(ctx->cctx, list->pos, DIAG_ERR, "Invalid combination of type specifiers");
     }
 
-    return rc;
+    return type_rc;
 }
 
 // Create a C type and get the name from an (abstract) declarator.
@@ -497,19 +605,19 @@ bool c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out
     switch (prim) {
         case C_PRIM_BOOL:
         case C_PRIM_UCHAR:
-        case C_PRIM_SCHAR: *align_out = *size_out = 1;
+        case C_PRIM_SCHAR: *align_out = *size_out = 1; break;
         case C_PRIM_USHORT:
-        case C_PRIM_SSHORT: *align_out = *size_out = ctx->options.short16 ? 2 : 1;
+        case C_PRIM_SSHORT: *align_out = *size_out = ctx->options.short16 ? 2 : 1; break;
         case C_PRIM_UINT:
-        case C_PRIM_SINT: *align_out = *size_out = ctx->options.int32 ? 4 : 2;
+        case C_PRIM_SINT: *align_out = *size_out = ctx->options.int32 ? 4 : 2; break;
         case C_PRIM_ULONG:
-        case C_PRIM_SLONG: *align_out = *size_out = ctx->options.long64 ? 8 : 4;
+        case C_PRIM_SLONG: *align_out = *size_out = ctx->options.long64 ? 8 : 4; break;
         case C_PRIM_ULLONG:
-        case C_PRIM_SLLONG: *align_out = *size_out = 8;
-        case C_PRIM_FLOAT: *align_out = *size_out = 4;
+        case C_PRIM_SLLONG: *align_out = *size_out = 8; break;
+        case C_PRIM_FLOAT: *align_out = *size_out = 4; break;
         case C_PRIM_DOUBLE:
-        case C_PRIM_LDOUBLE: *align_out = *size_out = 8;
-        case C_PRIM_VOID: *align_out = 1; *size_out = 0;
+        case C_PRIM_LDOUBLE: *align_out = *size_out = 8; break;
+        case C_PRIM_VOID: *align_out = 1, *size_out = 0; break;
         case C_COMP_STRUCT:
         case C_COMP_ENUM:
         case C_COMP_UNION: {
@@ -521,7 +629,7 @@ bool c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out
             *align_out = comp->align;
         } break;
         case C_COMP_POINTER: __builtin_unreachable();
-        case C_COMP_ARRAY: return false;
+        case C_COMP_ARRAY:
         case C_COMP_FUNCTION: return false;
     }
     return true;
@@ -702,7 +810,8 @@ ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *v
     }
 }
 
-// Create a local variable in a function.
+// Create a C variable in the current translation unit.
+// If in global scope, `code` and `prepass` must be `NULL`.
 c_var_t *c_var_create(
     c_compiler_t *ctx, c_prepass_t *prepass, ir_func_t *func, rc_t type_rc, token_t const *name_tkn, c_scope_t *scope
 ) {
@@ -719,24 +828,30 @@ c_var_t *c_var_create(
             case C_COMP_TYPE_UNION: comp_var = "union"; break;
         }
         cctx_diagnostic(ctx->cctx, name_tkn->pos, DIAG_ERR, "Use of incomplete type %s %s", comp_var, comp->name);
+        rc_delete(type_rc);
         return NULL;
     }
 
     if (map_get(&scope->locals, name_tkn->strval)
         || (scope->local_exclusive && scope->parent && map_get(&scope->parent->locals, name_tkn->strval))) {
         cctx_diagnostic(ctx->cctx, name_tkn->pos, DIAG_ERR, "Redefinition of %s", name_tkn->strval);
+        rc_delete(type_rc);
         return NULL;
     }
 
-    // Can create a valid local variable.
     c_var_t *var = calloc(1, sizeof(c_var_t));
-
-    if (set_contains(&prepass->pointer_taken, name_tkn)) {
-        var->storage = C_VAR_STORAGE_FRAME;
-        var->frame   = ir_frame_create(func, size, align, NULL);
+    var->type    = type_rc;
+    if (func) {
+        // Can create a valid local variable.
+        if (set_contains(&prepass->pointer_taken, name_tkn)) {
+            var->storage = C_VAR_STORAGE_FRAME;
+            var->frame   = ir_frame_create(func, size, align, NULL);
+        } else {
+            var->storage = C_VAR_STORAGE_REG;
+            var->ir_var  = ir_var_create(func, c_type_to_ir_type(ctx, type), NULL);
+        }
     } else {
-        var->storage = C_VAR_STORAGE_REG;
-        var->ir_var  = ir_var_create(func, c_type_to_ir_type(ctx, type), NULL);
+        fprintf(stderr, "[TODO] c_var_create in global scope\n");
     }
 
     map_set(&scope->locals, name_tkn->strval, var);
@@ -1582,7 +1697,7 @@ ir_code_t *
         }
 
         // Create the C variable.
-        c_var_t *var = c_var_create(ctx, prepass, code->func, rc_share(decl_type), decl_type->data, scope);
+        c_var_t *var = c_var_create(ctx, prepass, code ? code->func : NULL, rc_share(decl_type), name, scope);
         if (!var) {
             // A diagnostic will have already been created.
             rc_delete(decl_type);

@@ -38,7 +38,6 @@ static void compile(char const *path) {
     // While not EOF, keep parsing and compiling stuff.
     while (tkn_peek(tctx).type != TOKENTYPE_EOF) {
         token_t decls = c_parse_decls(&pctx, true);
-        c_tkn_debug_print(decls);
         if (decls.subtype == C_AST_FUNC_DEF) {
             // Function definition.
             c_prepass_t prepass = c_precompile_pass(&decls);

@@ -223,26 +223,26 @@ struct c_comp {
     // Alignment of this type; must be a power of 2; 0 for incomplete types.
     uint64_t      align;
     union {
-        struct {
-            // Struct/union fields.
-            c_field_t *fields;
-            // Number of fields.
-            size_t     fields_len;
-        };
-        struct {
-            // Enum variants.
-            c_enumvar_t *variants;
-            // Number of enum variants.
-            size_t       variants_len;
-        };
+        // Struct/union fields.
+        map_t fields;
+        // Enum variants.
+        map_t variants;
     };
 };
 
 // C enum variant definition.
-struct c_enumvar {};
+struct c_enumvar {
+    char *name;
+    int   ordinal;
+};
 
 // C struct/union field delcaration.
-struct c_field {};
+struct c_field {
+    char  *name;
+    // Refcount ptr of `c_type_t`.
+    rc_t   type_rc;
+    size_t offset;
+};
 
 // C compiler options.
 struct c_options {
@@ -337,7 +337,8 @@ void         c_value_write(c_compiler_t *ctx, ir_code_t *code, c_value_t const *
 ir_memref_t  c_value_memref(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
 // Read a value for scalar arithmetic.
 ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
-// Create a local variable in a function.
+// Create a C variable in the current translation unit.
+// If in global scope, `code` and `prepass` must be `NULL`.
 c_var_t     *c_var_create(
         c_compiler_t *ctx, c_prepass_t *prepass, ir_func_t *func, rc_t type_rc, token_t const *name_tkn, c_scope_t *scope
     );

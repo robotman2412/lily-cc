@@ -35,7 +35,7 @@ c_compiler_t *c_compiler_create(cctx_t *cctx, c_options_t options) {
     cc->global_scope.locals         = STR_MAP_EMPTY;
     cc->global_scope.locals_by_decl = PTR_MAP_EMPTY;
     cc->global_scope.typedefs       = STR_MAP_EMPTY;
-    cc->global_scope.structs        = STR_MAP_EMPTY;
+    cc->global_scope.comp_types     = STR_MAP_EMPTY;
 
     for (size_t i = 0; i < C_N_PRIM; i++) {
         cc->prim_types[i].primitive = i;
@@ -49,12 +49,7 @@ c_compiler_t *c_compiler_create(cctx_t *cctx, c_options_t options) {
 
 // Destroy a C compiler context.
 void c_compiler_destroy(c_compiler_t *cc) {
-    map_foreach(ent, &cc->global_scope.locals) {
-        c_var_t *local = ent->value;
-        rc_delete(local->type);
-        free(local);
-    }
-    map_clear(&cc->global_scope.locals);
+    c_scope_destroy(cc->global_scope);
     free(cc);
 }
 
@@ -76,6 +71,8 @@ static void c_type_free(c_type_t *type) {
         rc_delete(type->inner);
     } else if (type->primitive == C_COMP_POINTER) {
         rc_delete(type->inner);
+    } else if (type->primitive == C_COMP_ENUM || type->primitive == C_COMP_STRUCT || type->primitive == C_COMP_UNION) {
+        rc_delete(type->comp);
     }
     free(type);
 }
@@ -146,6 +143,7 @@ static void c_comp_free(c_comp_t *comp) {
         }
         map_clear(&comp->fields);
     }
+    free(comp->name);
     free(comp);
 }
 
@@ -178,10 +176,7 @@ static rc_t c_compile_comp_spec(c_compiler_t *ctx, token_t const *struct_spec, c
     rc_t      comp_rc = NULL;
     c_comp_t *comp;
     if (name) {
-        comp_rc = map_get(&scope->structs, name->strval);
-        if (comp_rc) {
-            comp_rc = rc_share(comp_rc);
-        }
+        comp_rc = c_scope_lookup_comp(scope, name->strval);
     }
     if (!comp_rc) {
         comp         = strong_calloc(1, sizeof(c_comp_t));
@@ -190,7 +185,7 @@ static rc_t c_compile_comp_spec(c_compiler_t *ctx, token_t const *struct_spec, c
         comp->type   = comp_type;
         comp->fields = STR_MAP_EMPTY;
         if (name) {
-            map_set(&scope->structs, name, rc_share(comp_rc));
+            map_set(&scope->comp_types, name->strval, rc_share(comp_rc));
         }
     } else {
         comp = comp_rc->data;
@@ -506,7 +501,7 @@ c_scope_t c_scope_create(c_scope_t *parent) {
     new_scope.locals         = STR_MAP_EMPTY;
     new_scope.locals_by_decl = PTR_MAP_EMPTY;
     new_scope.typedefs       = STR_MAP_EMPTY;
-    new_scope.structs        = STR_MAP_EMPTY;
+    new_scope.comp_types     = STR_MAP_EMPTY;
     return new_scope;
 }
 
@@ -530,10 +525,10 @@ void c_scope_destroy(c_scope_t scope) {
     map_clear(&scope.typedefs);
 
     // Delete enums, structs and unions.
-    map_foreach(ent, &scope.structs) {
+    map_foreach(ent, &scope.comp_types) {
         rc_delete(ent->value);
     }
-    map_clear(&scope.structs);
+    map_clear(&scope.comp_types);
 }
 
 // Look up a variable in scope.
@@ -554,6 +549,30 @@ c_var_t *c_scope_lookup_by_decl(c_scope_t *scope, token_t const *decl) {
         c_var_t *var = map_get(&scope->locals_by_decl, decl);
         if (var) {
             return var;
+        }
+        scope = scope->parent;
+    }
+    return NULL;
+}
+
+// Look up a compound type in scope.
+rc_t c_scope_lookup_comp(c_scope_t *scope, char const *ident) {
+    while (scope) {
+        rc_t var = map_get(&scope->comp_types, ident);
+        if (var) {
+            return rc_share(var);
+        }
+        scope = scope->parent;
+    }
+    return NULL;
+}
+
+// Look up a typedef in scope.
+rc_t c_scope_lookup_typedef(c_scope_t *scope, char const *ident) {
+    while (scope) {
+        rc_t var = map_get(&scope->typedefs, ident);
+        if (var) {
+            return rc_share(var);
         }
         scope = scope->parent;
     }
@@ -1696,7 +1715,7 @@ ir_code_t *
         }
 
         // Create the C variable.
-        c_var_t *var = c_var_create(ctx, prepass, code ? code->func : NULL, rc_share(decl_type), name, scope);
+        c_var_t *var = c_var_create(ctx, prepass, code ? code->func : NULL, decl_type, name, scope);
         if (!var) {
             // A diagnostic will have already been created.
             rc_delete(decl_type);

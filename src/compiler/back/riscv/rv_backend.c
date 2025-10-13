@@ -46,7 +46,7 @@ void rv_init_codegen(backend_profile_t *profile0) {
     profile->base.ptr_bits          = profile->base.gpr_bits;
     profile->base.has_f32           = profile->ext_enabled[RV_EXT_F];
     profile->base.has_f64           = profile->ext_enabled[RV_EXT_D];
-    profile->base.gpr_count         = profile->ext_enabled[RV_EXT_F] ? 63 : 31;
+    profile->base.gpr_count         = profile->ext_enabled[RV_EXT_F] ? 64 : 32;
     profile->base.gpr_classes       = strong_calloc(profile->base.gpr_count, sizeof(regclass_t));
 
     profile->base.gpr_classes[0].val = 0;

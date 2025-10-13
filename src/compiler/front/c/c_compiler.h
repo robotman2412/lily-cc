@@ -157,7 +157,7 @@ struct c_scope {
     // Map of typedefs (entry type is `rc_t` of `c_type_t`).
     map_t      typedefs;
     // Map of enums, structs and unions (entry type is `rc_t` of `c_type_t`).
-    map_t      structs;
+    map_t      comp_types;
 };
 
 // C type.
@@ -307,6 +307,10 @@ void      c_scope_destroy(c_scope_t scope);
 c_var_t  *c_scope_lookup(c_scope_t *scope, char const *ident);
 // Look up a variable in scope by declaration token.
 c_var_t  *c_scope_lookup_by_decl(c_scope_t *scope, token_t const *decl);
+// Look up a compound type in scope.
+rc_t      c_scope_lookup_comp(c_scope_t *scope, char const *ident);
+// Look up a typedef in scope.
+rc_t      c_scope_lookup_typedef(c_scope_t *scope, char const *ident);
 
 // Create a type that is a pointer to an existing type.
 rc_t          c_type_pointer(c_compiler_t *ctx, rc_t inner);

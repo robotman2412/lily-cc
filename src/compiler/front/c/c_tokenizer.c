@@ -415,7 +415,7 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
         if (as_utf8) {
             uint8_t utf8_len = utf8_encode(NULL, 0, c);
             array_lencap_resize_strong(&ptr, 1, &len, &cap, len + utf8_len);
-            utf8_encode(ptr - utf8_len, utf8_len, c);
+            utf8_encode(ptr + len - utf8_len, utf8_len, c);
         } else {
             uint8_t tmp = c;
             array_lencap_insert_strong(&ptr, 1, &len, &cap, &tmp, len);

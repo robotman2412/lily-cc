@@ -5,9 +5,8 @@
 
 #pragma once
 
-#include "c_compiler.h"
-#include "c_tokenizer.h"
 #include "set.h"
+#include "tokenizer.h"
 
 
 

@@ -6,10 +6,9 @@
 #pragma once
 
 #include "c_prepass.h"
-#include "c_std.h"
 #include "c_tokenizer.h"
 #include "compiler.h"
-#include "ir.h"
+#include "ir_types.h"
 #include "map.h"
 #include "refcount.h"
 

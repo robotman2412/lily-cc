@@ -77,11 +77,11 @@ struct srcfile {
     // Is this stored in RAM (as opposed to on disk)?
     bool     is_ram_file;
     // Current offset of file descriptor (for file on disk).
-    int      fd_off;
+    off_t    fd_off;
     // File descriptor (for files on disk).
     FILE    *fd;
     // File content size (for files in RAM).
-    int      content_len;
+    size_t   content_len;
     // File content pointer (for files in RAM).
     uint8_t *content;
 };
@@ -92,14 +92,14 @@ struct pos {
     srcfile_t *srcfile;
     // Include file from whence this came, if any.
     incfile_t *incfile;
+    // File offset in bytes.
+    off_t      off;
     // Zero-indexed line.
     int        line;
     // Zero-indexed column.
     int        col;
-    // File offset in bytes.
-    int        off;
     // Length in bytes.
-    int        len;
+    off_t      len;
 };
 
 // Include file instance.
@@ -177,7 +177,7 @@ srcfile_t *srcfile_open(cctx_t *ctx, char const *path);
 // Create a source file from binary data.
 srcfile_t *srcfile_create(cctx_t *ctx, char const *virt_path, void const *data, size_t len);
 // Read a character from a source file and update offset.
-int        srcfile_getc_raw(srcfile_t *file, int *offset);
+int        srcfile_getc_raw(srcfile_t *file, off_t *offset);
 // Read a character from a source file and update position.
 int        srcfile_getc(srcfile_t *file, pos_t *pos);
 // Try to seek to the previous character in a source file.

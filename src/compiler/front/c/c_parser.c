@@ -7,7 +7,6 @@
 
 #include "arrays.h"
 #include "c_tokenizer.h"
-#include "char_repr.h"
 #include "compiler.h"
 #include "strong_malloc.h"
 #include "tokenizer.h"
@@ -213,22 +212,6 @@ static bool is_prefix_oper_tkn(token_t token) {
         case C_TKN_DEC:
         case C_TKN_NOT:
         case C_TKN_LNOT: return true;
-        default: return false;
-    }
-}
-
-// Is this a valid suffix operator token?
-static bool is_suffix_oper_tkn(token_t token) {
-    if (token.type != TOKENTYPE_OTHER) {
-        return false;
-    }
-    switch (token.subtype) {
-        case C_TKN_LPAR:
-        case C_TKN_LBRAC:
-        case C_TKN_DOT:
-        case C_TKN_ARROW:
-        case C_TKN_INC:
-        case C_TKN_DEC: return true;
         default: return false;
     }
 }

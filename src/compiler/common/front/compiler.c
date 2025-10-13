@@ -149,12 +149,12 @@ void print_diagnostic(diagnostic_t const *diag, FILE *to) {
 
     // Print all the characters, splitting at each line ending and drawing a squiggly line underneath.
     // Extend until the next end-of-line (or at most 80 characters past `diag->pos`).
-    int  min_chars  = diag->pos.col - pos.col + diag->pos.len;
-    int  max_chars  = min_chars + 80;
-    int  off        = pos.off;
-    int  line       = pos.line + 1;
-    int  line_start = off;
-    bool draw       = false;
+    off_t min_chars  = diag->pos.col - pos.col + diag->pos.len;
+    off_t max_chars  = min_chars + 80;
+    off_t off        = pos.off;
+    int   line       = pos.line + 1;
+    off_t line_start = off;
+    bool  draw       = false;
     fprintf(to, "%5d | ", line);
     for (int x = 0; x < max_chars; x++) {
         // The bit that prints the line.
@@ -179,7 +179,7 @@ void print_diagnostic(diagnostic_t const *diag, FILE *to) {
             if (draw) {
                 color_fputs(color[diag->lvl], to);
             }
-            for (int y = line_start; y < off; y++) {
+            for (off_t y = line_start; y < off; y++) {
                 if (y == diag->pos.off + diag->pos.len) {
                     color_fputs(ANSI_DEFAULT, to);
                     fputc(' ', to);
@@ -282,9 +282,9 @@ err0:
 
 // Read a raw byte from a source file.
 // Returns -1 on EOF.
-static int srcfile_read_raw_byte(srcfile_t *file, int off) {
+static int srcfile_read_raw_byte(srcfile_t *file, off_t off) {
     if (file->is_ram_file) {
-        if (off >= file->content_len) {
+        if (off >= (off_t)file->content_len) {
             return -1;
         }
         return file->content[off];
@@ -302,7 +302,7 @@ static int srcfile_read_raw_byte(srcfile_t *file, int off) {
 }
 
 // Read a character from a source file and update offset.
-int srcfile_getc_raw(srcfile_t *file, int *off) {
+int srcfile_getc_raw(srcfile_t *file, off_t *off) {
     // Read first UTF-8 byte.
     int val  = 0;
     int head = srcfile_read_raw_byte(file, *off);
@@ -348,8 +348,8 @@ int srcfile_getc_raw(srcfile_t *file, int *off) {
 int srcfile_getc(srcfile_t *file, pos_t *pos) {
     int c = srcfile_getc_raw(file, &pos->off);
     if (c == '\r') {
-        int tmp = pos->off;
-        c       = srcfile_getc_raw(file, &tmp);
+        off_t tmp = pos->off;
+        c         = srcfile_getc_raw(file, &tmp);
         if (c == '\n') {
             pos->off = tmp;
         }
@@ -367,7 +367,7 @@ int srcfile_getc(srcfile_t *file, pos_t *pos) {
 }
 
 // Try to seek to the previous character in a source file.
-static bool srcfile_seekprev_raw(srcfile_t *file, int *off) {
+static bool srcfile_seekprev_raw(srcfile_t *file, off_t *off) {
     if (file->is_ram_file) {
         if (*off == 0) {
             return false;
@@ -398,13 +398,13 @@ static bool srcfile_seekprev_raw(srcfile_t *file, int *off) {
 // Try to seek to the previous character in a source file.
 // Will stop at the beginnings of lines.
 bool srcfile_seekprev(srcfile_t *file, pos_t *pos) {
-    int tmp_off = pos->off;
+    off_t tmp_off = pos->off;
     if (!srcfile_seekprev_raw(file, &tmp_off)) {
         return false;
     }
 
-    int tmp_off_2 = tmp_off;
-    int c         = srcfile_getc_raw(file, &tmp_off_2);
+    off_t tmp_off_2 = tmp_off;
+    int   c         = srcfile_getc_raw(file, &tmp_off_2);
     if (c == '\n') {
         return false;
     }

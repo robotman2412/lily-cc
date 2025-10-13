@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: MIT
 
 #include "c_parser.h"
+#include "c_std.h"
+#include "c_tokenizer.h"
 #include "testcase.h"
 
 

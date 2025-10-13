@@ -1555,7 +1555,6 @@ ir_code_t *
 
         // Compile condition.
         if (stmt->params[1].type == TOKENTYPE_AST && stmt->params[1].subtype == C_AST_NOP) {
-            // Condition -> body consistency is not needed because the body will have already made it so.
             for_cond = for_body;
         } else {
             for_cond             = ir_code_create(code->func, NULL);
@@ -1703,28 +1702,6 @@ ir_code_t *
             rc_delete(decl_type);
             continue;
         }
-
-        // if (map_get(&scope->locals, name->strval)) {
-        //     cctx_diagnostic(ctx->cctx, name->pos, DIAG_ERR, "Redefinition of %s", name->strval);
-        //     continue;
-        // }
-
-        // // Create the C variable.
-        // c_var_t  *var         = calloc(1, sizeof(c_var_t));
-        // c_type_t *c_decl_type = decl_type->data;
-        // var->type             = decl_type;
-        // if (scope->depth == 0) {
-        //     var->storage = C_VAR_STORAGE_GLOBAL;
-        //     var->sym     = strong_strdup(name->strval);
-        // } else if (set_contains(&prepass->pointer_taken, name)) {
-        //     var->storage = C_VAR_STORAGE_FRAME;
-        //     var->frame   = code ? ir_frame_create(code->func, c_decl_type->size, c_decl_type->size, NULL) : NULL;
-        // } else {
-        //     var->storage = C_VAR_STORAGE_REG;
-        //     var->ir_var  = code ? ir_var_create(code->func, c_type_to_ir_type(ctx, decl_type->data), NULL) : NULL;
-        // }
-        // map_set(&scope->locals, name->strval, var);
-        // map_set(&scope->locals_by_decl, name, var);
 
         // If the declaration has an assignment, compile it too.
         if (decls->params[i].type == TOKENTYPE_AST && decls->params[i].subtype == C_AST_ASSIGN_DECL) {

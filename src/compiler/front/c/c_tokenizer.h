@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include "c_std.h"
 #include "compiler.h"
 #include "tokenizer.h"
 

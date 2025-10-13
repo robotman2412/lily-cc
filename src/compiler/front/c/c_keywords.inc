@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: MIT
 // clang-format off
 
+#include "c_std.h"
+
 
 
 // Undef any macros that may conflict.

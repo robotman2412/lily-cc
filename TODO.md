@@ -113,6 +113,9 @@
     - Concept of stack frame ✓
     - Instruction to get stack variable pointer ✓
     - Memory load/store ✓
+- IR support for parameters
+    - In registers ✓
+    - In stack frames
 
 
 ## RISC-V backend

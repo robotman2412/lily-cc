@@ -45,8 +45,6 @@ char *test_rv_isel() {
     backend_profile_t *profile = rv_create_profile();
     profile->backend->init_codegen(profile);
     codegen(profile, func);
-    putchar('\n');
-    ir_func_serialize(func, profile, stdout);
 
     ir_func_delete(func);
     profile->backend->delete_profile(profile);

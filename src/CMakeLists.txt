@@ -15,7 +15,6 @@ add_compile_options(
     -Werror=all -Werror=extra -Werror=enum-conversion
     -DDLIST_CONSISTENCY_CHECK
 )
-add_link_options(-lbsd)
 
 
 add_subdirectory(util)

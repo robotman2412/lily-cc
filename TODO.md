@@ -53,7 +53,7 @@
     - `__DATE__` - `"Mmm dd yyyy"` format compile date
     - `__FILE__` - string literal file path
     - `__FILE_NAME__` - GNU extension; file name only
-    - `__LINE__` - line number string literal
+    - `__LINE__` - line number integer literal
     - `__STDC__` - int literal `1`
     - `__STDC_HOSTED__` - `0` with freestanding, `1` with hosted
     - `__STDC_VERSION__` - `yyyymmL` (e.g. `202311L`) format C standard version
@@ -92,7 +92,7 @@
     - Arrays
     - Structs
     - Unions
-    - Enums
+    - Enums ✓
     - Function pointers
 - Expression operators
     - Arithmetic ✓
@@ -115,13 +115,6 @@
     - Memory load/store ✓
 
 
-## Backends
-- Research compiler backend design
-- Create ELF writer
-- Create backends
-    - Faerie backend
-- Generic assembler
-
 ## RISC-V backend
 - RISC-V assembler
 - Instruction encoder
@@ -137,6 +130,6 @@
     - V
     - Privileged instructions
 - Register definitions
-    - Integer
+    - Integer ✓
     - Float
     - CSR

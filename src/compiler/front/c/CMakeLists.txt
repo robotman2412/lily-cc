@@ -10,6 +10,8 @@ add_library(c-frontend STATIC
     c_compiler.c
     c_parser.c
     c_tokenizer.c
+    c_types.c
+    c_values.c
 )
 target_include_directories(c-frontend PUBLIC .)
 target_link_libraries(c-frontend PUBLIC compiler-common)

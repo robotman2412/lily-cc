@@ -52,4 +52,3 @@ No preprocessor exists at all
 
 ## RISC-V backend
 - Instruction selection for all of RV32I
-For more detail see [TODO.md](TODO.md).

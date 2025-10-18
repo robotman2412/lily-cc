@@ -7,8 +7,11 @@
 
 #include "c_compiler.h"
 #include "c_parser.h"
+#include "compiler.h"
 #include "ir_interpreter.h"
 #include "strong_malloc.h"
+
+#include <stdio.h>
 
 
 
@@ -68,8 +71,10 @@ static void
         if (body[i].params_len == 2) {
             // Enum variant with specific index.
             c_compile_expr_t res = c_compile_expr(ctx, NULL, NULL, scope, &body[i].params[1]);
-            if (res.res.value_type == C_RVALUE) {
-                cur = (int)ir_cast(c_prim_to_ir_type(ctx, C_PRIM_SINT), res.res.rvalue.iconst).constl;
+            if (res.res.value_type == C_RVALUE_OPERAND) {
+                cur = (int)ir_cast(c_prim_to_ir_type(ctx, C_PRIM_SINT), res.res.rvalue.operand.iconst).constl;
+            } else if (c_is_rvalue(&res.res)) {
+                cctx_diagnostic(ctx->cctx, body->params[1].pos, DIAG_ERR, "Expected scalar type");
             }
         }
         if (map_get(&scope->locals, name->strval)) {
@@ -263,10 +268,12 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
         }
 
     } else if (has_char) {
-        if (has_unsigned || (!has_signed && !ctx->options.char_is_signed)) {
+        if (has_unsigned) {
             type->primitive = C_PRIM_UCHAR;
-        } else {
+        } else if (has_signed) {
             type->primitive = C_PRIM_SCHAR;
+        } else {
+            type->primitive = C_PRIM_CHAR;
         }
         has_char     = false;
         has_signed   = false;
@@ -460,28 +467,181 @@ rc_t c_type_pointer(c_compiler_t *ctx, rc_t inner) {
 }
 
 // Determine type promotion to apply in an infix context.
-// Note: This does not take ownership of the refcount ptr;
-// It will call `rc_share` on the callers behalf only if necessary.
-rc_t c_type_promote(c_compiler_t *ctx, c_tokentype_t oper, rc_t a_rc, rc_t b_rc) {
-    c_type_t *a = a_rc->data;
-    c_type_t *b = b_rc->data;
-    c_type_t *tmp;
-    if (a->primitive >= C_N_PRIM || b->primitive >= C_N_PRIM) {
-        return NULL;
-    } else if (a->primitive > b->primitive) {
+c_prim_t c_prim_promote(c_prim_t a, c_prim_t b) {
+    c_prim_t tmp;
+    if (a >= C_N_PRIM || b >= C_N_PRIM) {
+        __builtin_unreachable();
+    } else if (a > b) {
         tmp = a;
     } else {
         tmp = b;
     }
 
-    if (oper > C_TKN_LOR && tmp->primitive < C_PRIM_UINT) {
-        // If a non-boolean operator is used on a type smaller than int, promote to it.
-        bool is_unsigned = tmp->primitive & 1;
-        return rc_share(&ctx->prim_rcs[C_PRIM_SINT - is_unsigned]);
+    if (tmp < C_PRIM_SINT) {
+        // Promote smaller types to `int`.
+        return C_PRIM_SINT;
     } else {
-        // Otherwise, merely drop stuff like `volatile` and `const`.
-        return rc_share(&ctx->prim_rcs[tmp->primitive]);
+        // Otherwise, merely use the wider of the two types.
+        return tmp;
     }
+}
+
+// Determine whether two types are compatible.
+bool c_type_compatible(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b) {
+    if (a->primitive != b->primitive) {
+        return (a->primitive < C_N_PRIM || a->primitive == C_COMP_ENUM)
+               && (b->primitive < C_N_PRIM || b->primitive == C_COMP_ENUM);
+    }
+    switch (a->primitive) {
+        case C_PRIM_BOOL:
+        case C_PRIM_CHAR:
+        case C_PRIM_UCHAR:
+        case C_PRIM_SCHAR:
+        case C_PRIM_USHORT:
+        case C_PRIM_SSHORT:
+        case C_PRIM_UINT:
+        case C_PRIM_SINT:
+        case C_PRIM_ULONG:
+        case C_PRIM_SLONG:
+        case C_PRIM_ULLONG:
+        case C_PRIM_SLLONG:
+        case C_PRIM_FLOAT:
+        case C_PRIM_DOUBLE:
+        case C_PRIM_LDOUBLE:
+        case C_PRIM_VOID: return true;
+        case C_COMP_STRUCT:
+        case C_COMP_UNION: return a->comp == b->comp;
+        case C_COMP_ENUM:
+        case C_COMP_POINTER: return true;
+        case C_COMP_ARRAY: return c_type_compatible(ctx, a->inner->data, b->inner->data);
+        case C_COMP_FUNCTION: return false;
+    }
+    __builtin_unreachable();
+}
+
+// Helper for `c_type_arith_compatible` that determines pointer arithmetic compatibility.
+static bool c_type_ptrarith_compatible(
+    c_compiler_t   *ctx,
+    c_type_t const *ptr,
+    c_type_t const *other,
+    c_tokentype_t   oper_tkn,
+    pos_t           diag_pos,
+    bool            is_swapped
+) {
+    switch (oper_tkn) {
+        case C_TKN_LAND:
+        case C_TKN_LOR: return true;
+
+        case C_TKN_ADD:
+            if (!c_prim_is_int(other->primitive)) {
+                // Pointer addition requires a pointer and an integer.
+                cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_tokens[oper_tkn]);
+                return false;
+            }
+            return true;
+
+        case C_TKN_ADD_S:
+            if (is_swapped || ptr->primitive != C_COMP_POINTER || !c_prim_is_int(other->primitive)) {
+                // Pointer addition requires a pointer and an integer.
+                cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_tokens[oper_tkn]);
+                return false;
+            }
+            return true;
+
+        case C_TKN_SUB:
+            if (c_prim_is_ptr(other->primitive)) {
+                // Pointers must be to compatible types.
+                c_type_t const *ptr_inner   = ptr->inner->data;
+                c_type_t const *other_inner = other->inner->data;
+                if (ptr_inner->primitive != C_PRIM_VOID && other_inner->primitive != C_PRIM_VOID
+                    && !c_type_compatible(ctx, ptr_inner, other_inner)) {
+                    cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Difference of pointers to incompatible types");
+                    return false;
+                }
+                return true;
+            }
+            if (!c_prim_is_int(other->primitive)) {
+                // Pointer subtraction requires a pointer and an integer or another pointer.
+                cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_tokens[oper_tkn]);
+                return false;
+            }
+            return true;
+
+        case C_TKN_SUB_S:
+            if (is_swapped || ptr->primitive != C_COMP_POINTER || !c_prim_is_int(other->primitive)) {
+                // Pointer subtraction requires a pointer and an integer or another pointer.
+                cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_tokens[oper_tkn]);
+                return false;
+            }
+            return true;
+
+        case C_TKN_MUL:
+        case C_TKN_MUL_S:
+        case C_TKN_DIV:
+        case C_TKN_DIV_S:
+        case C_TKN_MOD:
+        case C_TKN_MOD_S:
+        case C_TKN_SHL:
+        case C_TKN_SHL_S:
+        case C_TKN_SHR:
+        case C_TKN_SHR_S:
+        case C_TKN_AND:
+        case C_TKN_AND_S:
+        case C_TKN_OR:
+        case C_TKN_OR_S:
+        case C_TKN_XOR:
+        case C_TKN_XOR_S:
+            // Cannot do any of these operations on a pointer.
+            cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_tokens[oper_tkn]);
+            return false;
+
+        case C_TKN_EQ:
+        case C_TKN_NE:
+        case C_TKN_LT:
+        case C_TKN_LE:
+        case C_TKN_GT:
+        case C_TKN_GE:
+            if (c_prim_is_ptr(other->primitive)) {
+                // Warn if incompatible pointers.
+                c_type_t const *ptr_inner   = ptr->inner->data;
+                c_type_t const *other_inner = other->inner->data;
+                if (ptr_inner->primitive != C_PRIM_VOID && other_inner->primitive != C_PRIM_VOID
+                    && !c_type_compatible(ctx, ptr_inner, other_inner)) {
+                    cctx_diagnostic(ctx->cctx, diag_pos, DIAG_WARN, "Comparison of pointers to incompatible types");
+                }
+            } else if (!c_prim_is_int(other->primitive)) {
+                // Comparison can only be integers and pointers.
+                cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_tokens[oper_tkn]);
+                return false;
+            } else {
+                // Warn of integer-pointer comparison.
+                cctx_diagnostic(ctx->cctx, diag_pos, DIAG_WARN, "Comparison of pointer and integral types");
+            }
+            return true;
+
+        default: __builtin_unreachable();
+    }
+}
+
+// Determine whether two types can be used with a certain operator token.
+// Produces a diagnostic if they cannot.
+bool c_type_arith_compatible(
+    c_compiler_t *ctx, c_type_t const *a, c_type_t const *b, c_tokentype_t oper_tkn, pos_t diag_pos
+) {
+    // There are additional checks and restrictions to pointer arithmetic.
+    if (c_prim_is_ptr(a->primitive)) {
+        return c_type_ptrarith_compatible(ctx, a, b, oper_tkn, diag_pos, false);
+    } else if (c_prim_is_ptr(b->primitive)) {
+        return c_type_ptrarith_compatible(ctx, b, a, oper_tkn, diag_pos, true);
+    }
+
+    // Otherwise, they are arithmetic compatible if both types are primitives.
+    if (a->primitive >= C_N_PRIM || b->primitive >= C_N_PRIM) {
+        cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_tokens[oper_tkn]);
+        return false;
+    }
+
+    return true;
 }
 
 // Get the alignment and size of a C type.
@@ -492,6 +652,7 @@ bool c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out
     }
     switch (prim) {
         case C_PRIM_BOOL:
+        case C_PRIM_CHAR:
         case C_PRIM_UCHAR:
         case C_PRIM_SCHAR: *align_out = *size_out = 1; break;
         case C_PRIM_USHORT:
@@ -527,6 +688,7 @@ bool c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out
 ir_prim_t c_prim_to_ir_type(c_compiler_t *ctx, c_prim_t prim) {
     switch (prim) {
         case C_PRIM_BOOL: return IR_PRIM_bool;
+        case C_PRIM_CHAR: return ctx->options.char_is_signed ? IR_PRIM_s8 : IR_PRIM_u8;
         case C_PRIM_UCHAR: return IR_PRIM_u8;
         case C_PRIM_SCHAR: return IR_PRIM_s8;
         case C_PRIM_USHORT: return !ctx->options.short16 ? IR_PRIM_u8 : IR_PRIM_u16;
@@ -540,12 +702,19 @@ ir_prim_t c_prim_to_ir_type(c_compiler_t *ctx, c_prim_t prim) {
         case C_PRIM_FLOAT: return IR_PRIM_f32;
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE: return IR_PRIM_f64;
-        default: return IR_PRIM_u8;
+        case C_PRIM_VOID:
+        case C_COMP_STRUCT:
+        case C_COMP_UNION:
+        case C_COMP_ENUM:
+        case C_COMP_POINTER:
+        case C_COMP_ARRAY:
+        case C_COMP_FUNCTION: __builtin_unreachable();
     }
+    __builtin_unreachable();
 }
 
 // Convert C primitive or pointer type to IR primitive type.
-ir_prim_t c_type_to_ir_type(c_compiler_t *ctx, c_type_t *type) {
+ir_prim_t c_type_to_ir_type(c_compiler_t *ctx, c_type_t const *type) {
     c_prim_t c_prim = type->primitive;
     if (c_prim == C_COMP_POINTER) {
         c_prim = ctx->options.size_type;

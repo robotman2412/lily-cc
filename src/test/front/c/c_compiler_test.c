@@ -8,6 +8,7 @@
 #include "c_std.h"
 #include "ir.h"
 #include "ir_optimizer.h"
+#include "ir_serialization.h"
 #include "ir_types.h"
 #include "list.h"
 #include "testcase.h"

@@ -6,6 +6,7 @@
 #include "c_compiler.h"
 #include "c_parser.h"
 #include "ir/ir_optimizer.h"
+#include "ir_serialization.h"
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -7,6 +7,7 @@
 
 
 
+#include "compiler.h"
 #include "ir_types.h"
 #include "refcount.h"
 
@@ -21,7 +22,13 @@ typedef enum {
     // Lvalue by c_var_t.
     C_LVALUE_VAR,
     // Rvalue by ir_operand_t.
-    C_RVALUE,
+    C_RVALUE_OPERAND,
+    // Rvalue of an array.
+    C_RVALUE_ARR,
+    // Rvalue for structs by map_t.
+    C_RVALUE_MAP,
+    // Rvalue for structs/unions/arrays by binary representation.
+    C_RVALUE_BINARY,
 } c_value_type_t;
 
 
@@ -50,8 +57,20 @@ struct c_value {
             // The IR variable associated.
             ir_var_t   *ir_var;
         } lvalue;
-        // IR operand that holds the current rvalue.
-        ir_operand_t rvalue;
+        union {
+            // IR operand that holds the current rvalue.
+            ir_operand_t operand;
+            // Array of `rc_t` to rvalues; the length is implied by the type.
+            rc_t        *arr;
+            // Map of field name to `rc_t` of rvalues.
+            map_t        map;
+            struct {
+                // Binary blob; the size is implied by the type.
+                rc_t   blob;
+                // Offset into the blob at which the value begins.
+                size_t offset;
+            } binary;
+        } rvalue;
     };
 };
 
@@ -65,3 +84,24 @@ void         c_value_write(c_compiler_t *ctx, ir_code_t *code, c_value_t const *
 ir_memref_t  c_value_memref(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
 // Read a value for scalar arithmetic.
 ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
+// Access the field of a struct/union value.
+c_value_t    c_value_field(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value, char const *field);
+// Determine whether a value is assignable.
+// Produces a diagnostic if it is not.
+bool         c_value_assignable(c_compiler_t *ctx, c_value_t const *value, pos_t diag_pos);
+// Determine whether the value is a constant rvalue.
+bool         c_value_is_const(c_value_t const *value);
+
+// Whether a value is an rvalue.
+static inline bool c_is_rvalue(c_value_t const *value) {
+    switch (value->value_type) {
+        case C_VALUE_ERROR:
+        case C_LVALUE_MEM:
+        case C_LVALUE_VAR: return false;
+        case C_RVALUE_OPERAND:
+        case C_RVALUE_ARR:
+        case C_RVALUE_MAP:
+        case C_RVALUE_BINARY: return true;
+    }
+    __builtin_unreachable();
+}

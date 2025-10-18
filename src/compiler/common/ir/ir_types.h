@@ -422,3 +422,10 @@ extern char const *const ir_op2_names[];
 extern char const *const ir_op1_names[];
 // Names used in the serialized representation for `ir_flow_type_t`.
 extern char const *const ir_flow_names[];
+
+// Convert an IR constant into bytes.
+// Assumes the caller allocates enough space.
+void       ir_const_to_blob(ir_const_t iconst, uint8_t *blob, bool big_endian);
+// Convert an IR constant from bytes.
+// Assumes the caller guarantees the correctness of `blob`.
+ir_const_t ir_const_from_blob(ir_prim_t prim, uint8_t const *blob, bool big_endian);

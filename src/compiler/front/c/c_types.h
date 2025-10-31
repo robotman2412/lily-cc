@@ -214,10 +214,10 @@ struct c_enumvar {
 
 // C struct/union field delcaration.
 struct c_field {
-    char    *name;
+    token_t const *name_tkn;
     // Refcount ptr of `c_type_t`.
-    rc_t     type_rc;
-    uint64_t offset;
+    rc_t           type_rc;
+    uint64_t       offset;
 };
 
 

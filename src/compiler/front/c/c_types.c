@@ -51,7 +51,6 @@ static void c_comp_free(c_comp_t *comp) {
     } else {
         map_foreach(ent, &comp->fields) {
             c_field_t *value = ent->value;
-            free(value->name);
             rc_delete(value->type_rc);
             free(value);
         }
@@ -109,19 +108,60 @@ static void
     bool     errors = false;
 
     for (size_t i = 0; i < body_len; i++) {
-        token_t const *decl       = &body[i];
-        rc_t           inner_type = c_compile_spec_qual_list(ctx, &decl->params[0], scope);
-        if (!inner_type) {
+        token_t const *decl     = &body[i];
+        rc_t           inner_rc = c_compile_spec_qual_list(ctx, &decl->params[0], scope);
+        if (!inner_rc) {
             errors = true;
-        } else if (decl->params_len == 1) {
-            // Nested struct/union field.
-            cctx_diagnostic(ctx->cctx, decl->pos, DIAG_ERR, "[TODO] Anonymous inner struct/union");
-            errors = true;
+            continue;
+        }
+
+        c_type_t const *inner_type = inner_rc->data;
+        // TODO: This check does not exclude `struct a` in `struct { struct a; }`.
+        if (decl->params_len == 1
+            && (inner_type->primitive == C_COMP_STRUCT || inner_type->primitive == C_COMP_UNION)) {
+            c_comp_t const *inner_comp = inner_type->comp->data;
+
+            // Pad to alignment of inner type.
+            if (offset % inner_comp->align) {
+                offset += inner_comp->align - offset % inner_comp->align;
+            }
+
+            // Copy fields in with current offset added.
+            map_foreach(ent, &inner_comp->fields) {
+                c_field_t const *field    = ent->value;
+                c_field_t const *existing = map_get(&comp->fields, ent->key);
+                if (existing) {
+                    cctx_diagnostic(ctx->cctx, field->name_tkn->pos, DIAG_ERR, "Redefinition of %s", ent->key);
+                    errors = true;
+                    continue;
+                }
+
+                c_field_t *copy = strong_calloc(1, sizeof(c_field_t));
+                copy->name_tkn  = field->name_tkn;
+                copy->offset    = field->offset + offset;
+                copy->type_rc   = rc_share(field->type_rc);
+                map_set(&comp->fields, ent->key, copy);
+            }
+
+            // Adjust size and alignment accordingly.
+            if (align < inner_comp->align) {
+                align = inner_comp->align;
+            }
+            if (comp->type == C_COMP_TYPE_STRUCT) {
+                offset += inner_comp->size;
+            } else if (size < inner_comp->size) {
+                size = inner_comp->size;
+            }
+
         } else {
             // Normal field.
             for (size_t x = 1; x < decl->params_len; x++) {
                 token_t const *name_tkn;
-                rc_t   field_type = c_compile_decl(ctx, &decl->params[x], scope, rc_share(inner_type), &name_tkn);
+                rc_t           field_type = c_compile_decl(ctx, &decl->params[x], scope, rc_share(inner_rc), &name_tkn);
+                if (!field_type) {
+                    errors = true;
+                    continue;
+                }
                 size_t field_size, field_align;
                 if (c_type_get_size(ctx, field_type->data, &field_size, &field_align)) {
                     if (offset % field_align) {
@@ -129,7 +169,7 @@ static void
                     }
                     c_field_t *field = strong_malloc(sizeof(c_field_t));
                     field->type_rc   = field_type;
-                    field->name      = strong_strdup(name_tkn->strval);
+                    field->name_tkn  = name_tkn;
                     field->offset    = offset;
                     map_set(&comp->fields, name_tkn->strval, field);
                 } else {
@@ -150,7 +190,7 @@ static void
             }
         }
 
-        rc_delete(inner_type);
+        rc_delete(inner_rc);
     }
 
     if (size % align) {

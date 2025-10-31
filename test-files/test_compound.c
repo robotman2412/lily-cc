@@ -13,7 +13,11 @@ int foo(int) {
 struct b {
     int  *a;
     _Bool b;
-    char  c;
+    union {
+        char  c;
+        short d;
+    };
+    char e;
 };
 
 void bar(struct b *b) {
@@ -21,4 +25,5 @@ void bar(struct b *b) {
     mydat.a = b->a;
     mydat.b = 1;
     mydat.c = ~(*b).c;
+    mydat.e = 2;
 }

@@ -61,15 +61,11 @@ struct c_value {
             // IR operand that holds the current rvalue.
             ir_operand_t operand;
             // Array of `rc_t` to rvalues; the length is implied by the type.
-            rc_t        *arr;
-            // Map of field name to `rc_t` of rvalues.
+            c_value_t   *arr;
+            // Map of field name to rvalues.
             map_t        map;
-            struct {
-                // Binary blob; the size is implied by the type.
-                rc_t   blob;
-                // Offset into the blob at which the value begins.
-                size_t offset;
-            } binary;
+            // Binary blob; the size is implied by the type.
+            uint8_t     *blob;
         } rvalue;
     };
 };
@@ -86,6 +82,8 @@ ir_memref_t  c_value_memref(c_compiler_t *ctx, ir_code_t *code, c_value_t const 
 ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
 // Access the field of a struct/union value.
 c_value_t    c_value_field(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value, char const *field);
+// Clone a C value.
+c_value_t    c_value_clone(c_compiler_t *ctx, c_value_t const *value);
 // Determine whether a value is assignable.
 // Produces a diagnostic if it is not.
 bool         c_value_assignable(c_compiler_t *ctx, c_value_t const *value, pos_t diag_pos);

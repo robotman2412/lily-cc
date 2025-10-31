@@ -12,10 +12,13 @@
 #include "ir_types.h"
 #include "map.h"
 #include "refcount.h"
+#include "strong_malloc.h"
 
 #include <assert.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 
 
@@ -37,7 +40,7 @@ void c_value_destroy(c_value_t value) {
             }
             map_clear(&value.rvalue.map);
         } break;
-        case C_RVALUE_BINARY: rc_delete(value.rvalue.binary.blob); break;
+        case C_RVALUE_BINARY: free(value.rvalue.blob); break;
     }
     rc_delete(value.c_type);
 }
@@ -156,7 +159,7 @@ static void c_lvalue_write_mem(c_compiler_t *ctx, ir_code_t *code, ir_memref_t l
             // Store a binary blob to memory.
             ir_add_memcpy_const(
                 IR_APPEND(code),
-                rvalue->rvalue.binary.blob->data + rvalue->rvalue.binary.offset,
+                rvalue->rvalue.blob,
                 lvalue_memref,
                 size,
                 usize_prim,
@@ -257,6 +260,7 @@ ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *v
 
 // Access the field of a struct/union value.
 c_value_t c_value_field(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value, char const *field_name) {
+    (void)code; // Will be needed later for bitfields.
     c_type_t const *type = value->c_type->data;
     if (type->primitive != C_COMP_STRUCT && type->primitive != C_COMP_UNION) {
         fprintf(stderr, "[BUG] c_value_field called on non-struct/union type\n");
@@ -264,6 +268,87 @@ c_value_t c_value_field(c_compiler_t *ctx, ir_code_t *code, c_value_t const *val
     }
     c_comp_t const  *comp  = type->comp->data;
     c_field_t const *field = map_get(&comp->fields, field_name);
+
+    switch (value->value_type) {
+        case C_VALUE_ERROR: __builtin_unreachable();
+        case C_LVALUE_MEM: {
+            ir_memref_t memref  = value->lvalue.memref;
+            memref.offset      += (int64_t)field->offset;
+            return (c_value_t){
+                .value_type    = C_LVALUE_MEM,
+                .c_type        = rc_share(field->type_rc),
+                .lvalue.memref = memref,
+            };
+        }
+        case C_LVALUE_VAR:
+        case C_RVALUE_OPERAND:
+        case C_RVALUE_ARR: abort();
+        case C_RVALUE_MAP: return c_value_clone(ctx, map_get(&value->rvalue.map, field));
+        case C_RVALUE_BINARY: {
+            size_t size, align;
+            c_type_get_size(ctx, field->type_rc->data, &size, &align);
+            uint8_t *blob = strong_malloc(size);
+            memcpy(blob, value->rvalue.blob + field->offset, size);
+
+            c_type_t const *field_type = field->type_rc->data;
+            if (field_type->primitive < C_N_PRIM || field_type->primitive == C_COMP_POINTER) {
+                // Primitives must be converted into IR constants.
+                ir_const_t value
+                    = ir_const_from_blob(c_type_to_ir_type(ctx, field_type), blob, ctx->options.big_endian);
+                free(blob);
+                return (c_value_t){
+                    .value_type     = C_RVALUE_OPERAND,
+                    .c_type         = rc_share(field->type_rc),
+                    .rvalue.operand = IR_OPERAND_CONST(value),
+                };
+
+            } else {
+                // Not a primitive, gets to be a blob.
+                return (c_value_t){
+                    .value_type  = C_RVALUE_BINARY,
+                    .c_type      = rc_share(field->type_rc),
+                    .rvalue.blob = blob,
+                };
+            }
+        }
+    }
+    __builtin_unreachable();
+}
+
+// Clone a C value.
+c_value_t c_value_clone(c_compiler_t *ctx, c_value_t const *value) {
+    switch (value->value_type) {
+        case C_VALUE_ERROR:
+        case C_LVALUE_MEM:
+        case C_LVALUE_VAR:
+        case C_RVALUE_OPERAND: rc_share(value->c_type); return *value;
+        case C_RVALUE_ARR: abort();
+        case C_RVALUE_MAP: {
+            map_t fields = STR_MAP_EMPTY;
+            map_foreach(ent, &value->rvalue.map) {
+                c_value_t *value = strong_malloc(sizeof(c_value_t));
+                *value           = c_value_clone(ctx, ent->value);
+                map_set(&fields, ent->key, value);
+            }
+            return (c_value_t){
+                .value_type = C_RVALUE_BINARY,
+                .c_type     = rc_share(value->c_type),
+                .rvalue.map = fields,
+            };
+        }
+        case C_RVALUE_BINARY: {
+            size_t size, align;
+            c_type_get_size(ctx, value->c_type->data, &size, &align);
+            uint8_t *blob = strong_malloc(size);
+            memcpy(blob, value->rvalue.blob, size);
+            return (c_value_t){
+                .value_type  = C_RVALUE_BINARY,
+                .c_type      = rc_share(value->c_type),
+                .rvalue.blob = blob,
+            };
+        }
+    }
+    __builtin_unreachable();
 }
 
 // Determine whether a value is assignable.

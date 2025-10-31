@@ -223,7 +223,8 @@ c_var_t *c_var_create(
     var->type    = type_rc;
     if (func) {
         // Can create a valid local variable.
-        if (set_contains(&prepass->pointer_taken, name_tkn)) {
+        bool is_struct = type->primitive == C_COMP_STRUCT || type->primitive == C_COMP_UNION;
+        if (is_struct || set_contains(&prepass->pointer_taken, name_tkn)) {
             var->storage = C_VAR_STORAGE_FRAME;
             var->frame   = ir_frame_create(func, size, align, NULL);
         } else {
@@ -764,7 +765,10 @@ c_compile_expr_t
                 lvalue.lvalue.memref.offset    += (int64_t)ptr.iconst.constl;
                 break;
             case IR_OPERAND_TYPE_UNDEF: __builtin_unreachable();
-            case IR_OPERAND_TYPE_VAR: lvalue.lvalue.memref.base_type = IR_MEMBASE_VAR; break;
+            case IR_OPERAND_TYPE_VAR:
+                lvalue.lvalue.memref.base_type = IR_MEMBASE_VAR;
+                lvalue.lvalue.memref.base_var  = ptr.var;
+                break;
             case IR_OPERAND_TYPE_MEM:
             case IR_OPERAND_TYPE_REG: __builtin_unreachable();
         }

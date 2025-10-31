@@ -9,6 +9,8 @@
 #include "c_parser.h"
 #include "compiler.h"
 #include "ir_interpreter.h"
+#include "map.h"
+#include "refcount.h"
 #include "strong_malloc.h"
 
 #include <stdio.h>
@@ -101,14 +103,63 @@ static void
 // Compile the body of a struct/union definition.
 static void
     c_compile_struct_body(c_compiler_t *ctx, token_t const *body, size_t body_len, c_scope_t *scope, c_comp_t *comp) {
-    (void)ctx;
-    (void)body;
-    (void)body_len;
-    (void)scope;
-    (void)comp;
-    // TODO: Nested struct/union definitions.
-    fprintf(stderr, "[TODO] c_compile_struct_body\n");
-    abort();
+    uint64_t offset = 0;
+    uint64_t size   = 0;
+    uint64_t align  = 1;
+    bool     errors = false;
+
+    for (size_t i = 0; i < body_len; i++) {
+        token_t const *decl       = &body[i];
+        rc_t           inner_type = c_compile_spec_qual_list(ctx, &decl->params[0], scope);
+        if (!inner_type) {
+            errors = true;
+        } else if (decl->params_len == 1) {
+            // Nested struct/union field.
+            cctx_diagnostic(ctx->cctx, decl->pos, DIAG_ERR, "[TODO] Anonymous inner struct/union");
+            errors = true;
+        } else {
+            // Normal field.
+            for (size_t x = 1; x < decl->params_len; x++) {
+                token_t const *name_tkn;
+                rc_t   field_type = c_compile_decl(ctx, &decl->params[x], scope, rc_share(inner_type), &name_tkn);
+                size_t field_size, field_align;
+                if (c_type_get_size(ctx, field_type->data, &field_size, &field_align)) {
+                    if (offset % field_align) {
+                        offset += field_align - offset % field_align;
+                    }
+                    c_field_t *field = strong_malloc(sizeof(c_field_t));
+                    field->type_rc   = field_type;
+                    field->name      = strong_strdup(name_tkn->strval);
+                    field->offset    = offset;
+                    map_set(&comp->fields, name_tkn->strval, field);
+                } else {
+                    cctx_diagnostic(ctx->cctx, name_tkn->pos, DIAG_ERR, "Use of incomplete type");
+                    rc_delete(field_type);
+                    errors = true;
+                }
+
+                if (align < field_align) {
+                    align = field_align;
+                }
+                if (comp->type == C_COMP_TYPE_STRUCT) {
+                    offset += field_size;
+                    size    = offset;
+                } else if (size < field_size) {
+                    size = field_size;
+                }
+            }
+        }
+
+        rc_delete(inner_type);
+    }
+
+    if (size % align) {
+        size += align - size % align;
+    }
+    if (!errors) {
+        comp->size  = size;
+        comp->align = align;
+    }
 }
 
 // Compile a C enum/struct/union specification.
@@ -176,10 +227,12 @@ static rc_t c_compile_comp_spec(c_compiler_t *ctx, token_t const *struct_spec, c
     }
 
     // Finally compile the body with the appropriate type.
-    if (comp_type == C_COMP_TYPE_ENUM) {
-        c_compile_enum_body(ctx, body, body_len, scope, comp);
-    } else {
-        c_compile_struct_body(ctx, body, body_len, scope, comp);
+    if (body_len) {
+        if (comp_type == C_COMP_TYPE_ENUM) {
+            c_compile_enum_body(ctx, body, body_len, scope, comp);
+        } else {
+            c_compile_struct_body(ctx, body, body_len, scope, comp);
+        }
     }
 
     return comp_rc;
@@ -450,6 +503,7 @@ rc_t c_compile_decl(
         } else if (decl->type == TOKENTYPE_AST && decl->subtype == C_AST_GARBAGE) {
             rc_delete(cur);
             return NULL;
+
         } else {
             abort();
         }

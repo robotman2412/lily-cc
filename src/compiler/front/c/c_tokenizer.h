@@ -49,6 +49,8 @@ extern char const *const c_tokentype_name[];
 
 // List of keywords.
 extern char const *const c_keywords[];
+// List of tokens.
+extern char const *const c_tokens[];
 
 
 // Create a new C tokenizer.

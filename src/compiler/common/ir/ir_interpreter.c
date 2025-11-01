@@ -120,12 +120,6 @@ bool ir_const_is_negative(ir_const_t value) {
 bool ir_const_identical(ir_const_t lhs, ir_const_t rhs) {
     if (lhs.prim_type != rhs.prim_type) {
         return false;
-    } else if (lhs.prim_type == IR_PRIM_f32) {
-        return (uint32_t)lhs.constl == (uint32_t)rhs.constl;
-    } else if (lhs.prim_type == IR_PRIM_f64) {
-        return lhs.constl == rhs.constl;
-    } else if (lhs.prim_type == IR_PRIM_bool) {
-        return (lhs.constl ^ rhs.constl) & 1;
     } else {
         return ir_calc2(IR_OP2_seq, lhs, rhs).constl & 1;
     }

@@ -6,6 +6,7 @@
 #include "c_tokenizer.h"
 
 #include "c_compiler.h"
+#include "c_types.h"
 #include "compiler.h"
 #include "strong_malloc.h"
 #include "utf8.h"
@@ -35,6 +36,12 @@ char const *const c_tokentype_name[] = {
 char const *const c_keywords[] = {
 #define C_KEYW_DEF(since, deprecated, name) #name,
 #include "c_keywords.inc"
+};
+
+// List of tokens.
+char const *const c_tokens[] = {
+#define C_TOKEN_DEF(id, name) name,
+#include "c_tokens.inc"
 };
 
 // Token introduction dates.
@@ -135,18 +142,26 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
     c_prim_t c_prim     = C_PRIM_SINT;
     bool     bad_suffix = false;
     bool     u_suffix   = false;
+    bool     l_suffix   = false;
+    bool     ll_suffix  = false;
     int      c          = srcfile_getc(ctx->file, &pos1);
 
     // Promote the primitive to be bigger if necessary.
-    int opt_int_bits   = 32;
+    int opt_int_bits   = 32; // TODO: Tokenizer is currently not aware of the C options.
     int opt_long_bits  = 32;
     int opt_llong_bits = 64;
-    if (val <= ((1llu << opt_int_bits) - 1)) {
+    if (val <= ((1llu << (opt_int_bits - 1)) - 1)) {
         c_prim = C_PRIM_SINT;
-    } else if (val <= ((1llu << opt_long_bits) - 1)) {
+    } else if (val <= ((1llu << opt_int_bits) - 1)) {
+        c_prim = C_PRIM_UINT;
+    } else if (val <= ((1llu << (opt_long_bits - 1)) - 1)) {
         c_prim = C_PRIM_SLONG;
-    } else {
+    } else if (val <= ((1llu << opt_long_bits) - 1)) {
+        c_prim = C_PRIM_ULONG;
+    } else if (val <= ((1llu << opt_llong_bits) - 1)) {
         c_prim = C_PRIM_SLLONG;
+    } else {
+        c_prim = C_PRIM_ULLONG;
     }
 
     // Unsigned (before).
@@ -164,13 +179,13 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         int c2 = c;
         c      = srcfile_getc(ctx->file, &pos1);
         if (c == c2) {
-            pos0   = pos1;
-            c      = srcfile_getc(ctx->file, &pos1);
-            c_prim = C_PRIM_SLLONG;
+            pos0      = pos1;
+            c         = srcfile_getc(ctx->file, &pos1);
+            ll_suffix = true;
         } else if (c != 'u' && (c == '_' || ((c | 0x20) >= 'a' && (c | 0x20) <= 'z'))) {
             bad_suffix = true;
         } else {
-            c_prim = C_PRIM_SLONG;
+            l_suffix = true;
         }
     } else if (c == '_' || ((c | 0x20) >= 'a' && (c | 0x20) <= 'z')) {
         bad_suffix = true;
@@ -188,14 +203,18 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         bad_suffix = true;
     }
 
-    if (bad_suffix && hasdat) {
-        cctx_diagnostic(ctx->cctx, pos_including(lit_end, pos0), DIAG_ERR, "Invalid literal suffix");
+    // Change primitive type according to literal suffix.
+    if (ll_suffix && c_prim < C_PRIM_SLLONG) {
+        c_prim = C_PRIM_SLLONG;
+    } else if (l_suffix && c_prim < C_PRIM_SLONG) {
+        c_prim = C_PRIM_SLONG;
+    }
+    if (u_suffix) {
+        c_prim |= 1; // Unsigned primitives have uneven encoding in the enum.
     }
 
-    // Make it unsigned if the MSB is set.
-    int bits = c_prim == C_PRIM_SINT ? opt_int_bits : c_prim == C_PRIM_SLONG ? opt_long_bits : opt_llong_bits;
-    if (val >> (bits - 1)) {
-        u_suffix = true;
+    if (bad_suffix && hasdat) {
+        cctx_diagnostic(ctx->cctx, pos_including(lit_end, pos0), DIAG_ERR, "Invalid literal suffix");
     }
 
     ctx->pos  = pos0;
@@ -228,7 +247,7 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         .type       = TOKENTYPE_ICONST,
         .pos        = pos,
         .ival       = val,
-        .subtype    = (int)c_prim - u_suffix,
+        .subtype    = c_prim,
         .strval     = NULL,
         .strval_len = 0,
         .params_len = 0,

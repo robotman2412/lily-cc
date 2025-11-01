@@ -244,7 +244,7 @@ static bool is_type_specifier(token_t token) {
         case C_KEYW_int:
         case C_KEYW_signed:
         case C_KEYW_unsigned:
-        case C_KEYW_bool: return true;
+        case C_KEYW__Bool: return true;
         default: return false;
     }
 }
@@ -496,6 +496,7 @@ static token_t c_parse_ddecl(c_parser_t *ctx, bool allows_name, bool is_typedef)
     } else if (peek.type != TOKENTYPE_OTHER || (peek.subtype != C_TKN_LBRAC && peek.subtype != C_TKN_LPAR)) {
         // Garbaj.
         cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ( or [");
+        tkn_delete(tkn_next(ctx->tkn_ctx));
         pos_t pos = peek.pos;
         pos.len   = 0;
         return ast_empty(C_AST_GARBAGE, pos);

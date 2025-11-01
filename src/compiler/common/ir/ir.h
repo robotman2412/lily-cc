@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include "ir_serialization.h"
 #include "ir_types.h"
 
 #include <stdio.h>
@@ -99,6 +98,35 @@ ir_insn_t *ir_add_lea(ir_insnloc_t loc, ir_var_t *dest, ir_memref_t memref);
 ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_memref_t memref);
 // Add a memory store to a code block.
 ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_memref_t memref);
+
+// Add an optimized large memory write into the IR; may generate multiple instructions.
+// May use uint copies of size up to `copy_max_prim` for inline memcpy.
+// Assumes that `size_prim` is the unsigned size type.
+// Returns the last instruction created.
+ir_insn_t *ir_add_memcpy_const(
+    ir_insnloc_t loc,
+    void const  *src,
+    ir_memref_t  dest,
+    size_t       len,
+    ir_prim_t    copy_max_prim,
+    ir_prim_t    usize_prim,
+    bool         allow_implicit_call,
+    bool         big_endian
+);
+// Add an optimized memory copy into the IR; may generate multiple instructions.
+// May use uint copies of size up to `copy_max_prim` for inline memcpy.
+// Assumes that `size_prim` is the unsigned size type.
+// Returns the last instruction created.
+ir_insn_t *ir_add_memcpy(
+    ir_insnloc_t loc,
+    ir_memref_t  src,
+    ir_memref_t  dest,
+    size_t       len,
+    ir_prim_t    copy_max_prim,
+    ir_prim_t    usize_prim,
+    bool         allow_implicit_call,
+    bool         big_endian
+);
 
 // Add a function call.
 ir_insn_t *ir_add_call(

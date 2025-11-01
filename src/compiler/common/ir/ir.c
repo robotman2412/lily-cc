@@ -19,6 +19,7 @@
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -541,7 +542,6 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
         fprintf(stderr, "[BUG] IR variable %%%s asked to be replaced with itself\n", var->name);
         abort();
     }
-    ir_prim_t const value_prim = ir_operand_prim(value);
     for (set_ent_t const *ent; (ent = set_next(&var->used_at, NULL));) {
         ir_insn_t *insn = ent->value;
         for (size_t i = 0; i < insn->combinators_len; i++) {
@@ -551,6 +551,7 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
                 ir_insn_set_operand(insn, i, value);
             } else if (operand->type == IR_OPERAND_TYPE_MEM && operand->mem.base_type == IR_MEMBASE_VAR
                        && operand->mem.base_var == var) {
+                ir_prim_t data_type = operand->mem.data_type;
                 switch (value.type) {
                     case IR_OPERAND_TYPE_CONST:
                         // Make it absolute and add the constant to the offset.
@@ -558,7 +559,7 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
                             insn,
                             i,
                             IR_OPERAND_MEM(IR_MEMREF(
-                                value_prim,
+                                data_type,
                                 IR_BADDR_ABS(),
                                 .offset = operand->mem.offset + (int64_t)value.iconst.constl
                             ))
@@ -567,11 +568,7 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
 
                     case IR_OPERAND_TYPE_UNDEF:
                         // Since there's no undefined address base, make this a null deref instead.
-                        ir_insn_set_operand(
-                            insn,
-                            i,
-                            IR_OPERAND_MEM(IR_MEMREF(value_prim, IR_BADDR_ABS(), .offset = 0))
-                        );
+                        ir_insn_set_operand(insn, i, IR_OPERAND_MEM(IR_MEMREF(data_type, IR_BADDR_ABS(), .offset = 0)));
                         break;
 
                     case IR_OPERAND_TYPE_VAR:
@@ -579,9 +576,7 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
                         ir_insn_set_operand(
                             insn,
                             i,
-                            IR_OPERAND_MEM(
-                                IR_MEMREF(value_prim, IR_BADDR_VAR(value.var), .offset = operand->mem.offset)
-                            )
+                            IR_OPERAND_MEM(IR_MEMREF(data_type, IR_BADDR_VAR(value.var), .offset = operand->mem.offset))
                         );
                         break;
 
@@ -960,6 +955,7 @@ ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_var_t *dest, ir_op2_type_t oper, ir
 }
 
 
+
 // Add a load effective address of a stack frame to a code block.
 ir_insn_t *ir_add_lea_stack(ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame, uint64_t offset) {
     return ir_create_insn_va(
@@ -996,6 +992,138 @@ ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_memref_t memref) {
 ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_memref_t memref) {
     return ir_create_insn_va(loc, IR_INSN_STORE, NULL, 2, IR_OPERAND_MEM(memref), src);
 }
+
+
+
+// Implementation of `ir_add_memcpy_const` and `ir_add_memcpy`.
+static ir_insn_t *ir_add_memcpy_impl(
+    ir_insnloc_t loc,
+    void const  *src,
+    ir_memref_t  dest,
+    size_t       len,
+    ir_prim_t    copy_max_prim,
+    ir_prim_t    usize_prim,
+    bool         allow_implicit_call,
+    bool         big_endian,
+    bool         is_const
+) {
+    ir_func_t *func = ir_insnloc_code(loc)->func;
+
+    // How many pairs of load -> store would be generated for inline memcpy.
+    size_t copies_reqd = (size_t)(((ptrdiff_t)len - 1) / (ptrdiff_t)ir_prim_sizes[copy_max_prim] + 1);
+
+    // Simple heuristic to determine whether inline memcpy is better.
+    if (copies_reqd > 8 && allow_implicit_call) {
+        // Decided implicit call to memcpy is better.
+        if (is_const) {
+            // Implicit memcpy for constant data.
+            fprintf(stderr, "[TODO] ir_add_memcpy_const implicit call instruction to memcpy");
+
+        } else {
+            // Implicit memcpy for non-constant data.
+            ir_var_t  *src_ptr   = ir_var_create(func, usize_prim, NULL);
+            ir_insn_t *src_lea   = ir_add_lea(loc, src_ptr, *(ir_memref_t const *)src);
+            ir_var_t  *dest_ptr  = ir_var_create(func, usize_prim, NULL);
+            ir_insn_t *dest_lea  = ir_add_lea(IR_AFTER_INSN(src_lea), dest_ptr, dest);
+            ir_const_t len_const = {
+                .prim_type = usize_prim,
+                .consth    = 0,
+                .constl    = len,
+            };
+            return ir_add_call(
+                IR_AFTER_INSN(dest_lea),
+                IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM("memcpy")),
+                0,
+                NULL,
+                3,
+                (ir_operand_t const[]){
+                    IR_OPERAND_VAR(src_ptr),
+                    IR_OPERAND_VAR(dest_ptr),
+                    IR_OPERAND_CONST(len_const),
+                }
+            );
+        }
+    }
+
+    // Decided inline memcpy is better.
+    ir_insn_t *last = NULL;
+    for (size_t i = 0; i < len;) {
+        // Determine the largest possible copy primitive here.
+        ir_prim_t copy_prim;
+        size_t    max_bytes = len - i;
+        if (max_bytes > ir_prim_sizes[copy_max_prim]) {
+            max_bytes = ir_prim_sizes[copy_max_prim];
+        }
+        int ilog2 = __builtin_ctzll(max_bytes);
+        if (ilog2 > __builtin_ctzll(ir_prim_sizes[copy_max_prim])) {
+            ilog2 = __builtin_ctzll(ir_prim_sizes[copy_max_prim]);
+        }
+        copy_prim = IR_PRIM_u8 + 2 * ilog2;
+
+        ir_operand_t data;
+        if (is_const) {
+            // Load part of the constant.
+            ir_const_t tmp = ir_const_from_blob(copy_prim, (uint8_t const *)src + i, big_endian);
+            data           = IR_OPERAND_CONST(tmp);
+
+        } else {
+            // Load part of the memory.
+            ir_var_t   *tmp       = ir_var_create(func, copy_prim, NULL);
+            ir_memref_t src_part  = *(ir_memref_t const *)src;
+            src_part.data_type    = copy_prim;
+            src_part.offset      += (int64_t)i;
+            loc                   = IR_AFTER_INSN(ir_add_load(loc, tmp, src_part));
+            data                  = IR_OPERAND_VAR(tmp);
+        }
+
+        // Store said part to the destination.
+        ir_memref_t dest_part  = dest;
+        dest_part.data_type    = copy_prim;
+        dest_part.offset      += (int64_t)i;
+        last                   = ir_add_store(loc, data, dest_part);
+        loc                    = IR_AFTER_INSN(last);
+
+        // Advance by the primitive size, not just one byte.
+        i += ir_prim_sizes[copy_prim];
+    }
+
+    return last;
+}
+
+// Add an optimized large memory write into the IR; may generate multiple instructions.
+// May use uint copies of size up to `copy_max_prim` for inline memcpy.
+// Assumes that `usize_prim` is the unsigned size type.
+// Returns the last instruction created.
+ir_insn_t *ir_add_memcpy_const(
+    ir_insnloc_t loc,
+    void const  *src,
+    ir_memref_t  dest,
+    size_t       len,
+    ir_prim_t    copy_max_prim,
+    ir_prim_t    usize_prim,
+    bool         allow_implicit_call,
+    bool         big_endian
+) {
+    return ir_add_memcpy_impl(loc, src, dest, len, copy_max_prim, usize_prim, allow_implicit_call, big_endian, true);
+}
+
+// Add an optimized memory copy into the IR; may generate multiple instructions.
+// May use uint copies of size up to `copy_max_prim` for inline memcpy.
+// Assumes that `usize_prim` is the unsigned size type.
+// Returns the last instruction created.
+ir_insn_t *ir_add_memcpy(
+    ir_insnloc_t loc,
+    ir_memref_t  src,
+    ir_memref_t  dest,
+    size_t       len,
+    ir_prim_t    copy_max_prim,
+    ir_prim_t    usize_prim,
+    bool         allow_implicit_call,
+    bool         big_endian
+) {
+    return ir_add_memcpy_impl(loc, &src, dest, len, copy_max_prim, usize_prim, allow_implicit_call, big_endian, false);
+}
+
 
 
 // Add a function call.

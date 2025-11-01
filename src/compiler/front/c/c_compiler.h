@@ -87,15 +87,17 @@ struct c_options {
     // Current C standard.
     int      c_std;
     // GNU extensions are enabled.
-    bool     gnu_ext_enable;
+    uint32_t gnu_ext_enable : 1;
     // Char is signed by default.
-    bool     char_is_signed;
+    uint32_t char_is_signed : 1;
     // `short` is 16-bit.
-    bool     short16;
+    uint32_t short16        : 1;
     // `int` is 32-bit.
-    bool     int32;
+    uint32_t int32          : 1;
     // `long` is 64-bit.
-    bool     long64;
+    uint32_t long64         : 1;
+    // Target is big-endian.
+    uint32_t big_endian     : 1;
     // C primitive corresponding to unsigned size_t.
     c_prim_t size_type;
 };

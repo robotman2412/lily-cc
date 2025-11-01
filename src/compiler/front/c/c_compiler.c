@@ -8,6 +8,8 @@
 #include "c_parser.h"
 #include "c_prepass.h"
 #include "c_tokenizer.h"
+#include "c_types.h"
+#include "c_values.h"
 #include "compiler.h"
 #include "ir.h"
 #include "ir/ir_interpreter.h"
@@ -189,6 +191,11 @@ c_var_t *c_var_create(
 ) {
     c_type_t *type = type_rc->data;
 
+    if (type->primitive == C_COMP_FUNCTION) {
+        fprintf(stderr, "[TODO] c_var_create C_COMP_FUNCTION\n");
+        return NULL;
+    }
+
     // Enforce that it is a complete type.
     size_t size, align;
     if (!c_type_get_size(ctx, type, &size, &align)) {
@@ -198,6 +205,7 @@ c_var_t *c_var_create(
             case C_COMP_TYPE_ENUM: comp_var = "enum"; break;
             case C_COMP_TYPE_STRUCT: comp_var = "struct"; break;
             case C_COMP_TYPE_UNION: comp_var = "union"; break;
+            default: __builtin_unreachable();
         }
         cctx_diagnostic(ctx->cctx, name_tkn->pos, DIAG_ERR, "Use of incomplete type %s %s", comp_var, comp->name);
         rc_delete(type_rc);
@@ -215,7 +223,8 @@ c_var_t *c_var_create(
     var->type    = type_rc;
     if (func) {
         // Can create a valid local variable.
-        if (set_contains(&prepass->pointer_taken, name_tkn)) {
+        bool is_struct = type->primitive == C_COMP_STRUCT || type->primitive == C_COMP_UNION;
+        if (is_struct || set_contains(&prepass->pointer_taken, name_tkn)) {
             var->storage = C_VAR_STORAGE_FRAME;
             var->frame   = ir_frame_create(func, size, align, NULL);
         } else {
@@ -233,6 +242,273 @@ c_var_t *c_var_create(
 }
 
 
+
+// Decay an array value into its pointer.
+static c_value_t c_array_decay(c_compiler_t *ctx, ir_code_t *code, c_value_t value) {
+    c_type_t const *type = value.c_type->data;
+    if (type->primitive != C_COMP_ARRAY) {
+        return value;
+    }
+    ir_prim_t ptr_prim = c_prim_to_ir_type(ctx, ctx->options.size_type);
+
+    if (c_is_rvalue(&value)) {
+        fprintf(stderr, "[TODO] Decay rvalue array into pointer");
+        abort();
+    }
+
+    rc_t        ptr_rc = c_type_pointer(ctx, rc_share(type->inner));
+    ir_memref_t memref = c_value_memref(ctx, code, &value);
+    c_value_destroy(value);
+    if (memref.base_type == IR_MEMBASE_ABS) {
+        // Can (and must, for design reasons) optimize array address into a constant.
+        return (c_value_t){
+            .value_type     = C_RVALUE_OPERAND,
+            .c_type         = ptr_rc,
+            .rvalue.operand = {
+                .type   = IR_OPERAND_TYPE_CONST,
+                .iconst = {
+                    .prim_type = ptr_prim,
+                    .consth    = 0,
+                    .constl    = memref.offset,
+                },
+            },
+        };
+    } else {
+        // The array address is not constant.
+        ir_var_t *tmp = ir_var_create(code->func, ptr_prim, NULL);
+        ir_add_lea(IR_APPEND(code), tmp, memref);
+        return (c_value_t){
+            .value_type     = C_RVALUE_OPERAND,
+            .c_type         = ptr_rc,
+            .rvalue.operand = IR_OPERAND_VAR(tmp),
+        };
+    }
+}
+
+// Compile an infix arithmetic expression into IR.
+static inline c_compile_expr_t
+    c_compile_expr2_arith(c_compiler_t *ctx, ir_code_t *code, token_t const *expr, c_value_t lhs, c_value_t rhs) {
+    bool            is_assign = expr->params[0].subtype >= C_TKN_ADD_S && expr->params[0].subtype <= C_TKN_XOR_S;
+    c_type_t const *lhs_type  = lhs.c_type->data;
+    c_type_t const *rhs_type  = rhs.c_type->data;
+
+    // Determine promotion.
+    c_tokentype_t op2     = is_assign ? expr->params[0].subtype + C_TKN_ADD - C_TKN_ADD_S : expr->params[0].subtype;
+    c_prim_t      c_prim  = c_prim_promote(lhs_type->primitive, rhs_type->primitive);
+    ir_prim_t     ir_prim = c_prim_to_ir_type(ctx, c_prim);
+    bool const    is_cmp  = op2 >= C_TKN_EQ && op2 <= C_TKN_GE;
+
+    // Cast the variables if needed.
+    ir_operand_t ir_lhs = c_cast_ir_operand(code, c_value_read(ctx, code, &lhs), ir_prim);
+    ir_operand_t ir_rhs = c_cast_ir_operand(code, c_value_read(ctx, code, &rhs), ir_prim);
+
+    ir_op2_type_t ir_op2 = c_op2_to_ir_op2(op2);
+    if ((ir_op2 == IR_OP2_div || ir_op2 == IR_OP2_rem) && ir_calc1(IR_OP1_seqz, ir_rhs.iconst).constl) {
+        cctx_diagnostic(ctx->cctx, expr->pos, DIAG_ERR, "Constant division by zero");
+        return (c_compile_expr_t){
+            .code = code,
+            .res  = (c_value_t){0},
+        };
+    }
+
+    if (ir_lhs.type == IR_OPERAND_TYPE_CONST && ir_rhs.type == IR_OPERAND_TYPE_CONST) {
+        // Resulting constant can be evaluated at compile-time.
+        c_value_destroy(lhs);
+        c_value_destroy(rhs);
+        ir_const_t tmp = ir_calc2(ir_op2, ir_lhs.iconst, ir_rhs.iconst);
+        if (is_cmp) {
+            tmp    = ir_cast(c_prim_to_ir_type(ctx, C_PRIM_SINT), tmp);
+            c_prim = C_PRIM_SINT;
+        }
+        return (c_compile_expr_t){
+            .code = code,
+            .res  = {
+                 .value_type     = C_RVALUE_OPERAND,
+                 .c_type         = rc_share(&ctx->prim_rcs[c_prim]),
+                 .rvalue.operand = IR_OPERAND_CONST(tmp),
+            },
+        };
+    }
+
+    // Add math instruction.
+    ir_var_t *tmpvar = ir_var_create(code->func, is_cmp ? IR_PRIM_bool : ir_prim, NULL);
+    ir_add_expr2(IR_APPEND(code), tmpvar, ir_op2, ir_lhs, ir_rhs);
+    if (is_cmp) {
+        ir_var_t *tmpvar2 = ir_var_create(code->func, c_prim_to_ir_type(ctx, C_PRIM_SINT), NULL);
+        ir_add_expr1(IR_APPEND(code), tmpvar2, IR_OP1_mov, IR_OPERAND_VAR(tmpvar));
+        tmpvar = tmpvar2;
+        c_prim = C_PRIM_SINT;
+    }
+
+    c_value_t rvalue = {
+        .value_type     = C_RVALUE_OPERAND,
+        .c_type         = rc_share(&ctx->prim_rcs[c_prim]),
+        .rvalue.operand = IR_OPERAND_VAR(tmpvar),
+    };
+
+    if (expr->params[0].subtype >= C_TKN_ADD_S && expr->params[0].subtype <= C_TKN_XOR_S) {
+        // Assignment arithmetic expression; write back.
+        if (c_value_assignable(ctx, &lhs, expr->params[1].pos)) {
+            c_value_write(ctx, code, &lhs, &rvalue);
+        }
+    }
+
+    c_value_destroy(lhs);
+    c_value_destroy(rhs);
+    return (c_compile_expr_t){
+        .code = code,
+        .res  = rvalue,
+    };
+}
+
+// Compile an infix pointer arithmetic expression into IR.
+static inline c_compile_expr_t
+    c_compile_expr2_ptrarith(c_compiler_t *ctx, ir_code_t *code, token_t const *expr, c_value_t lhs, c_value_t rhs) {
+    ir_prim_t     ptr_prim = c_prim_to_ir_type(ctx, ctx->options.size_type);
+    ir_op2_type_t op2      = c_op2_to_ir_op2(expr->params[0].subtype);
+
+    // Perform array decay, if needed.
+    lhs = c_array_decay(ctx, code, lhs);
+    rhs = c_array_decay(ctx, code, rhs);
+
+    c_type_t const *lhs_type = lhs.c_type->data;
+    c_type_t const *rhs_type = rhs.c_type->data;
+    bool const      lhs_ptr  = lhs_type->primitive == C_COMP_POINTER;
+    bool const      rhs_ptr  = rhs_type->primitive == C_COMP_POINTER;
+
+    uint64_t size = 0, align = 0;
+    if (op2 == IR_OP2_sub || op2 == IR_OP2_add) {
+        // Assert that pointers are complete types with nonzero size.
+        if (lhs_ptr) {
+            if (!c_type_get_size(ctx, lhs_type->inner->data, &size, &align)) {
+                cctx_diagnostic(ctx->cctx, expr->pos, DIAG_ERR, "Pointer arithmetic with incomplete type");
+                c_value_destroy(lhs);
+                c_value_destroy(rhs);
+                return (c_compile_expr_t){
+                    .code = code,
+                    .res  = (c_value_t){0},
+                };
+            } else if (size == 0) {
+                cctx_diagnostic(ctx->cctx, expr->pos, DIAG_ERR, "Pointer arithmetic with zero-size type");
+                c_value_destroy(lhs);
+                c_value_destroy(rhs);
+                return (c_compile_expr_t){
+                    .code = code,
+                    .res  = (c_value_t){0},
+                };
+            }
+        }
+        if (rhs_ptr) {
+            if (!c_type_get_size(ctx, rhs_type->inner->data, &size, &align)) {
+                cctx_diagnostic(ctx->cctx, expr->pos, DIAG_ERR, "Pointer arithmetic with incomplete type");
+                c_value_destroy(lhs);
+                c_value_destroy(rhs);
+                return (c_compile_expr_t){
+                    .code = code,
+                    .res  = (c_value_t){0},
+                };
+            } else if (size == 0) {
+                cctx_diagnostic(ctx->cctx, expr->pos, DIAG_ERR, "Pointer arithmetic with zero-size type");
+                c_value_destroy(lhs);
+                c_value_destroy(rhs);
+                return (c_compile_expr_t){
+                    .code = code,
+                    .res  = (c_value_t){0},
+                };
+            }
+        }
+    }
+    ir_const_t size_iconst = (ir_const_t){.prim_type = ptr_prim, .consth = 0, .constl = size};
+
+    ir_operand_t lhs_ir   = c_value_read(ctx, code, &lhs);
+    ir_operand_t rhs_ir   = c_value_read(ctx, code, &rhs);
+    bool const   is_const = lhs_ir.type == IR_OPERAND_TYPE_CONST && rhs_ir.type == IR_OPERAND_TYPE_CONST;
+
+    ir_operand_t value;
+    rc_t         type_rc;
+    if (op2 == IR_OP2_sub && lhs_ptr && rhs_ptr) {
+        // Pointer difference.
+        type_rc = rc_share(&ctx->prim_rcs[ptr_prim]);
+        if (is_const) {
+            value = IR_OPERAND_CONST(
+                ir_calc2(IR_OP2_div, ir_calc2(IR_OP2_sub, lhs_ir.iconst, rhs_ir.iconst), size_iconst)
+            );
+        } else {
+            ir_var_t *sub = ir_var_create(code->func, ptr_prim, NULL);
+            ir_add_expr2(IR_APPEND(code), sub, IR_OP2_sub, lhs_ir, rhs_ir);
+            ir_var_t *div = ir_var_create(code->func, ptr_prim, NULL);
+            ir_add_expr2(IR_APPEND(code), div, IR_OP2_div, IR_OPERAND_VAR(sub), IR_OPERAND_CONST(size_iconst));
+            value = IR_OPERAND_VAR(div);
+        }
+
+    } else if (op2 == IR_OP2_sub) {
+        // Pointer offset (subtract edition).
+        type_rc = rc_share(lhs.c_type);
+        if (is_const) {
+            value = IR_OPERAND_CONST(
+                ir_calc2(IR_OP2_sub, lhs_ir.iconst, ir_calc2(IR_OP2_mul, rhs_ir.iconst, size_iconst))
+            );
+        } else {
+            ir_var_t *mul = ir_var_create(code->func, ptr_prim, NULL);
+            ir_add_expr2(IR_APPEND(code), mul, IR_OP2_sub, rhs_ir, IR_OPERAND_CONST(size_iconst));
+            ir_var_t *sub = ir_var_create(code->func, ptr_prim, NULL);
+            ir_add_expr2(IR_APPEND(code), sub, IR_OP2_div, lhs_ir, IR_OPERAND_VAR(mul));
+            value = IR_OPERAND_VAR(sub);
+        }
+
+    } else if (op2 == IR_OP2_add) {
+        // Pointer offset.
+        if (lhs_ptr) {
+            type_rc = rc_share(lhs.c_type);
+            if (is_const) {
+                value = IR_OPERAND_CONST(
+                    ir_calc2(IR_OP2_add, lhs_ir.iconst, ir_calc2(IR_OP2_mul, rhs_ir.iconst, size_iconst))
+                );
+            } else {
+                ir_var_t *mul = ir_var_create(code->func, ptr_prim, NULL);
+                ir_add_expr2(IR_APPEND(code), mul, IR_OP2_add, rhs_ir, IR_OPERAND_CONST(size_iconst));
+                ir_var_t *sub = ir_var_create(code->func, ptr_prim, NULL);
+                ir_add_expr2(IR_APPEND(code), sub, IR_OP2_div, lhs_ir, IR_OPERAND_VAR(mul));
+                value = IR_OPERAND_VAR(sub);
+            }
+        } else {
+            type_rc = rc_share(rhs.c_type);
+            if (is_const) {
+                value = IR_OPERAND_CONST(
+                    ir_calc2(IR_OP2_add, rhs_ir.iconst, ir_calc2(IR_OP2_mul, lhs_ir.iconst, size_iconst))
+                );
+            } else {
+                ir_var_t *mul = ir_var_create(code->func, ptr_prim, NULL);
+                ir_add_expr2(IR_APPEND(code), mul, IR_OP2_add, lhs_ir, IR_OPERAND_CONST(size_iconst));
+                ir_var_t *sub = ir_var_create(code->func, ptr_prim, NULL);
+                ir_add_expr2(IR_APPEND(code), sub, IR_OP2_div, rhs_ir, IR_OPERAND_VAR(mul));
+                value = IR_OPERAND_VAR(sub);
+            }
+        }
+
+    } else {
+        // Pointer comparison.
+        type_rc = rc_share(&ctx->prim_rcs[C_PRIM_SINT]);
+        if (is_const) {
+            value = IR_OPERAND_CONST(ir_calc2(op2, lhs_ir.iconst, rhs_ir.iconst));
+        } else {
+            ir_var_t *cmp = ir_var_create(code->func, IR_PRIM_bool, NULL);
+            ir_add_expr2(IR_APPEND(code), cmp, op2, lhs_ir, rhs_ir);
+            value = IR_OPERAND_VAR(cmp);
+        }
+    }
+
+    c_value_destroy(lhs);
+    c_value_destroy(rhs);
+    return (c_compile_expr_t){
+        .res = {
+            .value_type = C_RVALUE_OPERAND,
+            .rvalue.operand = value,
+            .c_type = type_rc,
+        },
+        .code = code,
+    };
+}
 
 // Compile an expression into IR.
 c_compile_expr_t
@@ -257,9 +533,9 @@ c_compile_expr_t
             return (c_compile_expr_t){
                 .code = code,
                 .res  = {
-                     .value_type = C_RVALUE,
-                     .c_type     = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
-                     .rvalue     = IR_OPERAND_CONST(iconst),
+                     .value_type     = C_RVALUE_OPERAND,
+                     .c_type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
+                     .rvalue.operand = IR_OPERAND_CONST(iconst),
                 },
             };
         }
@@ -297,14 +573,14 @@ c_compile_expr_t
         return (c_compile_expr_t){
             .code = code,
             .res  = {
-                 .value_type = C_RVALUE,
-                 .c_type     = rc_share(&ctx->prim_rcs[expr->subtype]),
-                 .rvalue     = {
-                         .type   = IR_OPERAND_TYPE_CONST,
-                         .iconst = {
-                             .prim_type = c_prim_to_ir_type(ctx, expr->subtype),
-                             .constl    = expr->ival,
-                             .consth    = expr->ivalh,
+                 .value_type     = C_RVALUE_OPERAND,
+                 .c_type         = rc_share(&ctx->prim_rcs[expr->subtype]),
+                 .rvalue.operand = {
+                     .type   = IR_OPERAND_TYPE_CONST,
+                     .iconst = {
+                         .prim_type = c_prim_to_ir_type(ctx, expr->subtype),
+                         .constl    = expr->ival,
+                         .consth    = expr->ivalh,
                     },
                 },
             },
@@ -420,20 +696,240 @@ c_compile_expr_t
         abort();
 
     } else if (expr->subtype == C_AST_EXPR_INFIX && expr->params[0].subtype == C_TKN_ARROW) {
-        printf("TODO: Arrow operator\n");
-        abort();
+        // Compile struct/union pointer expression.
+        c_compile_expr_t res = c_compile_expr(ctx, prepass, code, scope, &expr->params[1]);
+        if (res.res.value_type == C_VALUE_ERROR) {
+            return (c_compile_expr_t){
+                .code = res.code,
+                .res  = {0},
+            };
+        }
+        code             = res.code;
+        ir_operand_t ptr = c_value_read(ctx, code, &res.res);
+
+        // Get the target struct/union field.
+        c_type_t const *ptr_type = res.res.c_type->data;
+        if (ptr_type->primitive != C_COMP_POINTER) {
+            cctx_diagnostic(
+                ctx->cctx,
+                expr->params[1].pos,
+                DIAG_ERR,
+                "Expression is not a pointer to struct/union type"
+            );
+            if (ptr_type->primitive == C_COMP_STRUCT || ptr_type->primitive == C_COMP_UNION) {
+                cctx_diagnostic(ctx->cctx, expr->params[1].pos, DIAG_HINT, "Did you mean to use the `.` operator?");
+            }
+            c_value_destroy(res.res);
+            return (c_compile_expr_t){
+                .code = res.code,
+                .res  = {0},
+            };
+        }
+        c_type_t const *inner_type = ptr_type->inner->data;
+        if (inner_type->primitive != C_COMP_STRUCT && inner_type->primitive != C_COMP_UNION) {
+            cctx_diagnostic(
+                ctx->cctx,
+                expr->params[1].pos,
+                DIAG_ERR,
+                "Expression is not a pointer to struct/union type"
+            );
+            c_value_destroy(res.res);
+            return (c_compile_expr_t){
+                .code = res.code,
+                .res  = {0},
+            };
+        }
+        c_comp_t const  *comp  = inner_type->comp->data;
+        c_field_t const *field = map_get(&comp->fields, expr->params[2].strval);
+        if (!field) {
+            cctx_diagnostic(ctx->cctx, expr->params[2].pos, DIAG_ERR, "Unknown field %s", expr->params[2].strval);
+            c_value_destroy(res.res);
+            return (c_compile_expr_t){
+                .code = res.code,
+                .res  = {0},
+            };
+        }
+
+        // Get field as an offset pointer.
+        c_value_t lvalue = {
+            .value_type    = C_LVALUE_MEM,
+            .c_type        = rc_share(field->type_rc),
+            .lvalue.memref = {
+                .data_type = c_type_to_ir_type(ctx, field->type_rc->data),
+                .offset    = (int64_t)field->offset,
+            },
+        };
+        switch (ptr.type) {
+            case IR_OPERAND_TYPE_CONST:
+                lvalue.lvalue.memref.base_type  = IR_MEMBASE_ABS;
+                lvalue.lvalue.memref.offset    += (int64_t)ptr.iconst.constl;
+                break;
+            case IR_OPERAND_TYPE_UNDEF: __builtin_unreachable();
+            case IR_OPERAND_TYPE_VAR:
+                lvalue.lvalue.memref.base_type = IR_MEMBASE_VAR;
+                lvalue.lvalue.memref.base_var  = ptr.var;
+                break;
+            case IR_OPERAND_TYPE_MEM:
+            case IR_OPERAND_TYPE_REG: __builtin_unreachable();
+        }
+
+        c_value_destroy(res.res);
+        return (c_compile_expr_t){
+            .code = code,
+            .res  = lvalue,
+        };
 
     } else if (expr->subtype == C_AST_EXPR_INFIX && expr->params[0].subtype == C_TKN_DOT) {
-        printf("TODO: Dot operator\n");
-        abort();
+        // Compile struct/union reference expression.
+        c_compile_expr_t res = c_compile_expr(ctx, prepass, code, scope, &expr->params[1]);
+        if (res.res.value_type == C_VALUE_ERROR) {
+            return (c_compile_expr_t){
+                .code = res.code,
+                .res  = {0},
+            };
+        }
+        code = res.code;
 
-    } else if (expr->subtype == C_AST_EXPR_INFIX && expr->params[0].subtype == C_TKN_LOR) {
-        printf("TODO: Logical OR operator\n");
-        abort();
+        // Get the target struct/union field.
+        c_type_t const *struct_type = res.res.c_type->data;
+        if (struct_type->primitive != C_COMP_STRUCT && struct_type->primitive != C_COMP_UNION) {
+            cctx_diagnostic(ctx->cctx, expr->params[1].pos, DIAG_ERR, "Expression is not a struct/union type");
+            if (struct_type->primitive == C_COMP_POINTER) {
+                c_type_t const *inner_type = struct_type->inner->data;
+                if (inner_type->primitive == C_COMP_UNION || inner_type->primitive == C_COMP_STRUCT) {
+                    cctx_diagnostic(
+                        ctx->cctx,
+                        expr->params[1].pos,
+                        DIAG_HINT,
+                        "Did you mean to use the `->` operator?"
+                    );
+                }
+            }
+            c_value_destroy(res.res);
+            return (c_compile_expr_t){
+                .code = res.code,
+                .res  = {0},
+            };
+        }
+        c_comp_t const  *comp  = struct_type->comp->data;
+        c_field_t const *field = map_get(&comp->fields, expr->params[2].strval);
+        if (!field) {
+            cctx_diagnostic(ctx->cctx, expr->params[2].pos, DIAG_ERR, "Unknown field %s", expr->params[2].strval);
+            c_value_destroy(res.res);
+            return (c_compile_expr_t){
+                .code = res.code,
+                .res  = {0},
+            };
+        }
 
-    } else if (expr->subtype == C_AST_EXPR_INFIX && expr->params[0].subtype == C_TKN_LAND) {
-        printf("TODO: Logical AND operator\n");
-        abort();
+        return (c_compile_expr_t){
+            .code = code,
+            .res  = c_value_field(ctx, code, &res.res, expr->params[2].strval),
+        };
+
+    } else if (expr->subtype == C_AST_EXPR_INFIX
+               && (expr->params[0].subtype == C_TKN_LOR || expr->params[0].subtype == C_TKN_LAND)) {
+        // Logical ANR/OR expression.
+        c_compile_expr_t res;
+        bool const       is_land = expr->params[0].subtype == C_TKN_LAND;
+
+        ir_code_t *cont_code  = ir_code_create(code->func, NULL);
+        ir_code_t *break_code = ir_code_create(code->func, NULL);
+        ir_code_t *exit_code  = ir_code_create(code->func, NULL);
+
+        // Get operands.
+        res = c_compile_expr(ctx, prepass, code, scope, &expr->params[1]);
+        if (res.res.value_type == C_VALUE_ERROR) {
+            return (c_compile_expr_t){
+                .code = res.code,
+                .res  = (c_value_t){0},
+            };
+        }
+        c_value_t  lhs         = res.res;
+        ir_code_t *branch_code = res.code;
+
+        res = c_compile_expr(ctx, prepass, cont_code, scope, &expr->params[2]);
+        if (res.res.value_type == C_VALUE_ERROR) {
+            c_value_destroy(lhs);
+            return (c_compile_expr_t){
+                .code = res.code,
+                .res  = (c_value_t){0},
+            };
+        }
+        c_value_t rhs = res.res;
+
+        // Determine compatibility with this operator.
+        if (!c_type_arith_compatible(
+                ctx,
+                lhs.c_type->data,
+                rhs.c_type->data,
+                expr->params[0].subtype,
+                expr->params[0].pos
+            )) {
+            ir_code_delete(exit_code);
+            ir_code_delete(cont_code);
+            ir_code_delete(break_code);
+            c_value_destroy(lhs);
+            c_value_destroy(rhs);
+            return (c_compile_expr_t){
+                .code = code,
+                .res  = (c_value_t){0},
+            };
+        }
+
+        if (c_value_is_const(&lhs) && c_value_is_const(&rhs)) {
+            // Constant expression.
+            ir_code_delete(exit_code);
+            ir_code_delete(cont_code);
+            ir_code_delete(break_code);
+            ir_const_t lhs_val = ir_calc1(IR_OP1_snez, lhs.rvalue.operand.iconst);
+            ir_const_t rhs_val = ir_calc1(IR_OP1_snez, rhs.rvalue.operand.iconst);
+            bool       res     = is_land ? (lhs_val.constl & rhs_val.constl) : (lhs_val.constl | rhs_val.constl);
+            return (c_compile_expr_t){
+                .code = code,
+                .res  = (c_value_t){
+                     .value_type     = C_RVALUE_OPERAND,
+                     .c_type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
+                     .rvalue.operand = IR_OPERAND_CONST(((ir_const_t){
+                         .prim_type = c_prim_to_ir_type(ctx, C_PRIM_SINT),
+                         .consth    = 0,
+                         .constl    = res,
+                    })),
+                },
+            };
+        }
+
+        // Not a constant expression.
+        code              = res.code;
+        ir_var_t *resvar  = ir_var_create(code->func, IR_PRIM_bool, NULL);
+        ir_var_t *resvar2 = ir_var_create(code->func, c_prim_to_ir_type(ctx, C_PRIM_SINT), NULL);
+        ir_var_t *condvar = ir_var_create(code->func, IR_PRIM_bool, NULL);
+
+        ir_add_expr1(
+            IR_APPEND(branch_code),
+            condvar,
+            is_land ? IR_OP1_seqz : IR_OP1_snez,
+            c_value_read(ctx, branch_code, &lhs)
+        );
+        ir_add_branch(IR_APPEND(branch_code), IR_OPERAND_VAR(condvar), break_code);
+        ir_add_jump(IR_APPEND(branch_code), cont_code);
+
+        ir_add_expr1(IR_APPEND(break_code), resvar, IR_OP1_mov, IR_OPERAND_CONST(IR_CONST_BOOL(!is_land)));
+        ir_add_jump(IR_APPEND(break_code), exit_code);
+
+        ir_add_expr1(IR_APPEND(cont_code), resvar, IR_OP1_snez, c_value_read(ctx, cont_code, &rhs));
+        ir_add_jump(IR_APPEND(cont_code), exit_code);
+
+        ir_add_expr1(IR_APPEND(exit_code), resvar2, IR_OP1_mov, IR_OPERAND_VAR(resvar));
+
+        return (c_compile_expr_t){
+            .code = exit_code,
+            .res  = (c_value_t){
+                 .value_type     = C_RVALUE_OPERAND,
+                 .c_type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
+                 .rvalue.operand = IR_OPERAND_VAR(resvar2),
+            },
+        };
 
     } else if (expr->subtype == C_AST_EXPR_INFIX) {
         if (expr->params[0].subtype == C_TKN_ASSIGN) {
@@ -448,8 +944,8 @@ c_compile_expr_t
                     .res  = (c_value_t){0},
                 };
             }
-            code             = res.code;
-            c_value_t rvalue = res.res;
+            code          = res.code;
+            c_value_t rhs = res.res;
 
             // Compile the lvalue.
             res = c_compile_expr(ctx, prepass, code, scope, &expr->params[1]);
@@ -459,14 +955,24 @@ c_compile_expr_t
                     .res  = (c_value_t){0},
                 };
             }
-            code             = res.code;
-            c_value_t lvalue = res.res;
+            code          = res.code;
+            c_value_t lhs = res.res;
 
             // Assert that it's actually a writable lvalue.
-            if (lvalue.value_type == C_RVALUE || ((c_type_t *)lvalue.c_type->data)->is_const) {
-                cctx_diagnostic(ctx->cctx, expr->params[1].pos, DIAG_ERR, "Expression must be a modifiable lvalue");
-                c_value_destroy(lvalue);
-                c_value_destroy(rvalue);
+            if (!c_value_assignable(ctx, &lhs, expr->params[1].pos)) {
+                c_value_destroy(lhs);
+                c_value_destroy(rhs);
+                return (c_compile_expr_t){
+                    .code = code,
+                    .res  = (c_value_t){0},
+                };
+            }
+
+            // Determine compatibility with this operator.
+            if (!c_type_compatible(ctx, lhs.c_type->data, rhs.c_type->data)) {
+                cctx_diagnostic(ctx->cctx, expr->params[0].pos, DIAG_ERR, "Cannot assign incompatible type");
+                c_value_destroy(lhs);
+                c_value_destroy(rhs);
                 return (c_compile_expr_t){
                     .code = code,
                     .res  = (c_value_t){0},
@@ -474,25 +980,24 @@ c_compile_expr_t
             }
 
             // Write into the lvalue.
-            c_value_write(ctx, code, &lvalue, &rvalue);
+            c_value_write(ctx, code, &lhs, &rhs);
             // The C semantics specify that the result of an assignment expression is an rvalue.
             // Therefor, clean up the lvalue and return the rvalue.
-            c_value_destroy(lvalue);
+            c_value_destroy(lhs);
             return (c_compile_expr_t){
                 .code = code,
-                .res  = rvalue,
+                .res  = rhs,
             };
 
         } else {
             // Other expressions.
             c_compile_expr_t res;
-            bool is_assign = expr->params[0].subtype >= C_TKN_ADD_S && expr->params[0].subtype <= C_TKN_XOR_S;
 
             // Get operands.
             res = c_compile_expr(ctx, prepass, code, scope, &expr->params[1]);
             if (res.res.value_type == C_VALUE_ERROR) {
                 return (c_compile_expr_t){
-                    .code = code,
+                    .code = res.code,
                     .res  = (c_value_t){0},
                 };
             }
@@ -502,77 +1007,38 @@ c_compile_expr_t
             if (res.res.value_type == C_VALUE_ERROR) {
                 c_value_destroy(lhs);
                 return (c_compile_expr_t){
-                    .code = code,
+                    .code = res.code,
                     .res  = (c_value_t){0},
                 };
             }
             c_value_t rhs = res.res;
             code          = res.code;
 
-            // Determine promotion.
-            c_tokentype_t op2 = is_assign ? expr->params[0].subtype + C_TKN_ADD - C_TKN_ADD_S : expr->params[0].subtype;
-            rc_t          type = c_type_promote(ctx, op2, lhs.c_type, rhs.c_type);
-            rc_t          res_type;
-
-            // Cast the variables if needed.
-            ir_prim_t ir_prim = c_type_to_ir_type(ctx, type->data);
-            if (op2 >= C_TKN_EQ && op2 <= C_TKN_GE) {
-                res_type = rc_share(&ctx->prim_rcs[C_PRIM_BOOL]);
-            } else {
-                res_type = rc_share(type);
-            }
-            ir_operand_t ir_lhs = c_cast_ir_operand(code, c_value_read(ctx, code, &lhs), ir_prim);
-            ir_operand_t ir_rhs = c_cast_ir_operand(code, c_value_read(ctx, code, &rhs), ir_prim);
-
-            ir_op2_type_t ir_op2 = c_op2_to_ir_op2(op2);
-            if ((ir_op2 == IR_OP2_div || ir_op2 == IR_OP2_rem) && ir_calc1(IR_OP1_seqz, ir_rhs.iconst).constl) {
-                cctx_diagnostic(ctx->cctx, expr->pos, DIAG_ERR, "Constant division by zero");
+            // Determine compatibility with this operator.
+            if (!c_type_arith_compatible(
+                    ctx,
+                    lhs.c_type->data,
+                    rhs.c_type->data,
+                    expr->params[0].subtype,
+                    expr->params[0].pos
+                )) {
+                c_value_destroy(lhs);
+                c_value_destroy(rhs);
                 return (c_compile_expr_t){
                     .code = code,
                     .res  = (c_value_t){0},
                 };
             }
 
-            if (ir_lhs.type == IR_OPERAND_TYPE_CONST && ir_rhs.type == IR_OPERAND_TYPE_CONST) {
-                // Resulting constant can be evaluated at compile-time.
-                c_value_destroy(lhs);
-                c_value_destroy(rhs);
-                return (c_compile_expr_t){
-                    .code = code,
-                    .res  = {
-                         .value_type = C_RVALUE,
-                         .c_type     = type,
-                         .rvalue     = IR_OPERAND_CONST(ir_calc2(ir_op2, ir_lhs.iconst, ir_rhs.iconst)),
-                    },
-                };
+            c_type_t const *lhs_type = lhs.c_type->data;
+            c_type_t const *rhs_type = rhs.c_type->data;
+            if (c_prim_is_ptr(lhs_type->primitive) || c_prim_is_ptr(rhs_type->primitive)) {
+                // Pointer arithmetic is more restricted and has special handling.
+                return c_compile_expr2_ptrarith(ctx, code, expr, lhs, rhs);
+            } else {
+                // All other arithmetic translates directly to the corresponding IR instructions.
+                return c_compile_expr2_arith(ctx, code, expr, lhs, rhs);
             }
-
-            // Add math instruction.
-            ir_var_t *tmpvar = ir_var_create(code->func, c_type_to_ir_type(ctx, res_type->data), NULL);
-            ir_add_expr2(IR_APPEND(code), tmpvar, ir_op2, ir_lhs, ir_rhs);
-
-            c_value_t rvalue = {
-                .value_type = C_RVALUE,
-                .c_type     = res_type,
-                .rvalue     = IR_OPERAND_VAR(tmpvar),
-            };
-
-            if (expr->params[0].subtype >= C_TKN_ADD_S && expr->params[0].subtype <= C_TKN_XOR_S) {
-                // Assignment arithmetic expression; write back.
-                if (lhs.value_type == C_RVALUE || ((c_type_t *)lhs.c_type->data)->is_const) {
-                    cctx_diagnostic(ctx->cctx, expr->params[1].pos, DIAG_ERR, "Expression must be a modifiable lvalue");
-                } else {
-                    c_value_write(ctx, code, &lhs, &rvalue);
-                }
-            }
-
-            c_value_destroy(lhs);
-            c_value_destroy(rhs);
-            rc_delete(type);
-            return (c_compile_expr_t){
-                .code = code,
-                .res  = rvalue,
-            };
         }
 
     } else if (expr->subtype == C_AST_EXPR_PREFIX) {
@@ -587,11 +1053,18 @@ c_compile_expr_t
                     .res  = (c_value_t){0},
                 };
             }
-            code = res.code;
+            code                     = res.code;
+            c_type_t const *res_type = res.res.c_type->data;
 
             // Assert that it's writeable.
-            if (res.res.value_type == C_RVALUE || ((c_type_t *)res.res.c_type->data)->is_const) {
-                cctx_diagnostic(ctx->cctx, expr->params[1].pos, DIAG_ERR, "Expression must be a modifiable lvalue");
+            if (!c_prim_is_scalar(res_type->primitive)) {
+                cctx_diagnostic(ctx->cctx, expr->params[0].pos, DIAG_ERR, "Cannot increment this type");
+                c_value_destroy(res.res);
+                return (c_compile_expr_t){
+                    .code = code,
+                    .res  = (c_value_t){0},
+                };
+            } else if (!c_value_assignable(ctx, &res.res, expr->params[1].pos)) {
                 c_value_destroy(res.res);
                 return (c_compile_expr_t){
                     .code = code,
@@ -599,22 +1072,40 @@ c_compile_expr_t
                 };
             }
 
-            // Add or subtract one.
-            ir_var_t *tmpvar = ir_var_create(code->func, c_type_to_ir_type(ctx, res.res.c_type->data), NULL);
+            // Determine increment, which is 1 for non-pointer types.
+            uint64_t increment = 1, dummy;
+            if (c_prim_is_ptr(res_type->primitive)) {
+                if (!c_type_get_size(ctx, res_type->inner->data, &increment, &dummy)) {
+                    c_value_destroy(res.res);
+                    return (c_compile_expr_t){
+                        .code = code,
+                        .res  = (c_value_t){0},
+                    };
+                }
+            }
+
+            // Add or subtract the increment.
+            ir_var_t *tmpvar = ir_var_create(code->func, c_type_to_ir_type(ctx, res_type), NULL);
             ir_add_expr2(
                 IR_APPEND(code),
                 tmpvar,
                 is_inc ? IR_OP2_add : IR_OP2_sub,
                 c_value_read(ctx, code, &res.res),
-                (ir_operand_t){.type   = IR_OPERAND_TYPE_CONST,
-                               .iconst = {.prim_type = tmpvar->prim_type, .constl = 1, .consth = 0}}
+                (ir_operand_t){
+                    .type   = IR_OPERAND_TYPE_CONST,
+                    .iconst = {
+                        .prim_type = tmpvar->prim_type,
+                        .constl    = increment,
+                        .consth    = 0,
+                    },
+                }
             );
 
             // After modifying, write back and return value.
             c_value_t rvalue = {
-                .value_type = C_RVALUE,
-                .c_type     = rc_share(res.res.c_type),
-                .rvalue     = IR_OPERAND_VAR(tmpvar),
+                .value_type     = C_RVALUE_OPERAND,
+                .c_type         = rc_share(res.res.c_type),
+                .rvalue.operand = IR_OPERAND_VAR(tmpvar),
             };
             c_value_write(ctx, code, &res.res, &rvalue);
             c_value_destroy(res.res);
@@ -632,7 +1123,7 @@ c_compile_expr_t
                     .code = code,
                     .res  = (c_value_t){0},
                 };
-            } else if (res.res.value_type == C_RVALUE) {
+            } else if (res.res.value_type == C_RVALUE_OPERAND) {
                 cctx_diagnostic(ctx->cctx, expr->params[0].pos, DIAG_ERR, "Lvalue required as unary `&` operand");
                 c_value_destroy(res.res);
                 return (c_compile_expr_t){
@@ -648,9 +1139,9 @@ c_compile_expr_t
             ir_var_t *ir_ptr = ir_var_create(code->func, c_prim_to_ir_type(ctx, ctx->options.size_type), NULL);
             ir_add_lea(IR_APPEND(code), ir_ptr, c_value_memref(ctx, code, &res.res));
             c_value_t rvalue = {
-                .value_type = C_RVALUE,
-                .c_type     = ptr_rc,
-                .rvalue     = IR_OPERAND_VAR(ir_ptr),
+                .value_type     = C_RVALUE_OPERAND,
+                .c_type         = ptr_rc,
+                .rvalue.operand = IR_OPERAND_VAR(ir_ptr),
             };
             c_value_destroy(res.res);
 
@@ -682,10 +1173,26 @@ c_compile_expr_t
             }
 
             // Create pointer lvalue.
+            ir_operand_t ptrval = c_value_read(ctx, code, &res.res);
+            ir_memref_t  memref = {0};
+            memref.data_type    = c_type_to_ir_type(ctx, type->inner->data);
+            switch (ptrval.type) {
+                case IR_OPERAND_TYPE_CONST:
+                    memref.base_type = IR_MEMBASE_ABS;
+                    memref.offset    = (int64_t)ptrval.iconst.constl;
+                    break;
+                case IR_OPERAND_TYPE_UNDEF: __builtin_unreachable();
+                case IR_OPERAND_TYPE_VAR:
+                    memref.base_type = IR_MEMBASE_VAR;
+                    memref.base_var  = ptrval.var;
+                    break;
+                case IR_OPERAND_TYPE_MEM:
+                case IR_OPERAND_TYPE_REG: __builtin_unreachable();
+            }
             c_value_t rvalue = {
                 .value_type    = C_LVALUE_MEM,
                 .c_type        = rc_share(type->inner),
-                .lvalue.memref = c_value_memref(ctx, code, &res.res),
+                .lvalue.memref = memref,
             };
             c_value_destroy(res.res);
 
@@ -715,9 +1222,10 @@ c_compile_expr_t
                 return (c_compile_expr_t){
                     .code = code,
                     .res  = {
-                         .value_type = C_RVALUE,
+                         .value_type = C_RVALUE_OPERAND,
                          .c_type     = type,
-                         .rvalue = IR_OPERAND_CONST(ir_calc1(c_op1_to_ir_op1(expr->params[0].subtype), ir_value.iconst)),
+                         .rvalue.operand
+                        = IR_OPERAND_CONST(ir_calc1(c_op1_to_ir_op1(expr->params[0].subtype), ir_value.iconst)),
                     },
                 };
             }
@@ -733,9 +1241,9 @@ c_compile_expr_t
 
             // Return temporary value.
             c_value_t rvalue = {
-                .value_type = C_RVALUE,
-                .c_type     = rc_share(res.res.c_type),
-                .rvalue     = IR_OPERAND_VAR(tmpvar),
+                .value_type     = C_RVALUE_OPERAND,
+                .c_type         = rc_share(res.res.c_type),
+                .rvalue.operand = IR_OPERAND_VAR(tmpvar),
             };
 
             c_value_destroy(res.res);
@@ -755,11 +1263,18 @@ c_compile_expr_t
                 .res  = (c_value_t){0},
             };
         }
-        code = res.code;
+        code                     = res.code;
+        c_type_t const *res_type = res.res.c_type->data;
 
         // Assert that it's actually a writable lvalue.
-        if (res.res.value_type == C_RVALUE || ((c_type_t *)res.res.c_type->data)->is_const) {
-            cctx_diagnostic(ctx->cctx, expr->params[1].pos, DIAG_ERR, "Expression must be a modifiable lvalue");
+        if (!c_prim_is_scalar(res_type->primitive)) {
+            cctx_diagnostic(ctx->cctx, expr->params[0].pos, DIAG_ERR, "Cannot increment this type");
+            c_value_destroy(res.res);
+            return (c_compile_expr_t){
+                .code = code,
+                .res  = (c_value_t){0},
+            };
+        } else if (!c_value_assignable(ctx, &res.res, expr->params[1].pos)) {
             c_value_destroy(res.res);
             return (c_compile_expr_t){
                 .code = code,
@@ -773,30 +1288,48 @@ c_compile_expr_t
         ir_var_t    *oldvar     = ir_var_create(code->func, ir_prim, NULL);
         ir_add_expr1(IR_APPEND(code), oldvar, IR_OP1_mov, read_value);
 
-        // Add or subtract one.
-        ir_var_t *tmpvar = ir_var_create(code->func, ir_prim, NULL);
+        // Determine increment, which is 1 for non-pointer types.
+        uint64_t increment = 1, dummy;
+        if (c_prim_is_ptr(res_type->primitive)) {
+            if (!c_type_get_size(ctx, res_type->inner->data, &increment, &dummy)) {
+                c_value_destroy(res.res);
+                return (c_compile_expr_t){
+                    .code = code,
+                    .res  = (c_value_t){0},
+                };
+            }
+        }
+
+        // Add or subtract the increment.
+        ir_var_t *tmpvar = ir_var_create(code->func, c_type_to_ir_type(ctx, res_type), NULL);
         ir_add_expr2(
             IR_APPEND(code),
             tmpvar,
             is_inc ? IR_OP2_add : IR_OP2_sub,
-            read_value,
-            (ir_operand_t){.type   = IR_OPERAND_TYPE_CONST,
-                           .iconst = {.prim_type = tmpvar->prim_type, .constl = 1, .consth = 0}}
+            c_value_read(ctx, code, &res.res),
+            (ir_operand_t){
+                .type   = IR_OPERAND_TYPE_CONST,
+                .iconst = {
+                    .prim_type = tmpvar->prim_type,
+                    .constl    = increment,
+                    .consth    = 0,
+                },
+            }
         );
 
         // After modifying, write back.
         c_value_t write_rvalue = {
-            .value_type = C_RVALUE,
-            .c_type     = res.res.c_type,
-            .rvalue     = IR_OPERAND_VAR(tmpvar),
+            .value_type     = C_RVALUE_OPERAND,
+            .c_type         = res.res.c_type,
+            .rvalue.operand = IR_OPERAND_VAR(tmpvar),
         };
         c_value_write(ctx, code, &res.res, &write_rvalue);
 
         // Return old value.
         c_value_t old_rvalue = {
-            .value_type = C_RVALUE,
-            .c_type     = rc_share(res.res.c_type),
-            .rvalue     = IR_OPERAND_VAR(tmpvar),
+            .value_type     = C_RVALUE_OPERAND,
+            .c_type         = rc_share(res.res.c_type),
+            .rvalue.operand = IR_OPERAND_VAR(tmpvar),
         };
         c_value_destroy(res.res);
 
@@ -809,8 +1342,9 @@ c_compile_expr_t
             .code = code,
             .res  = (c_value_t){0},
         };
+    } else {
+        __builtin_unreachable();
     }
-    abort();
 }
 
 // Compile a statement node into IR.
@@ -1011,8 +1545,9 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
             }
 
             if (var->storage == C_VAR_STORAGE_REG) {
-                func->args[i].has_var = true;
-                func->args[i].var     = var->ir_var;
+                func->args[i].has_var  = true;
+                func->args[i].var      = var->ir_var;
+                var->ir_var->arg_index = (ptrdiff_t)i;
             } else {
                 func->args[i].has_var = false;
                 func->args[i].type    = c_type_to_ir_type(ctx, func_type->func.args[i]->data);

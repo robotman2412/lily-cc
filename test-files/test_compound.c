@@ -9,3 +9,21 @@ int foo(int) {
     int;
     return a_0;
 }
+
+struct b {
+    int  *a;
+    _Bool b;
+    union {
+        char  c;
+        short d;
+    };
+    char e;
+};
+
+void bar(struct b *b) {
+    struct b mydat;
+    mydat.a = b->a;
+    mydat.b = 1;
+    mydat.c = ~(*b).c;
+    mydat.e = 2;
+}

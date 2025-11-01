@@ -149,6 +149,7 @@ static void
             }
             if (comp->type == C_COMP_TYPE_STRUCT) {
                 offset += inner_comp->size;
+                size    = offset;
             } else if (size < inner_comp->size) {
                 size = inner_comp->size;
             }

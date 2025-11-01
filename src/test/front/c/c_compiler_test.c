@@ -6,11 +6,13 @@
 #include "c_compiler.h"
 #include "c_parser.h"
 #include "c_std.h"
+#include "c_types.h"
 #include "ir.h"
 #include "ir_optimizer.h"
 #include "ir_serialization.h"
 #include "ir_types.h"
 #include "list.h"
+#include "map.h"
 #include "testcase.h"
 
 #include <string.h>
@@ -333,3 +335,87 @@ static char *test_c_compile_enum() {
     return TEST_OK;
 }
 LILY_TEST_CASE(test_c_compile_enum)
+
+
+static char *test_c_compile_struct() {
+    // clang-format off
+    char const source[] =
+    "struct a {\n"
+    "    int x, *y;\n"
+    "    char;\n"
+    "    union {\n"
+    "        long z;\n"
+    "        int u;\n"
+    "    };\n"
+    "};\n"
+    ;
+    // clang-format on
+    cctx_t       *cctx = cctx_create();
+    srcfile_t    *src  = srcfile_create(cctx, "<test_c_compile_enum>", source, sizeof(source) - 1);
+    tokenizer_t  *tctx = c_tkn_create(src, C_STD_def);
+    c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
+    c_compiler_t *cc   = c_compiler_create(
+        cctx,
+        (c_options_t){
+              .c_std          = C_STD_def,
+              .char_is_signed = true,
+              .short16        = true,
+              .int32          = true,
+              .long64         = true,
+              .size_type      = C_PRIM_ULONG,
+        }
+    );
+
+    // Parse the struct.
+    token_t struct_tok = c_parse_decls(&pctx, true);
+
+    if (cctx->diagnostics.len) {
+        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
+        printf("\n");
+        while (diag) {
+            print_diagnostic(diag, stderr);
+            diag = (diagnostic_t const *)diag->node.next;
+        }
+        c_tkn_debug_print(struct_tok);
+        return TEST_FAIL;
+    }
+
+    // Compile the struct declaration.
+    c_compile_decls(cc, NULL, NULL, &cc->global_scope, &struct_tok);
+
+    if (cctx->diagnostics.len) {
+        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
+        printf("\n");
+        while (diag) {
+            print_diagnostic(diag, stderr);
+            diag = (diagnostic_t const *)diag->node.next;
+        }
+        return TEST_FAIL;
+    }
+
+    // Check the struct fields.
+    rc_t comp_rc = map_get(&cc->global_scope.comp_types, "a");
+    RETURN_ON_FALSE(comp_rc);
+    c_comp_t const *comp = comp_rc->data;
+    EXPECT_INT(comp->type, C_COMP_TYPE_STRUCT);
+    EXPECT_INT(comp->fields.len, 4);
+    c_field_t const *f_x = map_get(&comp->fields, "x");
+    RETURN_ON_FALSE(f_x);
+    c_field_t const *f_y = map_get(&comp->fields, "y");
+    RETURN_ON_FALSE(f_y);
+    c_field_t const *f_z = map_get(&comp->fields, "z");
+    RETURN_ON_FALSE(f_z);
+    c_field_t const *f_u = map_get(&comp->fields, "u");
+    RETURN_ON_FALSE(f_u);
+
+    // Check struct layout.
+    EXPECT_INT(comp->size, 24);
+    EXPECT_INT(comp->align, 8);
+    EXPECT_INT(f_x->offset, 0);
+    EXPECT_INT(f_y->offset, 8);
+    EXPECT_INT(f_z->offset, 16);
+    EXPECT_INT(f_u->offset, 16);
+
+    return TEST_OK;
+}
+LILY_TEST_CASE(test_c_compile_struct)

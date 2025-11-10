@@ -17,6 +17,7 @@
 #include "map.h"
 #include "refcount.h"
 #include "strong_malloc.h"
+#include "unreachable.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -205,7 +206,7 @@ c_var_t *c_var_create(
             case C_COMP_TYPE_ENUM: comp_var = "enum"; break;
             case C_COMP_TYPE_STRUCT: comp_var = "struct"; break;
             case C_COMP_TYPE_UNION: comp_var = "union"; break;
-            default: __builtin_unreachable();
+            default: UNREACHABLE();
         }
         cctx_diagnostic(ctx->cctx, name_tkn->pos, DIAG_ERR, "Use of incomplete type %s %s", comp_var, comp->name);
         rc_delete(type_rc);
@@ -562,7 +563,7 @@ c_compile_expr_t
                 res.lvalue.memref
                     = IR_MEMREF(c_type_to_ir_type(ctx, c_var->type->data), IR_BADDR_SYM(strong_strdup(c_var->sym)));
                 break;
-            case C_VAR_STORAGE_ENUM_VARIANT: __builtin_unreachable();
+            case C_VAR_STORAGE_ENUM_VARIANT: UNREACHABLE();
         }
         return (c_compile_expr_t){
             .code = code,
@@ -691,6 +692,87 @@ c_compile_expr_t
         //     .res = (ir_operand_t){0},
         // };
 
+    } else if (expr->subtype == C_AST_EXPR_CAST) {
+        // Compile cast target type.
+        rc_t cast_rc;
+        if (expr->params[0].type == TOKENTYPE_AST && expr->params[0].subtype == C_AST_TYPE_NAME) {
+            rc_t inner_rc = c_compile_spec_qual_list(ctx, &expr->params[0].params[0], scope);
+            if (!inner_rc) {
+                return (c_compile_expr_t){
+                    .res  = (c_value_t){0},
+                    .code = code,
+                };
+            }
+            token_t const *name_tkn;
+            cast_rc = c_compile_decl(ctx, &expr->params[0].params[1], scope, inner_rc, &name_tkn);
+            if (name_tkn) {
+                cctx_diagnostic(ctx->cctx, name_tkn->pos, DIAG_ERR, "Spurious identifier in type name");
+            }
+        } else {
+            cast_rc = c_compile_spec_qual_list(ctx, &expr->params[0], scope);
+        }
+
+        // Compile cast source expression.
+        c_compile_expr_t res = c_compile_expr(ctx, prepass, code, scope, &expr->params[1]);
+        if (res.res.value_type == C_VALUE_ERROR || c_type_identical(ctx, cast_rc->data, res.res.c_type->data, false)) {
+            rc_delete(cast_rc);
+            return res;
+        }
+
+        // Determine castability.
+        c_type_t const *new_type = cast_rc->data;
+        c_type_t const *old_type = res.res.c_type->data;
+        if (!c_type_castable(ctx, new_type, old_type)) {
+            cctx_diagnostic(ctx->cctx, expr->params[1].pos, DIAG_ERR, "Cannot cast between these types");
+            return (c_compile_expr_t){
+                .res  = (c_value_t){0},
+                .code = code,
+            };
+        }
+
+        // If the new type is (effectively) `void`, then produce a `void` typed dummy rvalue.
+        if (new_type->primitive == C_PRIM_VOID) {
+            c_value_destroy(res.res);
+            return (c_compile_expr_t){
+                .code = code,
+                .res  = {
+                     .value_type     = C_RVALUE_OPERAND,
+                     .c_type         = cast_rc,
+                     .rvalue.operand = IR_OPERAND_UNDEF(IR_PRIM_u8),
+                },
+            };
+        }
+
+        // Anything that gets here can be represented as a cast with IR primitives.
+        if (res.res.value_type == C_RVALUE_OPERAND && res.res.rvalue.operand.type == IR_OPERAND_TYPE_CONST) {
+            // Can be evaluated at compile time.
+            ir_const_t new_const = ir_cast(c_type_to_ir_type(ctx, new_type), res.res.rvalue.operand.iconst);
+            c_value_t  rvalue    = {
+                    .value_type     = C_RVALUE_OPERAND,
+                    .c_type         = cast_rc,
+                    .rvalue.operand = IR_OPERAND_CONST(new_const),
+            };
+            c_value_destroy(res.res);
+            return (c_compile_expr_t){
+                .code = code,
+                .res  = rvalue,
+            };
+        }
+
+        // Otherwise emit a mov instruction.
+        ir_var_t *tmpvar = ir_var_create(code->func, c_type_to_ir_type(ctx, new_type), NULL);
+        ir_add_expr1(IR_APPEND(code), tmpvar, IR_OP1_mov, c_value_read(ctx, code, &res.res));
+        c_value_t rvalue = {
+            .value_type     = C_RVALUE_OPERAND,
+            .c_type         = cast_rc,
+            .rvalue.operand = IR_OPERAND_VAR(tmpvar),
+        };
+        c_value_destroy(res.res);
+        return (c_compile_expr_t){
+            .code = code,
+            .res  = rvalue,
+        };
+
     } else if (expr->subtype == C_AST_EXPR_INDEX) {
         printf("TODO: Index expressions\n");
         abort();
@@ -764,13 +846,13 @@ c_compile_expr_t
                 lvalue.lvalue.memref.base_type  = IR_MEMBASE_ABS;
                 lvalue.lvalue.memref.offset    += (int64_t)ptr.iconst.constl;
                 break;
-            case IR_OPERAND_TYPE_UNDEF: __builtin_unreachable();
+            case IR_OPERAND_TYPE_UNDEF: UNREACHABLE();
             case IR_OPERAND_TYPE_VAR:
                 lvalue.lvalue.memref.base_type = IR_MEMBASE_VAR;
                 lvalue.lvalue.memref.base_var  = ptr.var;
                 break;
             case IR_OPERAND_TYPE_MEM:
-            case IR_OPERAND_TYPE_REG: __builtin_unreachable();
+            case IR_OPERAND_TYPE_REG: UNREACHABLE();
         }
 
         c_value_destroy(res.res);
@@ -1181,13 +1263,13 @@ c_compile_expr_t
                     memref.base_type = IR_MEMBASE_ABS;
                     memref.offset    = (int64_t)ptrval.iconst.constl;
                     break;
-                case IR_OPERAND_TYPE_UNDEF: __builtin_unreachable();
+                case IR_OPERAND_TYPE_UNDEF: UNREACHABLE();
                 case IR_OPERAND_TYPE_VAR:
                     memref.base_type = IR_MEMBASE_VAR;
                     memref.base_var  = ptrval.var;
                     break;
                 case IR_OPERAND_TYPE_MEM:
-                case IR_OPERAND_TYPE_REG: __builtin_unreachable();
+                case IR_OPERAND_TYPE_REG: UNREACHABLE();
             }
             c_value_t rvalue = {
                 .value_type    = C_LVALUE_MEM,
@@ -1343,7 +1425,7 @@ c_compile_expr_t
             .res  = (c_value_t){0},
         };
     } else {
-        __builtin_unreachable();
+        UNREACHABLE();
     }
 }
 
@@ -1614,7 +1696,6 @@ ir_code_t *
         if (decls->params[i].type == TOKENTYPE_AST && decls->params[i].subtype == C_AST_ASSIGN_DECL) {
             if (scope->depth == 0) {
                 printf("TODO: Initialized variables in the global scope\n");
-                abort();
             }
 
             c_compile_expr_t res = c_compile_expr(ctx, prepass, code, scope, &decls->params[1].params[1]);
@@ -1627,7 +1708,7 @@ ir_code_t *
                         ir_add_store(IR_APPEND(code), tmp, IR_MEMREF(ir_operand_prim(tmp), IR_BADDR_FRAME(var->frame)));
                         break;
                     case C_VAR_STORAGE_GLOBAL: abort(); break;
-                    case C_VAR_STORAGE_ENUM_VARIANT: __builtin_unreachable();
+                    case C_VAR_STORAGE_ENUM_VARIANT: UNREACHABLE();
                 }
                 c_value_destroy(res.res);
             }

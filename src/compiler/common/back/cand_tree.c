@@ -11,6 +11,7 @@
 #include "ir_types.h"
 #include "set.h"
 #include "strong_malloc.h"
+#include "unreachable.h"
 
 #include <assert.h>
 #include <stddef.h>
@@ -315,7 +316,7 @@ static size_t tree_isel_match_proto(
                         return 0;
                     }
                     break;
-                default: __builtin_unreachable();
+                default: UNREACHABLE();
             }
         } else if (ir_operands[i]->type == IR_OPERAND_TYPE_CONST) {
             // Validate constant rules.

@@ -12,7 +12,7 @@ add_compile_options(
     -std=gnu17
     -O0 -ggdb
     -Wall -Wextra -Wno-type-limits -Wno-unused-function
-    -Werror=all -Werror=extra -Werror=enum-conversion
+    -Werror=all -Werror=extra -Werror=enum-conversion -Werror=incompatible-pointer-types
     -DDLIST_CONSISTENCY_CHECK
 )
 

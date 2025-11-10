@@ -19,6 +19,7 @@
 #include "set.h"
 #include "strong_malloc.h"
 #include "tokenizer.h"
+#include "unreachable.h"
 
 #include <assert.h>
 #include <inttypes.h>
@@ -116,7 +117,7 @@ void ir_operand_serialize(ir_operand_t operand, backend_profile_t const *profile
         fputc('%', to);
         fputs(operand.var->name, to);
     } else {
-        __builtin_unreachable();
+        UNREACHABLE();
     }
 }
 
@@ -248,7 +249,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
     for (size_t i = 0; i < ast.params[2].params_len; i++) {
         token_t const *stmt = &ast.params[2].params[i];
         switch (stmt->subtype) {
-            default: __builtin_unreachable();
+            default: UNREACHABLE();
             case IR_AST_VAR: {
                 claim_name(stmt->params[0]) {
                     ir_var_create(func, stmt->params[1].subtype - IR_KEYW_s8 + IR_PRIM_s8, stmt->params[0].strval);
@@ -293,7 +294,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
     for (size_t i = 0; i < ast.params[2].params_len; i++) {
         token_t const *stmt = &ast.params[2].params[i];
         switch (stmt->subtype) {
-            default: __builtin_unreachable();
+            default: UNREACHABLE();
             case IR_AST_VAR:
             case IR_AST_FRAME: break;
             case IR_AST_CODE: {
@@ -649,7 +650,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                 // Finally append the instruction.
                 if (insn_ok) {
                     switch (stmt->params[1].subtype) {
-                        default: __builtin_unreachable();
+                        default: UNREACHABLE();
 
                         case IR_KEYW_comb:
                             fprintf(stderr, "[TODO] Deserialize combinator instruction\n");

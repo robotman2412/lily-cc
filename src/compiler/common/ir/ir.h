@@ -6,6 +6,7 @@
 #pragma once
 
 #include "ir_types.h"
+#include "unreachable.h"
 
 #include <stdio.h>
 
@@ -170,6 +171,6 @@ static inline ir_code_t *ir_insnloc_code(ir_insnloc_t loc) {
         case IR_INSNLOC_APPEND_CODE: return loc.code;
         case IR_INSNLOC_AFTER_INSN:
         case IR_INSNLOC_BEFORE_INSN: return loc.insn->code;
-        default: __builtin_unreachable();
+        default: UNREACHABLE();
     }
 }

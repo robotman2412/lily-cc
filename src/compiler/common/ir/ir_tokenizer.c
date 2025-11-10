@@ -7,6 +7,7 @@
 // Must be before <stdbool.h> because it contains the identifier `bool`.
 #include "arith128.h"
 #include "compiler.h"
+#include "unreachable.h"
 
 #include <stdio.h>
 char const *const ir_keywords[] = {
@@ -121,7 +122,7 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
             case 8: ctype = "octal"; break;
             case 10: ctype = "decimal"; break;
             case 16: ctype = "hexadecimal"; break;
-            default: __builtin_unreachable();
+            default: UNREACHABLE();
         }
         cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Invalid %s constant", ctype);
         return (token_t){

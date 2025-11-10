@@ -12,6 +12,7 @@
 #include "ir_types.h"
 #include "map.h"
 #include "refcount.h"
+#include "unreachable.h"
 
 
 
@@ -95,7 +96,7 @@ static inline bool c_prim_is_int(c_prim_t prim) {
         case C_COMP_ARRAY:
         case C_COMP_FUNCTION: return false;
     }
-    __builtin_unreachable();
+    UNREACHABLE();
 }
 
 // Whether a primitive is a scalar type.
@@ -124,7 +125,7 @@ static inline bool c_prim_is_scalar(c_prim_t prim) {
         case C_COMP_ARRAY:
         case C_COMP_FUNCTION: return false;
     }
-    __builtin_unreachable();
+    UNREACHABLE();
 }
 
 // Whether a primitive is or decays into a pointer.
@@ -235,6 +236,11 @@ rc_t c_compile_decl(
 rc_t     c_type_pointer(c_compiler_t *ctx, rc_t inner);
 // Determine type promotion to apply in an infix context.
 c_prim_t c_prim_promote(c_prim_t a, c_prim_t b);
+// Determine whether a value of type `old_type` can be cast to `new_type`.
+bool     c_type_castable(c_compiler_t *ctx, c_type_t const *new_type, c_type_t const *old_type);
+// Determine whether two types are the same.
+// If `strict`, then modifiers like `_Atomic` and `volatile` also apply.
+bool     c_type_identical(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b, bool strict);
 // Determine whether two types are compatible.
 bool     c_type_compatible(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b);
 // Determine whether two types can be used with a certain operator token.

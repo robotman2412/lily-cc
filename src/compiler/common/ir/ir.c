@@ -13,6 +13,7 @@
 #include "map.h"
 #include "set.h"
 #include "strong_malloc.h"
+#include "unreachable.h"
 
 #include <assert.h>
 #include <complex.h>
@@ -23,7 +24,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 
 
 // Helper macro for performing an operation on all variables in an IR operand.
@@ -581,7 +581,7 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
                         break;
 
                     case IR_OPERAND_TYPE_MEM:
-                    case IR_OPERAND_TYPE_REG: __builtin_unreachable();
+                    case IR_OPERAND_TYPE_REG: UNREACHABLE();
                 }
             }
         }

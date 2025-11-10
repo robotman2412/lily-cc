@@ -6,6 +6,7 @@
 #pragma once
 
 #include "map.h"
+#include "unreachable.h"
 
 #include <endian.h>
 #include <stdlib.h>
@@ -304,7 +305,7 @@ static inline ir_prim_t ir_operand_prim(ir_operand_t oper) {
         case IR_OPERAND_TYPE_MEM: return oper.mem.data_type;
         case IR_OPERAND_TYPE_REG: break;
     }
-    __builtin_unreachable();
+    UNREACHABLE();
 }
 
 // A constant operand.

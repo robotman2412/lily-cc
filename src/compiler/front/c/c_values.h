@@ -10,6 +10,7 @@
 #include "compiler.h"
 #include "ir_types.h"
 #include "refcount.h"
+#include "unreachable.h"
 
 
 
@@ -101,5 +102,5 @@ static inline bool c_is_rvalue(c_value_t const *value) {
         case C_RVALUE_MAP:
         case C_RVALUE_BINARY: return true;
     }
-    __builtin_unreachable();
+    UNREACHABLE();
 }

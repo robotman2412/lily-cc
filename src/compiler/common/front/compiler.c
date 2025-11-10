@@ -361,7 +361,9 @@ int srcfile_getc(srcfile_t *file, pos_t *pos) {
         pos->col = 0;
         return '\n';
     } else {
-        pos->col++;
+        if (c != -1) {
+            pos->col++;
+        }
         return c;
     }
 }

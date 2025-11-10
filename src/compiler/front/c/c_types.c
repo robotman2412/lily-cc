@@ -9,9 +9,11 @@
 #include "c_parser.h"
 #include "compiler.h"
 #include "ir_interpreter.h"
+#include "ir_types.h"
 #include "map.h"
 #include "refcount.h"
 #include "strong_malloc.h"
+#include "unreachable.h"
 
 #include <stdio.h>
 
@@ -225,7 +227,7 @@ static rc_t c_compile_comp_spec(c_compiler_t *ctx, token_t const *struct_spec, c
         case C_KEYW_enum: comp_type = C_COMP_TYPE_ENUM; break;
         case C_KEYW_struct: comp_type = C_COMP_TYPE_STRUCT; break;
         case C_KEYW_union: comp_type = C_COMP_TYPE_UNION; break;
-        default: __builtin_unreachable();
+        default: UNREACHABLE();
     }
 
     // Get or create the compound type.
@@ -565,7 +567,7 @@ rc_t c_type_pointer(c_compiler_t *ctx, rc_t inner) {
 c_prim_t c_prim_promote(c_prim_t a, c_prim_t b) {
     c_prim_t tmp;
     if (a >= C_N_PRIM || b >= C_N_PRIM) {
-        __builtin_unreachable();
+        UNREACHABLE();
     } else if (a > b) {
         tmp = a;
     } else {
@@ -581,8 +583,65 @@ c_prim_t c_prim_promote(c_prim_t a, c_prim_t b) {
     }
 }
 
+// Determine whether a value of type `old_type` can be cast to `new_type`.
+bool c_type_castable(c_compiler_t *ctx, c_type_t const *new_type, c_type_t const *old_type) {
+    if (c_type_identical(ctx, new_type, old_type, false)) {
+        return true;
+    }
+    if (new_type->primitive == C_PRIM_VOID) {
+        return true;
+    }
+    return old_type->primitive < C_N_PRIM && new_type->primitive < C_N_PRIM && old_type->primitive != C_PRIM_VOID
+           && new_type->primitive != C_PRIM_VOID;
+}
+
+// Determine whether two types are the same.
+// If `strict`, then modifiers like `_Atomic` and `volatile` also apply.
+bool c_type_identical(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b, bool strict) {
+    if (a == b) {
+        return true;
+    }
+    if (a->primitive != b->primitive) {
+        return false;
+    }
+    if (strict) {
+        if (a->is_restrict != b->is_restrict || a->is_atomic != b->is_atomic || a->is_const != b->is_const
+            || a->is_volatile != b->is_volatile) {
+            return false;
+        }
+    }
+    switch (a->primitive) {
+        case C_PRIM_BOOL:
+        case C_PRIM_CHAR:
+        case C_PRIM_UCHAR:
+        case C_PRIM_SCHAR:
+        case C_PRIM_USHORT:
+        case C_PRIM_SSHORT:
+        case C_PRIM_UINT:
+        case C_PRIM_SINT:
+        case C_PRIM_ULONG:
+        case C_PRIM_SLONG:
+        case C_PRIM_ULLONG:
+        case C_PRIM_SLLONG:
+        case C_PRIM_FLOAT:
+        case C_PRIM_DOUBLE:
+        case C_PRIM_LDOUBLE:
+        case C_PRIM_VOID: return true;
+        case C_COMP_STRUCT:
+        case C_COMP_UNION: return a->comp == b->comp;
+        case C_COMP_ENUM:
+        case C_COMP_POINTER: return true;
+        case C_COMP_ARRAY: return c_type_compatible(ctx, a->inner->data, b->inner->data);
+        case C_COMP_FUNCTION: return false;
+    }
+    UNREACHABLE();
+}
+
 // Determine whether two types are compatible.
 bool c_type_compatible(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b) {
+    if (a == b) {
+        return true;
+    }
     if (a->primitive != b->primitive) {
         return (a->primitive < C_N_PRIM || a->primitive == C_COMP_ENUM)
                && (b->primitive < C_N_PRIM || b->primitive == C_COMP_ENUM);
@@ -611,7 +670,7 @@ bool c_type_compatible(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b) 
         case C_COMP_ARRAY: return c_type_compatible(ctx, a->inner->data, b->inner->data);
         case C_COMP_FUNCTION: return false;
     }
-    __builtin_unreachable();
+    UNREACHABLE();
 }
 
 // Helper for `c_type_arith_compatible` that determines pointer arithmetic compatibility.
@@ -714,7 +773,7 @@ static bool c_type_ptrarith_compatible(
             }
             return true;
 
-        default: __builtin_unreachable();
+        default: UNREACHABLE();
     }
 }
 
@@ -772,7 +831,7 @@ bool c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out
             *size_out  = comp->size;
             *align_out = comp->align;
         } break;
-        case C_COMP_POINTER: __builtin_unreachable();
+        case C_COMP_POINTER: UNREACHABLE();
         case C_COMP_ARRAY:
         case C_COMP_FUNCTION: return false;
     }
@@ -803,9 +862,9 @@ ir_prim_t c_prim_to_ir_type(c_compiler_t *ctx, c_prim_t prim) {
         case C_COMP_ENUM:
         case C_COMP_POINTER:
         case C_COMP_ARRAY:
-        case C_COMP_FUNCTION: __builtin_unreachable();
+        case C_COMP_FUNCTION: return IR_N_PRIM;
     }
-    __builtin_unreachable();
+    UNREACHABLE();
 }
 
 // Convert C primitive or pointer type to IR primitive type.

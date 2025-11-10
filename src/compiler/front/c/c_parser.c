@@ -362,34 +362,40 @@ token_t c_parse_expr(c_parser_t *ctx) {
             push(ast_from_va(C_AST_EXPR_INDEX, 2, arr, idx));
 
         } else if (is_tkn(0, C_TKN_LPAR)) { // Recursively parse exprs.
-            if (is_operand(1) && peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_RPAR) {
+            token_t lpar = pop();
+            token_t res;
+            if (is_operand(0) && peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_RPAR) {
                 // Function call may have zero params.
-                token_t lpar = pop();
-                push(tkn_with_pos(ast_from_va(C_AST_EXPRS, 0), pos_including(lpar.pos, peek.pos)));
-                tkn_delete(lpar);
+                res = ast_from_va(C_AST_EXPRS, 0);
             } else {
                 // If not a function call, then it must have something in the parentheses.
-                bool    is_type;
-                token_t tmp = c_parse_exprs_or_type(ctx, &is_type);
-                if (tmp.type == TOKENTYPE_AST && tmp.subtype == C_AST_GARBAGE) {
-                    push(tmp);
+                bool is_type;
+                res = c_parse_exprs_or_type(ctx, &is_type);
+                if (res.type == TOKENTYPE_AST && res.subtype == C_AST_GARBAGE) {
+                    push(res);
+                    tkn_delete(lpar);
                     goto err;
                 }
-                tkn_delete(pop());
-                push(tmp);
             }
-            token_t tmp = tkn_peek(ctx->tkn_ctx);
-            if (tmp.type != TOKENTYPE_OTHER || tmp.subtype != C_TKN_RPAR) {
-                cctx_diagnostic(ctx->tkn_ctx->cctx, tmp.pos, DIAG_ERR, "Expected )");
+            token_t rpar = tkn_peek(ctx->tkn_ctx);
+            if (rpar.type != TOKENTYPE_OTHER || rpar.subtype != C_TKN_RPAR) {
+                push(res);
+                tkn_delete(lpar);
+                cctx_diagnostic(ctx->tkn_ctx->cctx, rpar.pos, DIAG_ERR, "Expected )");
                 goto err;
             }
             tkn_next(ctx->tkn_ctx);
+            push(tkn_with_pos(res, pos_including(lpar.pos, rpar.pos)));
 
-        } else if (stack_len >= 2 && (is_operand(1) || is_type_node(ctx, stack[stack_len - 2]))
-                   && is_ast(0, C_AST_EXPRS)) { // Reduce call.
+        } else if (is_operand(1) && is_ast(0, C_AST_EXPRS)) { // Reduce call.
             token_t params = pop();
             token_t func   = pop();
             push(ast_from_va(C_AST_EXPR_CALL, 2, func, params));
+
+        } else if (stack_len >= 2 && is_operand(0) && is_type_node(ctx, stack[stack_len - 2])) { // Reduce cast.
+            token_t val      = pop();
+            token_t typename = pop();
+            push(ast_from_va(C_AST_EXPR_CAST, 2, typename, val));
 
         } else if (is_operand(1) && (is_tkn(0, C_TKN_INC) || is_tkn(0, C_TKN_DEC))) { // Reduce suffix.
             token_t op  = pop();
@@ -1108,7 +1114,9 @@ static void c_eat_delim(tokenizer_t *tkn_ctx, bool include_comma) {
     token_t peek    = tkn_peek(tkn_ctx);
     bool    tooketh = false;
     while (1) {
-        if (peek.type == TOKENTYPE_OTHER && (peek.subtype == C_TKN_RCURL || peek.subtype == C_TKN_LCURL)) {
+        if (peek.type == TOKENTYPE_EOF) {
+            return;
+        } else if (peek.type == TOKENTYPE_OTHER && (peek.subtype == C_TKN_RCURL || peek.subtype == C_TKN_LCURL)) {
             if (!tooketh) {
                 tkn_next(tkn_ctx);
             }

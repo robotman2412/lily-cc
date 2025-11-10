@@ -13,6 +13,7 @@
 #include "map.h"
 #include "refcount.h"
 #include "strong_malloc.h"
+#include "unreachable.h"
 
 #include <assert.h>
 #include <stdint.h>
@@ -69,7 +70,7 @@ static void c_rvalue_to_blob_r(c_compiler_t const *ctx, uint8_t *blob, c_value_t
         }
 
     } else {
-        __builtin_unreachable();
+        UNREACHABLE();
     }
 }
 
@@ -98,7 +99,7 @@ static inline void
         }
 
     } else {
-        __builtin_unreachable();
+        UNREACHABLE();
     }
 }
 
@@ -111,7 +112,7 @@ static void c_lvalue_write_mem(c_compiler_t *ctx, ir_code_t *code, ir_memref_t l
     ir_prim_t copy_max_prim = IR_PRIM_u8 + 2 * __builtin_ctzll(ir_prim_sizes[usize_prim] | align);
 
     switch (rvalue->value_type) {
-        case C_VALUE_ERROR: __builtin_unreachable();
+        case C_VALUE_ERROR: UNREACHABLE();
         case C_LVALUE_MEM: {
             // Copy memory.
             ir_add_memcpy(
@@ -174,7 +175,7 @@ static void c_lvalue_write_mem(c_compiler_t *ctx, ir_code_t *code, ir_memref_t l
 // Write to an lvalue.
 void c_value_write(c_compiler_t *ctx, ir_code_t *code, c_value_t const *lvalue, c_value_t const *rvalue) {
     switch (lvalue->value_type) {
-        default: __builtin_unreachable(); break;
+        default: UNREACHABLE(); break;
         case C_VALUE_ERROR:
             fprintf(stderr, "[BUG] c_value_write called on C_VALUE_ERROR\n");
             abort();
@@ -218,7 +219,7 @@ ir_memref_t c_value_memref(c_compiler_t *ctx, ir_code_t *code, c_value_t const *
         abort();
 
     } else {
-        __builtin_unreachable();
+        UNREACHABLE();
     }
 
     return memref;
@@ -227,7 +228,7 @@ ir_memref_t c_value_memref(c_compiler_t *ctx, ir_code_t *code, c_value_t const *
 // Read a value for scalar arithmetic.
 ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value) {
     switch (value->value_type) {
-        default: __builtin_unreachable(); break;
+        default: UNREACHABLE(); break;
         case C_VALUE_ERROR:
             fprintf(stderr, "[BUG] c_value_read called on C_VALUE_ERROR\n");
             abort();
@@ -270,7 +271,7 @@ c_value_t c_value_field(c_compiler_t *ctx, ir_code_t *code, c_value_t const *val
     c_field_t const *field = map_get(&comp->fields, field_name);
 
     switch (value->value_type) {
-        case C_VALUE_ERROR: __builtin_unreachable();
+        case C_VALUE_ERROR: UNREACHABLE();
         case C_LVALUE_MEM: {
             ir_memref_t memref  = value->lvalue.memref;
             memref.offset      += (int64_t)field->offset;
@@ -312,7 +313,7 @@ c_value_t c_value_field(c_compiler_t *ctx, ir_code_t *code, c_value_t const *val
             }
         }
     }
-    __builtin_unreachable();
+    UNREACHABLE();
 }
 
 // Clone a C value.
@@ -348,7 +349,7 @@ c_value_t c_value_clone(c_compiler_t *ctx, c_value_t const *value) {
             };
         }
     }
-    __builtin_unreachable();
+    UNREACHABLE();
 }
 
 // Determine whether a value is assignable.
@@ -385,7 +386,7 @@ bool c_value_assignable(c_compiler_t *ctx, c_value_t const *value, pos_t diag_po
             cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Cannot assign to function type");
             return false;
     }
-    __builtin_unreachable();
+    UNREACHABLE();
 }
 
 // Determine whether the value is a constant rvalue.
@@ -405,5 +406,5 @@ bool c_value_is_const(c_value_t const *value) {
             return true;
         case C_RVALUE_BINARY: return true;
     }
-    __builtin_unreachable();
+    UNREACHABLE();
 }

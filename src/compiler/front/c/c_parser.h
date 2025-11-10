@@ -30,9 +30,12 @@ typedef enum {
     // An array indexing expression (e.g. `expr[expr]`).
     // Args: Array, index.
     C_AST_EXPR_INDEX,
-    // A function invocation or cast (e.g. `identifier(exprs)`, `(typename) expr` or `(exprs)(exprs)`).
-    // Args: Function/type, args.
+    // A function invocation or cast (e.g. `identifier(exprs)` or `(exprs)(exprs)`).
+    // Args: Function, args.
     C_AST_EXPR_CALL,
+    // A cast (e.g. `(typename) expr`).
+    // Args: Type, expr.
+    C_AST_EXPR_CAST,
     // An array type (e.g. `int[]` or `int[expr]`).
     // Args: Thing the array binds to, index expression (optional).
     C_AST_TYPE_ARRAY,

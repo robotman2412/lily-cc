@@ -14,6 +14,7 @@ add_library(util STATIC
     refcount.c
     set.c
     strong_malloc.c
+    unreachable.c
     utf8.c
 )
 target_include_directories(util PUBLIC .)

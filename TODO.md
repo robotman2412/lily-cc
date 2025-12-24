@@ -62,9 +62,6 @@
     - `__COUNTER__` - increments every time it is expanded, starting at 0
 
 ### C parser and AST builder
-- Research C syntax
-    - GCC extension `__attribute__`
-    - Pointers of arrays and arrays of pointers ✓
 - Design clean, generic struct for building the AST ✓
 - Global variable declaration ✓
 - Global variable definition ✓
@@ -88,10 +85,10 @@
 ### C compiler
 - Types in expressions
     - Primitive types ✓
-    - Pointers
-    - Arrays
-    - Structs
-    - Unions
+    - Pointers ✓
+    - Arrays ✓
+    - Structs ✓
+    - Unions ✓
     - Enums ✓
     - Function pointers
 - Expression operators
@@ -100,6 +97,7 @@
     - Dereference ✓
     - Index
 - Modifiable l-value check ✓
+- Compound initializers/literals
 
 
 ## Generic codegen
@@ -109,6 +107,13 @@
     - Calculation deduplication
     - Strength reduction ✓
     - Mem2reg pass
+- IR function calls
+    - Returning multiple values
+    - Returning structs
+    - Parameter structs
+    - Implicit out pointers for large returns
+    - Implicit in pointers for large parameters
+    - Variadics
 - IR support for memory ✓
     - Concept of stack frame ✓
     - Instruction to get stack variable pointer ✓

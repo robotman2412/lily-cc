@@ -5,6 +5,7 @@
 
 #include "c_types.h"
 
+#include "arrays.h"
 #include "c_compiler.h"
 #include "c_parser.h"
 #include "compiler.h"
@@ -15,6 +16,7 @@
 #include "strong_malloc.h"
 #include "unreachable.h"
 
+#include <stddef.h>
 #include <stdio.h>
 
 
@@ -44,19 +46,16 @@ static void c_type_free(c_type_t *type) {
 // Delete a compound type.
 static void c_comp_free(c_comp_t *comp) {
     if (comp->type == C_COMP_TYPE_ENUM) {
-        map_foreach(ent, &comp->variants) {
-            c_enumvar_t *value = ent->value;
-            free(value->name);
-            free(value);
+        for (size_t i = 0; i < comp->variants.len; i++) {
+            free(comp->variants.arr[i].name);
         }
-        map_clear(&comp->variants);
+        free(comp->variants.arr);
     } else {
-        map_foreach(ent, &comp->fields) {
-            c_field_t *value = ent->value;
-            rc_delete(value->type_rc);
-            free(value);
+        for (size_t i = 0; i < comp->fields.len; i++) {
+            free(comp->fields.arr[i].name);
+            rc_delete(comp->fields.arr[i].type_rc);
         }
-        map_clear(&comp->fields);
+        free(comp->fields.arr);
     }
     free(comp->name);
     free(comp);
@@ -67,8 +66,9 @@ static void c_comp_free(c_comp_t *comp) {
 // Compile the body of an enum definition.
 static void
     c_compile_enum_body(c_compiler_t *ctx, token_t const *body, size_t body_len, c_scope_t *scope, c_comp_t *comp) {
+    size_t cap = 0;
     // TODO: Packed enums support.
-    int cur = 0;
+    int    cur = 0;
     for (size_t i = 0; i < body_len; i++, cur++) {
         token_t const *name = &body[i].params[0];
         if (body[i].params_len == 2) {
@@ -91,10 +91,17 @@ static void
             map_set(&scope->locals, name->strval, var);
             map_set(&scope->locals_by_decl, name, var);
 
-            c_enumvar_t *enumvar = strong_calloc(1, sizeof(c_enumvar_t));
-            enumvar->name        = strong_strdup(name->strval);
-            enumvar->ordinal     = cur;
-            map_set(&comp->variants, enumvar->name, enumvar);
+            c_enumvar_t enumvar;
+            enumvar.name    = strong_strdup(name->strval);
+            enumvar.ordinal = cur;
+            array_lencap_insert_strong(
+                &comp->variants.arr,
+                sizeof(c_enumvar_t),
+                &comp->variants.len,
+                &cap,
+                &enumvar,
+                comp->variants.len
+            );
         }
     }
 
@@ -104,6 +111,7 @@ static void
 // Compile the body of a struct/union definition.
 static void
     c_compile_struct_body(c_compiler_t *ctx, token_t const *body, size_t body_len, c_scope_t *scope, c_comp_t *comp) {
+    size_t   cap    = 0;
     uint64_t offset = 0;
     uint64_t size   = 0;
     uint64_t align  = 1;
@@ -128,22 +136,18 @@ static void
                 offset += inner_comp->align - offset % inner_comp->align;
             }
 
-            // Copy fields in with current offset added.
-            map_foreach(ent, &inner_comp->fields) {
-                c_field_t const *field    = ent->value;
-                c_field_t const *existing = map_get(&comp->fields, ent->key);
-                if (existing) {
-                    cctx_diagnostic(ctx->cctx, field->name_tkn->pos, DIAG_ERR, "Redefinition of %s", ent->key);
-                    errors = true;
-                    continue;
-                }
-
-                c_field_t *copy = strong_calloc(1, sizeof(c_field_t));
-                copy->name_tkn  = field->name_tkn;
-                copy->offset    = field->offset + offset;
-                copy->type_rc   = rc_share(field->type_rc);
-                map_set(&comp->fields, ent->key, copy);
-            }
+            c_field_t field;
+            field.type_rc = rc_share(inner_rc);
+            field.name    = NULL;
+            field.offset  = offset;
+            array_lencap_insert_strong(
+                &comp->fields.arr,
+                sizeof(c_field_t),
+                &comp->fields.len,
+                &cap,
+                &field,
+                comp->fields.len
+            );
 
             // Adjust size and alignment accordingly.
             if (align < inner_comp->align) {
@@ -159,7 +163,7 @@ static void
         } else {
             // Normal field.
             for (size_t x = 1; x < decl->params_len; x++) {
-                token_t const *name_tkn;
+                token_t const *name_tkn   = NULL;
                 rc_t           field_type = c_compile_decl(ctx, &decl->params[x], scope, rc_share(inner_rc), &name_tkn);
                 if (!field_type) {
                     errors = true;
@@ -170,11 +174,19 @@ static void
                     if (offset % field_align) {
                         offset += field_align - offset % field_align;
                     }
-                    c_field_t *field = strong_malloc(sizeof(c_field_t));
-                    field->type_rc   = field_type;
-                    field->name_tkn  = name_tkn;
-                    field->offset    = offset;
-                    map_set(&comp->fields, name_tkn->strval, field);
+                    c_field_t field;
+                    field.type_rc  = field_type;
+                    field.name     = strong_strdup(name_tkn->strval);
+                    field.name_pos = name_tkn->pos;
+                    field.offset   = offset;
+                    array_lencap_insert_strong(
+                        &comp->fields.arr,
+                        sizeof(c_field_t),
+                        &comp->fields.len,
+                        &cap,
+                        &field,
+                        comp->fields.len
+                    );
                 } else {
                     cctx_diagnostic(ctx->cctx, name_tkn->pos, DIAG_ERR, "Use of incomplete type");
                     rc_delete(field_type);
@@ -237,11 +249,10 @@ static rc_t c_compile_comp_spec(c_compiler_t *ctx, token_t const *struct_spec, c
         comp_rc = c_scope_lookup_comp(scope, name->strval);
     }
     if (!comp_rc) {
-        comp         = strong_calloc(1, sizeof(c_comp_t));
-        comp_rc      = rc_new_strong(comp, (void (*)(void *))c_comp_free);
-        comp->name   = name ? strong_strdup(name->strval) : NULL;
-        comp->type   = comp_type;
-        comp->fields = STR_MAP_EMPTY;
+        comp       = strong_calloc(1, sizeof(c_comp_t));
+        comp_rc    = rc_new_strong(comp, (void (*)(void *))c_comp_free);
+        comp->name = name ? strong_strdup(name->strval) : NULL;
+        comp->type = comp_type;
         if (name) {
             map_set(&scope->comp_types, name->strval, rc_share(comp_rc));
         }
@@ -820,7 +831,7 @@ bool c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out
         case C_PRIM_FLOAT: *align_out = *size_out = 4; break;
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE: *align_out = *size_out = 8; break;
-        case C_PRIM_VOID: *align_out = 1, *size_out = 0; break;
+        case C_PRIM_VOID: return false;
         case C_COMP_STRUCT:
         case C_COMP_ENUM:
         case C_COMP_UNION: {

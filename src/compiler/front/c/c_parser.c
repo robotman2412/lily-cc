@@ -76,6 +76,10 @@ char const *const c_asttype_name[] = {
     [C_AST_RETURN]         = "C_AST_RETURN",
     [C_AST_GOTO]           = "C_AST_GOTO",
     [C_AST_NOP]            = "C_AST_NOP",
+    [C_AST_COMPINIT]       = "C_AST_COMPINIT",
+    [C_AST_COMPINIT_NAME]  = "C_AST_COMPINIT_NAME",
+    [C_AST_COMPINIT_INDEX] = "C_AST_COMPINIT_INDEX",
+    [C_AST_COMPLITERAL]    = "C_AST_COMPLITERAL",
 };
 #endif
 
@@ -271,23 +275,123 @@ static bool is_type_node(c_parser_t *ctx, token_t node) {
 
 
 
-// Parse a C compilation unit into an AST.
-token_t c_parse(c_parser_t *ctx);
+// Recursive implementation of `c_parse_comp_init_field`.
+static token_t c_parse_comp_init_field_r(c_parser_t *ctx) {
+    token_t peek = tkn_peek(ctx->tkn_ctx);
 
+    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_ASSIGN) {
+        tkn_delete(tkn_next(ctx->tkn_ctx));
+        return c_parse_expr(ctx, true);
+
+    } else if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LBRAC) {
+        tkn_delete(tkn_next(ctx->tkn_ctx));
+        token_t index = c_parse_expr(ctx, false);
+        peek          = tkn_peek(ctx->tkn_ctx);
+        if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RBRAC) {
+            cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ]");
+            return ast_from_va(C_AST_GARBAGE, 1, index);
+        }
+        tkn_delete(tkn_next(ctx->tkn_ctx));
+        token_t inner   = c_parse_comp_init_field_r(ctx);
+        bool    garbage = inner.type == TOKENTYPE_AST && inner.subtype == C_AST_GARBAGE;
+        return ast_from_va(garbage ? C_AST_GARBAGE : C_AST_COMPINIT_INDEX, 2, index, inner);
+
+    } else if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_DOT) {
+        tkn_delete(tkn_next(ctx->tkn_ctx));
+        peek = tkn_peek(ctx->tkn_ctx);
+        if (peek.type != TOKENTYPE_IDENT) {
+            return ast_from_va(C_AST_GARBAGE, 0);
+        }
+        token_t ident   = tkn_next(ctx->tkn_ctx);
+        token_t inner   = c_parse_comp_init_field_r(ctx);
+        bool    garbage = inner.type == TOKENTYPE_AST && inner.subtype == C_AST_GARBAGE;
+        return ast_from_va(garbage ? C_AST_GARBAGE : C_AST_COMPINIT_NAME, 2, ident, inner);
+
+    } else {
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected initializer");
+        return ast_from_va(C_AST_GARBAGE, 0);
+    }
+}
+
+// Parse a compound initializer field.
+token_t c_parse_comp_init_field(c_parser_t *ctx) {
+    token_t peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type != TOKENTYPE_OTHER || (peek.subtype != C_TKN_DOT && peek.subtype != C_TKN_LBRAC)) {
+        return c_parse_expr(ctx, true);
+    } else {
+        return c_parse_comp_init_field_r(ctx);
+    }
+}
+
+// Parse a compound initializer.
+token_t c_parse_comp_init(c_parser_t *ctx) {
+    token_t lcurl = tkn_next(ctx->tkn_ctx);
+    if (lcurl.type != TOKENTYPE_OTHER || lcurl.subtype != C_TKN_LCURL) {
+        c_eat_delim(ctx->tkn_ctx, true);
+        return ast_from_va(C_AST_GARBAGE, 1, lcurl);
+    }
+
+    token_t *arr     = NULL;
+    size_t   len     = 0;
+    size_t   cap     = 0;
+    bool     garbage = false;
+
+    bool    has_rcurl = false;
+    token_t rcurl;
+    while (1) {
+        // Parse initializer.
+        token_t peek = tkn_peek(ctx->tkn_ctx);
+        if (peek.type == TOKENTYPE_OTHER
+            && (peek.subtype == C_TKN_SEMIC || peek.subtype == C_TKN_RBRAC || peek.subtype == C_TKN_RPAR)) {
+            cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected expression");
+            garbage = true;
+            break;
+        }
+        if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_RCURL) {
+            rcurl     = tkn_next(ctx->tkn_ctx);
+            has_rcurl = true;
+            break;
+        }
+        token_t expr = c_parse_comp_init_field(ctx);
+        if (expr.subtype == C_AST_GARBAGE) {
+            garbage = true;
+        }
+        array_lencap_insert_strong(&arr, sizeof(token_t), &len, &cap, &expr, len);
+
+        // Expect `,` or `}`.
+        peek = tkn_peek(ctx->tkn_ctx);
+        if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_RCURL) {
+            break;
+        } else if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_COMMA) {
+            cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ,");
+            garbage = true;
+            break;
+        }
+        tkn_delete(tkn_next(ctx->tkn_ctx));
+    }
+
+    token_t tmp = ast_from(garbage ? C_AST_GARBAGE : C_AST_COMPINIT, len, arr);
+    if (has_rcurl) {
+        tmp.pos = pos_including(lcurl.pos, rcurl.pos);
+    } else {
+        tmp.pos = pos_including(lcurl.pos, tmp.pos);
+    }
+    return tmp;
+}
 
 // Parse one or more C expressions separated by commas.
 token_t c_parse_exprs(c_parser_t *ctx) {
     size_t   exprs_len = 1;
     size_t   exprs_cap = 1;
     token_t *exprs     = strong_malloc(exprs_cap * sizeof(token_t));
-    *exprs             = c_parse_expr(ctx);
+    *exprs             = c_parse_expr(ctx, false);
     bool is_garbage    = exprs->type == TOKENTYPE_AST && exprs->subtype == C_AST_GARBAGE;
 
     // While the next token is a comma, more expressions can be parsed.
     token_t tkn = tkn_peek(ctx->tkn_ctx);
     while (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_COMMA) {
         tkn_next(ctx->tkn_ctx);
-        token_t expr = c_parse_expr(ctx);
+        token_t expr = c_parse_expr(ctx, false);
         if (expr.type == TOKENTYPE_AST && expr.subtype == C_AST_GARBAGE) {
             is_garbage = true;
         }
@@ -300,10 +404,12 @@ token_t c_parse_exprs(c_parser_t *ctx) {
 }
 
 // Parse a C expression.
-token_t c_parse_expr(c_parser_t *ctx) {
+token_t c_parse_expr(c_parser_t *ctx, bool allow_compinit) {
     // Assert that it starts with a token valid for the beginning of an expr.
     token_t peek = tkn_peek(ctx->tkn_ctx);
-    if (!is_first_expr_tkn(ctx, peek)) {
+    if (allow_compinit && peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LCURL) {
+        return c_parse_comp_init(ctx);
+    } else if (!is_first_expr_tkn(ctx, peek)) {
         cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected expression");
         return ast_from_va(C_AST_GARBAGE, 1, tkn_next(ctx->tkn_ctx));
     }
@@ -341,7 +447,7 @@ token_t c_parse_expr(c_parser_t *ctx) {
         bool can_push = is_pushable_expr_tkn(peek);
 
         if (is_tkn(0, C_TKN_LBRAC)) { // Recursively parse indexing.
-            token_t idx = c_parse_expr(ctx);
+            token_t idx = c_parse_expr(ctx, false);
             if (idx.type == TOKENTYPE_AST && idx.subtype == C_AST_GARBAGE) {
                 push(idx);
                 goto err;
@@ -386,6 +492,12 @@ token_t c_parse_expr(c_parser_t *ctx) {
             }
             tkn_next(ctx->tkn_ctx);
             push(tkn_with_pos(res, pos_including(lpar.pos, rpar.pos)));
+
+        } else if (stack_len >= 1 && is_type_node(ctx, stack[stack_len - 1]) && peek.type == TOKENTYPE_OTHER
+                   && peek.subtype == C_TKN_LCURL) { // Recursively parse compound literals.
+            token_t init     = c_parse_comp_init(ctx);
+            token_t typename = pop();
+            push(ast_from_va(C_AST_COMPLITERAL, 2, typename, init));
 
         } else if (is_operand(1) && is_ast(0, C_AST_EXPRS)) { // Reduce call.
             token_t params = pop();
@@ -719,7 +831,7 @@ token_t c_parse_decls(c_parser_t *ctx, bool allow_func_body) {
         peek         = tkn_peek(ctx->tkn_ctx);
         if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_ASSIGN) {
             tkn_next(ctx->tkn_ctx);
-            token_t expr = c_parse_expr(ctx);
+            token_t expr = c_parse_expr(ctx, true);
             decl         = ast_from_va(C_AST_ASSIGN_DECL, 2, decl, expr);
             peek         = tkn_peek(ctx->tkn_ctx);
         }
@@ -848,7 +960,7 @@ token_t c_parse_enum_spec(c_parser_t *ctx) {
             if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_ASSIGN) {
                 // Enum variant with specific index.
                 tkn_next(ctx->tkn_ctx);
-                token_t expr = c_parse_expr(ctx);
+                token_t expr = c_parse_expr(ctx, false);
                 if (expr.type != TOKENTYPE_AST || expr.subtype != C_AST_GARBAGE) {
                     token_t ast = ast_from_va(C_AST_ENUM_VARIANT, 2, ident, expr);
                     array_lencap_insert_strong(&args, sizeof(token_t), &args_len, &args_cap, &ast, args_len);

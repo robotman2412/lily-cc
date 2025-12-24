@@ -115,7 +115,7 @@ static char *test_c_compile_expr() {
         .pointer_taken = PTR_SET_EMPTY,
     };
 
-    token_t expr_tok = c_parse_expr(&pctx);
+    token_t expr_tok = c_parse_expr(&pctx, false);
 
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
@@ -398,24 +398,34 @@ static char *test_c_compile_struct() {
     RETURN_ON_FALSE(comp_rc);
     c_comp_t const *comp = comp_rc->data;
     EXPECT_INT(comp->type, C_COMP_TYPE_STRUCT);
-    EXPECT_INT(comp->fields.len, 4);
-    c_field_t const *f_x = map_get(&comp->fields, "x");
-    RETURN_ON_FALSE(f_x);
-    c_field_t const *f_y = map_get(&comp->fields, "y");
-    RETURN_ON_FALSE(f_y);
-    c_field_t const *f_z = map_get(&comp->fields, "z");
-    RETURN_ON_FALSE(f_z);
-    c_field_t const *f_u = map_get(&comp->fields, "u");
-    RETURN_ON_FALSE(f_u);
+    EXPECT_INT(comp->fields.len, 3);
+    RETURN_ON_FALSE(comp->fields.arr[0].name);
+    EXPECT_STR(comp->fields.arr[0].name, "x");
+    RETURN_ON_FALSE(comp->fields.arr[1].name);
+    EXPECT_STR(comp->fields.arr[1].name, "y");
+    RETURN_ON_FALSE(comp->fields.arr[2].name == NULL);
+    c_type_t const *inner_type = comp->fields.arr[2].type_rc->data;
+    c_comp_t const *inner_comp = inner_type->comp->data;
+    EXPECT_INT(inner_comp->fields.len, 2);
+    RETURN_ON_FALSE(inner_comp->fields.arr[0].name);
+    EXPECT_STR(inner_comp->fields.arr[0].name, "z");
+    RETURN_ON_FALSE(inner_comp->fields.arr[1].name);
+    EXPECT_STR(inner_comp->fields.arr[1].name, "u");
 
     // Check struct layout.
     EXPECT_INT(comp->size, 24);
     EXPECT_INT(comp->align, 8);
-    EXPECT_INT(f_x->offset, 0);
-    EXPECT_INT(f_y->offset, 8);
-    EXPECT_INT(f_z->offset, 16);
-    EXPECT_INT(f_u->offset, 16);
+    EXPECT_INT(comp->fields.arr[0].offset, 0);
+    EXPECT_INT(comp->fields.arr[1].offset, 8);
+    EXPECT_INT(comp->fields.arr[2].offset, 16);
+    EXPECT_INT(inner_comp->fields.arr[0].offset, 0);
+    EXPECT_INT(inner_comp->fields.arr[1].offset, 0);
 
+    tkn_delete(struct_tok);
+
+    c_compiler_destroy(cc);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
     return TEST_OK;
 }
 LILY_TEST_CASE(test_c_compile_struct)

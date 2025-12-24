@@ -155,6 +155,16 @@ c_var_t *c_var_create(
     c_compiler_t *ctx, c_prepass_t *prepass, ir_func_t *func, rc_t type_rc, token_t const *name_tkn, c_scope_t *scope
 );
 
+// Compile a compound initializer into IR.
+c_compile_expr_t c_compile_comp_init(
+    c_compiler_t  *ctx,
+    c_prepass_t   *prepass,
+    ir_code_t     *code,
+    c_scope_t     *scope,
+    token_t const *init,
+    rc_t           type_rc,
+    pos_t          type_pos
+);
 // Compile an expression into IR.
 c_compile_expr_t
     c_compile_expr(c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *code, c_scope_t *scope, token_t const *expr);

@@ -16,12 +16,121 @@
 #include "unreachable.h"
 
 #include <assert.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 
+
+static c_value_t c_rvalue_create_map(c_compiler_t *ctx, rc_t type_rc) {
+    c_type_t const *type = type_rc->data;
+    c_comp_t const *comp = type->comp->data;
+
+    map_t map = STR_MAP_EMPTY;
+    for (size_t i = 0; i < comp->fields.len; i++) {
+        c_field_t const *field     = &comp->fields.arr[i];
+        c_value_t       *value_box = strong_malloc(sizeof(c_value_t));
+        *value_box                 = c_rvalue_create(ctx, rc_share(field->type_rc));
+        map_set(&map, field->name, value_box);
+    }
+
+    return (c_value_t){
+        .value_type = C_RVALUE_MAP,
+        .c_type     = type_rc,
+        .rvalue.map = map,
+    };
+}
+
+static c_value_t c_rvalue_create_arr(c_compiler_t *ctx, rc_t type_rc) {
+    c_type_t const *type  = type_rc->data;
+    c_type_t const *inner = type->inner->data;
+    size_t          elem_size, elem_align;
+    if (!c_type_get_size(ctx, inner, &elem_size, &elem_align)) {
+        UNREACHABLE();
+    }
+
+    fprintf(stderr, "TODO: c_rvalue_create_arr\n");
+    abort();
+}
+
+// Create a zero-initialized rvalue for some type.
+c_value_t c_rvalue_create(c_compiler_t *ctx, rc_t type_rc) {
+    c_type_t const *type = type_rc->data;
+    size_t          size, align;
+    if (!c_type_get_size(ctx, type, &size, &align)) {
+        UNREACHABLE();
+    }
+
+    if (type->primitive < C_N_PRIM) {
+        return (c_value_t){
+            .value_type     = C_RVALUE_OPERAND,
+            .c_type         = type_rc,
+            .rvalue.operand = IR_OPERAND_CONST(((ir_const_t){
+                .prim_type = c_prim_to_ir_type(ctx, type->primitive),
+                .constl    = 0,
+                .consth    = 0,
+            })),
+        };
+    }
+
+    if (size > 1024 || type->primitive == C_COMP_UNION) {
+        // Store in blob form.
+        return (c_value_t){
+            .value_type  = C_RVALUE_BINARY,
+            .c_type      = type_rc,
+            .rvalue.blob = strong_calloc(1, size),
+        };
+    }
+
+    if (type->primitive == C_COMP_STRUCT) {
+        return c_rvalue_create_map(ctx, type_rc);
+    } else if (type->primitive == C_COMP_ARRAY) {
+        return c_rvalue_create_arr(ctx, type_rc);
+    } else {
+        UNREACHABLE();
+    }
+}
+
+// Convert an rvalue in binary form to array or map as appropriate.
+c_value_t c_value_unblob(c_compiler_t *ctx, rc_t type_rc, uint8_t const *blob) {
+    c_type_t const *type = type_rc->data;
+
+    if (type->primitive < C_N_PRIM || type->primitive == C_COMP_ENUM || type->primitive == C_COMP_POINTER) {
+        // Scalar and primitive types.
+        return (c_value_t){
+            .value_type = C_RVALUE_OPERAND,
+            .c_type     = type_rc,
+            .rvalue.operand
+            = IR_OPERAND_CONST(ir_const_from_blob(c_type_to_ir_type(ctx, type), blob, ctx->options.big_endian)),
+        };
+
+    } else if (type->primitive == C_COMP_STRUCT || type->primitive == C_COMP_UNION) {
+        // Struct/union types.
+        c_comp_t const *comp = type->comp->data;
+        map_t           map  = STR_MAP_EMPTY;
+        for (size_t i = 0; i < comp->fields.len; i++) {
+            c_field_t const *field     = &comp->fields.arr[i];
+            c_value_t       *value_box = strong_malloc(sizeof(c_value_t));
+            *value_box                 = c_value_unblob(ctx, rc_share(field->type_rc), blob + field->offset);
+            map_set(&map, field->name, value_box);
+        }
+        return (c_value_t){
+            .value_type = C_RVALUE_MAP,
+            .c_type     = type_rc,
+            .rvalue.map = map,
+        };
+
+    } else if (type->primitive == C_COMP_ARRAY) {
+        // Array types.
+        fprintf(stderr, "TODO: c_value_unblob for an array type\n");
+        abort();
+
+    } else {
+        UNREACHABLE();
+    }
+}
 
 // Clean up an lvalue or rvalue.
 void c_value_destroy(c_value_t value) {
@@ -58,9 +167,9 @@ static void c_rvalue_to_blob_r(c_compiler_t const *ctx, uint8_t *blob, c_value_t
     } else if (rvalue_type->primitive == C_COMP_STRUCT) {
         // Struct copy.
         c_comp_t const *rvalue_comp = rvalue_type->comp->data;
-        map_foreach(ent, &rvalue_comp->fields) {
-            c_field_t const *field       = ent->value;
-            c_value_t const *field_value = map_get(&rvalue->rvalue.map, ent->key);
+        for (size_t i = 0; i < rvalue_comp->fields.len; i++) {
+            c_field_t const *field       = &rvalue_comp->fields.arr[i];
+            c_value_t const *field_value = map_get(&rvalue->rvalue.map, field->name);
             if (field_value->value_type == C_RVALUE_OPERAND) {
                 assert(field_value->rvalue.operand.type == IR_OPERAND_TYPE_CONST);
                 ir_const_to_blob(field_value->rvalue.operand.iconst, blob + field->offset, ctx->options.big_endian);
@@ -90,9 +199,9 @@ static inline void
     } else if (rvalue_type->primitive == C_COMP_STRUCT) {
         // Struct copy.
         c_comp_t const *rvalue_comp = rvalue_type->comp->data;
-        map_foreach(ent, &rvalue_comp->fields) {
-            c_field_t const *field        = ent->value;
-            c_value_t const *field_value  = map_get(&rvalue->rvalue.map, ent->key);
+        for (size_t i = 0; i < rvalue_comp->fields.len; i++) {
+            c_field_t const *field        = &rvalue_comp->fields.arr[i];
+            c_value_t const *field_value  = map_get(&rvalue->rvalue.map, field->name);
             ir_memref_t      new_memref   = lvalue_memref;
             new_memref.offset            += (int64_t)field->offset;
             c_lvalue_write_mem(ctx, code, new_memref, field_value);
@@ -260,15 +369,26 @@ ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *v
 }
 
 // Access the field of a struct/union value.
-c_value_t c_value_field(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value, char const *field_name) {
+c_value_t c_value_field(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value, token_t const *field_name) {
     (void)code; // Will be needed later for bitfields.
     c_type_t const *type = value->c_type->data;
     if (type->primitive != C_COMP_STRUCT && type->primitive != C_COMP_UNION) {
         fprintf(stderr, "[BUG] c_value_field called on non-struct/union type\n");
         abort();
     }
-    c_comp_t const  *comp  = type->comp->data;
-    c_field_t const *field = map_get(&comp->fields, field_name);
+    c_comp_t const *comp = type->comp->data;
+
+    c_field_t const *field = NULL;
+    for (size_t i = 0; i < comp->fields.len; i++) {
+        if (!strcmp(comp->fields.arr[i].name, field_name->strval)) {
+            field = &comp->fields.arr[i];
+            break;
+        }
+    }
+    if (!field) {
+        cctx_diagnostic(ctx->cctx, field_name->pos, DIAG_ERR, "No such struct/union field");
+        return (c_value_t){0};
+    }
 
     switch (value->value_type) {
         case C_VALUE_ERROR: UNREACHABLE();
@@ -287,7 +407,9 @@ c_value_t c_value_field(c_compiler_t *ctx, ir_code_t *code, c_value_t const *val
         case C_RVALUE_MAP: return c_value_clone(ctx, map_get(&value->rvalue.map, field));
         case C_RVALUE_BINARY: {
             size_t size, align;
-            c_type_get_size(ctx, field->type_rc->data, &size, &align);
+            if (!c_type_get_size(ctx, field->type_rc->data, &size, &align)) {
+                UNREACHABLE();
+            }
             uint8_t *blob = strong_malloc(size);
             memcpy(blob, value->rvalue.blob + field->offset, size);
 

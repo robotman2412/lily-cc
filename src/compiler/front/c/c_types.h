@@ -169,6 +169,7 @@ struct c_type {
     bool     is_atomic;
     // Is a restrict pointer?
     bool     is_restrict;
+    // TODO: Determine how to store array length in types.
     union {
         // Inner type of pointers and arrays.
         rc_t inner;
@@ -200,10 +201,18 @@ struct c_comp {
     // Alignment of this type; must be a power of 2; 0 for incomplete types.
     uint64_t      align;
     union {
-        // Struct/union fields.
-        map_t fields;
-        // Enum variants.
-        map_t variants;
+        struct {
+            // Number of fields.
+            size_t     len;
+            // Fields by order of declaration.
+            c_field_t *arr;
+        } fields;
+        struct {
+            // Number of variants.
+            size_t       len;
+            // Variants by order of declaration.
+            c_enumvar_t *arr;
+        } variants;
     };
 };
 
@@ -215,10 +224,14 @@ struct c_enumvar {
 
 // C struct/union field delcaration.
 struct c_field {
-    token_t const *name_tkn;
+    // This field's name.
+    char    *name;
+    // Position at which `name` was defined.
+    pos_t    name_pos;
     // Refcount ptr of `c_type_t`.
-    rc_t           type_rc;
-    uint64_t       offset;
+    rc_t     type_rc;
+    // Offset in parent struct/union.
+    uint64_t offset;
 };
 
 

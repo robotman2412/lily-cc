@@ -12,7 +12,11 @@
 
 // Strong malloc; abort if out of memory.
 void *strong_malloc(size_t size) {
+#ifndef NDEBUG
+    void *mem = calloc(1, size);
+#else
     void *mem = malloc(size);
+#endif
     if (!mem && size) {
         fprintf(stderr, "Out of memory (allocating %zu byte%s)", size, size == 1 ? "" : "s");
         abort();

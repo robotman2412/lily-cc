@@ -102,6 +102,18 @@ typedef enum {
     // Empty expression or statement.
     // Args: Node.
     C_AST_NOP,
+    // Empty or array-based compound initializer/literal.
+    // Args: Initializer fields.
+    C_AST_COMPINIT,
+    // Named field specification for compound initializer/literal.
+    // Args: Identifier, value.
+    C_AST_COMPINIT_NAME,
+    // Indexed field specification for compound initializer/literal.
+    // Args: Index expression, value.
+    C_AST_COMPINIT_INDEX,
+    // Compound literals.
+    // Args: Typename, compound initializer.
+    C_AST_COMPLITERAL,
 } c_asttype_t;
 
 // C parser context.
@@ -122,14 +134,12 @@ typedef struct {
 extern char const *const c_asttype_name[];
 #endif
 
-
-// Parse a C compilation unit into an AST.
-token_t c_parse(c_parser_t *ctx);
-
+// Parse a compound initializer.
+token_t c_parse_comp_init(c_parser_t *ctx);
 // Parse one or more C expressions separated by commas.
 token_t c_parse_exprs(c_parser_t *ctx);
 // Parse a C expression.
-token_t c_parse_expr(c_parser_t *ctx);
+token_t c_parse_expr(c_parser_t *ctx, bool allow_compinit);
 // Parse a type name.
 token_t c_parse_type_name(c_parser_t *ctx);
 // Parse a type specifier/qualifier list.

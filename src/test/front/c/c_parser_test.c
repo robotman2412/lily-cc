@@ -17,7 +17,7 @@ static char *test_c_expr_basic() {
     tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
-    token_t expr = c_parse_expr(&pctx);
+    token_t expr = c_parse_expr(&pctx, false);
 
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
@@ -117,7 +117,7 @@ static char *test_c_expr_call() {
     tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
-    token_t expr = c_parse_expr(&pctx);
+    token_t expr = c_parse_expr(&pctx, false);
 
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
@@ -145,7 +145,7 @@ static char *test_c_expr_deref() {
     tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
-    token_t expr = c_parse_expr(&pctx);
+    token_t expr = c_parse_expr(&pctx, false);
 
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
@@ -173,7 +173,7 @@ static char *test_c_expr_cast() {
     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
     set_add(&pctx.type_names, "ident0");
-    token_t token = c_parse_expr(&pctx);
+    token_t token = c_parse_expr(&pctx, false);
 
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
@@ -408,3 +408,43 @@ static char *test_c_function() {
     return TEST_OK;
 }
 LILY_TEST_CASE(test_c_function)
+
+
+static char *test_c_compliteral() {
+    // clang-format off
+    char const   source[] =
+    "(struct a) {\n"
+    "    [1] = 2,\n"
+    "    .abc = 3,\n"
+    "    4,\n"
+    "    .def[5] = 6,\n"
+    "    [7].fgh = 8,\n"
+    "    {9, 10},\n"
+    "    {{11}, 12},\n"
+    "}\n"
+    ;
+    // clang-format on
+    cctx_t      *cctx = cctx_create();
+    srcfile_t   *src  = srcfile_create(cctx, "<c_compiteral>", source, sizeof(source) - 1);
+    tokenizer_t *tctx = c_tkn_create(src, C_STD_def);
+    c_parser_t   pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
+
+    token_t complit = c_parse_expr(&pctx, false);
+
+    if (cctx->diagnostics.len) {
+        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
+        printf("\n");
+        while (diag) {
+            print_diagnostic(diag, stderr);
+            diag = (diagnostic_t const *)diag->node.next;
+        }
+        c_tkn_debug_print(complit);
+        return TEST_FAIL;
+    }
+
+    tkn_delete(complit);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
+    return TEST_OK;
+}
+LILY_TEST_CASE(test_c_compliteral)

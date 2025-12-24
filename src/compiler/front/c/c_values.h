@@ -73,6 +73,11 @@ struct c_value {
 
 
 
+// Create a zero-initialized rvalue for some type.
+c_value_t c_rvalue_create(c_compiler_t *ctx, rc_t type_rc);
+// Convert an rvalue in binary form to array or map as appropriate.
+c_value_t c_value_unblob(c_compiler_t *ctx, rc_t type_rc, uint8_t const *blob);
+
 // Clean up an lvalue or rvalue.
 void         c_value_destroy(c_value_t value);
 // Write to an lvalue.
@@ -82,7 +87,7 @@ ir_memref_t  c_value_memref(c_compiler_t *ctx, ir_code_t *code, c_value_t const 
 // Read a value for scalar arithmetic.
 ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
 // Access the field of a struct/union value.
-c_value_t    c_value_field(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value, char const *field);
+c_value_t    c_value_field(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value, token_t const *field);
 // Clone a C value.
 c_value_t    c_value_clone(c_compiler_t *ctx, c_value_t const *value);
 // Determine whether a value is assignable.

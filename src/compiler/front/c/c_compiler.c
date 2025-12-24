@@ -21,6 +21,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 
 // Guards against actual cleanup happening for the fake RC types.
@@ -243,6 +244,48 @@ c_var_t *c_var_create(
 }
 
 
+
+// Compile a compound initializer into IR.
+c_compile_expr_t c_compile_comp_init(
+    c_compiler_t  *ctx,
+    c_prepass_t   *prepass,
+    ir_code_t     *code,
+    c_scope_t     *scope,
+    token_t const *init,
+    rc_t           type_rc,
+    pos_t          type_pos
+) {
+    c_type_t const *type = type_rc->data;
+
+    // Check type completeness.
+    uint64_t size, align;
+    if (!c_type_get_size(ctx, type, &size, &align)) {
+        cctx_diagnostic(ctx->cctx, type_pos, DIAG_ERR, "Usage of incomplete type");
+        return (c_compile_expr_t){
+            .code = code,
+            .res  = {0},
+        };
+    }
+
+    c_value_t res = c_rvalue_create(ctx, type_rc);
+    if (init->params[0].type == TOKENTYPE_ICONST && init->params[0].ival == 0 && init->params[0].ivalh == 0) {
+        // Zero-initializer is allowed for any type.
+        return (c_compile_expr_t){.code = code, .res = res};
+    }
+
+    // size_t *stack     = strong_calloc(1, sizeof(size_t));
+    // size_t  stack_len = 1;
+    // size_t  stack_cap = 1;
+
+    // for (size_t i = 0; i < init->params_len; i++) {
+    // }
+
+    // free(stack);
+
+    (void)prepass;
+    (void)scope;
+    UNREACHABLE();
+}
 
 // Decay an array value into its pointer.
 static c_value_t c_array_decay(c_compiler_t *ctx, ir_code_t *code, c_value_t value) {
@@ -692,6 +735,29 @@ c_compile_expr_t
         //     .res = (ir_operand_t){0},
         // };
 
+    } else if (expr->subtype == C_AST_COMPLITERAL) {
+        // Compile target type.
+        rc_t type_rc;
+        if (expr->params[0].type == TOKENTYPE_AST && expr->params[0].subtype == C_AST_TYPE_NAME) {
+            rc_t inner_rc = c_compile_spec_qual_list(ctx, &expr->params[0].params[0], scope);
+            if (!inner_rc) {
+                return (c_compile_expr_t){
+                    .res  = (c_value_t){0},
+                    .code = code,
+                };
+            }
+            token_t const *name_tkn;
+            type_rc = c_compile_decl(ctx, &expr->params[0].params[1], scope, inner_rc, &name_tkn);
+            if (name_tkn) {
+                cctx_diagnostic(ctx->cctx, name_tkn->pos, DIAG_ERR, "Spurious identifier in type name");
+            }
+        } else {
+            type_rc = c_compile_spec_qual_list(ctx, &expr->params[0], scope);
+        }
+
+        // Compile the actual initializer.
+        return c_compile_comp_init(ctx, prepass, code, scope, &expr->params[1], type_rc, expr->params[0].pos);
+
     } else if (expr->subtype == C_AST_EXPR_CAST) {
         // Compile cast target type.
         rc_t cast_rc;
@@ -822,7 +888,13 @@ c_compile_expr_t
             };
         }
         c_comp_t const  *comp  = inner_type->comp->data;
-        c_field_t const *field = map_get(&comp->fields, expr->params[2].strval);
+        c_field_t const *field = NULL;
+        for (size_t i = 0; i < comp->fields.len; i++) {
+            if (!strcmp(comp->fields.arr[i].name, expr->params[2].strval)) {
+                field = &comp->fields.arr[i];
+                break;
+            }
+        }
         if (!field) {
             cctx_diagnostic(ctx->cctx, expr->params[2].pos, DIAG_ERR, "Unknown field %s", expr->params[2].strval);
             c_value_destroy(res.res);
@@ -893,20 +965,10 @@ c_compile_expr_t
                 .res  = {0},
             };
         }
-        c_comp_t const  *comp  = struct_type->comp->data;
-        c_field_t const *field = map_get(&comp->fields, expr->params[2].strval);
-        if (!field) {
-            cctx_diagnostic(ctx->cctx, expr->params[2].pos, DIAG_ERR, "Unknown field %s", expr->params[2].strval);
-            c_value_destroy(res.res);
-            return (c_compile_expr_t){
-                .code = res.code,
-                .res  = {0},
-            };
-        }
 
         return (c_compile_expr_t){
             .code = code,
-            .res  = c_value_field(ctx, code, &res.res, expr->params[2].strval),
+            .res  = c_value_field(ctx, code, &res.res, &expr->params[2]),
         };
 
     } else if (expr->subtype == C_AST_EXPR_INFIX
@@ -1697,9 +1759,17 @@ ir_code_t *
             if (scope->depth == 0) {
                 printf("TODO: Initialized variables in the global scope\n");
             }
+            token_t const *init = &decls->params[1].params[1];
 
-            c_compile_expr_t res = c_compile_expr(ctx, prepass, code, scope, &decls->params[1].params[1]);
-            code                 = res.code;
+            // TODO: Clean this up a bit?
+
+            c_compile_expr_t res;
+            if (init->type == TOKENTYPE_AST && init->subtype == C_AST_COMPINIT) {
+                res = c_compile_comp_init(ctx, prepass, code, scope, init, rc_share(decl_type), name->pos);
+            } else {
+                res = c_compile_expr(ctx, prepass, code, scope, init);
+            }
+            code = res.code;
             if (res.res.value_type != C_VALUE_ERROR) {
                 ir_operand_t tmp = c_value_read(ctx, code, &res.res);
                 switch (var->storage) {

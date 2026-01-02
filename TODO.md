@@ -20,6 +20,8 @@
   - `__builtin_expect(expr, val)`
   - `__builtin_unreachable`
   - `__builtin_clz`, `__builtin_ctz`
+- `__auto_type__`
+- `__typeof__` operator
 
 ### C tokenizer
 - Comments ✓
@@ -74,8 +76,9 @@
     - Switch case
     - Inline assembly
 - Expressions
+    - Ternary
     - Assignments ✓
-    - Compound literals
+    - Compound literals ✓
     - Casts ✓
     - `sizeof` and `alignof`
     - Operators ✓
@@ -91,13 +94,16 @@
     - Unions ✓
     - Enums ✓
     - Function pointers
-- Expression operators
+- Expressions
+    - Ternary
+    - `sizeof` and `alignof`
     - Arithmetic ✓
     - Addrof ✓
     - Dereference ✓
-    - Index
+    - Index ✓
+    - Function calls
 - Modifiable l-value check ✓
-- Compound initializers/literals
+- Compound initializers/literals ✓
 
 
 ## Generic codegen

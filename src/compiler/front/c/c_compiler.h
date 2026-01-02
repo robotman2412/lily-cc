@@ -181,4 +181,4 @@ ir_code_t *
     c_compile_decls(c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *code, c_scope_t *scope, token_t const *decls);
 
 // Explain a C type.
-void c_type_explain(c_type_t *type, FILE *to);
+void c_type_explain(c_type_t const *type, FILE *to);

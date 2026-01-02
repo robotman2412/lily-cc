@@ -2512,7 +2512,7 @@ ir_code_t *
 
 
 // Explain a C type.
-static void c_type_explain_impl(c_type_t *type, FILE *to) {
+static void c_type_explain_impl(c_type_t const *type, FILE *to) {
 start:
     if (type->primitive == C_COMP_FUNCTION) {
         fputs("function(", to);
@@ -2526,7 +2526,11 @@ start:
         type = (c_type_t *)type->func.return_type->data;
         goto start;
     } else if (type->primitive == C_COMP_ARRAY) {
-        fputs("array of ", to);
+        if (type->length < 0) {
+            fputs("array (unsized) of ", to);
+        } else {
+            fprintf(to, "array (length %" PRId64 ") of ", type->length);
+        }
         type = (c_type_t *)type->inner->data;
         goto start;
     } else if (type->primitive == C_COMP_POINTER) {
@@ -2566,9 +2570,29 @@ start:
         case C_PRIM_DOUBLE: fputs("double", to); break;
         case C_PRIM_LDOUBLE: fputs("long double", to); break;
         case C_PRIM_VOID: fputs("void", to); break;
-        case C_COMP_STRUCT: fputs("struct", to); break;
-        case C_COMP_UNION: fputs("union", to); break;
-        case C_COMP_ENUM: fputs("enum", to); break;
+        case C_COMP_STRUCT:
+            fprintf(to, "struct %s", ((c_comp_t const *)type->comp->data)->name ?: "<anonymous>");
+            goto print_members;
+        case C_COMP_UNION:
+            fprintf(to, "union %s", ((c_comp_t const *)type->comp->data)->name ?: "<anonymous>");
+            goto print_members;
+        print_members: {
+            c_comp_t const *comp = type->comp->data;
+            if (comp->align != 0) {
+                fputs(" { ", to);
+                for (size_t i = 0; i < comp->fields.len; i++) {
+                    if (i) {
+                        fputs(", ", to);
+                    }
+                    if (comp->fields.arr[i].name) {
+                        fprintf(to, "%s: ", comp->fields.arr[i].name);
+                    }
+                    c_type_explain_impl(comp->fields.arr[i].type_rc->data, to);
+                }
+                fputs(" }", to);
+            }
+        } break;
+        case C_COMP_ENUM: fprintf(to, "enum %s", ((c_comp_t const *)type->comp->data)->name ?: "<anonymous>"); break;
         default: break;
     }
     if (type->is_const) {
@@ -2580,7 +2604,7 @@ start:
 }
 
 // Explain a C type.
-void c_type_explain(c_type_t *type, FILE *to) {
+void c_type_explain(c_type_t const *type, FILE *to) {
     c_type_explain_impl(type, to);
     fputc('\n', to);
 }

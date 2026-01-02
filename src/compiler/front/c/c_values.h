@@ -85,7 +85,7 @@ c_value_t    c_value_access_field(c_compiler_t *ctx, c_value_t const *value, tok
 c_value_t    c_value_clone(c_compiler_t *ctx, c_value_t const *value);
 // Determine whether a value is assignable.
 // Produces a diagnostic if it is not.
-bool         c_value_assignable(c_compiler_t *ctx, c_value_t const *value, pos_t diag_pos);
+bool         c_value_is_assignable(c_compiler_t *ctx, c_value_t const *value, pos_t diag_pos);
 // Determine whether the value is a constant rvalue.
 bool         c_value_is_const(c_value_t const *value);
 

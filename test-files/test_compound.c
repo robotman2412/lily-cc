@@ -58,12 +58,12 @@ struct e {
 
 struct f {
     struct e s0, s1;
-    // char     v0[4];
+    char     v0[4];
 };
 
 void quantum(int *dummy) {
     *dummy = ((struct f){}).s1.v0;
     *dummy = ((struct f){0}).s1.v0;
     *dummy = ((struct f){.s1.v0 = 9}).s1.v0;
-    // *dummy = ((struct f){.v0[2] = 9}).v0[2];
+    *dummy = ((struct f){.v0[2] = 9}).v0[2];
 }

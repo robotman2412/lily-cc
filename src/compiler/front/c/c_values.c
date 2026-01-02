@@ -48,6 +48,14 @@ static void c_lvalue_write_mem(c_compiler_t *ctx, ir_code_t *code, ir_memref_t l
     ir_prim_t usize_prim    = c_prim_to_ir_type(ctx, ctx->options.size_type);
     ir_prim_t copy_max_prim = IR_PRIM_u8 + 2 * __builtin_ctzll(ir_prim_sizes[usize_prim] | align);
 
+    if (lvalue_memref.data_type < IR_N_PRIM && lvalue_memref.data_type != c_type_to_ir_type(ctx, rvalue_type)) {
+        // Must cast the rvalue before it can be stored.
+        ir_var_t *tmp = ir_var_create(code->func, lvalue_memref.data_type, NULL);
+        ir_add_expr1(IR_APPEND(code), tmp, IR_OP1_mov, c_value_read(ctx, code, rvalue));
+        ir_add_store(IR_APPEND(code), IR_OPERAND_VAR(tmp), lvalue_memref);
+        return;
+    }
+
     switch (rvalue->value_type) {
         case C_VALUE_ERROR: UNREACHABLE();
         case C_LVALUE_MEM: {
@@ -92,6 +100,7 @@ static void c_lvalue_write_mem(c_compiler_t *ctx, ir_code_t *code, ir_memref_t l
 
 // Write to an lvalue.
 void c_value_write(c_compiler_t *ctx, ir_code_t *code, c_value_t const *lvalue, c_value_t const *rvalue) {
+    assert(c_type_is_compatible(ctx, lvalue->c_type->data, rvalue->c_type->data));
     switch (lvalue->value_type) {
         default: UNREACHABLE(); break;
         case C_VALUE_ERROR:
@@ -329,7 +338,7 @@ c_value_t c_value_clone(c_compiler_t *ctx, c_value_t const *value) {
 
 // Determine whether a value is assignable.
 // Produces a diagnostic if it is not.
-bool c_value_assignable(c_compiler_t *ctx, c_value_t const *value, pos_t diag_pos) {
+bool c_value_is_assignable(c_compiler_t *ctx, c_value_t const *value, pos_t diag_pos) {
     c_type_t const *type = value->c_type->data;
     if (type->is_const || (value->value_type != C_LVALUE_MEM && value->value_type != C_LVALUE_VAR)) {
         cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Expression must be a modifiable lvalue");

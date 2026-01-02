@@ -295,6 +295,7 @@ struct ir_memref {
         size_t      base_regno;
     };
     // Offset from base.
+    // TODO: Should this be 128-bit?
     int64_t offset;
 };
 

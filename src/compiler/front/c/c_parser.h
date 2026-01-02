@@ -28,7 +28,7 @@ typedef enum {
     // Args: Operator token, operand.
     C_AST_EXPR_SUFFIX,
     // An array indexing expression (e.g. `expr[expr]`).
-    // Args: Array, index.
+    // Args: Expression, expression.
     C_AST_EXPR_INDEX,
     // A function invocation or cast (e.g. `identifier(exprs)` or `(exprs)(exprs)`).
     // Args: Function, args.

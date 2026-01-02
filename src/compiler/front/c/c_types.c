@@ -5,9 +5,11 @@
 
 #include "c_types.h"
 
+#include "arith128.h"
 #include "arrays.h"
 #include "c_compiler.h"
 #include "c_parser.h"
+#include "c_values.h"
 #include "compiler.h"
 #include "ir_interpreter.h"
 #include "ir_types.h"
@@ -17,7 +19,9 @@
 #include "unreachable.h"
 
 #include <assert.h>
+#include <inttypes.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -507,11 +511,74 @@ rc_t c_compile_decl(
             c_type_t *next_type  = next->data;
             next_type->primitive = C_COMP_ARRAY;
             next_type->inner     = cur;
+            next_type->length    = -1;
 
-            if (decl->params_len == 2) {
+            uint64_t inner_size, inner_align;
+            if (!c_type_get_size(ctx, cur->data, &inner_size, &inner_align)) {
+                cctx_diagnostic(ctx->cctx, decl->pos, DIAG_ERR, "Array has incomplete inner type");
+            } else if (decl->params_len == 2) {
                 // Has size expression.
-            } else {
-                assert(decl->params_len == 1);
+                c_compile_expr_t res = c_compile_expr(ctx, NULL, NULL, scope, &decl->params[1]);
+                if (c_value_is_const(&res.res)) {
+                    if (!c_type_is_scalar(res.res.c_type->data)) {
+                        cctx_diagnostic(
+                            ctx->cctx,
+                            decl->params[1].pos,
+                            DIAG_ERR,
+                            "Expected scalar type for array bound"
+                        );
+                    } else {
+                        // Check that the evaluated array length is within bounds.
+                        ir_const_t iconst       = c_value_read(ctx, NULL, &res.res).iconst;
+                        i128_t     len          = ir_cast(IR_PRIM_u128, iconst).const128;
+                        int        sizeof_usize = ir_prim_sizes[c_prim_to_ir_type(ctx, ctx->options.size_type)];
+                        uint64_t   usize_max;
+                        if (sizeof_usize == 8) {
+                            usize_max = UINT64_MAX;
+                        } else {
+                            usize_max = (1llu << (sizeof_usize * 8)) - 1;
+                        }
+
+                        if (ir_prim_is_signed(iconst.prim_type) && cmp128s(len, int128(0, 0)) < 0) {
+                            char buf[40];
+                            itoa128(neg128(len), 0, buf);
+                            cctx_diagnostic(
+                                ctx->cctx,
+                                decl->params[1].pos,
+                                DIAG_ERR,
+                                "Negative array length of -%s is not allowed",
+                                buf
+                            );
+                        } else if (cmp128u(len, int128(0, INT64_MAX / 2)) > 0) {
+                            char buf[40];
+                            itoa128(len, 0, buf);
+                            cctx_diagnostic(
+                                ctx->cctx,
+                                decl->params[1].pos,
+                                DIAG_ERR,
+                                "Array length of %s is not supported by Lily-CC",
+                                buf
+                            );
+                        } else if (cmp128u(mul128(len, int128(0, inner_size)), int128(0, usize_max)) > 0) {
+                            char buf[40];
+                            itoa128(mul128(len, int128(0, inner_size)), 0, buf);
+                            cctx_diagnostic(
+                                ctx->cctx,
+                                decl->params[1].pos,
+                                DIAG_ERR,
+                                "Array length of %" PRIu64 " would cause its size (%s) exceed __SIZE_MAX__ (%" PRIu64
+                                ")",
+                                lo64(len),
+                                buf,
+                                usize_max
+                            );
+                        } else {
+                            // All checks passed, the array length is valid.
+                            next_type->length = (int64_t)lo64(len);
+                        }
+                    }
+                }
+                c_value_destroy(res.res);
             }
 
             decl = &decl->params[0];
@@ -560,7 +627,7 @@ rc_t c_compile_decl(
 
 
 // Create a type that is a pointer to an existing type.
-rc_t c_type_pointer(c_compiler_t *ctx, rc_t inner) {
+rc_t c_type_to_pointer(c_compiler_t *ctx, rc_t inner) {
     (void)ctx;
     c_type_t *data  = strong_calloc(1, sizeof(c_type_t));
     data->primitive = C_COMP_POINTER;
@@ -627,6 +694,35 @@ bool c_type_is_castable(c_compiler_t *ctx, c_type_t const *new_type, c_type_t co
     }
     return old_type->primitive < C_N_PRIM && new_type->primitive < C_N_PRIM && old_type->primitive != C_PRIM_VOID
            && new_type->primitive != C_PRIM_VOID;
+}
+
+// Determine whether a type is usable in pointer arithmetic (i.e. it is a pointer or array type).
+bool c_type_is_pointer(c_type_t const *type) {
+    switch (type->primitive) {
+        case C_PRIM_BOOL:
+        case C_PRIM_CHAR:
+        case C_PRIM_SCHAR:
+        case C_PRIM_UCHAR:
+        case C_PRIM_SSHORT:
+        case C_PRIM_USHORT:
+        case C_PRIM_SINT:
+        case C_PRIM_UINT:
+        case C_PRIM_SLONG:
+        case C_PRIM_ULONG:
+        case C_PRIM_SLLONG:
+        case C_PRIM_ULLONG:
+        case C_PRIM_FLOAT:
+        case C_PRIM_DOUBLE:
+        case C_PRIM_LDOUBLE:
+        case C_PRIM_VOID:
+        case C_COMP_STRUCT:
+        case C_COMP_UNION:
+        case C_COMP_ENUM: return false;
+        case C_COMP_POINTER:
+        case C_COMP_ARRAY: return true;
+        case C_COMP_FUNCTION: return false;
+    }
+    UNREACHABLE();
 }
 
 // Determine whether two types are the same.
@@ -865,11 +961,22 @@ bool c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out
             *size_out  = comp->size;
             *align_out = comp->align;
             return true;
-        } break;
+        }
         case C_COMP_POINTER:
             *align_out = *size_out = ir_prim_sizes[c_prim_to_ir_type(ctx, ctx->options.size_type)];
             return true;
-        case C_COMP_ARRAY:
+        case C_COMP_ARRAY: {
+            if (type->length < 0) {
+                return false;
+            }
+            uint64_t inner_size, inner_align;
+            if (!c_type_get_size(ctx, type->inner->data, &inner_size, &inner_align)) {
+                UNREACHABLE();
+            }
+            *align_out = inner_align;
+            *size_out  = inner_size * type->length;
+            return true;
+        }
         case C_COMP_FUNCTION: return false;
     }
     UNREACHABLE();

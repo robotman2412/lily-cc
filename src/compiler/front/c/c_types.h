@@ -249,13 +249,15 @@ rc_t c_compile_decl(
 );
 
 // Create a type that is a pointer to an existing type.
-rc_t     c_type_pointer(c_compiler_t *ctx, rc_t inner);
+rc_t     c_type_to_pointer(c_compiler_t *ctx, rc_t inner);
 // Determine type promotion to apply in an infix context.
 c_prim_t c_prim_promote(c_prim_t a, c_prim_t b);
 // Determine whether a type is a scalar type.
 bool     c_type_is_scalar(c_type_t const *type);
 // Determine whether a value of type `old_type` can be cast to `new_type`.
 bool     c_type_is_castable(c_compiler_t *ctx, c_type_t const *new_type, c_type_t const *old_type);
+// Determine whether a type is usable in pointer arithmetic (i.e. it is a pointer or array type).
+bool     c_type_is_pointer(c_type_t const *type);
 // Determine whether two types are the same.
 // If `strict`, then modifiers like `_Atomic` and `volatile` also apply.
 bool     c_type_is_identical(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b, bool strict);

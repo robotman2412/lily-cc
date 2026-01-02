@@ -19,8 +19,6 @@ static token_t c_parse_ddecl(c_parser_t *ctx, bool allows_name, bool is_typedef)
 static token_t c_parse_decl(c_parser_t *ctx, bool allows_name, bool is_typedef);
 // Parse a type qualifier list.
 static token_t c_parse_type_qual_list(c_parser_t *ctx);
-// Parse a pointer and its qualifier list.
-static token_t c_parse_pointer(c_parser_t *ctx);
 // Parse one or more C expressions separated by commas or a type.
 static token_t c_parse_exprs_or_type(c_parser_t *ctx, bool *is_type_out);
 
@@ -714,21 +712,21 @@ static token_t c_parse_decl(c_parser_t *ctx, bool allows_name, bool is_typedef) 
     }
 
     // Parse the pointer before the ddecl.
-    token_t pointer = c_parse_pointer(ctx);
-    peek            = tkn_peek(ctx->tkn_ctx);
-    bool empty      = peek.type != TOKENTYPE_OTHER
+    token_t ptr  = tkn_next(ctx->tkn_ctx);
+    token_t list = c_parse_type_qual_list(ctx);
+    peek         = tkn_peek(ctx->tkn_ctx);
+    bool empty   = peek.type != TOKENTYPE_OTHER
                  || (peek.subtype != C_TKN_MUL && peek.subtype != C_TKN_LPAR && peek.subtype != C_TKN_LBRAC);
     if (allows_name && peek.type == TOKENTYPE_IDENT) {
         // Non-abstract decls can have idents here too.
         empty = false;
     }
     if (empty) {
-        return pointer;
+        return ast_from_va(C_AST_TYPE_PTR_TO, 2, ptr, list);
     }
 
     // Something after the pointer; parse the ddecl and add it.
-    ast_append_param(&pointer, c_parse_decl(ctx, allows_name, is_typedef));
-    return pointer;
+    return ast_from_va(C_AST_TYPE_PTR_TO, 3, ptr, list, c_parse_decl(ctx, allows_name, is_typedef));
 }
 
 // Parse a type qualifier list.
@@ -745,13 +743,6 @@ static token_t c_parse_type_qual_list(c_parser_t *ctx) {
     }
 
     return ast_from(C_AST_SPEC_QUAL_LIST, args_len, args);
-}
-
-// Parse a pointer and its qualifier list.
-static token_t c_parse_pointer(c_parser_t *ctx) {
-    token_t ptr  = tkn_next(ctx->tkn_ctx);
-    token_t list = c_parse_type_qual_list(ctx);
-    return ast_from_va(C_AST_TYPE_PTR_TO, 2, ptr, list);
 }
 
 // Parse one or more C expressions separated by commas or a type.

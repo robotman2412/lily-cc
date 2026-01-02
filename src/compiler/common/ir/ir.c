@@ -448,7 +448,7 @@ void ir_func_recalc_flow(ir_func_t *func) {
 static void name_free_assert(ir_func_t *func, char *name) {
     if (map_get(&func->code_by_name, name) || map_get(&func->var_by_name, name)
         || map_get(&func->frame_by_name, name)) {
-        fprintf(stderr, "[BUG] The name %%%s is already in use\n", name);
+        fprintf(stderr, "BUG: The name %%%s is already in use\n", name);
         abort();
     }
 }
@@ -457,11 +457,11 @@ static void name_free_assert(ir_func_t *func, char *name) {
 // If `name` is `NULL`, its name will be `frame%zu` where `%zu` is a number.
 ir_frame_t *ir_frame_create(ir_func_t *func, uint64_t size, uint64_t align, char const *name) {
     if (!align || align & (align - 1)) {
-        fprintf(stderr, "[BUG] Stack frame does not have power-of-2 alignment\n");
+        fprintf(stderr, "BUG: Stack frame does not have power-of-2 alignment\n");
         abort();
     }
     if (size & (align - 1)) {
-        fprintf(stderr, "[BUG] Stack frame size is not an integer multiple of alignment\n");
+        fprintf(stderr, "BUG: Stack frame size is not an integer multiple of alignment\n");
         abort();
     }
     ir_frame_t *frame = calloc(1, sizeof(ir_frame_t));
@@ -539,7 +539,7 @@ void ir_var_delete(ir_var_t *var) {
 void ir_var_replace(ir_var_t *var, ir_operand_t value) {
     assert(value.type != IR_OPERAND_TYPE_MEM);
     if (value.type == IR_OPERAND_TYPE_VAR && value.var == var) {
-        fprintf(stderr, "[BUG] IR variable %%%s asked to be replaced with itself\n", var->name);
+        fprintf(stderr, "BUG: IR variable %%%s asked to be replaced with itself\n", var->name);
         abort();
     }
     for (set_ent_t const *ent; (ent = set_next(&var->used_at, NULL));) {
@@ -682,7 +682,9 @@ void ir_insn_delete(ir_insn_t *insn) {
         case IR_INSN_BRANCH:
         case IR_INSN_STORE:
         case IR_INSN_CALL:
-        case IR_INSN_RETURN: assert(insn->returns_len == 0); break;
+        case IR_INSN_RETURN:
+        case IR_INSN_MEMCPY: assert(insn->returns_len == 0); break;
+        case IR_INSN_MEMSET: assert(insn->returns_len == 0); break;
         case IR_INSN_MACHINE: break;
     }
 
@@ -698,6 +700,8 @@ void ir_insn_delete(ir_insn_t *insn) {
         case IR_INSN_COMBINATOR: assert(insn->operands_len > 0); break;
         case IR_INSN_CALL: break;
         case IR_INSN_RETURN: assert(insn->operands_len <= 1); break;
+        case IR_INSN_MEMCPY: assert(insn->operands_len == 3); break;
+        case IR_INSN_MEMSET: assert(insn->operands_len == 3); break;
         case IR_INSN_MACHINE: break;
     }
 
@@ -811,7 +815,7 @@ static void ir_emplace_insn(ir_insnloc_t loc, ir_insn_t *insn) {
 
     // IR precondition assertions.
     if ((ir_is_jbr(insn) && next && ir_not_after_jbr(next)) || (ir_not_after_jbr(insn) && prev && ir_is_jbr(prev))) {
-        fprintf(stderr, "[BUG] Cannot place IR jump, branch or return before an instruction not in that list\n");
+        fprintf(stderr, "BUG: Cannot place IR jump, branch or return before an instruction not in that list\n");
         abort();
     }
 
@@ -854,7 +858,7 @@ static ir_insn_t *
     }
     if (dest != NULL) {
         if (ir_insnloc_code(loc)->func->enforce_ssa && (dest->assigned_at.len || dest->arg_index >= 0)) {
-            fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
+            fprintf(stderr, "BUG: SSA IR variable %%%s assigned twice\n", dest->name);
             abort();
         }
         set_add(&dest->assigned_at, insn);
@@ -891,12 +895,12 @@ ir_insn_t *ir_add_combinator(ir_insnloc_t loc, ir_var_t *dest, size_t from_len, 
     insn->combinators     = from;
     insn->returns[0]      = dest;
     if (ir_insnloc_code(loc)->func->enforce_ssa && (dest->assigned_at.len || dest->arg_index >= 0)) {
-        fprintf(stderr, "[BUG] SSA IR variable %%%s assigned twice\n", dest->name);
+        fprintf(stderr, "BUG: SSA IR variable %%%s assigned twice\n", dest->name);
         abort();
     }
     for (size_t i = 0; i < from_len; i++) {
         if (ir_operand_prim(from[i].bind) != dest->prim_type) {
-            fprintf(stderr, "[BUG] IR phi has conflicting bind and return types\n");
+            fprintf(stderr, "BUG: IR phi has conflicting bind and return types\n");
             abort();
         }
         ir_mark_used(from[i].bind, insn);
@@ -911,12 +915,12 @@ ir_insn_t *ir_add_expr1(ir_insnloc_t loc, ir_var_t *dest, ir_op1_type_t oper, ir
     assert(oper < IR_N_OP1);
     if (oper == IR_OP1_snez || oper == IR_OP1_seqz) {
         if (dest->prim_type != IR_PRIM_bool) {
-            fprintf(stderr, "[BUG] IR %s must return a boolean\n", ir_op1_names[oper]);
+            fprintf(stderr, "BUG: IR %s must return a boolean\n", ir_op1_names[oper]);
             abort();
         }
     } else if (oper != IR_OP1_mov) {
         if (ir_operand_prim(operand) != dest->prim_type) {
-            fprintf(stderr, "[BUG] IR expr1 has conflicting operand and return types\n");
+            fprintf(stderr, "BUG: IR expr1 has conflicting operand and return types\n");
             abort();
         }
     }
@@ -932,20 +936,20 @@ ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_var_t *dest, ir_op2_type_t oper, ir
     ir_prim_t rhs_prim = ir_operand_prim(rhs);
     if (oper >= IR_OP2_sgt && oper <= IR_OP2_sne) {
         if (lhs_prim != rhs_prim) {
-            fprintf(stderr, "[BUG] IR expr2 has conflicting operand types\n");
+            fprintf(stderr, "BUG: IR expr2 has conflicting operand types\n");
             abort();
         }
         if (dest->prim_type != IR_PRIM_bool) {
-            fprintf(stderr, "[BUG] IR expr2 should be returning IR_PRIM_bool\n");
+            fprintf(stderr, "BUG: IR expr2 should be returning IR_PRIM_bool\n");
             abort();
         }
     } else {
         if (lhs_prim != dest->prim_type) {
-            fprintf(stderr, "[BUG] IR expr2 has conflicting operand and return types\n");
+            fprintf(stderr, "BUG: IR expr2 has conflicting operand and return types\n");
             abort();
         }
         if (rhs_prim != dest->prim_type) {
-            fprintf(stderr, "[BUG] IR expr2 has conflicting operand and return types\n");
+            fprintf(stderr, "BUG: IR expr2 has conflicting operand and return types\n");
             abort();
         }
     }
@@ -995,8 +999,19 @@ ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_memref_t memref) 
 
 
 
+// Add a memory filling intrinsic.
+// The fill value must be either u8 or s8.
+ir_insn_t *ir_add_memset(ir_insnloc_t loc, ir_memref_t dest, ir_operand_t fill, ir_operand_t size) {
+    return ir_create_insn_va(loc, IR_INSN_MEMSET, NULL, 3, IR_OPERAND_MEM(dest), fill, size);
+}
+
+// Add a memory copying intrinsic.
+ir_insn_t *ir_add_memcpy(ir_insnloc_t loc, ir_memref_t dest, ir_memref_t src, ir_operand_t size) {
+    return ir_create_insn_va(loc, IR_INSN_MEMCPY, NULL, 3, IR_OPERAND_MEM(dest), IR_OPERAND_MEM(src), size);
+}
+
 // Implementation of `ir_add_memcpy_const` and `ir_add_memcpy`.
-static ir_insn_t *ir_add_memcpy_impl(
+static ir_insn_t *ir_gen_memcpy_impl(
     ir_insnloc_t loc,
     void const  *src,
     ir_memref_t  dest,
@@ -1017,30 +1032,16 @@ static ir_insn_t *ir_add_memcpy_impl(
         // Decided implicit call to memcpy is better.
         if (is_const) {
             // Implicit memcpy for constant data.
-            fprintf(stderr, "[TODO] ir_add_memcpy_const implicit call instruction to memcpy");
+            // This would require emitting a blob into the rodata section, which isn't supported yet.
+            fprintf(stderr, "TODO: ir_add_memcpy_const implicit call instruction to memcpy");
 
         } else {
             // Implicit memcpy for non-constant data.
-            ir_var_t  *src_ptr   = ir_var_create(func, usize_prim, NULL);
-            ir_insn_t *src_lea   = ir_add_lea(loc, src_ptr, *(ir_memref_t const *)src);
-            ir_var_t  *dest_ptr  = ir_var_create(func, usize_prim, NULL);
-            ir_insn_t *dest_lea  = ir_add_lea(IR_AFTER_INSN(src_lea), dest_ptr, dest);
-            ir_const_t len_const = {
-                .prim_type = usize_prim,
-                .consth    = 0,
-                .constl    = len,
-            };
-            return ir_add_call(
-                IR_AFTER_INSN(dest_lea),
-                IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM("memcpy")),
-                0,
-                NULL,
-                3,
-                (ir_operand_t const[]){
-                    IR_OPERAND_VAR(src_ptr),
-                    IR_OPERAND_VAR(dest_ptr),
-                    IR_OPERAND_CONST(len_const),
-                }
+            return ir_add_memcpy(
+                loc,
+                dest,
+                *(ir_memref_t const *)src,
+                IR_OPERAND_CONST(((ir_const_t){.prim_type = usize_prim, .constl = len}))
             );
         }
     }
@@ -1094,7 +1095,7 @@ static ir_insn_t *ir_add_memcpy_impl(
 // May use uint copies of size up to `copy_max_prim` for inline memcpy.
 // Assumes that `usize_prim` is the unsigned size type.
 // Returns the last instruction created.
-ir_insn_t *ir_add_memcpy_const(
+ir_insn_t *ir_gen_memcpy_const(
     ir_insnloc_t loc,
     void const  *src,
     ir_memref_t  dest,
@@ -1104,14 +1105,14 @@ ir_insn_t *ir_add_memcpy_const(
     bool         allow_implicit_call,
     bool         big_endian
 ) {
-    return ir_add_memcpy_impl(loc, src, dest, len, copy_max_prim, usize_prim, allow_implicit_call, big_endian, true);
+    return ir_gen_memcpy_impl(loc, src, dest, len, copy_max_prim, usize_prim, allow_implicit_call, big_endian, true);
 }
 
 // Add an optimized memory copy into the IR; may generate multiple instructions.
 // May use uint copies of size up to `copy_max_prim` for inline memcpy.
 // Assumes that `usize_prim` is the unsigned size type.
 // Returns the last instruction created.
-ir_insn_t *ir_add_memcpy(
+ir_insn_t *ir_gen_memcpy(
     ir_insnloc_t loc,
     ir_memref_t  src,
     ir_memref_t  dest,
@@ -1121,7 +1122,7 @@ ir_insn_t *ir_add_memcpy(
     bool         allow_implicit_call,
     bool         big_endian
 ) {
-    return ir_add_memcpy_impl(loc, &src, dest, len, copy_max_prim, usize_prim, allow_implicit_call, big_endian, false);
+    return ir_gen_memcpy_impl(loc, &src, dest, len, copy_max_prim, usize_prim, allow_implicit_call, big_endian, false);
 }
 
 
@@ -1157,7 +1158,7 @@ ir_insn_t *ir_add_jump(ir_insnloc_t loc, ir_code_t *to) {
 // Add a conditional branch.
 ir_insn_t *ir_add_branch(ir_insnloc_t loc, ir_operand_t cond, ir_code_t *to) {
     if (ir_operand_prim(cond) != IR_PRIM_bool) {
-        fprintf(stderr, "[BUG] IR branch requires a boolean condition\n");
+        fprintf(stderr, "BUG: IR branch requires a boolean condition\n");
         abort();
     }
     ir_insn_t *insn = ir_create_insn_va(

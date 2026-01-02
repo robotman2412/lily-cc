@@ -18,6 +18,7 @@
 
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 
 
 
@@ -594,9 +595,38 @@ c_prim_t c_prim_promote(c_prim_t a, c_prim_t b) {
     }
 }
 
+// Determine whether a type is a scalar type.
+bool c_type_is_scalar(c_type_t const *type) {
+    switch (type->primitive) {
+        case C_PRIM_BOOL:
+        case C_PRIM_CHAR:
+        case C_PRIM_SCHAR:
+        case C_PRIM_UCHAR:
+        case C_PRIM_SSHORT:
+        case C_PRIM_USHORT:
+        case C_PRIM_SINT:
+        case C_PRIM_UINT:
+        case C_PRIM_SLONG:
+        case C_PRIM_ULONG:
+        case C_PRIM_SLLONG:
+        case C_PRIM_ULLONG:
+        case C_PRIM_FLOAT:
+        case C_PRIM_DOUBLE:
+        case C_PRIM_LDOUBLE:
+        case C_COMP_ENUM:
+        case C_COMP_POINTER: return true;
+        case C_PRIM_VOID:
+        case C_COMP_STRUCT:
+        case C_COMP_UNION:
+        case C_COMP_ARRAY:
+        case C_COMP_FUNCTION: return false;
+    }
+    UNREACHABLE();
+}
+
 // Determine whether a value of type `old_type` can be cast to `new_type`.
-bool c_type_castable(c_compiler_t *ctx, c_type_t const *new_type, c_type_t const *old_type) {
-    if (c_type_identical(ctx, new_type, old_type, false)) {
+bool c_type_is_castable(c_compiler_t *ctx, c_type_t const *new_type, c_type_t const *old_type) {
+    if (c_type_is_identical(ctx, new_type, old_type, false)) {
         return true;
     }
     if (new_type->primitive == C_PRIM_VOID) {
@@ -608,7 +638,7 @@ bool c_type_castable(c_compiler_t *ctx, c_type_t const *new_type, c_type_t const
 
 // Determine whether two types are the same.
 // If `strict`, then modifiers like `_Atomic` and `volatile` also apply.
-bool c_type_identical(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b, bool strict) {
+bool c_type_is_identical(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b, bool strict) {
     if (a == b) {
         return true;
     }
@@ -642,14 +672,14 @@ bool c_type_identical(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b, b
         case C_COMP_UNION: return a->comp == b->comp;
         case C_COMP_ENUM:
         case C_COMP_POINTER: return true;
-        case C_COMP_ARRAY: return c_type_compatible(ctx, a->inner->data, b->inner->data);
+        case C_COMP_ARRAY: return c_type_is_compatible(ctx, a->inner->data, b->inner->data);
         case C_COMP_FUNCTION: return false;
     }
     UNREACHABLE();
 }
 
 // Determine whether two types are compatible.
-bool c_type_compatible(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b) {
+bool c_type_is_compatible(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b) {
     if (a == b) {
         return true;
     }
@@ -678,7 +708,7 @@ bool c_type_compatible(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b) 
         case C_COMP_UNION: return a->comp == b->comp;
         case C_COMP_ENUM:
         case C_COMP_POINTER: return true;
-        case C_COMP_ARRAY: return c_type_compatible(ctx, a->inner->data, b->inner->data);
+        case C_COMP_ARRAY: return c_type_is_compatible(ctx, a->inner->data, b->inner->data);
         case C_COMP_FUNCTION: return false;
     }
     UNREACHABLE();
@@ -719,7 +749,7 @@ static bool c_type_ptrarith_compatible(
                 c_type_t const *ptr_inner   = ptr->inner->data;
                 c_type_t const *other_inner = other->inner->data;
                 if (ptr_inner->primitive != C_PRIM_VOID && other_inner->primitive != C_PRIM_VOID
-                    && !c_type_compatible(ctx, ptr_inner, other_inner)) {
+                    && !c_type_is_compatible(ctx, ptr_inner, other_inner)) {
                     cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Difference of pointers to incompatible types");
                     return false;
                 }
@@ -771,7 +801,7 @@ static bool c_type_ptrarith_compatible(
                 c_type_t const *ptr_inner   = ptr->inner->data;
                 c_type_t const *other_inner = other->inner->data;
                 if (ptr_inner->primitive != C_PRIM_VOID && other_inner->primitive != C_PRIM_VOID
-                    && !c_type_compatible(ctx, ptr_inner, other_inner)) {
+                    && !c_type_is_compatible(ctx, ptr_inner, other_inner)) {
                     cctx_diagnostic(ctx->cctx, diag_pos, DIAG_WARN, "Comparison of pointers to incompatible types");
                 }
             } else if (!c_prim_is_int(other->primitive)) {
@@ -819,18 +849,18 @@ bool c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out
         case C_PRIM_BOOL:
         case C_PRIM_CHAR:
         case C_PRIM_UCHAR:
-        case C_PRIM_SCHAR: *align_out = *size_out = 1; break;
+        case C_PRIM_SCHAR: *align_out = *size_out = 1; return true;
         case C_PRIM_USHORT:
-        case C_PRIM_SSHORT: *align_out = *size_out = ctx->options.short16 ? 2 : 1; break;
+        case C_PRIM_SSHORT: *align_out = *size_out = ctx->options.short16 ? 2 : 1; return true;
         case C_PRIM_UINT:
-        case C_PRIM_SINT: *align_out = *size_out = ctx->options.int32 ? 4 : 2; break;
+        case C_PRIM_SINT: *align_out = *size_out = ctx->options.int32 ? 4 : 2; return true;
         case C_PRIM_ULONG:
-        case C_PRIM_SLONG: *align_out = *size_out = ctx->options.long64 ? 8 : 4; break;
+        case C_PRIM_SLONG: *align_out = *size_out = ctx->options.long64 ? 8 : 4; return true;
         case C_PRIM_ULLONG:
-        case C_PRIM_SLLONG: *align_out = *size_out = 8; break;
-        case C_PRIM_FLOAT: *align_out = *size_out = 4; break;
+        case C_PRIM_SLLONG: *align_out = *size_out = 8; return true;
+        case C_PRIM_FLOAT: *align_out = *size_out = 4; return true;
         case C_PRIM_DOUBLE:
-        case C_PRIM_LDOUBLE: *align_out = *size_out = 8; break;
+        case C_PRIM_LDOUBLE: *align_out = *size_out = 8; return true;
         case C_PRIM_VOID: return false;
         case C_COMP_STRUCT:
         case C_COMP_ENUM:
@@ -841,12 +871,51 @@ bool c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out
             }
             *size_out  = comp->size;
             *align_out = comp->align;
+            return true;
         } break;
-        case C_COMP_POINTER: UNREACHABLE();
+        case C_COMP_POINTER:
+            *align_out = *size_out = ir_prim_sizes[c_prim_to_ir_type(ctx, ctx->options.size_type)];
+            return true;
         case C_COMP_ARRAY:
         case C_COMP_FUNCTION: return false;
     }
-    return true;
+    UNREACHABLE();
+}
+
+// Recursive implementation of `c_type_get_field`.
+static c_field_t const *
+    c_type_get_field_r(c_compiler_t *ctx, c_type_t const *type, char const *name, uint64_t *field_offset) {
+    c_comp_t const *comp = type->comp->data;
+
+    for (size_t i = 0; i < comp->fields.len; i++) {
+        c_field_t const *field      = &comp->fields.arr[i];
+        c_type_t const  *field_type = field->type_rc->data;
+
+        if (field->name && !strcmp(field->name, name)) {
+            *field_offset = field->offset;
+            return field;
+        } else if (!field->name && (field_type->primitive == C_COMP_STRUCT || field_type->primitive == C_COMP_UNION)) {
+            c_field_t const *res = c_type_get_field_r(ctx, field_type, name, field_offset);
+            if (res) {
+                *field_offset += field->offset;
+                return res;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+// Get the descriptor and effective offset of a field.
+// WARNING: `field->offset` may differ from `*field_offset`; use the latter for accessing the field.
+c_field_t const *c_type_get_field(c_compiler_t *ctx, c_type_t const *type, char const *name, uint64_t *field_offset) {
+    *field_offset = 0;
+
+    if (type->primitive != C_COMP_STRUCT && type->primitive != C_COMP_UNION) {
+        UNREACHABLE();
+    }
+
+    return c_type_get_field_r(ctx, type, name, field_offset);
 }
 
 // Convert C primitive or pointer type to IR primitive type.

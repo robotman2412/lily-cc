@@ -22,12 +22,10 @@ typedef enum {
     C_LVALUE_MEM,
     // Lvalue by c_var_t.
     C_LVALUE_VAR,
-    // Rvalue by ir_operand_t.
+    // Rvalue for scalar types by ir_operand_t.
     C_RVALUE_OPERAND,
-    // Rvalue of an array.
-    C_RVALUE_ARR,
-    // Rvalue for structs by map_t.
-    C_RVALUE_MAP,
+    // Rvalue for structs/unions/arrays by stack-allocated temporary.
+    C_RVALUE_STACK,
     // Rvalue for structs/unions/arrays by binary representation.
     C_RVALUE_BINARY,
 } c_value_type_t;
@@ -59,12 +57,10 @@ struct c_value {
             ir_var_t   *ir_var;
         } lvalue;
         union {
-            // IR operand that holds the current rvalue.
+            // IR operand that holds a scalar rvalue.
             ir_operand_t operand;
-            // Array of `rc_t` to rvalues; the length is implied by the type.
-            c_value_t   *arr;
-            // Map of field name to rvalues.
-            map_t        map;
+            // Stack frame within which the temporary value is held.
+            ir_frame_t  *frame;
             // Binary blob; the size is implied by the type.
             uint8_t     *blob;
         } rvalue;
@@ -72,11 +68,6 @@ struct c_value {
 };
 
 
-
-// Create a zero-initialized rvalue for some type.
-c_value_t c_rvalue_create(c_compiler_t *ctx, rc_t type_rc);
-// Convert an rvalue in binary form to array or map as appropriate.
-c_value_t c_value_unblob(c_compiler_t *ctx, rc_t type_rc, uint8_t const *blob);
 
 // Clean up an lvalue or rvalue.
 void         c_value_destroy(c_value_t value);
@@ -86,8 +77,10 @@ void         c_value_write(c_compiler_t *ctx, ir_code_t *code, c_value_t const *
 ir_memref_t  c_value_memref(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
 // Read a value for scalar arithmetic.
 ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value);
+// Copy a value to some memory location.
+void         c_value_memcpy(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value, ir_memref_t dest);
 // Access the field of a struct/union value.
-c_value_t    c_value_field(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value, token_t const *field);
+c_value_t    c_value_access_field(c_compiler_t *ctx, c_value_t const *value, token_t const *field);
 // Clone a C value.
 c_value_t    c_value_clone(c_compiler_t *ctx, c_value_t const *value);
 // Determine whether a value is assignable.
@@ -103,8 +96,7 @@ static inline bool c_is_rvalue(c_value_t const *value) {
         case C_LVALUE_MEM:
         case C_LVALUE_VAR: return false;
         case C_RVALUE_OPERAND:
-        case C_RVALUE_ARR:
-        case C_RVALUE_MAP:
+        case C_RVALUE_STACK:
         case C_RVALUE_BINARY: return true;
     }
     UNREACHABLE();

@@ -100,11 +100,16 @@ ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_memref_t memref);
 // Add a memory store to a code block.
 ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_memref_t memref);
 
+// Add a memory filling intrinsic.
+// The fill value must be either u8 or s8.
+ir_insn_t *ir_add_memset(ir_insnloc_t loc, ir_memref_t dest, ir_operand_t fill, ir_operand_t size);
+// Add a memory copying intrinsic.
+ir_insn_t *ir_add_memcpy(ir_insnloc_t loc, ir_memref_t dest, ir_memref_t src, ir_operand_t size);
 // Add an optimized large memory write into the IR; may generate multiple instructions.
 // May use uint copies of size up to `copy_max_prim` for inline memcpy.
 // Assumes that `size_prim` is the unsigned size type.
 // Returns the last instruction created.
-ir_insn_t *ir_add_memcpy_const(
+ir_insn_t *ir_gen_memcpy_const(
     ir_insnloc_t loc,
     void const  *src,
     ir_memref_t  dest,
@@ -114,11 +119,11 @@ ir_insn_t *ir_add_memcpy_const(
     bool         allow_implicit_call,
     bool         big_endian
 );
-// Add an optimized memory copy into the IR; may generate multiple instructions.
+// Add an inline memory copy into the IR; may generate multiple instructions.
 // May use uint copies of size up to `copy_max_prim` for inline memcpy.
 // Assumes that `size_prim` is the unsigned size type.
 // Returns the last instruction created.
-ir_insn_t *ir_add_memcpy(
+ir_insn_t *ir_gen_memcpy(
     ir_insnloc_t loc,
     ir_memref_t  src,
     ir_memref_t  dest,

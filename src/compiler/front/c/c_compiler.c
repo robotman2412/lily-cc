@@ -5,6 +5,7 @@
 
 #include "c_compiler.h"
 
+#include "arrays.h"
 #include "c_parser.h"
 #include "c_prepass.h"
 #include "c_tokenizer.h"
@@ -19,6 +20,9 @@
 #include "strong_malloc.h"
 #include "unreachable.h"
 
+#include <assert.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,7 +31,7 @@
 // Guards against actual cleanup happening for the fake RC types.
 static void c_compiler_t_fake_cleanup(void *_) {
     (void)_;
-    printf("[BUG] Refcount ptr to primitive cache destroyed\n");
+    printf("BUG: Refcount ptr to primitive cache destroyed\n");
     abort();
 }
 
@@ -166,7 +170,7 @@ ir_op2_type_t c_op2_to_ir_op2(c_tokentype_t subtype) {
         case C_TKN_GT: return IR_OP2_sgt;
         case C_TKN_GE: return IR_OP2_sge;
         default:
-            printf("[BUG] C token %d cannot be converted to IR op2\n", subtype);
+            printf("BUG: C token %d cannot be converted to IR op2\n", subtype);
             abort();
             break;
     }
@@ -178,7 +182,7 @@ ir_op1_type_t c_op1_to_ir_op1(c_tokentype_t subtype) {
         case C_TKN_SUB: return IR_OP1_neg;
         case C_TKN_NOT: return IR_OP1_bneg;
         default:
-            printf("[BUG] C token %d cannot be converted to IR op1\n", subtype);
+            printf("BUG: C token %d cannot be converted to IR op1\n", subtype);
             abort();
             break;
     }
@@ -194,7 +198,7 @@ c_var_t *c_var_create(
     c_type_t *type = type_rc->data;
 
     if (type->primitive == C_COMP_FUNCTION) {
-        fprintf(stderr, "[TODO] c_var_create C_COMP_FUNCTION\n");
+        fprintf(stderr, "TODO: c_var_create C_COMP_FUNCTION\n");
         return NULL;
     }
 
@@ -234,7 +238,7 @@ c_var_t *c_var_create(
             var->ir_var  = ir_var_create(func, c_type_to_ir_type(ctx, type), NULL);
         }
     } else {
-        fprintf(stderr, "[TODO] c_var_create in global scope\n");
+        fprintf(stderr, "TODO: c_var_create in global scope\n");
     }
 
     map_set(&scope->locals, name_tkn->strval, var);
@@ -244,6 +248,293 @@ c_var_t *c_var_create(
 }
 
 
+
+// Describes a store to memory needed to initialize a compound type.
+typedef struct {
+    uint64_t  offset;
+    c_value_t value;
+    pos_t     pos;
+} c_comp_store_t;
+
+// Helper for `c_compile_comp_init` that keeps track of the field being written.
+typedef struct {
+    // Stack that indicates field being accessed.
+    size_t         *stack;
+    size_t          stack_len;
+    size_t          stack_cap;
+    // Stores needed to initialize without optimization.
+    c_comp_store_t *stores;
+    size_t          stores_len;
+    size_t          stores_cap;
+    // Type being initialized.
+    rc_t            type_rc;
+    // Current field offset.
+    uint64_t        field_offset;
+    // Current field type.
+    rc_t            field_type_rc;
+} c_init_cursor_t;
+
+// Step into the first field of the current (compound-typed) field.
+// Returns whether there is such a field (the compound type is not zero-sized).
+static bool c_init_cursor_step_in(c_init_cursor_t *cursor) {
+    c_type_t const *cur = cursor->type_rc->data;
+    for (size_t i = 0;; i++) {
+        size_t field = (i < cursor->stack_len) ? cursor->stack[i] : 0;
+
+        if (cur->primitive == C_COMP_STRUCT) {
+            c_comp_t const *comp = cur->comp->data;
+            if (comp->fields.len == 0) {
+                return false;
+            }
+            cur = comp->fields.arr[field].type_rc->data;
+
+        } else if (cur->primitive == C_COMP_UNION) {
+            c_comp_t const *comp = cur->comp->data;
+            if (comp->fields.len == 0) {
+                return false;
+            }
+            cur = comp->fields.arr[field].type_rc->data;
+
+        } else if (cur->primitive == C_COMP_ARRAY) {
+            fprintf(stderr, "TODO: c_init_cursor_step_in with C_COMP_ARRAY\n");
+            abort();
+
+        } else {
+            // Pointers, enums and primitive types.
+            break;
+        }
+
+        if (i >= cursor->stack_len) {
+            array_lencap_insert_strong(
+                &cursor->stack,
+                sizeof(size_t),
+                &cursor->stack_len,
+                &cursor->stack_cap,
+                (size_t[]){0},
+                cursor->stack_len
+            );
+        }
+    }
+
+    return true;
+}
+
+// Helper for `c_compile_comp_init` that selects a named field.
+// Returns whether the field exists.
+static inline bool
+    c_init_cursor_select_named(c_compiler_t *ctx, c_init_cursor_t *cursor, token_t const *name, bool err_notfound) {
+    c_type_t const *field_type = cursor->field_type_rc->data;
+    if (!field_type || (field_type->primitive != C_COMP_STRUCT && field_type->primitive != C_COMP_UNION)) {
+        cctx_diagnostic(ctx->cctx, name->pos, DIAG_ERR, "Unexpected named initializer field for non-struct/union type");
+        return false;
+    }
+
+    c_comp_t const *comp = field_type->comp->data;
+    for (size_t i = 0; i < comp->fields.len; i++) {
+        c_field_t const *field      = &comp->fields.arr[i];
+        c_type_t const  *field_type = field->type_rc->data;
+
+        if (field->name && !strcmp(field->name, name->strval)) {
+            // Matching field name found.
+            array_lencap_insert_strong(
+                &cursor->stack,
+                sizeof(size_t),
+                &cursor->stack_len,
+                &cursor->stack_cap,
+                &i,
+                cursor->stack_len
+            );
+            cursor->field_offset += field->offset;
+            rc_delete(cursor->field_type_rc);
+            cursor->field_type_rc = rc_share(field->type_rc);
+            return true;
+
+        } else if (!field->name && (field_type->primitive == C_COMP_STRUCT || field_type->primitive == C_COMP_UNION)) {
+            // Recursively search in anonymous nested structs/unions.
+            rc_t prev_type_rc = rc_share(cursor->field_type_rc);
+            array_lencap_insert_strong(
+                &cursor->stack,
+                sizeof(size_t),
+                &cursor->stack_len,
+                &cursor->stack_cap,
+                &i,
+                cursor->stack_len
+            );
+            cursor->field_offset += field->offset;
+            rc_delete(cursor->field_type_rc);
+            cursor->field_type_rc = rc_share(field->type_rc);
+
+            if (c_init_cursor_select_named(ctx, cursor, name, false)) {
+                rc_delete(prev_type_rc);
+                return true;
+            } else {
+                // Restore cursor to original value if search fails.
+                rc_delete(cursor->field_type_rc);
+                cursor->field_type_rc = prev_type_rc;
+                cursor->stack_len--;
+                cursor->field_offset -= field->offset;
+            }
+        }
+    }
+
+    if (err_notfound) {
+        cctx_diagnostic(ctx->cctx, name->pos, DIAG_ERR, "No such struct/union field");
+    }
+
+    return false;
+}
+
+// Helper for `c_compile_comp_init` that selects an indexed field.
+// Returns whether the field exists.
+static inline bool
+    c_init_cursor_select_indexed(c_compiler_t *ctx, c_init_cursor_t *cursor, c_value_t index, pos_t index_pos) {
+    c_type_t const *field_type = cursor->field_type_rc->data;
+    if (!field_type || (field_type->primitive != C_COMP_STRUCT && field_type->primitive != C_COMP_UNION)) {
+        cctx_diagnostic(ctx->cctx, index_pos, DIAG_ERR, "Unexpected indexed initializer field for non-array type");
+        return false;
+    }
+
+    (void)index;
+    fprintf(stderr, "TODO: c_init_cursor_select_indexed\n");
+    abort();
+}
+
+// Helper for `c_init_field` that moves the cursor to the next field.
+static void c_init_cursor_next(c_init_cursor_t *cursor) {
+    while (cursor->stack_len) {
+        bool            has_next = false;
+        c_type_t const *cur      = cursor->type_rc->data;
+        for (size_t depth = 0; depth < cursor->stack_len; depth++) {
+            size_t index = cursor->stack[depth];
+            if (cur->primitive == C_COMP_STRUCT) {
+                c_comp_t const  *comp  = cur->comp->data;
+                c_field_t const *field = &comp->fields.arr[index];
+                rc_delete(cursor->field_type_rc);
+                cursor->field_type_rc = rc_share(field->type_rc);
+                cur                   = field->type_rc->data;
+                cursor->field_offset  = field->offset;
+                has_next              = index + 1 < comp->fields.len;
+
+            } else if (cur->primitive == C_COMP_UNION) {
+                c_comp_t const  *comp  = cur->comp->data;
+                c_field_t const *field = &comp->fields.arr[index];
+                rc_delete(cursor->field_type_rc);
+                cursor->field_type_rc = rc_share(field->type_rc);
+                cur                   = field->type_rc->data;
+                cursor->field_offset  = field->offset;
+                has_next              = false;
+
+            } else if (cur->primitive == C_COMP_ARRAY) {
+                fprintf(stderr, "TODO: c_init_cursor_next with C_COMP_ARRAY\n");
+                abort();
+
+            } else {
+                // Pointers, enums and primitive types.
+                has_next = false;
+            }
+            if (!has_next) {
+                break;
+            }
+        }
+        if (has_next) {
+            break;
+        }
+
+        cursor->stack_len--;
+    }
+
+    if (cursor->stack_len) {
+        cursor->stack[cursor->stack_len - 1]++;
+    }
+}
+
+// Compile a compound initializer for a scalar type.
+static c_compile_expr_t c_compile_scalar_init(
+    c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *code, c_scope_t *scope, token_t const *init, rc_t type_rc
+) {
+    if (init->params_len == 0) {
+        UNREACHABLE();
+    }
+
+    for (size_t i = 0; i < init->params_len; i++) {
+        if (init->params[i].type == TOKENTYPE_AST
+            && (init->params[i].subtype == C_AST_COMPINIT_INDEX || init->params[i].subtype == C_AST_COMPINIT_NAME)) {
+            cctx_diagnostic(ctx->cctx, init->params[i].pos, DIAG_ERR, "Designated initializer used with a scalar type");
+            return (c_compile_expr_t){.code = code, .res = {0}};
+        }
+    }
+
+    c_compile_expr_t res = c_compile_expr(ctx, prepass, code, scope, &init->params[0]);
+    if (res.res.value_type == C_VALUE_ERROR) {
+        return res;
+    }
+    code          = res.code;
+    bool is_const = c_value_is_const(&res.res);
+
+    if (init->params_len > 1) {
+        cctx_diagnostic(ctx->cctx, init->params[1].pos, DIAG_WARN, "Excess elements in scalar initializer");
+        bool       error      = false;
+        // Need a dummy code to compile, but it will not run.
+        ir_code_t *dummy_code = code ? ir_code_create(code->func, NULL) : NULL;
+        for (size_t i = 0; i < init->params_len; i++) {
+            c_compile_expr_t tmp = c_compile_expr(ctx, prepass, dummy_code, scope, &init->params[i]);
+            if (tmp.res.value_type == C_VALUE_ERROR) {
+                error = true;
+            }
+            if (!c_value_is_const(&tmp.res)) {
+                is_const = false;
+            }
+            c_value_destroy(tmp.res);
+            dummy_code = tmp.code;
+        }
+        if (error) {
+            c_value_destroy(res.res);
+            res.res.value_type = C_VALUE_ERROR;
+        }
+    }
+
+    ir_operand_t cast_operand;
+    ir_prim_t    dest_prim = c_type_to_ir_type(ctx, type_rc->data);
+    if (is_const) {
+        cast_operand = IR_OPERAND_CONST(ir_cast(dest_prim, res.res.rvalue.operand.iconst));
+    } else {
+        ir_var_t *tmp = ir_var_create(code->func, dest_prim, NULL);
+        ir_add_expr1(IR_APPEND(code), tmp, IR_OP1_mov, c_value_read(ctx, code, &res.res));
+        cast_operand = IR_OPERAND_VAR(tmp);
+    }
+    c_value_destroy(res.res);
+    c_value_t cast_value = {
+        .value_type     = C_RVALUE_OPERAND,
+        .rvalue.operand = cast_operand,
+    };
+
+    return (c_compile_expr_t){
+        .code = code,
+        .res  = cast_value,
+    };
+}
+
+// Compile excess nested initializers.
+// Used to check for errors, but the code will effectively never run.
+// Returns true if a compile error occurred.
+static int c_compile_excess_init(
+    c_compiler_t *ctx, c_prepass_t *prepass, ir_func_t *func, c_scope_t *scope, token_t const *init
+) {
+    if (init->type == TOKENTYPE_AST && init->subtype == C_AST_COMPINIT) {
+        bool err = false;
+        for (size_t i = 0; i < init->params_len; i++) {
+            err |= c_compile_excess_init(ctx, prepass, func, scope, &init->params[i]);
+        }
+        return err;
+    } else {
+        // Detached code created here means that it will compile but never run.
+        ir_code_t       *code = func ? ir_code_create(func, NULL) : NULL;
+        c_compile_expr_t res  = c_compile_expr(ctx, prepass, code, scope, init);
+        bool             err  = res.res.value_type == C_VALUE_ERROR;
+        c_value_destroy(res.res);
+        return err;
+    }
+}
 
 // Compile a compound initializer into IR.
 c_compile_expr_t c_compile_comp_init(
@@ -267,24 +558,264 @@ c_compile_expr_t c_compile_comp_init(
         };
     }
 
-    c_value_t res = c_rvalue_create(ctx, type_rc);
-    if (init->params[0].type == TOKENTYPE_ICONST && init->params[0].ival == 0 && init->params[0].ivalh == 0) {
-        // Zero-initializer is allowed for any type.
-        return (c_compile_expr_t){.code = code, .res = res};
+    // Compile-time optimization for zero-initializations.
+    ir_prim_t prim = c_type_to_ir_type(ctx, type);
+    if (init->params_len == 0
+        || (init->params_len == 1 && init->params[0].type == TOKENTYPE_ICONST && init->params[0].ival == 0
+            && init->params[0].ivalh == 0)) {
+
+        c_value_t zeroed;
+        if (prim < IR_N_PRIM) {
+            zeroed = (c_value_t){
+                .value_type     = C_RVALUE_OPERAND,
+                .c_type         = type_rc,
+                .rvalue.operand = IR_OPERAND_CONST(((ir_const_t){
+                    .prim_type = prim,
+                    .constl    = 0,
+                    .consth    = 0,
+                })),
+            };
+        } else {
+            zeroed = (c_value_t){
+                .value_type  = C_RVALUE_BINARY,
+                .c_type      = type_rc,
+                .rvalue.blob = strong_calloc(1, size),
+            };
+        }
+
+        return (c_compile_expr_t){.code = code, .res = zeroed};
     }
 
-    // size_t *stack     = strong_calloc(1, sizeof(size_t));
-    // size_t  stack_len = 1;
-    // size_t  stack_cap = 1;
+    // Initializer of scalar types.
+    if (prim < IR_N_PRIM) {
+        return c_compile_scalar_init(ctx, prepass, code, scope, init, type_rc);
+    }
 
-    // for (size_t i = 0; i < init->params_len; i++) {
-    // }
+    c_init_cursor_t cursor = {
+        .stack        = strong_calloc(1, sizeof(size_t)),
+        .stack_len    = 1,
+        .stack_cap    = 1,
+        .stores       = NULL,
+        .stores_len   = 0,
+        .stores_cap   = 0,
+        .type_rc      = rc_share(type_rc),
+        .field_offset = 0,
+    };
+    if (type->primitive == C_COMP_ARRAY) {
+        cursor.field_type_rc = rc_share(type->inner);
+    } else {
+        c_comp_t const *comp = type->comp->data;
+        if (comp->fields.len > 0) {
+            cursor.field_type_rc = rc_share(comp->fields.arr[0].type_rc);
+        }
+    }
 
-    // free(stack);
+    // Collect unoptimized stores from the initializer.
+    bool error    = false;
+    bool is_const = true;
+    for (size_t i = 0; i < init->params_len; i++) {
+        bool           field_error = false;
+        bool           can_step_in = true;
+        token_t const *field       = &init->params[i];
 
-    (void)prepass;
-    (void)scope;
-    UNREACHABLE();
+        if (field->type == TOKENTYPE_AST
+            && (field->subtype == C_AST_COMPINIT_NAME || field->subtype == C_AST_COMPINIT_INDEX)) {
+            can_step_in         = false;
+            cursor.stack_len    = 0;
+            cursor.field_offset = 0;
+            rc_delete(cursor.field_type_rc);
+            cursor.field_type_rc = rc_share(cursor.type_rc);
+        }
+
+        while (1) {
+            if (field->type == TOKENTYPE_AST && field->subtype == C_AST_COMPINIT_NAME) {
+                // Named initializer field, e.g. `.foo = bar`.
+                if (!c_init_cursor_select_named(ctx, &cursor, &field->params[0], true)) {
+                    field_error = true;
+                }
+
+            } else if (field->type == TOKENTYPE_AST && field->subtype == C_AST_COMPINIT_INDEX) {
+                // Indexed initializer field, e.g. `[foo] = bar`.
+                cctx_diagnostic(
+                    ctx->cctx,
+                    field->params[0].pos,
+                    DIAG_ERR,
+                    "TODO: Indexed initializer fields are unimplemented"
+                );
+                field_error = true;
+
+            } else {
+                break;
+            }
+            field = &field->params[1];
+        }
+
+        if (field_error) {
+            error = true;
+            break;
+
+        } else if (cursor.stack_len == 0) {
+            // An excess initializer; the expressions are compiled but will not run.
+            error |= c_compile_excess_init(ctx, prepass, code ? code->func : NULL, scope, field);
+
+        } else if (field->type == TOKENTYPE_AST && field->subtype == C_AST_COMPINIT) {
+            // Nested initializer.
+            c_compile_expr_t res;
+            if (c_type_is_scalar(cursor.field_type_rc->data)) {
+                // Directly compile scalar initializer.
+                res = c_compile_scalar_init(ctx, prepass, code, scope, field, cursor.field_type_rc);
+
+            } else {
+                // Recursively compile compound initializer.
+                res = c_compile_comp_init(ctx, prepass, code, scope, field, rc_share(cursor.field_type_rc), (pos_t){0});
+            }
+
+            is_const &= c_value_is_const(&res.res);
+            code      = res.code;
+            if (res.res.value_type == C_VALUE_ERROR) {
+                error = true;
+            } else {
+                c_comp_store_t entry = {
+                    .offset = cursor.field_offset,
+                    .pos    = field->pos,
+                    .value  = res.res,
+                };
+                array_lencap_insert_strong(
+                    &cursor.stores,
+                    sizeof(*cursor.stores),
+                    &cursor.stores_len,
+                    &cursor.stores_cap,
+                    &entry,
+                    cursor.stores_len
+                );
+            }
+            c_init_cursor_next(&cursor);
+
+        } else {
+            // Field expression.
+            c_compile_expr_t res  = c_compile_expr(ctx, prepass, code, scope, field);
+            is_const             &= c_value_is_const(&res.res);
+            code                  = res.code;
+
+            if (res.res.value_type == C_VALUE_ERROR) {
+                c_value_destroy(res.res);
+                error = true;
+            } else {
+                if (can_step_in && !c_type_is_compatible(ctx, cursor.field_type_rc->data, res.res.c_type->data)) {
+                    c_init_cursor_step_in(&cursor);
+                }
+
+                if (!c_type_is_compatible(ctx, cursor.field_type_rc->data, res.res.c_type->data)) {
+                    cctx_diagnostic(ctx->cctx, field->pos, DIAG_ERR, "Initializer with value of incompatible type");
+                    c_value_destroy(res.res);
+                    error = true;
+                } else {
+                    c_comp_store_t entry = {
+                        .pos    = field->pos,
+                        .offset = cursor.field_offset,
+                        .value  = res.res,
+                    };
+                    array_lencap_insert_strong(
+                        &cursor.stores,
+                        sizeof(*cursor.stores),
+                        &cursor.stores_len,
+                        &cursor.stores_cap,
+                        &entry,
+                        cursor.stores_len
+                    );
+                }
+            }
+            c_init_cursor_next(&cursor);
+        }
+    }
+
+    if (error) {
+        goto out;
+    }
+
+    // Emit warnings about reinitializations of fields.
+    uint32_t *bytes_init = calloc((size + 3) / 4, sizeof(uint32_t));
+    for (size_t i = 0; i < cursor.stores_len; i++) {
+        c_comp_store_t const *store = &cursor.stores[i];
+        uint64_t              write_size, write_align;
+        if (!c_type_get_size(ctx, store->value.c_type->data, &write_size, &write_align)) {
+            UNREACHABLE();
+        }
+
+        bool overlap = false;
+        for (size_t x = 0; x < write_size; x++) {
+            size_t byte            = x + store->offset;
+            overlap               |= (bytes_init[byte / 32] >> (byte % 32)) & 1;
+            bytes_init[byte / 32] |= 1 << (byte % 32);
+        }
+
+        if (overlap) {
+            cctx_diagnostic(ctx->cctx, store->pos, DIAG_WARN, "Initializer overwrites previous value");
+        }
+    }
+    free(bytes_init);
+
+    // Collect the writes.
+    c_value_t value;
+    value.c_type = type_rc;
+    if (is_const) {
+        uint8_t *blob = calloc(size, sizeof(uint8_t));
+        for (size_t i = 0; i < cursor.stores_len; i++) {
+            c_comp_store_t const *store = &cursor.stores[i];
+            if (store->value.value_type == C_RVALUE_OPERAND) {
+                assert(store->value.rvalue.operand.type == IR_OPERAND_TYPE_CONST);
+                ir_const_to_blob(store->value.rvalue.operand.iconst, blob + store->offset, ctx->options.big_endian);
+            } else {
+                assert(store->value.value_type == C_RVALUE_BINARY);
+                size_t write_size, write_align;
+                if (!c_type_get_size(ctx, store->value.c_type->data, &write_size, &write_align)) {
+                    UNREACHABLE();
+                }
+                memcpy(blob + store->offset, store->value.rvalue.blob, write_size);
+            }
+        }
+
+        value.value_type  = C_RVALUE_BINARY;
+        value.rvalue.blob = blob;
+
+    } else {
+        ir_frame_t *frame = ir_frame_create(code->func, size, align, NULL);
+        ir_add_memset(
+            IR_APPEND(code),
+            IR_MEMREF(IR_N_PRIM, IR_BADDR_FRAME(frame)),
+            IR_OPERAND_CONST(IR_CONST_U8(0)),
+            IR_OPERAND_CONST(((ir_const_t){
+                .prim_type = c_prim_to_ir_type(ctx, ctx->options.size_type),
+                .constl    = size,
+            }))
+        );
+
+        for (size_t i = 0; i < cursor.stores_len; i++) {
+            c_comp_store_t const *store = &cursor.stores[i];
+            c_value_memcpy(
+                ctx,
+                code,
+                &store->value,
+                IR_MEMREF(IR_N_PRIM, IR_BADDR_FRAME(frame), .offset = store->offset)
+            );
+        }
+
+        value.value_type   = C_RVALUE_STACK;
+        value.rvalue.frame = frame;
+    }
+
+out:
+    // Final cleanup.
+    rc_delete(cursor.type_rc);
+    rc_delete(cursor.field_type_rc);
+    free(cursor.stack);
+    free(cursor.stores);
+
+    if (error) {
+        return (c_compile_expr_t){.code = code, .res = {0}};
+    } else {
+        return (c_compile_expr_t){.code = code, .res = value};
+    }
 }
 
 // Decay an array value into its pointer.
@@ -296,7 +827,7 @@ static c_value_t c_array_decay(c_compiler_t *ctx, ir_code_t *code, c_value_t val
     ir_prim_t ptr_prim = c_prim_to_ir_type(ctx, ctx->options.size_type);
 
     if (c_is_rvalue(&value)) {
-        fprintf(stderr, "[TODO] Decay rvalue array into pointer");
+        fprintf(stderr, "TODO: Decay rvalue array into pointer");
         abort();
     }
 
@@ -408,8 +939,9 @@ static inline c_compile_expr_t
 // Compile an infix pointer arithmetic expression into IR.
 static inline c_compile_expr_t
     c_compile_expr2_ptrarith(c_compiler_t *ctx, ir_code_t *code, token_t const *expr, c_value_t lhs, c_value_t rhs) {
-    ir_prim_t     ptr_prim = c_prim_to_ir_type(ctx, ctx->options.size_type);
-    ir_op2_type_t op2      = c_op2_to_ir_op2(expr->params[0].subtype);
+    ir_prim_t const     uptr_prim = c_prim_to_ir_type(ctx, ctx->options.size_type);
+    ir_prim_t const     sptr_prim = ir_prim_as_signed(uptr_prim);
+    ir_op2_type_t const op2       = c_op2_to_ir_op2(expr->params[0].subtype);
 
     // Perform array decay, if needed.
     lhs = c_array_decay(ctx, code, lhs);
@@ -462,26 +994,48 @@ static inline c_compile_expr_t
             }
         }
     }
-    ir_const_t size_iconst = (ir_const_t){.prim_type = ptr_prim, .consth = 0, .constl = size};
+    ir_const_t usize_iconst = (ir_const_t){.prim_type = uptr_prim, .consth = 0, .constl = size};
+    ir_const_t ssize_iconst = (ir_const_t){.prim_type = ir_prim_as_signed(uptr_prim), .consth = 0, .constl = size};
 
     ir_operand_t lhs_ir   = c_value_read(ctx, code, &lhs);
     ir_operand_t rhs_ir   = c_value_read(ctx, code, &rhs);
     bool const   is_const = lhs_ir.type == IR_OPERAND_TYPE_CONST && rhs_ir.type == IR_OPERAND_TYPE_CONST;
 
+    // Ensure the types match for the following IR operations.
+    if (ir_operand_prim(lhs_ir) != ir_operand_prim(rhs_ir)) {
+        ir_prim_t large_prim
+            = ir_operand_prim(lhs_ir) > ir_operand_prim(rhs_ir) ? ir_operand_prim(lhs_ir) : ir_operand_prim(rhs_ir);
+        if (is_const) {
+            lhs_ir = IR_OPERAND_CONST(ir_cast(large_prim, lhs_ir.iconst));
+            rhs_ir = IR_OPERAND_CONST(ir_cast(large_prim, rhs_ir.iconst));
+        } else {
+            ir_var_t *lhs_tmp = ir_var_create(code->func, large_prim, NULL);
+            ir_add_expr1(IR_APPEND(code), lhs_tmp, IR_OP1_mov, lhs_ir);
+            lhs_ir            = IR_OPERAND_VAR(lhs_tmp);
+            ir_var_t *rhs_tmp = ir_var_create(code->func, large_prim, NULL);
+            ir_add_expr1(IR_APPEND(code), rhs_tmp, IR_OP1_mov, rhs_ir);
+            rhs_ir = IR_OPERAND_VAR(rhs_tmp);
+        }
+    }
+
     ir_operand_t value;
     rc_t         type_rc;
     if (op2 == IR_OP2_sub && lhs_ptr && rhs_ptr) {
         // Pointer difference.
-        type_rc = rc_share(&ctx->prim_rcs[ptr_prim]);
+        type_rc = rc_share(&ctx->prim_rcs[uptr_prim]);
         if (is_const) {
-            value = IR_OPERAND_CONST(
-                ir_calc2(IR_OP2_div, ir_calc2(IR_OP2_sub, lhs_ir.iconst, rhs_ir.iconst), size_iconst)
-            );
+            value = IR_OPERAND_CONST(ir_calc2(
+                IR_OP2_div,
+                ir_cast(sptr_prim, ir_calc2(IR_OP2_sub, lhs_ir.iconst, rhs_ir.iconst)),
+                ssize_iconst
+            ));
         } else {
-            ir_var_t *sub = ir_var_create(code->func, ptr_prim, NULL);
+            ir_var_t *sub = ir_var_create(code->func, uptr_prim, NULL);
             ir_add_expr2(IR_APPEND(code), sub, IR_OP2_sub, lhs_ir, rhs_ir);
-            ir_var_t *div = ir_var_create(code->func, ptr_prim, NULL);
-            ir_add_expr2(IR_APPEND(code), div, IR_OP2_div, IR_OPERAND_VAR(sub), IR_OPERAND_CONST(size_iconst));
+            ir_var_t *cast = ir_var_create(code->func, sptr_prim, NULL);
+            ir_add_expr1(IR_APPEND(code), cast, IR_OP1_mov, IR_OPERAND_VAR(sub));
+            ir_var_t *div = ir_var_create(code->func, uptr_prim, NULL);
+            ir_add_expr2(IR_APPEND(code), div, IR_OP2_div, IR_OPERAND_VAR(cast), IR_OPERAND_CONST(ssize_iconst));
             value = IR_OPERAND_VAR(div);
         }
 
@@ -490,12 +1044,12 @@ static inline c_compile_expr_t
         type_rc = rc_share(lhs.c_type);
         if (is_const) {
             value = IR_OPERAND_CONST(
-                ir_calc2(IR_OP2_sub, lhs_ir.iconst, ir_calc2(IR_OP2_mul, rhs_ir.iconst, size_iconst))
+                ir_calc2(IR_OP2_sub, lhs_ir.iconst, ir_calc2(IR_OP2_mul, rhs_ir.iconst, usize_iconst))
             );
         } else {
-            ir_var_t *mul = ir_var_create(code->func, ptr_prim, NULL);
-            ir_add_expr2(IR_APPEND(code), mul, IR_OP2_sub, rhs_ir, IR_OPERAND_CONST(size_iconst));
-            ir_var_t *sub = ir_var_create(code->func, ptr_prim, NULL);
+            ir_var_t *mul = ir_var_create(code->func, uptr_prim, NULL);
+            ir_add_expr2(IR_APPEND(code), mul, IR_OP2_sub, rhs_ir, IR_OPERAND_CONST(usize_iconst));
+            ir_var_t *sub = ir_var_create(code->func, uptr_prim, NULL);
             ir_add_expr2(IR_APPEND(code), sub, IR_OP2_div, lhs_ir, IR_OPERAND_VAR(mul));
             value = IR_OPERAND_VAR(sub);
         }
@@ -506,12 +1060,12 @@ static inline c_compile_expr_t
             type_rc = rc_share(lhs.c_type);
             if (is_const) {
                 value = IR_OPERAND_CONST(
-                    ir_calc2(IR_OP2_add, lhs_ir.iconst, ir_calc2(IR_OP2_mul, rhs_ir.iconst, size_iconst))
+                    ir_calc2(IR_OP2_add, lhs_ir.iconst, ir_calc2(IR_OP2_mul, rhs_ir.iconst, usize_iconst))
                 );
             } else {
-                ir_var_t *mul = ir_var_create(code->func, ptr_prim, NULL);
-                ir_add_expr2(IR_APPEND(code), mul, IR_OP2_add, rhs_ir, IR_OPERAND_CONST(size_iconst));
-                ir_var_t *sub = ir_var_create(code->func, ptr_prim, NULL);
+                ir_var_t *mul = ir_var_create(code->func, uptr_prim, NULL);
+                ir_add_expr2(IR_APPEND(code), mul, IR_OP2_add, rhs_ir, IR_OPERAND_CONST(usize_iconst));
+                ir_var_t *sub = ir_var_create(code->func, uptr_prim, NULL);
                 ir_add_expr2(IR_APPEND(code), sub, IR_OP2_div, lhs_ir, IR_OPERAND_VAR(mul));
                 value = IR_OPERAND_VAR(sub);
             }
@@ -519,12 +1073,12 @@ static inline c_compile_expr_t
             type_rc = rc_share(rhs.c_type);
             if (is_const) {
                 value = IR_OPERAND_CONST(
-                    ir_calc2(IR_OP2_add, rhs_ir.iconst, ir_calc2(IR_OP2_mul, lhs_ir.iconst, size_iconst))
+                    ir_calc2(IR_OP2_add, rhs_ir.iconst, ir_calc2(IR_OP2_mul, lhs_ir.iconst, usize_iconst))
                 );
             } else {
-                ir_var_t *mul = ir_var_create(code->func, ptr_prim, NULL);
-                ir_add_expr2(IR_APPEND(code), mul, IR_OP2_add, lhs_ir, IR_OPERAND_CONST(size_iconst));
-                ir_var_t *sub = ir_var_create(code->func, ptr_prim, NULL);
+                ir_var_t *mul = ir_var_create(code->func, uptr_prim, NULL);
+                ir_add_expr2(IR_APPEND(code), mul, IR_OP2_add, lhs_ir, IR_OPERAND_CONST(usize_iconst));
+                ir_var_t *sub = ir_var_create(code->func, uptr_prim, NULL);
                 ir_add_expr2(IR_APPEND(code), sub, IR_OP2_div, rhs_ir, IR_OPERAND_VAR(mul));
                 value = IR_OPERAND_VAR(sub);
             }
@@ -584,6 +1138,7 @@ c_compile_expr_t
             };
         }
 
+        // TODO: This should allow for `const` variables whose value is known at compile-time.
         if (!code) {
             cctx_diagnostic(ctx->cctx, expr->pos, DIAG_ERR, "Cannot access a variable in a constant expression");
             return (c_compile_expr_t){0};
@@ -780,7 +1335,8 @@ c_compile_expr_t
 
         // Compile cast source expression.
         c_compile_expr_t res = c_compile_expr(ctx, prepass, code, scope, &expr->params[1]);
-        if (res.res.value_type == C_VALUE_ERROR || c_type_identical(ctx, cast_rc->data, res.res.c_type->data, false)) {
+        if (res.res.value_type == C_VALUE_ERROR
+            || c_type_is_identical(ctx, cast_rc->data, res.res.c_type->data, false)) {
             rc_delete(cast_rc);
             return res;
         }
@@ -788,7 +1344,7 @@ c_compile_expr_t
         // Determine castability.
         c_type_t const *new_type = cast_rc->data;
         c_type_t const *old_type = res.res.c_type->data;
-        if (!c_type_castable(ctx, new_type, old_type)) {
+        if (!c_type_is_castable(ctx, new_type, old_type)) {
             cctx_diagnostic(ctx->cctx, expr->params[1].pos, DIAG_ERR, "Cannot cast between these types");
             return (c_compile_expr_t){
                 .res  = (c_value_t){0},
@@ -887,14 +1443,8 @@ c_compile_expr_t
                 .res  = {0},
             };
         }
-        c_comp_t const  *comp  = inner_type->comp->data;
-        c_field_t const *field = NULL;
-        for (size_t i = 0; i < comp->fields.len; i++) {
-            if (!strcmp(comp->fields.arr[i].name, expr->params[2].strval)) {
-                field = &comp->fields.arr[i];
-                break;
-            }
-        }
+        uint64_t         field_offset;
+        c_field_t const *field = c_type_get_field(ctx, inner_type, expr->params[2].strval, &field_offset);
         if (!field) {
             cctx_diagnostic(ctx->cctx, expr->params[2].pos, DIAG_ERR, "Unknown field %s", expr->params[2].strval);
             c_value_destroy(res.res);
@@ -910,7 +1460,7 @@ c_compile_expr_t
             .c_type        = rc_share(field->type_rc),
             .lvalue.memref = {
                 .data_type = c_type_to_ir_type(ctx, field->type_rc->data),
-                .offset    = (int64_t)field->offset,
+                .offset    = (int64_t)field_offset,
             },
         };
         switch (ptr.type) {
@@ -968,7 +1518,7 @@ c_compile_expr_t
 
         return (c_compile_expr_t){
             .code = code,
-            .res  = c_value_field(ctx, code, &res.res, &expr->params[2]),
+            .res  = c_value_access_field(ctx, &res.res, &expr->params[2]),
         };
 
     } else if (expr->subtype == C_AST_EXPR_INFIX
@@ -1113,7 +1663,7 @@ c_compile_expr_t
             }
 
             // Determine compatibility with this operator.
-            if (!c_type_compatible(ctx, lhs.c_type->data, rhs.c_type->data)) {
+            if (!c_type_is_compatible(ctx, lhs.c_type->data, rhs.c_type->data)) {
                 cctx_diagnostic(ctx->cctx, expr->params[0].pos, DIAG_ERR, "Cannot assign incompatible type");
                 c_value_destroy(lhs);
                 c_value_destroy(rhs);
@@ -1771,15 +2321,24 @@ ir_code_t *
             }
             code = res.code;
             if (res.res.value_type != C_VALUE_ERROR) {
-                ir_operand_t tmp = c_value_read(ctx, code, &res.res);
+                c_value_t lvalue;
                 switch (var->storage) {
-                    case C_VAR_STORAGE_REG: ir_add_expr1(IR_APPEND(code), var->ir_var, IR_OP1_mov, tmp); break;
-                    case C_VAR_STORAGE_FRAME:
-                        ir_add_store(IR_APPEND(code), tmp, IR_MEMREF(ir_operand_prim(tmp), IR_BADDR_FRAME(var->frame)));
+                    case C_VAR_STORAGE_REG:
+                        lvalue = (c_value_t){
+                            .value_type    = C_LVALUE_VAR,
+                            .lvalue.ir_var = var->ir_var,
+                        };
                         break;
-                    case C_VAR_STORAGE_GLOBAL: abort(); break;
+                    case C_VAR_STORAGE_FRAME:
+                        lvalue = (c_value_t){
+                            .value_type    = C_LVALUE_MEM,
+                            .lvalue.memref = IR_MEMREF(IR_N_PRIM, IR_BADDR_FRAME(var->frame)),
+                        };
+                        break;
+                    case C_VAR_STORAGE_GLOBAL: fprintf(stderr, "TODO: Initialized globals\n"); abort();
                     case C_VAR_STORAGE_ENUM_VARIANT: UNREACHABLE();
                 }
+                c_value_write(ctx, code, &lvalue, &res.res);
                 c_value_destroy(res.res);
             }
         }

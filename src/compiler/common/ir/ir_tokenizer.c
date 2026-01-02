@@ -68,7 +68,7 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
     bool   invalid  = false;
 
     if (prim == IR_PRIM_f32 || prim == IR_PRIM_f64) {
-        cctx_diagnostic(ctx->cctx, start_pos, DIAG_ERR, "[TODO] Floating-point constants not supported");
+        cctx_diagnostic(ctx->cctx, start_pos, DIAG_ERR, "TODO: Floating-point constants not supported");
         return (token_t){
             .type       = TOKENTYPE_GARBAGE,
             .pos        = start_pos,

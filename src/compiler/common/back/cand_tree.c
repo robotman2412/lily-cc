@@ -445,7 +445,7 @@ ir_insn_t *
         }
     }
 
-    fprintf(stderr, "[TODO] finish cand_tree_isel");
+    fprintf(stderr, "TODO: finish cand_tree_isel");
     abort();
     (void)best_fit;
     // isel_t res = {0};

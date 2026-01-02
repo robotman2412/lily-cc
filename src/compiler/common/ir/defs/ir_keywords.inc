@@ -54,6 +54,8 @@ IR_KEYW_DEF(store)
 IR_KEYW_DEF(lea)
 IR_KEYW_DEF(call)
 IR_KEYW_DEF(return)
+IR_KEYW_DEF(memcpy)
+IR_KEYW_DEF(memset)
 
 #undef IR_KEYW_DEF
 

@@ -10,7 +10,6 @@
 #include "c_tokenizer.h"
 #include "compiler.h"
 #include "ir_types.h"
-#include "map.h"
 #include "refcount.h"
 #include "unreachable.h"
 
@@ -34,11 +33,11 @@ typedef enum {
     C_PRIM_SINT,
     // `unsigned (int)`
     C_PRIM_UINT,
-    // `signed long (int)`
+    // `(signed) long (int)`
     C_PRIM_SLONG,
     // `unsigned long (int)`
     C_PRIM_ULONG,
-    // `signed long long (int)`
+    // `(signed) long long (int)`
     C_PRIM_SLLONG,
     // `unsigned long long (int)`
     C_PRIM_ULLONG,
@@ -249,13 +248,15 @@ rc_t c_compile_decl(
 rc_t     c_type_pointer(c_compiler_t *ctx, rc_t inner);
 // Determine type promotion to apply in an infix context.
 c_prim_t c_prim_promote(c_prim_t a, c_prim_t b);
+// Determine whether a type is a scalar type.
+bool     c_type_is_scalar(c_type_t const *type);
 // Determine whether a value of type `old_type` can be cast to `new_type`.
-bool     c_type_castable(c_compiler_t *ctx, c_type_t const *new_type, c_type_t const *old_type);
+bool     c_type_is_castable(c_compiler_t *ctx, c_type_t const *new_type, c_type_t const *old_type);
 // Determine whether two types are the same.
 // If `strict`, then modifiers like `_Atomic` and `volatile` also apply.
-bool     c_type_identical(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b, bool strict);
+bool     c_type_is_identical(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b, bool strict);
 // Determine whether two types are compatible.
-bool     c_type_compatible(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b);
+bool     c_type_is_compatible(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b);
 // Determine whether two types can be used with a certain operator token.
 // Produces a diagnostic if they cannot.
 bool     c_type_arith_compatible(
@@ -263,10 +264,13 @@ bool     c_type_arith_compatible(
     );
 // Get the alignment and size of a C type.
 // Returns false if it is an incomplete type and the layout is therefor unknown.
-bool         c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out, uint64_t *align_out);
+bool             c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out, uint64_t *align_out);
+// Get the descriptor and effective offset of a field.
+// WARNING: `field->offset` may differ from `*field_offset`; use the latter for accessing the field.
+c_field_t const *c_type_get_field(c_compiler_t *ctx, c_type_t const *type, char const *name, uint64_t *field_offset);
 // Convert C primitive or pointer type to IR primitive type.
-ir_prim_t    c_prim_to_ir_type(c_compiler_t *ctx, c_prim_t prim);
+ir_prim_t        c_prim_to_ir_type(c_compiler_t *ctx, c_prim_t prim);
 // Convert C primitive or pointer type to IR primitive type.
-ir_prim_t    c_type_to_ir_type(c_compiler_t *ctx, c_type_t const *type);
+ir_prim_t        c_type_to_ir_type(c_compiler_t *ctx, c_type_t const *type);
 // Cast one IR type to another according to the C rules for doing so.
-ir_operand_t c_cast_ir_operand(ir_code_t *code, ir_operand_t operand, ir_prim_t type);
+ir_operand_t     c_cast_ir_operand(ir_code_t *code, ir_operand_t operand, ir_prim_t type);

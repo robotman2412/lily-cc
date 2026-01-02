@@ -39,7 +39,7 @@ static void cg_isel(backend_profile_t *profile, ir_code_t *code) {
         if (cur->type != IR_INSN_MACHINE && cur->type != IR_INSN_COMBINATOR) {
             ir_insn_t *res = profile->backend->isel(profile, cur);
             if (!res) {
-                fprintf(stderr, "[BUG] Backend cannot select an instruction for `");
+                fprintf(stderr, "BUG: Backend cannot select an instruction for `");
                 ir_insn_serialize(cur, profile, stderr);
                 fprintf(stderr, "`\n");
                 set_t vars = PTR_SET_EMPTY;

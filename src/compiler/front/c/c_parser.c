@@ -123,7 +123,8 @@ static bool is_operand_tkn(token_t tkn) {
                 case C_AST_EXPR_SUFFIX:
                 case C_AST_EXPR_CALL:
                 case C_AST_EXPR_INDEX:
-                case C_AST_EXPRS: return true;
+                case C_AST_EXPRS:
+                case C_AST_COMPLITERAL: return true;
                 default: return false;
             }
         default: return false;
@@ -361,6 +362,8 @@ token_t c_parse_comp_init(c_parser_t *ctx) {
         // Expect `,` or `}`.
         peek = tkn_peek(ctx->tkn_ctx);
         if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_RCURL) {
+            rcurl     = tkn_next(ctx->tkn_ctx);
+            has_rcurl = true;
             break;
         } else if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_COMMA) {
             cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ,");
@@ -373,9 +376,11 @@ token_t c_parse_comp_init(c_parser_t *ctx) {
     token_t tmp = ast_from(garbage ? C_AST_GARBAGE : C_AST_COMPINIT, len, arr);
     if (has_rcurl) {
         tmp.pos = pos_including(lcurl.pos, rcurl.pos);
+        tkn_delete(rcurl);
     } else {
         tmp.pos = pos_including(lcurl.pos, tmp.pos);
     }
+    tkn_delete(lcurl);
     return tmp;
 }
 
@@ -994,14 +999,14 @@ token_t c_parse_enum_spec(c_parser_t *ctx) {
 // Parse a switch statement.
 static token_t c_parse_switch(c_parser_t *ctx) {
     (void)ctx;
-    fprintf(stderr, "[TODO] Create C switch statement parser\n");
+    fprintf(stderr, "TODO: Create C switch statement parser\n");
     abort();
 }
 
 // Parse a do...while statement.
 static token_t c_parse_do_while(c_parser_t *ctx) {
     (void)ctx;
-    fprintf(stderr, "[TODO] Create do...while statement parser\n");
+    fprintf(stderr, "TODO: Create do...while statement parser\n");
     abort();
 }
 
@@ -1137,7 +1142,7 @@ static token_t c_parse_if(c_parser_t *ctx) {
 // Parse a goto statement.
 static token_t c_parse_goto(c_parser_t *ctx) {
     (void)ctx;
-    fprintf(stderr, "[TODO] Create goto statement parser\n");
+    fprintf(stderr, "TODO: Create goto statement parser\n");
     abort();
 }
 

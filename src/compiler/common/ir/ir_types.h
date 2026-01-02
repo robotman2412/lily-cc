@@ -22,8 +22,25 @@ typedef enum __attribute__((packed)) {
     IR_N_PRIM,
 } ir_prim_t;
 
+// Whether a primitive is of integer type.
+static inline bool ir_prim_is_integer(ir_prim_t prim) {
+    switch (prim) {
+        case IR_PRIM_s8:
+        case IR_PRIM_s16:
+        case IR_PRIM_s32:
+        case IR_PRIM_s64:
+        case IR_PRIM_s128:
+        case IR_PRIM_u8:
+        case IR_PRIM_u16:
+        case IR_PRIM_u32:
+        case IR_PRIM_u64:
+        case IR_PRIM_u128: return true;
+        default: return false;
+    }
+}
+
 // Whether a primitive is signed.
-static inline ir_prim_t ir_prim_is_signed(ir_prim_t prim) {
+static inline bool ir_prim_is_signed(ir_prim_t prim) {
     switch (prim) {
         case IR_PRIM_s8:
         case IR_PRIM_s16:
@@ -42,6 +59,18 @@ static inline ir_prim_t ir_prim_as_unsigned(ir_prim_t prim) {
         case IR_PRIM_s32: return IR_PRIM_u32;
         case IR_PRIM_s64: return IR_PRIM_u64;
         case IR_PRIM_s128: return IR_PRIM_u128;
+        default: return prim;
+    }
+}
+
+// Get unsigned counterpart of primitive.
+static inline ir_prim_t ir_prim_as_signed(ir_prim_t prim) {
+    switch (prim) {
+        case IR_PRIM_u8: return IR_PRIM_s8;
+        case IR_PRIM_u16: return IR_PRIM_s16;
+        case IR_PRIM_u32: return IR_PRIM_s32;
+        case IR_PRIM_u64: return IR_PRIM_s64;
+        case IR_PRIM_u128: return IR_PRIM_s128;
         default: return prim;
     }
 }
@@ -91,6 +120,12 @@ typedef enum __attribute__((packed)) {
     IR_INSN_CALL,
     // Return from function the specified operands as per ABI.
     IR_INSN_RETURN,
+    // The memory copying intrinsic.
+    // Operands: dest. memory location, src. memory location, size in bytes.
+    IR_INSN_MEMCPY,
+    // The memory filling intrinsic.
+    // Operands: dest. memory location, value (must be u8 or s8), size in bytes.
+    IR_INSN_MEMSET,
     // Machine instructions; target architecture-dependent.
     IR_INSN_MACHINE,
 } ir_insn_type_t;

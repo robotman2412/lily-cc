@@ -36,10 +36,10 @@ void ir_const_serialize(ir_const_t iconst, FILE *to) {
         fputs(iconst.constl ? "true" : "false", to);
 
     } else if (iconst.prim_type == IR_PRIM_f32) {
-        fprintf(stderr, "[TODO] ir_const_serialize for f32\n");
+        fprintf(stderr, "TODO: ir_const_serialize for f32\n");
         abort();
     } else if (iconst.prim_type == IR_PRIM_f64) {
-        fprintf(stderr, "[TODO] ir_const_serialize for f64\n");
+        fprintf(stderr, "TODO: ir_const_serialize for f64\n");
         abort();
     } else {
         fputs(ir_prim_names[iconst.prim_type], to);
@@ -145,6 +145,8 @@ void ir_insn_serialize(ir_insn_t *insn, backend_profile_t const *profile_opt, FI
         case IR_INSN_COMBINATOR: fputs("comb", to); break;
         case IR_INSN_CALL: fputs("call", to); break;
         case IR_INSN_RETURN: fputs("return", to); break;
+        case IR_INSN_MEMCPY: fputs("memcpy", to); break;
+        case IR_INSN_MEMSET: fputs("memset", to); break;
         case IR_INSN_MACHINE: fprintf(to, "mach %s", insn->prototype->name); break;
     }
 
@@ -189,7 +191,7 @@ void ir_code_serialize(ir_code_t *code, backend_profile_t const *profile_opt, FI
 // Serialize an IR function.
 void ir_func_serialize(ir_func_t *func, backend_profile_t const *profile_opt, FILE *to) {
     if (!func->entry) {
-        fprintf(stderr, "[BUG] IR function <%s> has no entrypoint\n", func->name);
+        fprintf(stderr, "BUG: IR function <%s> has no entrypoint\n", func->name);
         abort();
     }
 
@@ -338,7 +340,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                 ir_operand_t *operands     = strong_calloc(operands_len, sizeof(ir_operand_t));
                 for (size_t i = 0; i < operands_len; i++) {
                     if (stmt->params[1].subtype == IR_KEYW_comb) {
-                        fprintf(stderr, "[TODO] Deserialize IR combinator\n");
+                        fprintf(stderr, "TODO: Deserialize IR combinator\n");
                         abort();
                     }
                     token_t const *operand_ast = &stmt->params[2].params[i];
@@ -449,6 +451,13 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                             insn_ok = false;
                         }
                         break;
+                    case IR_KEYW_memcpy:
+                    case IR_KEYW_memset:
+                        if (operands_len != 3) {
+                            cctx_diagnostic(from->cctx, stmt->params[1].pos, DIAG_ERR, "Instruction takes 3 operands");
+                            insn_ok = false;
+                        }
+                        break;
                 }
 
                 // Assert return count.
@@ -469,6 +478,8 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     case IR_KEYW_return:
                     case IR_KEYW_store:
                     case IR_KEYW_branch:
+                    case IR_KEYW_memcpy:
+                    case IR_KEYW_memset:
                         if (returns_len != 0) {
                             cctx_diagnostic(from->cctx, stmt->params[1].pos, DIAG_ERR, "Instruction returns nothing");
                             insn_ok = false;
@@ -530,6 +541,44 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                             }
                         }
                         // That it definitely is a memory operand is asserted below.
+                        goto operand0_mem;
+
+                    case IR_KEYW_memset:
+                        // Second operand must be either u8 or s8.
+                        if (ir_prim_as_unsigned(ir_operand_prim(operands[2])) != IR_PRIM_u8) {
+                            cctx_diagnostic(
+                                from->cctx,
+                                stmt->params[2].params[2].pos,
+                                DIAG_ERR,
+                                "Operand must be of u8 or s8 type"
+                            );
+                            insn_ok = false;
+                        }
+                        goto operand1_mem;
+
+                    case IR_KEYW_memcpy:
+                        // Second operand must be a memory operand.
+                        if (operands[1].type != IR_OPERAND_TYPE_MEM) {
+                            cctx_diagnostic(
+                                from->cctx,
+                                stmt->params[2].params[1].pos,
+                                DIAG_ERR,
+                                "Operand must be a memory operand"
+                            );
+                            insn_ok = false;
+                        }
+
+                    operand1_mem:
+                        // Third operand must be of integer type.
+                        if (!ir_prim_is_integer(ir_operand_prim(operands[2]))) {
+                            cctx_diagnostic(
+                                from->cctx,
+                                stmt->params[2].params[2].pos,
+                                DIAG_ERR,
+                                "Operand must be of integer type"
+                            );
+                            insn_ok = false;
+                        }
                         goto operand0_mem;
 
                     case IR_KEYW_load:
@@ -653,7 +702,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                         default: UNREACHABLE();
 
                         case IR_KEYW_comb:
-                            fprintf(stderr, "[TODO] Deserialize combinator instruction\n");
+                            fprintf(stderr, "TODO: Deserialize combinator instruction\n");
                             abort();
                             break;
 
@@ -670,7 +719,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                         case IR_KEYW_lea: ir_add_lea(IR_APPEND(cur_code), returns[0], operands[0].mem); break;
 
                         case IR_KEYW_call:
-                            fprintf(stderr, "[TODO] Deserialize call instruction\n");
+                            fprintf(stderr, "TODO: Deserialize call instruction\n");
                             abort();
                             break;
 
@@ -695,6 +744,14 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                                 operands[0],
                                 operands[1]
                             );
+                            break;
+
+                        case IR_KEYW_memcpy:
+                            ir_add_memcpy(IR_APPEND(cur_code), operands[0].mem, operands[1].mem, operands[2]);
+                            break;
+
+                        case IR_KEYW_memset:
+                            ir_add_memset(IR_APPEND(cur_code), operands[0].mem, operands[1], operands[2]);
                             break;
                     }
                 }

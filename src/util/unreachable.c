@@ -11,7 +11,7 @@
 #ifndef NDEBUG
 void UNREACHABLE(char const *file, int line) {
     fflush(stdout);
-    fprintf(stderr, "[BUG] %s:%d: unreachable code\n", file, line);
+    fprintf(stderr, "BUG: %s:%d: unreachable code\n", file, line);
     abort();
 }
 #endif

@@ -48,7 +48,7 @@ token_t tkn_peek(tokenizer_t *tkn_ctx) {
 // Depth 0 is one ahead, depth 1 is two ahead, etc.
 token_t tkn_peek_n(tokenizer_t *tkn_ctx, int depth) {
     if (depth > TKN_PEEK_MAX) {
-        fprintf(stderr, "[BUG] tkn_peek_n() with depth too high\n");
+        fprintf(stderr, "BUG: tkn_peek_n() with depth too high\n");
         abort();
     }
     while (tkn_ctx->tkn_buffer_len <= depth) {
@@ -65,7 +65,7 @@ token_t tkn_peek_n(tokenizer_t *tkn_ctx, int depth) {
 // Will abort if there is already a token there.
 void tkn_unget(tokenizer_t *tkn_ctx, token_t token) {
     if (tkn_ctx->tkn_buffer_len > TKN_PEEK_MAX) {
-        fprintf(stderr, "[BUG] tkn_unget() with buffer already full\n");
+        fprintf(stderr, "BUG: tkn_unget() with buffer already full\n");
         abort();
     }
     tkn_ctx->tkn_buffer[tkn_ctx->tkn_buffer_len++] = token;

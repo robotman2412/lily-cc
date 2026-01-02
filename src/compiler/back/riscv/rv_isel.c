@@ -22,7 +22,7 @@ static ir_insn_t *rv_isel_rr_mov(ir_insn_t *insn) {
     ir_operand_t const operand = insn->operands[0];
     ir_insn_t         *new_node;
     if (ir_operand_prim(operand) == IR_PRIM_f32 || ir_operand_prim(operand) == IR_PRIM_f64) {
-        fprintf(stderr, "[TODO] Emit register copy for FP\n");
+        fprintf(stderr, "TODO: Emit register copy for FP\n");
         return NULL;
     } else {
         new_node = ir_add_mach_insn(
@@ -46,10 +46,10 @@ static ir_insn_t *rv_isel_const_mov(ir_insn_t *insn) {
     ir_const_t const iconst = ir_trim_const(insn->operands[0].iconst);
 
     if (iconst.prim_type == IR_PRIM_f32 || iconst.prim_type == IR_PRIM_f64) {
-        fprintf(stderr, "[TODO] Emit constant for FP\n");
+        fprintf(stderr, "TODO: Emit constant for FP\n");
         return NULL;
     } else if (iconst.prim_type >= IR_PRIM_s64 && iconst.prim_type <= IR_PRIM_u128) {
-        fprintf(stderr, "[TODO] Emit constant for 64-bit or larger\n");
+        fprintf(stderr, "TODO: Emit constant for 64-bit or larger\n");
         return NULL;
     }
 

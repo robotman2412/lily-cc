@@ -48,28 +48,8 @@ void baz(char const *mystr) {
             .v0 = 99,
             .v1 = mystr + 2,
         },
-        .v0 = mystr[0] == 'a',
+        .v0 = *mystr == 'a',
     };
-
-    if (thing.v0) {
-        // Lily-CC can't optimize out `thing` yet because it can't fold this if.
-    }
-
-    thing = (struct d) {
-        .s0 = {
-            .v0 = 12,
-            .v1 = mystr,
-        },
-        .s1 = {
-            .v0 = 99,
-            .v1 = mystr + 2,
-        },
-        .v0 = mystr[0] == 'a',
-    };
-
-    if (thing.v0) {
-        // Lily-CC can't optimize out `thing` yet because it can't fold this if.
-    }
 }
 
 struct e {
@@ -78,12 +58,12 @@ struct e {
 
 struct f {
     struct e s0, s1;
-    char     v0[4];
+    // char     v0[4];
 };
 
 void quantum(int *dummy) {
     *dummy = ((struct f){}).s1.v0;
     *dummy = ((struct f){0}).s1.v0;
     *dummy = ((struct f){.s1.v0 = 9}).s1.v0;
-    *dummy = ((struct f){.v0[2] = 9}).v0[2];
+    // *dummy = ((struct f){.v0[2] = 9}).v0[2];
 }

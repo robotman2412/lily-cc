@@ -184,7 +184,9 @@ token_t ir_parse_insn(tokenizer_t *from) {
             case IR_KEYW_store:
             case IR_KEYW_lea:
             case IR_KEYW_call:
-            case IR_KEYW_return: break; // Valid instruction mnemonic.
+            case IR_KEYW_return:
+            case IR_KEYW_memcpy:
+            case IR_KEYW_memset: break; // Valid instruction mnemonic.
         }
     }
     pos1 = insn.pos;

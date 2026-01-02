@@ -3,9 +3,9 @@
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
-#include "c_compiler.h"
 #include "c_std.h"
 #include "c_tokenizer.h"
+#include "c_types.h"
 #include "testcase.h"
 
 

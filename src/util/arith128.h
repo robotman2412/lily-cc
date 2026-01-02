@@ -16,7 +16,9 @@
 
 #if defined(__SIZEOF_INT128__) && !defined(LILY_SOFT_INT128)
 // Structure that stores 128 bits of data.
-typedef struct {
+typedef struct __attribute__((packed, aligned(8))) {
+    // The struct overrides the alignment because the normal 16 is not needed.
+    // This allows other structs that depend on this one to be smaller.
     __uint128_t val;
 } i128_t;
 

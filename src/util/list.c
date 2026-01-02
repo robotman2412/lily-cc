@@ -20,7 +20,7 @@ __attribute__((always_inline)) static inline void consistency_check(dlist_t cons
     while (node) {
         count++;
         if (count > list->len) {
-            fprintf(stderr, "[BUG] List length mismatch: %zu vs %zu\n", count, list->len);
+            fprintf(stderr, "BUG: List length mismatch: %zu vs %zu\n", count, list->len);
             abort();
         }
         node = node->next;
@@ -32,7 +32,7 @@ __attribute__((always_inline)) static inline void consistency_check(dlist_t cons
     while (node) {
         count++;
         if (count > list->len) {
-            fprintf(stderr, "[BUG] List length mismatch: %zu vs %zu\n", count, list->len);
+            fprintf(stderr, "BUG: List length mismatch: %zu vs %zu\n", count, list->len);
             abort();
         }
         node = node->previous;

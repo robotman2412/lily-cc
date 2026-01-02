@@ -16,7 +16,7 @@
 // Count how many bits are needed to represent the value.
 int ir_count_bits(ir_const_t iconst, bool allow_s, bool allow_u) {
     if (iconst.prim_type == IR_PRIM_f32 || iconst.prim_type == IR_PRIM_f64) {
-        printf("[BUG] ir_count_bits with float value\n");
+        printf("BUG: ir_count_bits with float value\n");
         abort();
     }
 
@@ -46,7 +46,7 @@ int ir_count_bits(ir_const_t iconst, bool allow_s, bool allow_u) {
 // Count number of leading zeroes. Interprets all values as 128-bit.
 int ir_const_clz(ir_const_t value) {
     if (value.prim_type == IR_PRIM_f32 || value.prim_type == IR_PRIM_f64) {
-        printf("[BUG] ir_const_clz with float value\n");
+        printf("BUG: ir_const_clz with float value\n");
         abort();
     }
 
@@ -60,7 +60,7 @@ int ir_const_clz(ir_const_t value) {
 // Count number of trailing zeroes.
 int ir_const_ctz(ir_const_t value) {
     if (value.prim_type == IR_PRIM_f32 || value.prim_type == IR_PRIM_f64) {
-        printf("[BUG] ir_const_ctz with float value\n");
+        printf("BUG: ir_const_ctz with float value\n");
         abort();
     }
 
@@ -74,7 +74,7 @@ int ir_const_ctz(ir_const_t value) {
 // Count number of set bits.
 int ir_const_popcnt(ir_const_t value) {
     if (value.prim_type == IR_PRIM_f32 || value.prim_type == IR_PRIM_f64) {
-        printf("[BUG] ir_const_popcnt with float value\n");
+        printf("BUG: ir_const_popcnt with float value\n");
         abort();
     }
     // Make it unsigned so the number isn't sign-extended on truncate.
@@ -250,7 +250,7 @@ ir_const_t ir_cast(ir_prim_t type, ir_const_t value) {
 // Calculate the result of an expr1.
 ir_const_t ir_calc1(ir_op1_type_t oper, ir_const_t value) {
     if (oper == IR_OP1_mov) {
-        printf("[BUG] ir_calc1 on with IR_OP1_mov is invalid\n");
+        printf("BUG: ir_calc1 on with IR_OP1_mov is invalid\n");
         abort();
     } else if (oper == IR_OP1_snez || oper == IR_OP1_seqz) {
         bool eqz;
@@ -275,7 +275,7 @@ ir_const_t ir_calc1(ir_op1_type_t oper, ir_const_t value) {
         if (value.prim_type == IR_PRIM_bool) {
             value.constl ^= 1;
         } else if (value.prim_type == IR_PRIM_f32 || value.prim_type == IR_PRIM_f64) {
-            fprintf(stderr, "[BUG] Cannot do bitwise negation on f32 or f64\n");
+            fprintf(stderr, "BUG: Cannot do bitwise negation on f32 or f64\n");
             abort();
         } else {
             value.constl ^= -1;
@@ -284,7 +284,7 @@ ir_const_t ir_calc1(ir_op1_type_t oper, ir_const_t value) {
         return value;
     } else if (oper == IR_OP1_neg) {
         if (value.prim_type == IR_PRIM_bool) {
-            fprintf(stderr, "[BUG] Cannot do arithmetic negation on bool\n");
+            fprintf(stderr, "BUG: Cannot do arithmetic negation on bool\n");
             abort();
         } else if (value.prim_type == IR_PRIM_f64) {
             value.constf64 = -value.constf64;
@@ -300,7 +300,7 @@ ir_const_t ir_calc1(ir_op1_type_t oper, ir_const_t value) {
         }
         return value;
     } else {
-        fprintf(stderr, "[BUG] Invalid op1 type\n");
+        fprintf(stderr, "BUG: Invalid op1 type\n");
         abort();
     }
 }
@@ -326,7 +326,7 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
             case IR_OP2_mul: out.constf32 = lhs.constf32 * rhs.constf32; break;
             case IR_OP2_div: out.constf32 = lhs.constf32 / rhs.constf32; break;
             default:
-                fprintf(stderr, "[BUG] Invalid op2 type for f32: %s\n", ir_op2_names[oper]);
+                fprintf(stderr, "BUG: Invalid op2 type for f32: %s\n", ir_op2_names[oper]);
                 abort();
                 break;
         }
@@ -344,7 +344,7 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
             case IR_OP2_mul: out.constf64 = lhs.constf64 * rhs.constf64; break;
             case IR_OP2_div: out.constf64 = lhs.constf64 / rhs.constf64; break;
             default:
-                fprintf(stderr, "[BUG] Invalid op2 type for f64: %s\n", ir_op2_names[oper]);
+                fprintf(stderr, "BUG: Invalid op2 type for f64: %s\n", ir_op2_names[oper]);
                 abort();
                 break;
         }
@@ -359,7 +359,7 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
             case IR_OP2_bor: out.constl = 1 & (lhs.constl | rhs.constl); break;
             case IR_OP2_bxor: out.constl = 1 & (lhs.constl ^ rhs.constl); break;
             default:
-                fprintf(stderr, "[BUG] Invalid op2 type for bool: %s\n", ir_op2_names[oper]);
+                fprintf(stderr, "BUG: Invalid op2 type for bool: %s\n", ir_op2_names[oper]);
                 abort();
                 break;
         }

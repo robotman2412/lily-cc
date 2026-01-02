@@ -52,6 +52,9 @@ rc_t rc_share(rc_t rc) {
 
 // Delete a share from a refcount pointer.
 void rc_delete(rc_t rc) {
+    if (rc == NULL) {
+        return;
+    }
     int prev = atomic_fetch_sub(&rc->refcount, 1);
     if (prev <= 0) {
         rc_abort(rc, prev);

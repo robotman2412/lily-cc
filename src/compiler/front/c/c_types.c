@@ -523,32 +523,25 @@ rc_t c_compile_decl(
             next_type->primitive = C_COMP_POINTER;
             next_type->inner     = cur;
 
-            if (decl->params_len > 1 && decl->params[1].type == TOKENTYPE_AST
-                && decl->params[1].subtype == C_AST_SPEC_QUAL_LIST) {
-                // Add specifiers to pointer.
-                token_t const *list = &decl->params[1];
-                for (size_t i = 0; i < list->params_len; i++) {
-                    if (list->params[i].subtype == C_KEYW_volatile) {
-                        next_type->is_volatile = true;
-                    } else if (list->params[i].subtype == C_KEYW_const) {
-                        next_type->is_const = true;
-                    } else if (list->params[i].subtype == C_KEYW__Atomic) {
-                        next_type->is_atomic = true;
-                    } else if (list->params[i].subtype == C_KEYW_restrict) {
-                        next_type->is_restrict = true;
-                    }
-                }
+            assert(decl->params_len == 2 || decl->params_len == 3);
 
-                if (decl->params_len > 2) {
-                    // Inner node.
-                    decl = &decl->params[2];
-                } else {
-                    // No inner node.
-                    return next;
+            // Add specifiers to pointer.
+            token_t const *list = &decl->params[1];
+            for (size_t i = 0; i < list->params_len; i++) {
+                if (list->params[i].subtype == C_KEYW_volatile) {
+                    next_type->is_volatile = true;
+                } else if (list->params[i].subtype == C_KEYW_const) {
+                    next_type->is_const = true;
+                } else if (list->params[i].subtype == C_KEYW__Atomic) {
+                    next_type->is_atomic = true;
+                } else if (list->params[i].subtype == C_KEYW_restrict) {
+                    next_type->is_restrict = true;
                 }
-            } else if (decl->params_len > 1) {
+            }
+
+            if (decl->params_len == 3) {
                 // Inner node.
-                decl = &decl->params[1];
+                decl = &decl->params[2];
             } else {
                 // No inner node.
                 return next;

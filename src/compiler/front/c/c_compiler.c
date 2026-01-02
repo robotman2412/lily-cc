@@ -1125,9 +1125,9 @@ static inline c_compile_expr_t
             );
         } else {
             ir_var_t *mul = ir_var_create(code->func, uptr_prim, NULL);
-            ir_add_expr2(IR_APPEND(code), mul, IR_OP2_sub, rhs_ir, IR_OPERAND_CONST(usize_iconst));
+            ir_add_expr2(IR_APPEND(code), mul, IR_OP2_mul, rhs_ir, IR_OPERAND_CONST(usize_iconst));
             ir_var_t *sub = ir_var_create(code->func, uptr_prim, NULL);
-            ir_add_expr2(IR_APPEND(code), sub, IR_OP2_div, lhs_ir, IR_OPERAND_VAR(mul));
+            ir_add_expr2(IR_APPEND(code), sub, IR_OP2_sub, lhs_ir, IR_OPERAND_VAR(mul));
             value = IR_OPERAND_VAR(sub);
         }
 
@@ -1141,10 +1141,10 @@ static inline c_compile_expr_t
                 );
             } else {
                 ir_var_t *mul = ir_var_create(code->func, uptr_prim, NULL);
-                ir_add_expr2(IR_APPEND(code), mul, IR_OP2_add, rhs_ir, IR_OPERAND_CONST(usize_iconst));
-                ir_var_t *sub = ir_var_create(code->func, uptr_prim, NULL);
-                ir_add_expr2(IR_APPEND(code), sub, IR_OP2_div, lhs_ir, IR_OPERAND_VAR(mul));
-                value = IR_OPERAND_VAR(sub);
+                ir_add_expr2(IR_APPEND(code), mul, IR_OP2_mul, rhs_ir, IR_OPERAND_CONST(usize_iconst));
+                ir_var_t *add = ir_var_create(code->func, uptr_prim, NULL);
+                ir_add_expr2(IR_APPEND(code), add, IR_OP2_add, lhs_ir, IR_OPERAND_VAR(mul));
+                value = IR_OPERAND_VAR(add);
             }
         } else {
             type_rc = rc_share(rhs.c_type);
@@ -1154,10 +1154,10 @@ static inline c_compile_expr_t
                 );
             } else {
                 ir_var_t *mul = ir_var_create(code->func, uptr_prim, NULL);
-                ir_add_expr2(IR_APPEND(code), mul, IR_OP2_add, lhs_ir, IR_OPERAND_CONST(usize_iconst));
-                ir_var_t *sub = ir_var_create(code->func, uptr_prim, NULL);
-                ir_add_expr2(IR_APPEND(code), sub, IR_OP2_div, rhs_ir, IR_OPERAND_VAR(mul));
-                value = IR_OPERAND_VAR(sub);
+                ir_add_expr2(IR_APPEND(code), mul, IR_OP2_mul, lhs_ir, IR_OPERAND_CONST(usize_iconst));
+                ir_var_t *add = ir_var_create(code->func, uptr_prim, NULL);
+                ir_add_expr2(IR_APPEND(code), add, IR_OP2_add, rhs_ir, IR_OPERAND_VAR(mul));
+                value = IR_OPERAND_VAR(add);
             }
         }
 

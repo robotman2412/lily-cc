@@ -727,7 +727,7 @@ static token_t c_parse_decl(c_parser_t *ctx, bool allows_name, bool is_typedef) 
     }
 
     // Something after the pointer; parse the ddecl and add it.
-    ast_append_param(&pointer, c_parse_ddecl(ctx, allows_name, is_typedef));
+    ast_append_param(&pointer, c_parse_decl(ctx, allows_name, is_typedef));
     return pointer;
 }
 
@@ -751,13 +751,7 @@ static token_t c_parse_type_qual_list(c_parser_t *ctx) {
 static token_t c_parse_pointer(c_parser_t *ctx) {
     token_t ptr  = tkn_next(ctx->tkn_ctx);
     token_t list = c_parse_type_qual_list(ctx);
-    token_t peek = tkn_peek(ctx->tkn_ctx);
-
-    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_MUL) {
-        return ast_from_va(C_AST_TYPE_PTR_TO, 3, ptr, list, c_parse_pointer(ctx));
-    } else {
-        return ast_from_va(C_AST_TYPE_PTR_TO, 2, ptr, list);
-    }
+    return ast_from_va(C_AST_TYPE_PTR_TO, 2, ptr, list);
 }
 
 // Parse one or more C expressions separated by commas or a type.

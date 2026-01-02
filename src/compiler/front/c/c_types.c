@@ -16,6 +16,7 @@
 #include "strong_malloc.h"
 #include "unreachable.h"
 
+#include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -507,15 +508,14 @@ rc_t c_compile_decl(
             next_type->primitive = C_COMP_ARRAY;
             next_type->inner     = cur;
 
-            if (decl->params_len) {
-                // Inner node.
-                decl = &decl->params[0];
+            if (decl->params_len == 2) {
+                // Has size expression.
             } else {
-                // No inner node.
-                return next;
+                assert(decl->params_len == 1);
             }
 
-            cur = next;
+            decl = &decl->params[0];
+            cur  = next;
 
         } else if (decl->type == TOKENTYPE_AST && decl->subtype == C_AST_TYPE_PTR_TO) {
             rc_t      next       = rc_new_strong(strong_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);

@@ -170,8 +170,12 @@ struct c_type {
     bool     is_restrict;
     // TODO: Determine how to store array length in types.
     union {
-        // Inner type of pointers and arrays.
-        rc_t inner;
+        struct {
+            // Inner type of pointers and arrays.
+            rc_t    inner;
+            // Array length; set to -1 if undetermined.
+            int64_t length;
+        };
         // Compound type of enums, structs and unions.
         rc_t comp;
         struct {

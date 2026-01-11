@@ -8,6 +8,7 @@
 #include "arrays.h"
 #include "compiler.h"
 #include "ir_tokenizer.h"
+#include "ir_types.h"
 #include "strong_malloc.h"
 #include "tokenizer.h"
 
@@ -252,18 +253,28 @@ token_t ir_parse_code(tokenizer_t *from) {
 
 // Parse an argument definition.
 token_t ir_parse_arg(tokenizer_t *from) {
-    token_t const keyw = tkn_next(from);
+    token_t keyw = tkn_next(from);
     if (keyw.type != TOKENTYPE_KEYWORD || keyw.subtype != IR_KEYW_arg) {
         cctx_diagnostic(from->cctx, keyw.pos, DIAG_ERR, "Expected `arg`");
         return ast_from_va(IR_AST_GARBAGE, 1, keyw);
     }
     tkn_delete(keyw);
-    token_t ident = tkn_next(from);
-    if (ident.type != TOKENTYPE_IDENT || ident.subtype != IR_IDENT_LOCAL) {
-        cctx_diagnostic(from->cctx, ident.pos, DIAG_ERR, "Expected %%identifier");
-        return ast_from_va(IR_AST_GARBAGE, 1, ident);
+    token_t ident_struct = tkn_next(from);
+    if (ident_struct.type == TOKENTYPE_KEYWORD && ident_struct.subtype == IR_KEYW_struct) {
+        token_t ident = tkn_next(from);
+        if (ident.type != TOKENTYPE_IDENT || ident.subtype != IR_IDENT_LOCAL) {
+            cctx_diagnostic(from->cctx, keyw.pos, DIAG_ERR, "Expected %%identifier");
+            return ast_from_va(IR_AST_GARBAGE, 2, ident_struct, ident);
+        }
+        return ast_from_va(IR_AST_STRUCTARG, 1, ident);
+
+    } else {
+        if (ident_struct.type != TOKENTYPE_IDENT || ident_struct.subtype != IR_IDENT_LOCAL) {
+            cctx_diagnostic(from->cctx, ident_struct.pos, DIAG_ERR, "Expected `struct` or integer constant");
+            return ast_from_va(IR_AST_GARBAGE, 1, ident_struct);
+        }
+        return ast_from_va(IR_AST_ARG, 1, ident_struct);
     }
-    return ast_from_va(IR_AST_ARG, 1, ident);
 }
 
 // Parse an entrypoint definition.
@@ -382,6 +393,15 @@ token_t ir_parse_operand(tokenizer_t *from) {
         || (peek.type == TOKENTYPE_OTHER && peek.subtype == IR_TKN_UNDEF)    // Undefined operand.
     ) {
         return tkn_next(from);
+
+    } else if (peek.type == TOKENTYPE_KEYWORD && peek.subtype == IR_KEYW_struct) {
+        tkn_delete(tkn_next(from));
+        token_t tmp = tkn_next(from);
+        if (tmp.type != TOKENTYPE_IDENT || tmp.subtype != IR_IDENT_LOCAL) {
+            cctx_diagnostic(from->cctx, tmp.pos, DIAG_ERR, "Expected a local identifier");
+            return ast_from_va(IR_AST_GARBAGE, 1, tmp);
+        }
+        return ast_from_va(IR_AST_STRUCTOPERAND, 1, tmp);
 
     } else if (peek.type == TOKENTYPE_OTHER && peek.subtype == IR_TKN_LPAR) {
         // Memory operand.

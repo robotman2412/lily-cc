@@ -42,7 +42,7 @@ typedef struct {
 
 
 // Create a new IR function.
-// Function argument types are IR_PRIM_S32 by default.
+// Function argument types are IR_PRIM_s32 by default.
 ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_len);
 // Create an IR function without operands nor code.
 ir_func_t *ir_func_create_empty(char const *name);
@@ -78,7 +78,7 @@ void ir_insn_delete(ir_insn_t *insn);
 // Set an IR instruction's operand by index.
 void ir_insn_set_operand(ir_insn_t *insn, size_t index, ir_operand_t operand);
 // Set an IR instruction's return variable by index.
-void ir_insn_set_return(ir_insn_t *insn, size_t index, ir_var_t *var);
+void ir_insn_set_return(ir_insn_t *insn, size_t index, ir_retval_t dest);
 
 
 // Add a combinator function to a code block.
@@ -139,7 +139,7 @@ ir_insn_t *ir_add_call(
     ir_insnloc_t        from,
     ir_memref_t         to,
     size_t              returns_len,
-    ir_var_t          **returns,
+    ir_retval_t const  *returns,
     size_t              params_len,
     ir_operand_t const *params
 );
@@ -163,8 +163,8 @@ ir_insn_t *ir_add_mach_insn(
 
 // If the instruction stores to a variable, returns the variable written to.
 static inline ir_var_t *ir_insn_get_dest(ir_insn_t const *insn) {
-    if (insn->returns_len == 1) {
-        return insn->returns[0];
+    if (insn->returns_len == 1 && !insn->returns[0].is_struct) {
+        return insn->returns[0].dest_var;
     } else {
         return NULL;
     }

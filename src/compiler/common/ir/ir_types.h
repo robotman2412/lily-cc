@@ -140,6 +140,8 @@ typedef enum __attribute__((packed)) {
     IR_OPERAND_TYPE_VAR,
     // Memory location.
     IR_OPERAND_TYPE_MEM,
+    // Stack frame to be used as a struct parameter or return value.
+    IR_OPERAND_TYPE_STRUCT,
     // A specific register.
     IR_OPERAND_TYPE_REG,
 } ir_operand_type_t;
@@ -160,9 +162,20 @@ typedef enum __attribute__((packed)) {
     IR_MEMBASE_REG,
 } ir_membase_t;
 
+// Possible representations of a function argument.
+typedef enum __attribute__((packed)) {
+    // Passed in IR variable.
+    IR_ARG_TYPE_VAR,
+    // Struct passed/copied into some stack frame.
+    IR_ARG_TYPE_STRUCT,
+    // Ignored argument of primitive type.
+    IR_ARG_TYPE_IGNORED,
+} ir_arg_type_t;
 
 // IR stack frame.
 typedef struct ir_frame      ir_frame_t;
+// IR struct value.
+typedef struct ir_struct     ir_struct_t;
 // IR function argument.
 typedef struct ir_arg        ir_arg_t;
 // IR variable.
@@ -175,14 +188,14 @@ typedef struct ir_memref     ir_memref_t;
 typedef struct ir_operand    ir_operand_t;
 // IR combinator code block -> variable map.
 typedef struct ir_combinator ir_combinator_t;
+// IR instruction return value.
+typedef struct ir_retval     ir_retval_t;
 // IR instruction.
 typedef struct ir_insn       ir_insn_t;
 // IR code block.
 typedef struct ir_code       ir_code_t;
 // IR function.
 typedef struct ir_func       ir_func_t;
-
-
 
 // IR stack frame.
 struct ir_frame {
@@ -200,14 +213,14 @@ struct ir_frame {
 
 // IR function argument.
 struct ir_arg {
-    // Whether this argument has a variable.
-    // If it doesn't, it's still counted by the ABI but not used.
-    bool has_var;
+    ir_arg_type_t arg_type;
     union {
-        // Type for variable-less args.
-        ir_prim_t type;
-        // Variable args.
-        ir_var_t *var;
+        // Primitive argument.
+        ir_var_t   *var;
+        // Stack frame to store struct argument into.
+        ir_frame_t *struct_frame;
+        // Ignored primitive argument.
+        ir_prim_t   ignored_prim;
     };
 };
 
@@ -309,6 +322,8 @@ struct ir_memref {
 #define IR_BADDR_CODE(code)   .base_type = IR_MEMBASE_CODE, .base_code = (code)
 // Variable base address for `ir_memref_t` compound initializer.
 #define IR_BADDR_VAR(var)     .base_type = IR_MEMBASE_VAR, .base_var = (var)
+// Register base address for `ir_memref_t` compound initializer.
+#define IR_BADDR_REG(regno)   .base_type = IR_MEMBASE_REG, .base_regno = (regno)
 
 // Create an `ir_memref_t` without offset.
 #define IR_MEMREF(data_type_, ...) ((ir_memref_t){.data_type = (data_type_), __VA_ARGS__})
@@ -325,6 +340,8 @@ struct ir_operand {
         ir_prim_t   undef_type;
         // Variable / register.
         ir_var_t   *var;
+        // Struct stack fromae.
+        ir_frame_t *struct_frame;
         // Memory location.
         ir_memref_t mem;
         // Register index.
@@ -338,8 +355,9 @@ static inline ir_prim_t ir_operand_prim(ir_operand_t oper) {
         case IR_OPERAND_TYPE_CONST: return oper.iconst.prim_type;
         case IR_OPERAND_TYPE_UNDEF: return oper.undef_type;
         case IR_OPERAND_TYPE_VAR: return oper.var->prim_type;
-        case IR_OPERAND_TYPE_MEM: return oper.mem.data_type;
-        case IR_OPERAND_TYPE_REG: break;
+        case IR_OPERAND_TYPE_MEM:
+        case IR_OPERAND_TYPE_STRUCT: return oper.mem.data_type;
+        case IR_OPERAND_TYPE_REG: UNREACHABLE();
     }
     UNREACHABLE();
 }
@@ -352,6 +370,8 @@ static inline ir_prim_t ir_operand_prim(ir_operand_t oper) {
 #define IR_OPERAND_VAR(var_)          ((ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = (var_)})
 // A memory location operand.
 #define IR_OPERAND_MEM(mem_)          ((ir_operand_t){.type = IR_OPERAND_TYPE_MEM, .mem = (mem_)})
+// A struct operand.
+#define IR_OPERAND_STRUCT(frame_)     ((ir_operand_t){.type = IR_OPERAND_TYPE_STRUCT, .struct_frame = (frame_)})
 // A register operand.
 #define IR_OPERAND_REG(regno_)        ((ir_operand_t){.type = IR_OPERAND_TYPE_REG, .regno = (regno_)})
 
@@ -362,6 +382,18 @@ struct ir_combinator {
     // Variable or constant to bind.
     ir_operand_t bind;
 };
+
+// IR instruction return value.
+struct ir_retval {
+    bool is_struct;
+    union {
+        ir_var_t   *dest_var;
+        ir_frame_t *dest_struct;
+    };
+};
+
+#define IR_RETVAL_VAR(dest_var_)       ((ir_retval_t){.is_struct = false, .dest_var = (dest_var_)})
+#define IR_RETVAL_STRUCT(dest_struct_) ((ir_retval_t){.is_struct = true, .dest_struct = (dest_struct_)})
 
 // IR instruction.
 struct ir_insn {
@@ -380,9 +412,9 @@ struct ir_insn {
         ir_op2_type_t op2;
     };
     // Number of return values.
-    size_t     returns_len;
+    size_t       returns_len;
     // Return values.
-    ir_var_t **returns;
+    ir_retval_t *returns;
     union {
         struct {
             // Number of operands.

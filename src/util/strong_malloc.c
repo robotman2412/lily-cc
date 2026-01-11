@@ -27,7 +27,7 @@ void *strong_malloc(size_t size) {
 // Strong calloc; abort if out of memory.
 void *strong_calloc(size_t nmemb, size_t size) {
     void *mem = calloc(nmemb, size);
-    if (!mem && (nmemb || size)) {
+    if (!mem && nmemb && size) {
         fprintf(stderr, "Out of memory (allocating %zux%zu byte%s)", nmemb, size, nmemb == 1 ? "" : "s");
         abort();
     }

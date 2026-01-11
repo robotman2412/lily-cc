@@ -1185,6 +1185,134 @@ static inline c_compile_expr_t
     };
 }
 
+// Compile a function call expression into IR.
+static inline c_compile_expr_t c_compile_expr_call(
+    c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *code, c_scope_t *scope, token_t const *expr
+) {
+    c_compile_expr_t res;
+    bool             errors = false;
+
+    // Compile the function expression.
+    res = c_compile_expr(ctx, prepass, code, scope, &expr->params[0]);
+    if (res.res.value_type == C_VALUE_ERROR) {
+        errors = true;
+    }
+    code           = res.code;
+    c_value_t func = res.res;
+
+    token_t const *params_ast = &expr->params[1];
+    c_value_t     *params     = strong_calloc(params_ast->params_len, sizeof(c_value_t));
+
+    // Compile and collect the argument expressions.
+    for (size_t i = 0; i < params_ast->params_len; i++) {
+        res = c_compile_expr(ctx, prepass, code, scope, &params_ast->params[i]);
+        if (res.res.value_type == C_VALUE_ERROR) {
+            errors = true;
+        }
+        code      = res.code;
+        params[i] = res.res;
+    }
+
+    c_value_t retval = {0};
+    if (!errors) {
+        // Emit IR function call.
+        c_type_t const *func_type = func.c_type->data;
+
+        // Collect arguments into form IR can use.
+        ir_operand_t *operands = strong_calloc(params_ast->params_len, sizeof(ir_operand_t));
+        for (size_t i = 0; i < params_ast->params_len; i++) {
+            c_type_t const *value_type = params[i].c_type->data;
+            if (value_type->primitive == C_COMP_STRUCT || value_type->primitive == C_COMP_UNION) {
+                // Structs/unions passed by stack frame.
+                uint64_t size, align;
+                if (!c_type_get_size(ctx, value_type, &size, &align)) {
+                    UNREACHABLE();
+                }
+                ir_frame_t *frame = ir_frame_create(code->func, size, align, NULL);
+                c_value_memcpy(ctx, code, &params[i], IR_MEMREF(IR_N_PRIM, IR_BADDR_FRAME(frame)));
+
+            } else {
+                // Other types passed by value after array decay.
+                params[i]   = c_array_decay(ctx, code, params[i]);
+                operands[i] = c_value_read(ctx, code, &params[i]);
+            }
+        }
+
+        c_type_t const *signature = NULL;
+        ir_memref_t     call_memref;
+        if (func_type->primitive == C_COMP_FUNCTION) {
+            // Call by symbol.
+            signature   = func_type;
+            call_memref = func.lvalue.memref;
+
+        } else if (func_type->primitive == C_COMP_POINTER
+                   && ((c_type_t *)func_type->inner->data)->primitive == C_COMP_FUNCTION) {
+            // Call by function pointer.
+            signature        = func_type->inner->data;
+            ir_operand_t ptr = c_value_read(ctx, code, &func);
+            switch (ptr.type) {
+                default: UNREACHABLE();
+                case IR_OPERAND_TYPE_VAR: call_memref = IR_MEMREF(IR_N_PRIM, IR_BADDR_VAR(ptr.var)); break;
+                case IR_OPERAND_TYPE_REG: call_memref = IR_MEMREF(IR_N_PRIM, IR_BADDR_REG(ptr.regno)); break;
+                case IR_OPERAND_TYPE_CONST:
+                    call_memref = IR_MEMREF(IR_N_PRIM, IR_BADDR_ABS(), .offset = ptr.iconst.constl);
+                    break;
+            }
+
+        } else {
+            cctx_diagnostic(ctx->cctx, expr->params[0].pos, DIAG_ERR, "Expected function or pointer to function");
+        }
+
+        if (signature) {
+            // Set up return value.
+            c_type_t const *returns = signature->func.return_type->data;
+            retval.c_type           = rc_share(signature->func.return_type);
+            size_t       n_ir_ret;
+            ir_retval_t *ir_ret;
+            if (returns->primitive == C_PRIM_VOID) {
+                n_ir_ret = 0;
+                ir_ret   = NULL;
+            } else if (returns->primitive == C_COMP_STRUCT || returns->primitive == C_COMP_UNION) {
+                n_ir_ret = 1;
+                ir_ret   = malloc(sizeof(ir_retval_t));
+
+                uint64_t size, align;
+                if (!c_type_get_size(ctx, returns, &size, &align)) {
+                    UNREACHABLE();
+                }
+
+                ir_ret->is_struct   = true;
+                ir_ret->dest_struct = ir_frame_create(code->func, size, align, NULL);
+                retval.value_type   = C_RVALUE_STACK;
+                retval.rvalue.frame = ir_ret->dest_struct;
+            } else {
+                n_ir_ret = 1;
+                ir_ret   = malloc(sizeof(ir_retval_t));
+
+                ir_ret->is_struct     = false;
+                ir_ret->dest_var      = ir_var_create(code->func, c_type_to_ir_type(ctx, returns), NULL);
+                retval.value_type     = C_RVALUE_OPERAND;
+                retval.rvalue.operand = IR_OPERAND_VAR(ir_ret->dest_var);
+            }
+
+            // Emit function call.
+            ir_add_call(IR_APPEND(code), call_memref, n_ir_ret, ir_ret, params_ast->params_len, operands);
+
+            free(ir_ret);
+        }
+
+        free(operands);
+    }
+
+    for (size_t i = 0; i < params_ast->params_len; i++) {
+        c_value_destroy(params[i]);
+    }
+    free(params);
+    c_value_destroy(func);
+
+    return (c_compile_expr_t){.code = code, .res = retval};
+}
+
 // Compile an expression into IR.
 c_compile_expr_t
     c_compile_expr(c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *code, c_scope_t *scope, token_t const *expr) {
@@ -1288,84 +1416,7 @@ c_compile_expr_t
             return (c_compile_expr_t){0};
         }
 
-        ir_operand_t funcptr;
-        rc_t         functype_rc;
-        if (expr->params[0].type != TOKENTYPE_IDENT) {
-            // If not an ident, compile function addr expression.
-            c_compile_expr_t res = c_compile_expr(ctx, prepass, code, scope, &expr->params[0]);
-            if (res.res.value_type == C_VALUE_ERROR) {
-                return (c_compile_expr_t){
-                    .code = code,
-                    .res  = (c_value_t){0},
-                };
-            }
-            code        = res.code;
-            funcptr     = c_value_read(ctx, code, &res.res);
-            functype_rc = res.res.c_type;
-        } else {
-            // If it is an ident, it should be a function in the global scope.
-            c_var_t *funcvar = c_scope_lookup(scope, expr->params[0].strval);
-            functype_rc      = funcvar->type;
-        }
-        c_type_t *functype = functype_rc->data;
-
-        if (functype->primitive == C_COMP_POINTER
-            && ((c_type_t *)functype->inner->data)->primitive == C_COMP_FUNCTION) {
-            // Function pointer type.
-            (void)funcptr;
-            printf("TODO: Function pointer types\n");
-            abort();
-        }
-
-        // Validate compatibility.
-        if (functype->primitive != C_COMP_FUNCTION) {
-            cctx_diagnostic(ctx->cctx, expr->params[0].pos, DIAG_ERR, "Expected a function type");
-            rc_delete(functype_rc);
-            return (c_compile_expr_t){
-                .code = code,
-                .res  = (c_value_t){0},
-            };
-        } else if (functype->func.args_len < expr->params_len - 1) {
-            cctx_diagnostic(ctx->cctx, expr->params[functype->func.args_len + 1].pos, DIAG_ERR, "Too many arguments");
-            rc_delete(functype_rc);
-            return (c_compile_expr_t){
-                .code = code,
-                .res  = (c_value_t){0},
-            };
-        } else if (functype->func.args_len > expr->params_len - 1) {
-            cctx_diagnostic(ctx->cctx, expr->pos, DIAG_ERR, "Not enough arguments");
-            rc_delete(functype_rc);
-            return (c_compile_expr_t){
-                .code = code,
-                .res  = (c_value_t){0},
-            };
-        }
-
-        ir_operand_t *params = strong_calloc(sizeof(ir_operand_t), expr->params_len - 1);
-        for (size_t i = 0; i < expr->params_len - 1; i++) {
-            c_compile_expr_t res = c_compile_expr(ctx, prepass, code, scope, &expr->params[i + 1]);
-            if (res.res.value_type == C_VALUE_ERROR) {
-                rc_delete(functype_rc);
-                free(params);
-                return (c_compile_expr_t){
-                    .code = code,
-                    .res  = (c_value_t){0},
-                };
-            }
-            // TODO: Do casting here.
-            // code = res.code;
-            // params[i] = res.res;
-        }
-
-        printf("TODO: Call expressions\n");
-        abort();
-        // rc_t return_type = rc_share(functype->func.return_type);
-        // rc_delete(functype_rc);
-        // return (c_compile_expr_t){
-        //     .code = code,
-        //     .type = return_type,
-        //     .res = (ir_operand_t){0},
-        // };
+        return c_compile_expr_call(ctx, prepass, code, scope, expr);
 
     } else if (expr->subtype == C_AST_COMPLITERAL) {
         // Compile target type.
@@ -1539,7 +1590,8 @@ c_compile_expr_t
                 memref.base_type = IR_MEMBASE_VAR;
                 memref.base_var  = ir_ptr.var;
                 break;
-            case IR_OPERAND_TYPE_MEM: UNREACHABLE();
+            case IR_OPERAND_TYPE_MEM:
+            case IR_OPERAND_TYPE_STRUCT: UNREACHABLE();
             case IR_OPERAND_TYPE_REG:
                 memref.base_type  = IR_MEMBASE_REG;
                 memref.base_regno = ir_ptr.regno;
@@ -1632,6 +1684,7 @@ c_compile_expr_t
                 lvalue.lvalue.memref.base_var  = ptr.var;
                 break;
             case IR_OPERAND_TYPE_MEM:
+            case IR_OPERAND_TYPE_STRUCT:
             case IR_OPERAND_TYPE_REG: UNREACHABLE();
         }
 
@@ -2039,6 +2092,7 @@ c_compile_expr_t
                     memref.base_var  = ptrval.var;
                     break;
                 case IR_OPERAND_TYPE_MEM:
+                case IR_OPERAND_TYPE_STRUCT:
                 case IR_OPERAND_TYPE_REG: UNREACHABLE();
             }
             c_value_t rvalue = {
@@ -2344,18 +2398,34 @@ ir_code_t *
 
     } else if (stmt->subtype == C_AST_RETURN) {
         // Return statement.
-        if (stmt->params_len) {
-            // With value.
-            c_compile_expr_t expr = c_compile_expr(ctx, prepass, code, scope, &stmt->params[0]);
-            code                  = expr.code;
-            if (expr.res.value_type != C_VALUE_ERROR) {
-                ir_add_return1(IR_APPEND(code), c_value_read(ctx, code, &expr.res));
-                c_value_destroy(expr.res);
-            }
-        } else {
-            // Without.
+        if (stmt->params_len == 0) {
             ir_add_return0(IR_APPEND(code));
+            return code;
         }
+
+        // With value.
+        c_compile_expr_t expr = c_compile_expr(ctx, prepass, code, scope, &stmt->params[0]);
+        code                  = expr.code;
+        if (expr.res.value_type == C_VALUE_ERROR) {
+            return code;
+        }
+
+        c_value_t       retval  = expr.res;
+        c_type_t const *rettype = retval.c_type->data;
+
+        if (rettype->primitive == C_COMP_STRUCT || rettype->primitive == C_COMP_UNION) {
+            uint64_t size, align;
+            if (!c_type_get_size(ctx, rettype, &size, &align)) {
+                UNREACHABLE();
+            }
+            ir_frame_t *frame = ir_frame_create(code->func, size, align, NULL);
+            c_value_memcpy(ctx, code, &retval, IR_MEMREF(IR_N_PRIM, IR_BADDR_FRAME(frame)));
+            ir_add_return1(IR_APPEND(code), IR_OPERAND_STRUCT(frame));
+
+        } else {
+            ir_add_return1(IR_APPEND(code), c_value_read(ctx, code, &expr.res));
+        }
+        c_value_destroy(expr.res);
     }
     return code;
 }
@@ -2396,16 +2466,58 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
                 continue;
             }
 
-            if (var->storage == C_VAR_STORAGE_REG) {
-                func->args[i].has_var  = true;
-                func->args[i].var      = var->ir_var;
-                var->ir_var->arg_index = (ptrdiff_t)i;
-            } else {
-                func->args[i].has_var = false;
-                func->args[i].type    = c_type_to_ir_type(ctx, func_type->func.args[i]->data);
+            switch (var->storage) {
+                case C_VAR_STORAGE_REG:
+                    func->args[i].arg_type = IR_ARG_TYPE_VAR;
+                    func->args[i].var      = var->ir_var;
+                    break;
+                case C_VAR_STORAGE_FRAME: {
+                    uint64_t size, align;
+                    if (!c_type_get_size(ctx, var->type->data, &size, &align)) {
+                        UNREACHABLE();
+                    }
+                    func->args[i].arg_type     = IR_ARG_TYPE_STRUCT;
+                    func->args[i].struct_frame = var->frame;
+                } break;
+                case C_VAR_STORAGE_GLOBAL:
+                case C_VAR_STORAGE_ENUM_VARIANT: UNREACHABLE();
             }
         } else {
-            func->args[i].type = c_type_to_ir_type(ctx, func_type->func.args[i]->data);
+            c_type_t const *arg_type = func_type->func.args[i]->data;
+            switch (arg_type->primitive) {
+                case C_PRIM_BOOL:
+                case C_PRIM_CHAR:
+                case C_PRIM_SCHAR:
+                case C_PRIM_UCHAR:
+                case C_PRIM_SSHORT:
+                case C_PRIM_USHORT:
+                case C_PRIM_SINT:
+                case C_PRIM_UINT:
+                case C_PRIM_SLONG:
+                case C_PRIM_ULONG:
+                case C_PRIM_SLLONG:
+                case C_PRIM_ULLONG:
+                case C_PRIM_FLOAT:
+                case C_PRIM_DOUBLE:
+                case C_PRIM_LDOUBLE:
+                case C_COMP_ENUM:
+                case C_COMP_POINTER:
+                    func->args[i].arg_type     = IR_ARG_TYPE_IGNORED;
+                    func->args[i].ignored_prim = c_prim_to_ir_type(ctx, arg_type->primitive);
+                    break;
+                case C_PRIM_VOID: UNREACHABLE();
+                case C_COMP_STRUCT:
+                case C_COMP_UNION: {
+                    uint64_t size, align;
+                    if (!c_type_get_size(ctx, arg_type, &size, &align)) {
+                        UNREACHABLE();
+                    }
+                    func->args[i].arg_type     = IR_ARG_TYPE_STRUCT;
+                    func->args[i].struct_frame = ir_frame_create(func, size, align, NULL);
+                } break;
+                case C_COMP_ARRAY:
+                case C_COMP_FUNCTION: UNREACHABLE();
+            }
         }
     }
 

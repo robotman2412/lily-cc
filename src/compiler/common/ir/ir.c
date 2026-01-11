@@ -57,8 +57,8 @@ ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_
     func->args      = strong_calloc(args_len, sizeof(ir_arg_t));
     func->args_len  = args_len;
     for (size_t i = 0; i < args_len; i++) {
-        func->args[i].has_var = false;
-        func->args[i].type    = IR_PRIM_s32;
+        func->args[i].arg_type     = IR_ARG_TYPE_IGNORED;
+        func->args[i].ignored_prim = IR_PRIM_s32;
     }
     func->entry = ir_code_create(func, entry_name);
     return func;
@@ -238,7 +238,7 @@ static void create_combinator(ir_code_t *code, ir_var_t *dest) {
     expr->combinators_len = code->pred.len;
     expr->combinators     = strong_calloc(1, code->pred.len * sizeof(ir_combinator_t));
     expr->returns         = strong_malloc(sizeof(void *));
-    expr->returns[0]      = dest;
+    expr->returns[0]      = IR_RETVAL_VAR(dest);
     expr->returns_len     = 1;
     size_t i              = 0;
     set_foreach(ir_code_t, pred, &code->pred) {
@@ -340,7 +340,7 @@ static void replace_phi_vars(ir_code_t *pred, ir_code_t *code, set_t *from, ir_v
     dlist_foreach_node(ir_insn_t, insn, &code->insns) {
         if (insn->type != IR_INSN_COMBINATOR) {
             continue;
-        } else if (set_contains(from, insn->returns[0])) {
+        } else if (!insn->returns[0].is_struct && set_contains(from, insn->returns[0].dest_var)) {
             for (size_t i = 0; i < insn->combinators_len; i++) {
                 if (insn->combinators[i].prev == pred) {
                     ir_unmark_used(insn->combinators[i].bind, insn);
@@ -365,14 +365,14 @@ static void rename_assignments(ir_func_t *func, ir_code_t *code, ir_var_t *from,
             replace_insn_var(insn, from, to);
         }
         for (size_t i = 0; i < insn->returns_len; i++) {
-            if (insn->returns[i] != from) {
+            if (insn->returns[i].is_struct || insn->returns[i].dest_var != from) {
                 continue;
             }
             to = ir_var_create(func, from->prim_type, NULL);
-            set_remove(&insn->returns[i]->assigned_at, insn);
+            set_remove(&insn->returns[i].dest_var->assigned_at, insn);
             set_add(&to->assigned_at, insn);
             set_add(phi_from, to);
-            insn->returns[i] = to;
+            insn->returns[i].dest_var = to;
         }
     }
     set_foreach(ir_code_t, succ, &code->succ) {
@@ -523,8 +523,8 @@ void ir_var_delete(ir_var_t *var) {
 
     if (var->arg_index >= 0) {
         // Turn function arg into variable-less.
-        var->func->args[var->arg_index].has_var = false;
-        var->func->args[var->arg_index].type    = var->prim_type;
+        var->func->args[var->arg_index].arg_type     = IR_ARG_TYPE_IGNORED;
+        var->func->args[var->arg_index].ignored_prim = var->prim_type;
     }
 
     // Delete the variable itself.
@@ -581,7 +581,8 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
                         break;
 
                     case IR_OPERAND_TYPE_MEM:
-                    case IR_OPERAND_TYPE_REG: UNREACHABLE();
+                    case IR_OPERAND_TYPE_REG:
+                    case IR_OPERAND_TYPE_STRUCT: UNREACHABLE();
                 }
             }
         }
@@ -622,7 +623,7 @@ static void remove_combinator_path(ir_insn_t *expr, ir_code_t *code) {
         }
     }
     if (expr->combinators_len == 1) {
-        ir_var_replace(expr->returns[0], expr->combinators[0].bind);
+        ir_var_replace(expr->returns[0].dest_var, expr->combinators[0].bind);
         ir_insn_delete(expr);
     }
 }
@@ -724,7 +725,9 @@ void ir_insn_delete(ir_insn_t *insn) {
         free(insn->operands);
     }
     for (size_t i = 0; i < insn->returns_len; i++) {
-        set_remove(&insn->returns[i]->assigned_at, insn);
+        if (!insn->returns[i].is_struct) {
+            set_remove(&insn->returns[i].dest_var->assigned_at, insn);
+        }
     }
     free(insn->returns);
     dlist_remove(&insn->code->insns, &insn->node);
@@ -770,15 +773,15 @@ void ir_insn_set_operand(ir_insn_t *insn, size_t index, ir_operand_t operand) {
 }
 
 // Set an IR instruction's return variable by index.
-void ir_insn_set_return(ir_insn_t *insn, size_t index, ir_var_t *var) {
+void ir_insn_set_return(ir_insn_t *insn, size_t index, ir_retval_t dest) {
     assert(index < insn->returns_len);
-    if (insn->returns[index]) {
-        set_remove(&insn->returns[index]->assigned_at, insn);
+    if (!insn->returns[index].is_struct) {
+        set_remove(&insn->returns[index].dest_var->assigned_at, insn);
     }
-    insn->returns[index] = var;
-    if (var) {
-        assert(!set_contains(&var->assigned_at, insn));
-        set_add(&var->assigned_at, insn);
+    insn->returns[index] = dest;
+    if (!dest.is_struct) {
+        assert(!set_contains(&dest.dest_var->assigned_at, insn));
+        set_add(&dest.dest_var->assigned_at, insn);
     }
 }
 
@@ -862,7 +865,7 @@ static ir_insn_t *
             abort();
         }
         set_add(&dest->assigned_at, insn);
-        insn->returns[0] = dest;
+        insn->returns[0] = IR_RETVAL_VAR(dest);
     }
     for (size_t i = 0; i < operands_len; i++) {
         ir_mark_used(insn->operands[i], insn);
@@ -893,7 +896,7 @@ ir_insn_t *ir_add_combinator(ir_insnloc_t loc, ir_var_t *dest, size_t from_len, 
     insn->type            = IR_INSN_COMBINATOR;
     insn->combinators_len = from_len;
     insn->combinators     = from;
-    insn->returns[0]      = dest;
+    insn->returns[0]      = IR_RETVAL_VAR(dest);
     if (ir_insnloc_code(loc)->func->enforce_ssa && (dest->assigned_at.len || dest->arg_index >= 0)) {
         fprintf(stderr, "BUG: SSA IR variable %%%s assigned twice\n", dest->name);
         abort();
@@ -1132,7 +1135,7 @@ ir_insn_t *ir_add_call(
     ir_insnloc_t        loc,
     ir_memref_t         to,
     size_t              returns_len,
-    ir_var_t          **returns,
+    ir_retval_t const  *returns,
     size_t              operands_len,
     ir_operand_t const *operands
 ) {
@@ -1140,7 +1143,7 @@ ir_insn_t *ir_add_call(
     operands_copy[0]            = IR_OPERAND_MEM(to);
     memcpy(operands_copy + 1, operands, operands_len * sizeof(ir_operand_t));
 
-    ir_var_t **returns_copy = strong_calloc(returns_len, sizeof(void *));
+    ir_retval_t *returns_copy = strong_calloc(returns_len, sizeof(ir_retval_t));
     memcpy(returns_copy, returns, returns_len * sizeof(void *));
 
     return ir_create_insn(loc, IR_INSN_CALL, NULL, 1 + operands_len, operands_copy);

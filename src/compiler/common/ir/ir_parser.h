@@ -13,6 +13,9 @@ typedef enum {
     // A memory operand.
     // Operands: Type (optional), offset, add/sub token (optional), base (optional).
     IR_AST_MEMOPERAND,
+    // A struct operand.
+    // Operands: Stack frame.
+    IR_AST_STRUCTOPERAND,
     // An instruction.
     // Operands: Returns list, mnemonic, operands list.
     IR_AST_INSN,
@@ -25,6 +28,9 @@ typedef enum {
     // An argument definition.
     // Operands: Name / type.
     IR_AST_ARG,
+    // A struct argument definition.
+    // Operands: Stack frame.
+    IR_AST_STRUCTARG,
     // An entrypoint definition.
     // Operands: Name.
     IR_AST_ENTRY,

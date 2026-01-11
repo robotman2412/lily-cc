@@ -44,7 +44,7 @@ static void cg_isel(backend_profile_t *profile, ir_code_t *code) {
                 fprintf(stderr, "`\n");
                 set_t vars = PTR_SET_EMPTY;
                 for (size_t i = 0; i < cur->returns_len; i++) {
-                    set_add(&vars, cur->returns[i]);
+                    set_add(&vars, cur->returns[i].dest_var);
                 }
                 for (size_t i = 0; i < cur->operands_len; i++) {
                     if (cur->operands[i].type == IR_OPERAND_TYPE_VAR) {
@@ -70,7 +70,7 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
     assert(insn->type == IR_INSN_EXPR2);
     assert(insn->returns_len == 1);
     assert(insn->operands_len == 2);
-    ir_prim_t const prim = insn->returns[0]->prim_type;
+    ir_prim_t const prim = insn->returns[0].dest_var->prim_type;
     bool softfloat       = (prim == IR_PRIM_f32 && !profile->has_f32) || (prim == IR_PRIM_f64 && !profile->has_f64);
 
     insn->code->func->enforce_ssa = false;
@@ -138,7 +138,7 @@ static void cg_functionize_expr1(backend_profile_t *profile, ir_insn_t *insn) {
     assert(insn->returns_len == 1);
     assert(insn->operands_len == 1);
     ir_prim_t const prim     = ir_operand_prim(insn->operands[0]);
-    ir_prim_t const ret_prim = insn->returns[0]->prim_type;
+    ir_prim_t const ret_prim = insn->returns[0].dest_var->prim_type;
     bool            softfloat
         = ((prim == IR_PRIM_f32 && !profile->has_f32) || (prim == IR_PRIM_f64 && !profile->has_f64))
           || ((ret_prim == IR_PRIM_f32 && !profile->has_f32) || (ret_prim == IR_PRIM_f64 && !profile->has_f64));

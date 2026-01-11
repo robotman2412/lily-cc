@@ -34,7 +34,7 @@ IR_KEYW_DEF(entry)
 IR_KEYW_DEF(true)
 IR_KEYW_DEF(false)
 
-IR_KEYW_DEF(reloc)
+IR_KEYW_DEF(struct)
 
 #define IR_PRIM_DEF(x) IR_KEYW_DEF(x)
 #include "ir_primitives.inc"

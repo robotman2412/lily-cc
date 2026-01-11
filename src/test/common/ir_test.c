@@ -212,11 +212,11 @@ LILY_TEST_CASE(test_ir_deserialize)
 
 
 static char *test_ir_append() {
-    ir_func_t *func       = ir_func_create("myfunc", "entry", 1);
-    func->args[0].has_var = true;
-    func->args[0].var     = ir_var_create(func, IR_PRIM_f32, "myparam");
-    ir_code_t *cur        = func->entry;
-    ir_var_t  *var1       = ir_var_create(func, IR_PRIM_bool, "var1");
+    ir_func_t *func        = ir_func_create("myfunc", "entry", 1);
+    func->args[0].arg_type = IR_ARG_TYPE_VAR;
+    func->args[0].var      = ir_var_create(func, IR_PRIM_f32, "myparam");
+    ir_code_t *cur         = func->entry;
+    ir_var_t  *var1        = ir_var_create(func, IR_PRIM_bool, "var1");
 
     ir_add_expr1(
         IR_APPEND(cur),

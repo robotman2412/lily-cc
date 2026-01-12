@@ -69,6 +69,12 @@ struct backend {
     void (*init_codegen)(backend_profile_t *profile);
     // Perform target-specific passes before instruction selection.
     void (*pre_isel_pass)(backend_profile_t *profile, ir_func_t *func);
+    // Expand the ABI for a specific return instruction.
+    ir_insn_t *(*xabi_return)(backend_profile_t *profile, ir_insn_t *ret_insn);
+    // Expand the ABI for a specific call instruction.
+    ir_insn_t *(*xabi_call)(backend_profile_t *profile, ir_insn_t *call_insn);
+    // Expand the ABI for a function entry.
+    void (*xabi_entry)(backend_profile_t *profile, ir_func_t *func);
     // Perform instruction selection.
     ir_insn_t *(*isel)(backend_profile_t *profile, ir_insn_t *ir_insn);
     // Perform target-specific passes after instruction selection.

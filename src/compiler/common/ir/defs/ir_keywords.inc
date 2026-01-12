@@ -56,6 +56,7 @@ IR_KEYW_DEF(call)
 IR_KEYW_DEF(return)
 IR_KEYW_DEF(memcpy)
 IR_KEYW_DEF(memset)
+IR_KEYW_DEF(clobber)
 
 #undef IR_KEYW_DEF
 

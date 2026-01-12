@@ -2444,11 +2444,25 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
         rc_delete(func_type_rc);
         return NULL;
     }
-    c_type_t *func_type = func_type_rc->data;
+    c_type_t const *func_type = func_type_rc->data;
 
     // Create function and scope.
     ir_func_t *func  = ir_func_create(name->strval, NULL, func_type->func.args_len);
     c_scope_t  scope = c_scope_create(&ctx->global_scope);
+
+    // Set return type.
+    c_type_t const *rettype = func_type->func.return_type->data;
+    if (rettype->primitive == C_PRIM_VOID) {
+        func->rettype.type = IR_FUNCRET_NONE;
+    } else if (rettype->primitive == C_COMP_STRUCT || rettype->primitive == C_COMP_UNION) {
+        func->rettype.type = IR_FUNCRET_STRUCT;
+        if (!c_type_get_size(ctx, rettype, &func->rettype.struct_type.size, &func->rettype.struct_type.align)) {
+            UNREACHABLE();
+        }
+    } else {
+        func->rettype.type      = IR_FUNCRET_PRIM;
+        func->rettype.prim_type = c_type_to_ir_type(ctx, rettype);
+    }
 
     // Bring parameters into scope.
     for (size_t i = 0; i < func_type->func.args_len; i++) {

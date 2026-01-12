@@ -60,7 +60,8 @@ ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_
         func->args[i].arg_type     = IR_ARG_TYPE_IGNORED;
         func->args[i].ignored_prim = IR_PRIM_s32;
     }
-    func->entry = ir_code_create(func, entry_name);
+    func->entry        = ir_code_create(func, entry_name);
+    func->rettype.type = IR_FUNCRET_NONE;
     return func;
 }
 
@@ -71,6 +72,7 @@ ir_func_t *ir_func_create_empty(char const *name) {
     func->code_by_name  = STR_MAP_EMPTY;
     func->var_by_name   = STR_MAP_EMPTY;
     func->frame_by_name = STR_MAP_EMPTY;
+    func->rettype.type  = IR_FUNCRET_NONE;
     return func;
 }
 
@@ -686,7 +688,8 @@ void ir_insn_delete(ir_insn_t *insn) {
         case IR_INSN_RETURN:
         case IR_INSN_MEMCPY: assert(insn->returns_len == 0); break;
         case IR_INSN_MEMSET: assert(insn->returns_len == 0); break;
-        case IR_INSN_MACHINE: break;
+        case IR_INSN_MACHINE:
+        case IR_INSN_CLOBBER: break;
     }
 
     // Debug-assert parameter lengths.
@@ -703,7 +706,8 @@ void ir_insn_delete(ir_insn_t *insn) {
         case IR_INSN_RETURN: assert(insn->operands_len <= 1); break;
         case IR_INSN_MEMCPY: assert(insn->operands_len == 3); break;
         case IR_INSN_MEMSET: assert(insn->operands_len == 3); break;
-        case IR_INSN_MACHINE: break;
+        case IR_INSN_MACHINE:
+        case IR_INSN_CLOBBER: break;
     }
 
     if (insn->type == IR_INSN_COMBINATOR) {
@@ -803,17 +807,17 @@ static void ir_emplace_insn(ir_insnloc_t loc, ir_insn_t *insn) {
     ir_insn_t *prev = NULL;
     ir_insn_t *next = NULL;
     switch (loc.type) {
-        case IR_INSNLOC_APPEND_CODE: {
-            prev = container_of(loc.code->insns.tail, ir_insn_t, node);
-        } break;
-        case IR_INSNLOC_AFTER_INSN: {
+        case IR_INSNLOC_PREPEND_CODE: next = container_of(loc.code->insns.head, ir_insn_t, node); break;
+        case IR_INSNLOC_APPEND_CODE: prev = container_of(loc.code->insns.tail, ir_insn_t, node); break;
+        case IR_INSNLOC_AFTER_INSN:
             prev = loc.insn;
             next = container_of(loc.insn->node.next, ir_insn_t, node);
-        } break;
-        case IR_INSNLOC_BEFORE_INSN: {
+            break;
+        case IR_INSNLOC_BEFORE_INSN:
             prev = container_of(loc.insn->node.previous, ir_insn_t, node);
             next = loc.insn;
-        } break;
+            break;
+        default: UNREACHABLE();
     }
 
     // IR precondition assertions.
@@ -822,19 +826,12 @@ static void ir_emplace_insn(ir_insnloc_t loc, ir_insn_t *insn) {
         abort();
     }
 
+    insn->code = loc.code;
     switch (loc.type) {
-        case IR_INSNLOC_APPEND_CODE: {
-            insn->code = loc.code;
-            dlist_append(&loc.code->insns, &insn->node);
-        } break;
-        case IR_INSNLOC_AFTER_INSN: {
-            insn->code = loc.insn->code;
-            dlist_insert_after(&loc.insn->code->insns, &loc.insn->node, &insn->node);
-        } break;
-        case IR_INSNLOC_BEFORE_INSN: {
-            insn->code = loc.insn->code;
-            dlist_insert_before(&loc.insn->code->insns, &loc.insn->node, &insn->node);
-        } break;
+        case IR_INSNLOC_PREPEND_CODE: dlist_prepend(&loc.code->insns, &insn->node); break;
+        case IR_INSNLOC_APPEND_CODE: dlist_append(&loc.code->insns, &insn->node); break;
+        case IR_INSNLOC_AFTER_INSN: dlist_insert_after(&loc.insn->code->insns, &loc.insn->node, &insn->node); break;
+        case IR_INSNLOC_BEFORE_INSN: dlist_insert_before(&loc.insn->code->insns, &loc.insn->node, &insn->node); break;
     }
 }
 
@@ -958,6 +955,30 @@ ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_var_t *dest, ir_op2_type_t oper, ir
     }
     ir_insn_t *insn = ir_create_insn_va(loc, IR_INSN_EXPR2, dest, 2, lhs, rhs);
     insn->op2       = oper;
+    return insn;
+}
+
+// Add a clobbering intrinsic.
+ir_insn_t *ir_add_clobber(ir_insnloc_t loc, size_t returns_len, ir_retval_t const *returns) {
+    ir_insn_t *insn = alloc_ir_insn(0, returns_len);
+    for (size_t i = 0; i < returns_len; i++) {
+        insn->returns[i] = returns[i];
+    }
+    ir_emplace_insn(loc, insn);
+    return insn;
+}
+
+// Add a clobbering intrinsic.
+// The remaining arguments are of type `ir_retval_t const`.
+ir_insn_t *ir_add_clobber_va(ir_insnloc_t loc, size_t returns_len, ...) {
+    ir_insn_t *insn = alloc_ir_insn(0, returns_len);
+    va_list    l;
+    va_start(l, returns_len);
+    for (size_t i = 0; i < returns_len; i++) {
+        insn->returns[i] = va_arg(l, ir_retval_t);
+    }
+    va_end(l);
+    ir_emplace_insn(loc, insn);
     return insn;
 }
 

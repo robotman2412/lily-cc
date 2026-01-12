@@ -6,6 +6,7 @@
 #include "rv_backend.h"
 
 #include "backend.h"
+#include "rv_abi.h"
 #include "rv_isel.h"
 #include "rv_misc.h"
 #include "strong_malloc.h"
@@ -73,6 +74,9 @@ backend_t const rv_backend = {
     .delete_profile = rv_delete_profile,
     .init_codegen   = rv_init_codegen,
     .isel           = rv_isel,
+    .xabi_entry     = rv_xabi_entry,
+    .xabi_call      = rv_xabi_call,
+    .xabi_return    = rv_xabi_return,
 };
 
 // Table of RISC-V register names.

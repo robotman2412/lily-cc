@@ -28,9 +28,9 @@ typedef enum {
     // An argument definition.
     // Operands: Name / type.
     IR_AST_ARG,
-    // A struct argument definition.
+    // A struct argument/return value definition.
     // Operands: Stack frame.
-    IR_AST_STRUCTARG,
+    IR_AST_STRUCT,
     // An entrypoint definition.
     // Operands: Name.
     IR_AST_ENTRY,

@@ -12,6 +12,8 @@
 
 // Type of IR code placement location.
 typedef enum {
+    // Place at the start of a code block.
+    IR_INSNLOC_PREPEND_CODE,
     // Place at the end of a code block.
     IR_INSNLOC_APPEND_CODE,
     // Place after an existing instruction.
@@ -32,6 +34,8 @@ typedef struct {
     };
 } ir_insnloc_t;
 
+// Construct an `ir_insnloc_t` that places at the start of `code_`.
+#define IR_PREPEND(code_)     ((ir_insnloc_t){.type = IR_INSNLOC_PREPEND_CODE, .code = (code_)})
 // Construct an `ir_insnloc_t` that places at the end of `code_`.
 #define IR_APPEND(code_)      ((ir_insnloc_t){.type = IR_INSNLOC_APPEND_CODE, .code = (code_)})
 // Construct an `ir_insnloc_t` that places after `insn_`.
@@ -43,8 +47,10 @@ typedef struct {
 
 // Create a new IR function.
 // Function argument types are IR_PRIM_s32 by default.
+// Function returns nothing by default.
 ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_len);
 // Create an IR function without operands nor code.
+// Function returns nothing by default.
 ir_func_t *ir_func_create_empty(char const *name);
 // Delete an IR function.
 void       ir_func_delete(ir_func_t *func);
@@ -88,6 +94,11 @@ ir_insn_t *ir_add_combinator(ir_insnloc_t loc, ir_var_t *dest, size_t from_len, 
 ir_insn_t *ir_add_expr1(ir_insnloc_t loc, ir_var_t *dest, ir_op1_type_t oper, ir_operand_t operand);
 // Add an expression to a code block.
 ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_var_t *dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs);
+// Add a clobbering intrinsic.
+ir_insn_t *ir_add_clobber(ir_insnloc_t loc, size_t returns_len, ir_retval_t const *returns);
+// Add a clobbering intrinsic.
+// The remaining arguments are of type `ir_retval_t const`.
+ir_insn_t *ir_add_clobber_va(ir_insnloc_t loc, size_t returns_len, ...);
 
 // Add a load effective address of a stack frame to a code block.
 ir_insn_t *ir_add_lea_stack(ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame, uint64_t offset);

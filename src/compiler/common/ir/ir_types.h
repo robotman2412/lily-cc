@@ -128,6 +128,8 @@ typedef enum __attribute__((packed)) {
     IR_INSN_MEMSET,
     // Machine instructions; target architecture-dependent.
     IR_INSN_MACHINE,
+    // Clobber intrinsic; all destinations of this will have an undefined, useless value from now on.
+    IR_INSN_CLOBBER,
 } ir_insn_type_t;
 
 // Type of IR operand.
@@ -182,6 +184,15 @@ typedef enum __attribute__((packed)) {
     IR_RETVAL_TYPE_STRUCT,
 } ir_retval_type_t;
 
+typedef enum __attribute__((packed)) {
+    // Function returns nothing (or "void").
+    IR_FUNCRET_NONE,
+    // Function returns a primitive type.
+    IR_FUNCRET_PRIM,
+    // Function returns a struct type.
+    IR_FUNCRET_STRUCT,
+} ir_funcret_type_t;
+
 // IR stack frame.
 typedef struct ir_frame      ir_frame_t;
 // IR struct value.
@@ -204,6 +215,8 @@ typedef struct ir_retval     ir_retval_t;
 typedef struct ir_insn       ir_insn_t;
 // IR code block.
 typedef struct ir_code       ir_code_t;
+// IR function return type.
+typedef struct ir_funcret    ir_funcret_t;
 // IR function.
 typedef struct ir_func       ir_func_t;
 
@@ -467,30 +480,51 @@ struct ir_code {
     size_t       dfs_index;
 };
 
+// IR function return type.
+struct ir_funcret {
+    ir_funcret_type_t type;
+    union {
+        ir_prim_t prim_type;
+        struct {
+            uint64_t size, align;
+        } struct_type;
+    };
+};
+
 // IR function.
 struct ir_func {
     // Function name.
-    char      *name;
+    char        *name;
+    // Type of the function's return value.
+    ir_funcret_t rettype;
     // Number of arguments.
-    size_t     args_len;
+    size_t       args_len;
+    // Implicit out parameter pointer.
+    ir_var_t    *retval_ptr;
+    // The stack frame for arguments passed to this function on the stack.
+    // For variadic functions, may in reality be larger than what IR says.
+    ir_frame_t  *this_stackargs;
+    // The stack frame for arguments passed to callees on the stack.
+    // This may be larger than needed for some of the calls because it is re-used.
+    ir_frame_t  *callee_stackargs;
     // Function arguments.
-    ir_arg_t  *args;
+    ir_arg_t    *args;
     // Function entrypoint.
-    ir_code_t *entry;
+    ir_code_t   *entry;
     // Unordered list of code blocks.
-    dlist_t    code_list;
+    dlist_t      code_list;
     // Unordered list of variables.
-    dlist_t    vars_list;
+    dlist_t      vars_list;
     // Unordered list of stack frames.
-    dlist_t    frames_list;
+    dlist_t      frames_list;
     // Map from name to code blocks.
-    map_t      code_by_name;
+    map_t        code_by_name;
     // Map from name to variables.
-    map_t      var_by_name;
+    map_t        var_by_name;
     // Map from name to frames.
-    map_t      frame_by_name;
+    map_t        frame_by_name;
     // Enforce the SSA form.
-    bool       enforce_ssa;
+    bool         enforce_ssa;
 };
 
 // Byte size per primitive type.

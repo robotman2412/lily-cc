@@ -187,7 +187,8 @@ token_t ir_parse_insn(tokenizer_t *from) {
             case IR_KEYW_call:
             case IR_KEYW_return:
             case IR_KEYW_memcpy:
-            case IR_KEYW_memset: break; // Valid instruction mnemonic.
+            case IR_KEYW_memset:
+            case IR_KEYW_clobber: break; // Valid instruction mnemonic.
         }
     }
     pos1 = insn.pos;
@@ -266,7 +267,7 @@ token_t ir_parse_arg(tokenizer_t *from) {
             cctx_diagnostic(from->cctx, keyw.pos, DIAG_ERR, "Expected %%identifier");
             return ast_from_va(IR_AST_GARBAGE, 2, ident_struct, ident);
         }
-        return ast_from_va(IR_AST_STRUCTARG, 1, ident);
+        return ast_from_va(IR_AST_STRUCT, 1, ident);
 
     } else {
         if (ident_struct.type != TOKENTYPE_IDENT || ident_struct.subtype != IR_IDENT_LOCAL) {

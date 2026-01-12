@@ -10,6 +10,8 @@
 
 // Move / cast value.
 IR_OP1_DEF(mov)
+// Bit-cast value.
+IR_OP1_DEF(bitcast)
 
 // Set if equal to zero.
 IR_OP1_DEF(seqz)
@@ -21,6 +23,7 @@ IR_OP1_DEF(neg)
 
 // Bitwise negate.
 IR_OP1_DEF(bneg)
+
 
 // TODO: clz, ctz, popcnt, sqrt, abs
 

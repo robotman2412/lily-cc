@@ -134,10 +134,10 @@ void ir_insn_serialize(ir_insn_t const *insn, backend_profile_t const *profile_o
         if (i) {
             fputs(", ", to);
         }
-        if (insn->returns[i].is_struct) {
-            fprintf(to, "struct %%%s", insn->returns[i].dest_struct->name);
-        } else {
-            fprintf(to, "%%%s", insn->returns[i].dest_var->name);
+        switch (insn->returns[i].type) {
+            case IR_RETVAL_TYPE_VAR: fprintf(to, "%%%s", insn->returns[i].dest_var->name); break;
+            case IR_RETVAL_TYPE_REG: fprintf(to, "$%s", profile_opt->gpr_names[insn->returns[i].dest_regno]); break;
+            case IR_RETVAL_TYPE_STRUCT: fprintf(to, "struct %%%s", insn->returns[i].dest_struct->name); break;
         }
     }
 

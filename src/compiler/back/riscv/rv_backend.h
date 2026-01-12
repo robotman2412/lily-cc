@@ -10,6 +10,26 @@
 
 
 
+// Supported RISC-V ABI types.
+typedef enum {
+    // 32-bit.
+    RV_ABI_ILP32,
+    // 32-bit, RVE registers only.
+    RV_ABI_ILP32E,
+    // 32-bit, float32.
+    RV_ABI_ILP32F,
+    // 32-bit, float64.
+    RV_ABI_ILP32D,
+    // 64-bit.
+    RV_ABI_LP64,
+    // 64-bit, float32.
+    RV_ABI_LP64F,
+    // 64-bit, float64.
+    RV_ABI_LP64D,
+} rv_abi_t;
+
+
+
 // RISC-V backend profile.
 typedef struct rv_profile rv_profile_t;
 
@@ -19,6 +39,8 @@ typedef struct rv_profile rv_profile_t;
 struct rv_profile {
     // Common backend profile information.
     backend_profile_t base;
+    // Selected ABI.
+    rv_abi_t          abi;
     // Profile is RV*E.
     bool              is_rve;
     // Which extensions are enabled in this profile.

@@ -239,6 +239,15 @@ bool opt_dead_code(ir_func_t *func) {
 
 // Try to constant-propagate a single expression.
 static bool const_prop_expr(ir_insn_t *expr) {
+    if (expr->returns[0].type != IR_RETVAL_TYPE_VAR) {
+        return false;
+    }
+    for (size_t i = 0; i < expr->operands_len; i++) {
+        if (expr->operands[i].type != IR_OPERAND_TYPE_CONST && expr->operands[i].type != IR_OPERAND_TYPE_VAR) {
+            return false;
+        }
+    }
+
     if (expr->type == IR_INSN_COMBINATOR) {
         // Flatten phi-nodes with only a single predecessor or all identical bindings.
         for (size_t i = 1; i < expr->combinators_len; i++) {

@@ -1281,7 +1281,7 @@ static inline c_compile_expr_t c_compile_expr_call(
                     UNREACHABLE();
                 }
 
-                ir_ret->is_struct   = true;
+                ir_ret->type        = IR_RETVAL_TYPE_STRUCT;
                 ir_ret->dest_struct = ir_frame_create(code->func, size, align, NULL);
                 retval.value_type   = C_RVALUE_STACK;
                 retval.rvalue.frame = ir_ret->dest_struct;
@@ -1289,7 +1289,7 @@ static inline c_compile_expr_t c_compile_expr_call(
                 n_ir_ret = 1;
                 ir_ret   = malloc(sizeof(ir_retval_t));
 
-                ir_ret->is_struct     = false;
+                ir_ret->type          = IR_RETVAL_TYPE_VAR;
                 ir_ret->dest_var      = ir_var_create(code->func, c_type_to_ir_type(ctx, returns), NULL);
                 retval.value_type     = C_RVALUE_OPERAND;
                 retval.rvalue.operand = IR_OPERAND_VAR(ir_ret->dest_var);

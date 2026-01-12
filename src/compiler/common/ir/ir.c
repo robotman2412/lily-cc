@@ -340,7 +340,7 @@ static void replace_phi_vars(ir_code_t *pred, ir_code_t *code, set_t *from, ir_v
     dlist_foreach_node(ir_insn_t, insn, &code->insns) {
         if (insn->type != IR_INSN_COMBINATOR) {
             continue;
-        } else if (!insn->returns[0].is_struct && set_contains(from, insn->returns[0].dest_var)) {
+        } else if (insn->returns[0].type == IR_RETVAL_TYPE_VAR && set_contains(from, insn->returns[0].dest_var)) {
             for (size_t i = 0; i < insn->combinators_len; i++) {
                 if (insn->combinators[i].prev == pred) {
                     ir_unmark_used(insn->combinators[i].bind, insn);
@@ -365,7 +365,7 @@ static void rename_assignments(ir_func_t *func, ir_code_t *code, ir_var_t *from,
             replace_insn_var(insn, from, to);
         }
         for (size_t i = 0; i < insn->returns_len; i++) {
-            if (insn->returns[i].is_struct || insn->returns[i].dest_var != from) {
+            if (insn->returns[i].type != IR_RETVAL_TYPE_VAR || insn->returns[i].dest_var != from) {
                 continue;
             }
             to = ir_var_create(func, from->prim_type, NULL);
@@ -725,7 +725,7 @@ void ir_insn_delete(ir_insn_t *insn) {
         free(insn->operands);
     }
     for (size_t i = 0; i < insn->returns_len; i++) {
-        if (!insn->returns[i].is_struct) {
+        if (insn->returns[i].type == IR_RETVAL_TYPE_VAR) {
             set_remove(&insn->returns[i].dest_var->assigned_at, insn);
         }
     }
@@ -775,11 +775,11 @@ void ir_insn_set_operand(ir_insn_t *insn, size_t index, ir_operand_t operand) {
 // Set an IR instruction's return variable by index.
 void ir_insn_set_return(ir_insn_t *insn, size_t index, ir_retval_t dest) {
     assert(index < insn->returns_len);
-    if (!insn->returns[index].is_struct) {
+    if (insn->returns[index].type == IR_RETVAL_TYPE_VAR) {
         set_remove(&insn->returns[index].dest_var->assigned_at, insn);
     }
     insn->returns[index] = dest;
-    if (!dest.is_struct) {
+    if (dest.type == IR_RETVAL_TYPE_VAR) {
         assert(!set_contains(&dest.dest_var->assigned_at, insn));
         set_add(&dest.dest_var->assigned_at, insn);
     }

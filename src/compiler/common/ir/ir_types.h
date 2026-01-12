@@ -172,6 +172,16 @@ typedef enum __attribute__((packed)) {
     IR_ARG_TYPE_IGNORED,
 } ir_arg_type_t;
 
+// Types of IR return value.
+typedef enum __attribute__((packed)) {
+    // Return value stored in IR variable.
+    IR_RETVAL_TYPE_VAR,
+    // Return value stored in a register.
+    IR_RETVAL_TYPE_REG,
+    // Return value (from function call) stored in struct.
+    IR_RETVAL_TYPE_STRUCT,
+} ir_retval_type_t;
+
 // IR stack frame.
 typedef struct ir_frame      ir_frame_t;
 // IR struct value.
@@ -385,15 +395,17 @@ struct ir_combinator {
 
 // IR instruction return value.
 struct ir_retval {
-    bool is_struct;
+    ir_retval_type_t type;
     union {
         ir_var_t   *dest_var;
         ir_frame_t *dest_struct;
+        size_t      dest_regno;
     };
 };
 
-#define IR_RETVAL_VAR(dest_var_)       ((ir_retval_t){.is_struct = false, .dest_var = (dest_var_)})
-#define IR_RETVAL_STRUCT(dest_struct_) ((ir_retval_t){.is_struct = true, .dest_struct = (dest_struct_)})
+#define IR_RETVAL_VAR(dest_var_)       ((ir_retval_t){.type = IR_RETVAL_TYPE_VAR, .dest_var = (dest_var_)})
+#define IR_RETVAL_REG(dest_regno_)     ((ir_retval_t){.type = IR_RETVAL_TYPE_REG, .dest_regno = (dest_regno_)})
+#define IR_RETVAL_STRUCT(dest_struct_) ((ir_retval_t){.type = IR_RETVAL_TYPE_STRUCT, .dest_struct = (dest_struct_)})
 
 // IR instruction.
 struct ir_insn {

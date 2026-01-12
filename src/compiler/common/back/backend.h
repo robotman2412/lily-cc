@@ -40,23 +40,19 @@ typedef struct backend_profile backend_profile_t;
 union regclass {
     struct {
         // Can be used to operate on 8-bit integers.
-        uint16_t int8      : 1;
+        uint16_t int8   : 1;
         // Can be used to operate on 16-bit integers.
-        uint16_t int16     : 1;
+        uint16_t int16  : 1;
         // Can be used to operate on 32-bit integers.
-        uint16_t int32     : 1;
+        uint16_t int32  : 1;
         // Can be used to operate on 64-bit integers.
-        uint16_t int64     : 1;
+        uint16_t int64  : 1;
         // Can be used to operate on 128-bit integers.
-        uint16_t int128    : 1;
+        uint16_t int128 : 1;
         // Can be used to operate on 32-bit floats.
-        uint16_t f32       : 1;
+        uint16_t f32    : 1;
         // Can be used to operate on 64-bit floats.
-        uint16_t f64       : 1;
-        // Can be used as a memory operand base address.
-        uint16_t mem_base  : 1;
-        // Can be used as a memory operand index.
-        uint16_t mem_index : 1;
+        uint16_t f64    : 1;
     };
     uint16_t val;
 };

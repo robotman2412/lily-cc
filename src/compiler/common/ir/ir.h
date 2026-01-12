@@ -163,7 +163,7 @@ ir_insn_t *ir_add_mach_insn(
 
 // If the instruction stores to a variable, returns the variable written to.
 static inline ir_var_t *ir_insn_get_dest(ir_insn_t const *insn) {
-    if (insn->returns_len == 1 && !insn->returns[0].is_struct) {
+    if (insn->returns_len == 1 && insn->returns[0].type == IR_RETVAL_TYPE_VAR) {
         return insn->returns[0].dest_var;
     } else {
         return NULL;

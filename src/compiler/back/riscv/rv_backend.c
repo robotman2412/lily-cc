@@ -22,6 +22,7 @@ backend_profile_t *rv_create_profile() {
     rv_profile_t *profile           = strong_calloc(1, sizeof(rv_profile_t));
     profile->ext_enabled[RV_BASE]   = true;
     profile->ext_enabled[RV_32ONLY] = true;
+    profile->abi                    = RV_ABI_ILP32;
     profile->base.backend           = &rv_backend;
     profile->base.reloc_names       = rv_reloc_names;
     return (void *)profile;

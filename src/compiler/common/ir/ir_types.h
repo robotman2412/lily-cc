@@ -22,8 +22,17 @@ typedef enum __attribute__((packed)) {
     IR_N_PRIM,
 } ir_prim_t;
 
+// Wehter a primitive is of float type.
+__attribute__((const)) static inline bool ir_prim_is_float(ir_prim_t prim) {
+    switch (prim) {
+        case IR_PRIM_f32:
+        case IR_PRIM_f64: return true;
+        default: return false;
+    }
+}
+
 // Whether a primitive is of integer type.
-static inline bool ir_prim_is_integer(ir_prim_t prim) {
+__attribute__((const)) static inline bool ir_prim_is_integer(ir_prim_t prim) {
     switch (prim) {
         case IR_PRIM_s8:
         case IR_PRIM_s16:
@@ -40,7 +49,7 @@ static inline bool ir_prim_is_integer(ir_prim_t prim) {
 }
 
 // Whether a primitive is signed.
-static inline bool ir_prim_is_signed(ir_prim_t prim) {
+__attribute__((const)) static inline bool ir_prim_is_signed(ir_prim_t prim) {
     switch (prim) {
         case IR_PRIM_s8:
         case IR_PRIM_s16:
@@ -52,7 +61,7 @@ static inline bool ir_prim_is_signed(ir_prim_t prim) {
 }
 
 // Get unsigned counterpart of primitive.
-static inline ir_prim_t ir_prim_as_unsigned(ir_prim_t prim) {
+__attribute__((const)) static inline ir_prim_t ir_prim_as_unsigned(ir_prim_t prim) {
     switch (prim) {
         case IR_PRIM_s8: return IR_PRIM_u8;
         case IR_PRIM_s16: return IR_PRIM_u16;
@@ -64,7 +73,7 @@ static inline ir_prim_t ir_prim_as_unsigned(ir_prim_t prim) {
 }
 
 // Get unsigned counterpart of primitive.
-static inline ir_prim_t ir_prim_as_signed(ir_prim_t prim) {
+__attribute__((const)) static inline ir_prim_t ir_prim_as_signed(ir_prim_t prim) {
     switch (prim) {
         case IR_PRIM_u8: return IR_PRIM_s8;
         case IR_PRIM_u16: return IR_PRIM_s16;

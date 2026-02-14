@@ -184,9 +184,10 @@ static inline ir_var_t *ir_insn_get_dest(ir_insn_t const *insn) {
 // Get the code that an `ir_insnloc_t` lies within.
 static inline ir_code_t *ir_insnloc_code(ir_insnloc_t loc) {
     switch (loc.type) {
+        case IR_INSNLOC_PREPEND_CODE:
         case IR_INSNLOC_APPEND_CODE: return loc.code;
         case IR_INSNLOC_AFTER_INSN:
         case IR_INSNLOC_BEFORE_INSN: return loc.insn->code;
-        default: UNREACHABLE();
     }
+    UNREACHABLE();
 }

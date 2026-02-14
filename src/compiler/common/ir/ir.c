@@ -934,7 +934,8 @@ ir_insn_t *ir_add_expr1(ir_insnloc_t loc, ir_retval_t dest, ir_op1_type_t oper, 
             abort();
         }
     } else if (oper != IR_OP1_mov) {
-        if (dest.type == IR_RETVAL_TYPE_VAR && ir_operand_prim(operand) != dest.dest_var->prim_type) {
+        if (dest.type == IR_RETVAL_TYPE_VAR && operand.type != IR_OPERAND_TYPE_REG
+            && ir_operand_prim(operand) != dest.dest_var->prim_type) {
             fprintf(stderr, "BUG: IR expr1 has conflicting operand and return types\n");
             abort();
         }
@@ -947,9 +948,9 @@ ir_insn_t *ir_add_expr1(ir_insnloc_t loc, ir_retval_t dest, ir_op1_type_t oper, 
 // Add an expression to a code block.
 ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_retval_t dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs) {
     assert(oper < IR_N_OP2);
-    ir_prim_t lhs_prim = ir_operand_prim(lhs);
-    ir_prim_t rhs_prim = ir_operand_prim(rhs);
-    if (lhs_prim != rhs_prim) {
+    ir_prim_t lhs_prim = lhs.type != IR_OPERAND_TYPE_REG ? ir_operand_prim(lhs) : IR_N_PRIM;
+    ir_prim_t rhs_prim = rhs.type != IR_OPERAND_TYPE_REG ? ir_operand_prim(rhs) : IR_N_PRIM;
+    if (lhs.type != IR_OPERAND_TYPE_REG && rhs.type != IR_OPERAND_TYPE_REG && lhs_prim != rhs_prim) {
         fprintf(stderr, "BUG: IR expr2 has conflicting operand types\n");
         abort();
     }
@@ -959,7 +960,9 @@ ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_retval_t dest, ir_op2_type_t oper, 
             abort();
         }
     } else {
-        if (dest.type == IR_RETVAL_TYPE_VAR && lhs_prim != dest.dest_var->prim_type) {
+        if (dest.type == IR_RETVAL_TYPE_VAR
+            && ((lhs.type != IR_OPERAND_TYPE_REG && lhs_prim != dest.dest_var->prim_type)
+                || (rhs.type != IR_OPERAND_TYPE_REG && rhs_prim != dest.dest_var->prim_type))) {
             fprintf(stderr, "BUG: IR expr2 has conflicting operand and return types\n");
             abort();
         }

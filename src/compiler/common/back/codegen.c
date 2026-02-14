@@ -65,6 +65,46 @@ static void cg_isel(backend_profile_t *profile, ir_code_t *code) {
     code->func->enforce_ssa = true;
 }
 
+// Expand the ABI definitions of calls and returns.
+static void cg_xabi(backend_profile_t *profile, ir_code_t *code) {
+    assert(code->func->enforce_ssa);
+    code->func->enforce_ssa = false;
+    ir_insn_t *cur          = container_of(code->insns.tail, ir_insn_t, node);
+    while (cur) {
+        if (cur->type == IR_INSN_RETURN || cur->type == IR_INSN_CALL) {
+            ir_insn_t *res;
+            if (cur->type == IR_INSN_RETURN) {
+                res = profile->backend->xabi_return(profile, cur);
+            } else {
+                res = profile->backend->xabi_call(profile, cur);
+            }
+            if (!res) {
+                fprintf(stderr, "BUG: Backend cannot implement the ABI for `");
+                ir_insn_serialize(cur, profile, stderr);
+                fprintf(stderr, "`\n");
+                set_t vars = PTR_SET_EMPTY;
+                for (size_t i = 0; i < cur->returns_len; i++) {
+                    set_add(&vars, cur->returns[i].dest_var);
+                }
+                for (size_t i = 0; i < cur->operands_len; i++) {
+                    if (cur->operands[i].type == IR_OPERAND_TYPE_VAR) {
+                        set_add(&vars, cur->operands[i].var);
+                    }
+                }
+                set_foreach(ir_var_t, var, &vars) {
+                    fprintf(stderr, "Note: %%%s is %s\n", var->name, ir_prim_names[var->prim_type]);
+                }
+                set_clear(&vars);
+                fflush(stderr);
+                abort();
+            }
+            cur = res;
+        }
+        cur = container_of(cur->node.previous, ir_insn_t, node);
+    }
+    code->func->enforce_ssa = true;
+}
+
 // Replace arithmetic that is not supported with function calls.
 static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
     assert(insn->type == IR_INSN_EXPR2);
@@ -285,6 +325,17 @@ static void cg_normalize_op_order(ir_insn_t *insn) {
 void codegen(backend_profile_t *profile, ir_func_t *func) {
     assert(func->enforce_ssa);
 
+    // Expand the ABI definition.
+    assert(func->enforce_ssa);
+    func->enforce_ssa = false;
+    profile->backend->xabi_entry(profile, func);
+    func->enforce_ssa = true;
+    dlist_foreach_node(ir_code_t, code, &func->code_list) {
+        cg_xabi(profile, code);
+    }
+
+    // TODO: Perform optimizations.
+
     // Remove jumps that go the the next code block linearly.
     cg_remove_jumps(func);
 
@@ -294,6 +345,8 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
             cg_functionize_exprs(profile, insn);
         }
     }
+
+    // TODO: Convert operations into ones which fit in the CPU's registers.
 
     // Normalize operand order of instructions, if possible.
     dlist_foreach_node(ir_code_t, code, &func->code_list) {

@@ -37,7 +37,7 @@ typedef struct {
 // Expand the ABI for a specific return instruction.
 ir_insn_t *rv_xabi_return(backend_profile_t *profile, ir_insn_t *ret_insn) {
     rv_profile_t const *rv_profile = (void *)profile;
-    if (ret_insn->operands_len == 0) {
+    if (ret_insn->returns_len == 0) {
         // No need to consider how to return nothing.
         goto replace;
     }

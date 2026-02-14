@@ -3,8 +3,10 @@
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
+#include "backend.h"
 #include "c_compiler.h"
 #include "c_parser.h"
+#include "codegen.h"
 #include "ir/ir_optimizer.h"
 #include "ir_serialization.h"
 
@@ -33,6 +35,9 @@ static void compile(char const *path) {
               .size_type      = C_PRIM_ULONG,
         }
     );
+    backend_t const   *backend = backend_default();
+    backend_profile_t *profile = backend->create_profile();
+    backend->init_codegen(profile);
 
     printf("// Compiling %s\n", path);
 
@@ -44,10 +49,9 @@ static void compile(char const *path) {
             c_prepass_t prepass = c_precompile_pass(&decls);
             ir_func_t  *func    = c_compile_func_def(cc, &decls, &prepass);
             c_prepass_destroy(prepass);
-            ir_func_to_ssa(func);
-            ir_optimize(func);
+            codegen(profile, func);
             printf("\n");
-            ir_func_serialize(func, NULL, stdout);
+            ir_func_serialize(func, profile, stdout);
             ir_func_delete(func);
         } else {
             // Declarations.
@@ -69,6 +73,7 @@ static void compile(char const *path) {
     }
 
     // Clean up.
+    backend->delete_profile(profile);
     set_clear(&pctx.type_names);
     set_clear(&pctx.local_type_names);
     c_compiler_destroy(cc);

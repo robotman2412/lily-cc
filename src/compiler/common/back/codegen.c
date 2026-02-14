@@ -9,6 +9,7 @@
 #include "ir.h"
 #include "ir/ir_serialization.h"
 #include "ir_interpreter.h"
+#include "ir_optimizer.h"
 #include "ir_types.h"
 #include "list.h"
 #include "set.h"
@@ -323,7 +324,7 @@ static void cg_normalize_op_order(ir_insn_t *insn) {
 // functions, and unnecessary jumps are removed. When finished, the code blocks and instructions therein will be in
 // order as written to the eventual executable file.
 void codegen(backend_profile_t *profile, ir_func_t *func) {
-    assert(func->enforce_ssa);
+    ir_func_to_ssa(func);
 
     // Expand the ABI definition.
     assert(func->enforce_ssa);
@@ -334,7 +335,9 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
         cg_xabi(profile, code);
     }
 
-    // TODO: Perform optimizations.
+    // Perform optimizations.
+    // TODO: Make this configurable.
+    ir_optimize(func);
 
     // Remove jumps that go the the next code block linearly.
     cg_remove_jumps(func);

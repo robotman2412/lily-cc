@@ -266,9 +266,10 @@ static ir_insn_t *rv_isel_const_bitcast(rv_profile_t const *profile, ir_insn_t *
 // Jump instruction.
 static inline ir_insn_t *rv_isel_jump(rv_profile_t const *profile, ir_insn_t *insn) {
     (void)profile;
-    insn->type      = IR_INSN_MACHINE;
-    insn->prototype = &rv_insn_jal;
-    return insn;
+    ir_insn_t *new_node
+        = ir_add_mach_insn(IR_BEFORE_INSN(insn), true, IR_RETVAL_REG(0), &rv_insn_jal, 1, insn->operands);
+    ir_insn_delete(insn);
+    return new_node;
 }
 
 // Compare-branch instruction patterns.

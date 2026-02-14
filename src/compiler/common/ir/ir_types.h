@@ -389,7 +389,7 @@ static inline ir_prim_t ir_operand_prim(ir_operand_t oper) {
         case IR_OPERAND_TYPE_VAR: return oper.var->prim_type;
         case IR_OPERAND_TYPE_MEM:
         case IR_OPERAND_TYPE_STRUCT: return oper.mem.data_type;
-        case IR_OPERAND_TYPE_REG: UNREACHABLE();
+        case IR_OPERAND_TYPE_REG: return IR_N_PRIM;
     }
     UNREACHABLE();
 }

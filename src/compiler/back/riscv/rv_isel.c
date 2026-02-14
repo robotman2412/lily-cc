@@ -8,11 +8,12 @@
 #include "ir.h"
 #include "ir_interpreter.h"
 #include "ir_types.h"
+#include "list.h"
 #include "rv_backend.h"
 #include "rv_instructions.h"
 #include "rv_misc.h"
-#include "set.h"
 
+#include <assert.h>
 #include <stdio.h>
 
 
@@ -27,7 +28,8 @@ static ir_insn_t *rv_isel_rr_mov(ir_insn_t *insn) {
     } else {
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(insn),
-            insn->returns[0].dest_var,
+            true,
+            insn->returns[0],
             &rv_insn_addi,
             2,
             (ir_operand_t const[]){
@@ -69,7 +71,8 @@ static ir_insn_t *rv_isel_const_mov(ir_insn_t *insn) {
         ir_var_t *tmp = ir_var_create(func, IR_PRIM_s32, NULL);
         ir_add_mach_insn(
             IR_BEFORE_INSN(insn),
-            tmp,
+            true,
+            IR_RETVAL_VAR(tmp),
             &rv_insn_lui,
             1,
             (ir_operand_t const[]){
@@ -78,7 +81,8 @@ static ir_insn_t *rv_isel_const_mov(ir_insn_t *insn) {
         );
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(insn),
-            insn->returns[0].dest_var,
+            true,
+            insn->returns[0],
             &rv_insn_addi,
             2,
             (ir_operand_t const[]){
@@ -91,7 +95,8 @@ static ir_insn_t *rv_isel_const_mov(ir_insn_t *insn) {
         // Use just `lui`.
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(insn),
-            insn->returns[0].dest_var,
+            true,
+            insn->returns[0],
             &rv_insn_lui,
             1,
             (ir_operand_t const[]){
@@ -103,7 +108,8 @@ static ir_insn_t *rv_isel_const_mov(ir_insn_t *insn) {
         // Use just `addi`.
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(insn),
-            insn->returns[0].dest_var,
+            true,
+            insn->returns[0],
             &rv_insn_addi,
             2,
             (ir_operand_t const[]){
@@ -125,6 +131,7 @@ static inline ir_insn_t *rv_isel_jump(ir_insn_t *insn) {
     return insn;
 }
 
+/*
 // Compare-branch instruction patterns.
 static inline ir_insn_t *rv_isel_cmp_branch(ir_insn_t *ir_insn) {
     // Check that the branch is given a variable...
@@ -153,7 +160,8 @@ static inline ir_insn_t *rv_isel_cmp_branch(ir_insn_t *ir_insn) {
         }
         ir_insn_t *new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            NULL,
+            false,
+            (ir_retval_t){},
             proto,
             3,
             (ir_operand_t const[]){
@@ -203,7 +211,8 @@ static inline ir_insn_t *rv_isel_cmp_branch(ir_insn_t *ir_insn) {
         }
         ir_insn_t *new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            NULL,
+            false,
+            (ir_retval_t){},
             proto,
             3,
             (ir_operand_t const[]){pred_insn->operands[swap], pred_insn->operands[!swap], ir_insn->operands[0]}
@@ -219,24 +228,31 @@ static inline ir_insn_t *rv_isel_cmp_branch(ir_insn_t *ir_insn) {
         return NULL;
     }
 }
+*/
 
 // Branch instruction patterns.
 static inline ir_insn_t *rv_isel_branch(ir_insn_t *ir_insn) {
-    ir_insn_t *new_node = rv_isel_cmp_branch(ir_insn);
-    if (new_node) {
-        return new_node;
-    }
+    // ir_insn_t *new_node = rv_isel_cmp_branch(ir_insn);
+    // if (new_node) {
+    //     return new_node;
+    // }
+    ir_insn_t *new_node;
 
     // bne rs1, x0, dest
-    new_node = ir_add_mach_insn(
-        IR_BEFORE_INSN(ir_insn),
-        NULL,
-        &rv_insn_bne,
-        3,
-        (ir_operand_t const[]){ir_insn->operands[1], IR_OPERAND_REG(0), ir_insn->operands[0]}
-    );
+    new_node = ir_add_mach_insn(IR_BEFORE_INSN(ir_insn), false, (ir_retval_t){}, &rv_insn_addi, 0, NULL);
+    // new_node = ir_add_mach_insn(
+    //     IR_BEFORE_INSN(ir_insn),
+    //     false,
+    //     (ir_retval_t){},
+    //     &rv_insn_bne,
+    //     3,
+    //     (ir_operand_t const[]){ir_insn->operands[1], IR_OPERAND_REG(0), ir_insn->operands[0]}
+    // );
 
     ir_insn_delete(ir_insn);
+    assert(new_node->node.next != &ir_insn->node);
+    assert(!dlist_contains(&new_node->code->insns, &ir_insn->node));
+
     return new_node;
 }
 
@@ -302,7 +318,8 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t *profile, ir_insn_t *ir_i
         // b < a
         ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            tmp,
+            true,
+            IR_RETVAL_VAR(tmp),
             &rv_insn_slt,
             2,
             (ir_operand_t const[]){ir_insn->operands[1], ir_insn->operands[0]}
@@ -310,7 +327,8 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t *profile, ir_insn_t *ir_i
         // (b < a) ^ 1
         ir_insn_t *new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            ir_insn->returns[0].dest_var,
+            true,
+            ir_insn->returns[0],
             &rv_insn_xori,
             2,
             (ir_operand_t const[]){IR_OPERAND_VAR(tmp), IR_OPERAND_CONST(IR_CONST_U16(1))}
@@ -323,13 +341,14 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t *profile, ir_insn_t *ir_i
         // a != b written as 0u < (a ^ b)
         ir_var_t *tmp = ir_var_create(ir_insn->code->func, ir_operand_prim(ir_insn->operands[0]), NULL);
         // a ^ b
-        ir_add_mach_insn(IR_BEFORE_INSN(ir_insn), tmp, &rv_insn_xor, 2, ir_insn->operands);
+        ir_add_mach_insn(IR_BEFORE_INSN(ir_insn), true, IR_RETVAL_VAR(tmp), &rv_insn_xor, 2, ir_insn->operands);
         ir_insn_t *new_node;
         if (ir_insn->op2 == IR_OP2_seq) {
             // (a ^ b) < 1u
             new_node = ir_add_mach_insn(
                 IR_BEFORE_INSN(ir_insn),
-                ir_insn->returns[0].dest_var,
+                true,
+                ir_insn->returns[0],
                 &rv_insn_sltiu,
                 2,
                 (ir_operand_t const[]){IR_OPERAND_VAR(tmp), IR_OPERAND_CONST(IR_CONST_U16(1))}
@@ -338,7 +357,8 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t *profile, ir_insn_t *ir_i
             // 0u < (a ^ b)
             new_node = ir_add_mach_insn(
                 IR_BEFORE_INSN(ir_insn),
-                ir_insn->returns[0].dest_var,
+                true,
+                ir_insn->returns[0],
                 &rv_insn_sltu,
                 2,
                 (ir_operand_t const[]){IR_OPERAND_CONST(IR_CONST_U16(1)), IR_OPERAND_VAR(tmp)}
@@ -391,7 +411,7 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t *profile, ir_insn_t *ir_i
 // Unary expressions.
 static inline ir_insn_t *rv_isel_expr1(rv_profile_t *profile, ir_insn_t *ir_insn) {
     (void)profile;
-    ir_var_t    *dest = ir_insn->returns[0].dest_var;
+    ir_retval_t  dest = ir_insn->returns[0];
     ir_operand_t src  = ir_insn->operands[0];
     ir_insn_t   *new_node;
 
@@ -399,6 +419,7 @@ static inline ir_insn_t *rv_isel_expr1(rv_profile_t *profile, ir_insn_t *ir_insn
         case IR_OP1_seqz: // sltiu rd, rs1, 1
             new_node = ir_add_mach_insn(
                 IR_BEFORE_INSN(ir_insn),
+                true,
                 dest,
                 &rv_insn_sltiu,
                 2,
@@ -408,6 +429,7 @@ static inline ir_insn_t *rv_isel_expr1(rv_profile_t *profile, ir_insn_t *ir_insn
         case IR_OP1_snez: // sltu rd, x0, rs2
             new_node = ir_add_mach_insn(
                 IR_BEFORE_INSN(ir_insn),
+                true,
                 dest,
                 &rv_insn_sltu,
                 2,
@@ -417,6 +439,7 @@ static inline ir_insn_t *rv_isel_expr1(rv_profile_t *profile, ir_insn_t *ir_insn
         case IR_OP1_neg: // sub rd, x0, rs2
             new_node = ir_add_mach_insn(
                 IR_BEFORE_INSN(ir_insn),
+                true,
                 dest,
                 &rv_insn_sub,
                 2,
@@ -426,6 +449,7 @@ static inline ir_insn_t *rv_isel_expr1(rv_profile_t *profile, ir_insn_t *ir_insn
         case IR_OP1_bneg: // xori rd, rs1, -1
             new_node = ir_add_mach_insn(
                 IR_BEFORE_INSN(ir_insn),
+                true,
                 dest,
                 &rv_insn_xori,
                 2,
@@ -468,7 +492,8 @@ static inline ir_insn_t *rv_isel_mem_abs(rv_profile_t *profile, ir_insn_t *ir_in
         ir_var_t *tmp      = ir_var_create(ir_insn->code->func, ptr_prim, NULL);
         ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            tmp,
+            true,
+            IR_RETVAL_VAR(tmp),
             &rv_insn_lui,
             1,
             (ir_operand_t const[]){IR_OPERAND_CONST(IR_CONST_S32(lui))}
@@ -485,7 +510,8 @@ static inline ir_insn_t *rv_isel_mem_abs(rv_profile_t *profile, ir_insn_t *ir_in
     if (ir_insn->type == IR_INSN_STORE) {
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            NULL,
+            false,
+            (ir_retval_t){},
             lo12_proto,
             2,
             (ir_operand_t const[]){
@@ -497,7 +523,8 @@ static inline ir_insn_t *rv_isel_mem_abs(rv_profile_t *profile, ir_insn_t *ir_in
     } else {
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            ir_insn->returns[0].dest_var,
+            true,
+            ir_insn->returns[0],
             lo12_proto,
             1,
             (ir_operand_t const[]){
@@ -532,7 +559,8 @@ static inline ir_insn_t *rv_isel_mem_var(rv_profile_t *profile, ir_insn_t *ir_in
         iconst.constl    = memref.offset;
         ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            ptr,
+            true,
+            IR_RETVAL_VAR(ptr),
             &rv_insn_add,
             2,
             (ir_operand_t const[]){
@@ -548,7 +576,8 @@ static inline ir_insn_t *rv_isel_mem_var(rv_profile_t *profile, ir_insn_t *ir_in
     if (ir_insn->type == IR_INSN_STORE) {
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            NULL,
+            false,
+            (ir_retval_t){},
             lo12_proto,
             2,
             (ir_operand_t const[]){
@@ -559,7 +588,8 @@ static inline ir_insn_t *rv_isel_mem_var(rv_profile_t *profile, ir_insn_t *ir_in
     } else {
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            ir_insn->returns[0].dest_var,
+            true,
+            ir_insn->returns[0],
             lo12_proto,
             1,
             (ir_operand_t const[]){
@@ -622,7 +652,8 @@ static inline ir_insn_t *rv_isel_mem(rv_profile_t *profile, ir_insn_t *ir_insn) 
     if (ir_insn->type == IR_INSN_STORE) {
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            NULL,
+            false,
+            (ir_retval_t){},
             lo12_proto,
             2,
             (ir_operand_t const[]){ir_insn->operands[1], ir_insn->operands[0]}
@@ -630,7 +661,8 @@ static inline ir_insn_t *rv_isel_mem(rv_profile_t *profile, ir_insn_t *ir_insn) 
     } else {
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            ir_insn->returns[0].dest_var,
+            true,
+            ir_insn->returns[0],
             lo12_proto,
             1,
             (ir_operand_t const[]){ir_insn->operands[0]}

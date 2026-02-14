@@ -750,13 +750,11 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                             ir_add_branch(IR_APPEND(cur_code), operands[1], operands[0].mem.base_code);
                             break;
 
-                        case IR_KEYW_load:
-                            ir_add_load(IR_APPEND(cur_code), returns[0].dest_var, operands[0].mem);
-                            break;
+                        case IR_KEYW_load: ir_add_load(IR_APPEND(cur_code), returns[0], operands[0].mem); break;
 
                         case IR_KEYW_store: ir_add_store(IR_APPEND(cur_code), operands[1], operands[0].mem); break;
 
-                        case IR_KEYW_lea: ir_add_lea(IR_APPEND(cur_code), returns[0].dest_var, operands[0].mem); break;
+                        case IR_KEYW_lea: ir_add_lea(IR_APPEND(cur_code), returns[0], operands[0].mem); break;
 
                         case IR_KEYW_call:
                             fprintf(stderr, "TODO: Deserialize call instruction\n");
@@ -769,7 +767,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
 #include "defs/ir_op1.inc"
                             ir_add_expr1(
                                 IR_APPEND(cur_code),
-                                returns[0].dest_var,
+                                returns[0],
                                 stmt->params[1].subtype - IR_KEYW_mov + IR_OP1_mov,
                                 operands[0]
                             );
@@ -779,7 +777,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
 #include "defs/ir_op2.inc"
                             ir_add_expr2(
                                 IR_APPEND(cur_code),
-                                returns[0].dest_var,
+                                returns[0],
                                 stmt->params[1].subtype - IR_KEYW_sgt + IR_OP2_sgt,
                                 operands[0],
                                 operands[1]

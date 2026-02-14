@@ -23,6 +23,10 @@ __attribute__((always_inline)) static inline void consistency_check(dlist_t cons
             fprintf(stderr, "BUG: List length mismatch: %zu vs %zu\n", count, list->len);
             abort();
         }
+        if (!node->next && node != list->tail) {
+            fprintf(stderr, "BUG: List tail node mismatch\n");
+            abort();
+        }
         node = node->next;
     }
     assert(count == list->len);
@@ -33,6 +37,10 @@ __attribute__((always_inline)) static inline void consistency_check(dlist_t cons
         count++;
         if (count > list->len) {
             fprintf(stderr, "BUG: List length mismatch: %zu vs %zu\n", count, list->len);
+            abort();
+        }
+        if (!node->previous && node != list->head) {
+            fprintf(stderr, "BUG: List head node mismatch\n");
             abort();
         }
         node = node->previous;
@@ -138,6 +146,7 @@ void dlist_prepend(dlist_t *const list, dlist_node_t *const node) {
     }
     list->head  = node;
     list->len  += 1;
+
     consistency_check(list);
 }
 
@@ -150,8 +159,10 @@ void dlist_insert_after(dlist_t *list, dlist_node_t *existing, dlist_node_t *nod
     assert_dev_drop(node->next == NULL);
     assert_dev_drop(node->previous == NULL);
     consistency_check(list);
+#ifdef DLIST_CONSISTENCY_CHECK
     assert_dev_drop(!dlist_contains(list, node));
     assert_dev_drop(dlist_contains(list, existing));
+#endif
 
     *node = (dlist_node_t){
         .next     = existing->next,
@@ -164,6 +175,7 @@ void dlist_insert_after(dlist_t *list, dlist_node_t *existing, dlist_node_t *nod
     }
     existing->next  = node;
     list->len      += 1;
+
     consistency_check(list);
 }
 
@@ -190,6 +202,7 @@ void dlist_insert_before(dlist_t *list, dlist_node_t *existing, dlist_node_t *no
     }
     existing->previous  = node;
     list->len          += 1;
+
     consistency_check(list);
 }
 
@@ -284,9 +297,10 @@ bool dlist_contains(dlist_t const *const list, dlist_node_t const *const node) {
 // Removes `node` from `list`. `node` must be either an empty (non-inserted) node or must be contained in `list`.
 // Both `list` and `node` must be non-NULL.
 void dlist_remove(dlist_t *const list, dlist_node_t *const node) {
-    assert_dev_drop(list->len > 0);
-    consistency_check(list);
+#ifdef DLIST_CONSISTENCY_CHECK
     assert_dev_drop(dlist_contains(list, node));
+#endif
+    assert_dev_drop(list->len > 0);
 
     if (node->previous != NULL) {
         node->previous->next = node->next;
@@ -305,5 +319,7 @@ void dlist_remove(dlist_t *const list, dlist_node_t *const node) {
     list->len -= 1;
     *node      = DLIST_NODE_EMPTY;
 
-    consistency_check(list);
+#ifdef DLIST_CONSISTENCY_CHECK
+    assert_dev_drop(!dlist_contains(list, node));
+#endif
 }

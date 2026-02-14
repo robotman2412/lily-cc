@@ -51,7 +51,7 @@ static void c_lvalue_write_mem(c_compiler_t *ctx, ir_code_t *code, ir_memref_t l
     if (lvalue_memref.data_type < IR_N_PRIM && lvalue_memref.data_type != c_type_to_ir_type(ctx, rvalue_type)) {
         // Must cast the rvalue before it can be stored.
         ir_var_t *tmp = ir_var_create(code->func, lvalue_memref.data_type, NULL);
-        ir_add_expr1(IR_APPEND(code), tmp, IR_OP1_mov, c_value_read(ctx, code, rvalue));
+        ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(tmp), IR_OP1_mov, c_value_read(ctx, code, rvalue));
         ir_add_store(IR_APPEND(code), IR_OPERAND_VAR(tmp), lvalue_memref);
         return;
     }
@@ -116,7 +116,7 @@ void c_value_write(c_compiler_t *ctx, ir_code_t *code, c_value_t const *lvalue, 
         case C_LVALUE_MEM: c_lvalue_write_mem(ctx, code, lvalue->lvalue.memref, rvalue); break;
         case C_LVALUE_VAR: {
             ir_operand_t tmp = c_value_read(ctx, code, rvalue);
-            ir_add_expr1(IR_APPEND(code), lvalue->lvalue.ir_var, IR_OP1_mov, tmp);
+            ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(lvalue->lvalue.ir_var), IR_OP1_mov, tmp);
         } break;
     }
 }
@@ -175,7 +175,7 @@ ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *v
             }
             // Pointer lvalue is read from memory.
             ir_var_t *tmp = ir_var_create(code->func, c_type_to_ir_type(ctx, value->c_type->data), NULL);
-            ir_add_load(IR_APPEND(code), tmp, c_value_memref(ctx, code, value));
+            ir_add_load(IR_APPEND(code), IR_RETVAL_VAR(tmp), c_value_memref(ctx, code, value));
             return IR_OPERAND_VAR(tmp);
         }
         case C_LVALUE_VAR:

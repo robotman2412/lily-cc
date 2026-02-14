@@ -31,7 +31,7 @@ ir_insn_t *
     }
 
     // Insert this node's instruction
-    ir_insn_t *insn = ir_add_mach_insn(loc, dest, tree->proto, tree->operands_len, operands);
+    ir_insn_t *insn = ir_add_mach_insn(loc, dest != 0, IR_RETVAL_VAR(dest), tree->proto, tree->operands_len, operands);
 
     // Generate subtrees as needed.
     for (size_t i = 0; i < tree->operands_len; i++) {

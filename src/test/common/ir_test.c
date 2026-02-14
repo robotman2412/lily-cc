@@ -220,7 +220,7 @@ static char *test_ir_append() {
 
     ir_add_expr1(
         IR_APPEND(cur),
-        var1,
+        IR_RETVAL_VAR(var1),
         IR_OP1_snez,
         (ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = func->args[0].var}
     );
@@ -246,25 +246,30 @@ static char *test_ir_to_ssa() {
 
     ir_add_expr1(
         IR_APPEND(code0),
-        var0,
+        IR_RETVAL_VAR(var0),
         IR_OP1_mov,
         (ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = {.prim_type = IR_PRIM_s32, .constl = 0xdeadbeef}}
     );
     ir_add_expr1(
         IR_APPEND(code0),
-        var1,
+        IR_RETVAL_VAR(var1),
         IR_OP1_mov,
         (ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = {.prim_type = IR_PRIM_s32, .constl = 0}}
     );
     ir_add_jump(IR_APPEND(code0), code1);
 
-    ir_add_expr1(IR_APPEND(code1), var2, IR_OP1_snez, (ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = var1});
+    ir_add_expr1(
+        IR_APPEND(code1),
+        IR_RETVAL_VAR(var2),
+        IR_OP1_snez,
+        (ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = var1}
+    );
     ir_add_branch(IR_APPEND(code1), (ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = var2}, code2);
     ir_add_jump(IR_APPEND(code1), code3);
 
     ir_add_expr2(
         IR_APPEND(code2),
-        var0,
+        IR_RETVAL_VAR(var0),
         IR_OP2_shr,
         (ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = var0},
         (ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = {.prim_type = IR_PRIM_s32, .constl = 3}}

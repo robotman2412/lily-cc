@@ -239,7 +239,7 @@ static void create_combinator(ir_code_t *code, ir_var_t *dest) {
     expr->code            = code;
     expr->combinators_len = code->pred.len;
     expr->combinators     = strong_calloc(1, code->pred.len * sizeof(ir_combinator_t));
-    expr->returns         = strong_malloc(sizeof(void *));
+    expr->returns         = strong_malloc(sizeof(ir_retval_t));
     expr->returns[0]      = IR_RETVAL_VAR(dest);
     expr->returns_len     = 1;
     size_t i              = 0;
@@ -826,12 +826,23 @@ static void ir_emplace_insn(ir_insnloc_t loc, ir_insn_t *insn) {
         abort();
     }
 
-    insn->code = loc.code;
     switch (loc.type) {
-        case IR_INSNLOC_PREPEND_CODE: dlist_prepend(&loc.code->insns, &insn->node); break;
-        case IR_INSNLOC_APPEND_CODE: dlist_append(&loc.code->insns, &insn->node); break;
-        case IR_INSNLOC_AFTER_INSN: dlist_insert_after(&loc.insn->code->insns, &loc.insn->node, &insn->node); break;
-        case IR_INSNLOC_BEFORE_INSN: dlist_insert_before(&loc.insn->code->insns, &loc.insn->node, &insn->node); break;
+        case IR_INSNLOC_PREPEND_CODE:
+            dlist_prepend(&loc.code->insns, &insn->node);
+            insn->code = loc.code;
+            break;
+        case IR_INSNLOC_APPEND_CODE:
+            dlist_append(&loc.code->insns, &insn->node);
+            insn->code = loc.code;
+            break;
+        case IR_INSNLOC_AFTER_INSN:
+            dlist_insert_after(&loc.insn->code->insns, &loc.insn->node, &insn->node);
+            insn->code = loc.insn->code;
+            break;
+        case IR_INSNLOC_BEFORE_INSN:
+            dlist_insert_before(&loc.insn->code->insns, &loc.insn->node, &insn->node);
+            insn->code = loc.insn->code;
+            break;
     }
 }
 
@@ -840,29 +851,31 @@ static ir_insn_t *alloc_ir_insn(size_t operands_len, size_t returns_len) {
     ir_insn_t *insn    = strong_calloc(1, sizeof(ir_insn_t));
     insn->operands     = strong_calloc(operands_len, sizeof(ir_operand_t));
     insn->operands_len = operands_len;
-    insn->returns      = strong_calloc(returns_len, sizeof(ir_var_t *));
+    insn->returns      = strong_calloc(returns_len, sizeof(ir_retval_t));
     insn->returns_len  = returns_len;
     return insn;
 }
 
 // Helper function for creating an `ir_insn_t`.
-static ir_insn_t *
-    ir_create_insn(ir_insnloc_t loc, ir_insn_type_t type, ir_var_t *dest, size_t operands_len, ir_operand_t *operands) {
+static ir_insn_t *ir_create_insn(
+    ir_insnloc_t loc, ir_insn_type_t type, bool has_dest, ir_retval_t dest, size_t operands_len, ir_operand_t *operands
+) {
     ir_insn_t *insn    = strong_calloc(1, sizeof(ir_insn_t));
     insn->type         = type;
     insn->operands     = operands;
     insn->operands_len = operands_len;
-    if (dest) {
-        insn->returns     = strong_malloc(sizeof(ir_var_t *));
+    if (has_dest) {
+        insn->returns     = strong_malloc(sizeof(ir_retval_t));
         insn->returns_len = 1;
-    }
-    if (dest != NULL) {
-        if (ir_insnloc_code(loc)->func->enforce_ssa && (dest->assigned_at.len || dest->arg_index >= 0)) {
-            fprintf(stderr, "BUG: SSA IR variable %%%s assigned twice\n", dest->name);
-            abort();
+        if (dest.type == IR_RETVAL_TYPE_VAR) {
+            if (ir_insnloc_code(loc)->func->enforce_ssa
+                && (dest.dest_var->assigned_at.len || dest.dest_var->arg_index >= 0)) {
+                fprintf(stderr, "BUG: SSA IR variable %%%s assigned twice\n", dest.dest_var->name);
+                abort();
+            }
+            set_add(&dest.dest_var->assigned_at, insn);
         }
-        set_add(&dest->assigned_at, insn);
-        insn->returns[0] = IR_RETVAL_VAR(dest);
+        insn->returns[0] = dest;
     }
     for (size_t i = 0; i < operands_len; i++) {
         ir_mark_used(insn->operands[i], insn);
@@ -875,7 +888,9 @@ static ir_insn_t *
 }
 
 // Helper function for creating an `ir_insn_t`.
-static ir_insn_t *ir_create_insn_va(ir_insnloc_t loc, ir_insn_type_t type, ir_var_t *dest, size_t operands_len, ...) {
+static ir_insn_t *ir_create_insn_va(
+    ir_insnloc_t loc, ir_insn_type_t type, bool has_dest, ir_retval_t dest, size_t operands_len, ...
+) {
     ir_operand_t *operands = strong_calloc(operands_len, sizeof(ir_operand_t));
     va_list       l;
     va_start(l, operands_len);
@@ -883,7 +898,7 @@ static ir_insn_t *ir_create_insn_va(ir_insnloc_t loc, ir_insn_type_t type, ir_va
         operands[i] = va_arg(l, ir_operand_t);
     }
     va_end(l);
-    return ir_create_insn(loc, type, dest, operands_len, operands);
+    return ir_create_insn(loc, type, has_dest, dest, operands_len, operands);
 }
 
 // Add a combinator function to a code block.
@@ -911,49 +926,45 @@ ir_insn_t *ir_add_combinator(ir_insnloc_t loc, ir_var_t *dest, size_t from_len, 
 }
 
 // Add an expression to a code block.
-ir_insn_t *ir_add_expr1(ir_insnloc_t loc, ir_var_t *dest, ir_op1_type_t oper, ir_operand_t operand) {
+ir_insn_t *ir_add_expr1(ir_insnloc_t loc, ir_retval_t dest, ir_op1_type_t oper, ir_operand_t operand) {
     assert(oper < IR_N_OP1);
     if (oper == IR_OP1_snez || oper == IR_OP1_seqz) {
-        if (dest->prim_type != IR_PRIM_bool) {
+        if (dest.type == IR_RETVAL_TYPE_VAR && dest.dest_var->prim_type != IR_PRIM_bool) {
             fprintf(stderr, "BUG: IR %s must return a boolean\n", ir_op1_names[oper]);
             abort();
         }
     } else if (oper != IR_OP1_mov) {
-        if (ir_operand_prim(operand) != dest->prim_type) {
+        if (dest.type == IR_RETVAL_TYPE_VAR && ir_operand_prim(operand) != dest.dest_var->prim_type) {
             fprintf(stderr, "BUG: IR expr1 has conflicting operand and return types\n");
             abort();
         }
     }
-    ir_insn_t *insn = ir_create_insn_va(loc, IR_INSN_EXPR1, dest, 1, operand);
+    ir_insn_t *insn = ir_create_insn_va(loc, IR_INSN_EXPR1, true, dest, 1, operand);
     insn->op1       = oper;
     return insn;
 }
 
 // Add an expression to a code block.
-ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_var_t *dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs) {
+ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_retval_t dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs) {
     assert(oper < IR_N_OP2);
     ir_prim_t lhs_prim = ir_operand_prim(lhs);
     ir_prim_t rhs_prim = ir_operand_prim(rhs);
+    if (lhs_prim != rhs_prim) {
+        fprintf(stderr, "BUG: IR expr2 has conflicting operand types\n");
+        abort();
+    }
     if (oper >= IR_OP2_sgt && oper <= IR_OP2_sne) {
-        if (lhs_prim != rhs_prim) {
-            fprintf(stderr, "BUG: IR expr2 has conflicting operand types\n");
-            abort();
-        }
-        if (dest->prim_type != IR_PRIM_bool) {
+        if (dest.type == IR_RETVAL_TYPE_VAR && dest.dest_var->prim_type != IR_PRIM_bool) {
             fprintf(stderr, "BUG: IR expr2 should be returning IR_PRIM_bool\n");
             abort();
         }
     } else {
-        if (lhs_prim != dest->prim_type) {
-            fprintf(stderr, "BUG: IR expr2 has conflicting operand and return types\n");
-            abort();
-        }
-        if (rhs_prim != dest->prim_type) {
+        if (dest.type == IR_RETVAL_TYPE_VAR && lhs_prim != dest.dest_var->prim_type) {
             fprintf(stderr, "BUG: IR expr2 has conflicting operand and return types\n");
             abort();
         }
     }
-    ir_insn_t *insn = ir_create_insn_va(loc, IR_INSN_EXPR2, dest, 2, lhs, rhs);
+    ir_insn_t *insn = ir_create_insn_va(loc, IR_INSN_EXPR2, true, dest, 2, lhs, rhs);
     insn->op2       = oper;
     return insn;
 }
@@ -985,10 +996,11 @@ ir_insn_t *ir_add_clobber_va(ir_insnloc_t loc, size_t returns_len, ...) {
 
 
 // Add a load effective address of a stack frame to a code block.
-ir_insn_t *ir_add_lea_stack(ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame, uint64_t offset) {
+ir_insn_t *ir_add_lea_stack(ir_insnloc_t loc, ir_retval_t dest, ir_frame_t *frame, uint64_t offset) {
     return ir_create_insn_va(
         loc,
         IR_INSN_LEA,
+        true,
         dest,
         1,
         IR_OPERAND_MEM(IR_MEMREF(IR_PRIM_u8, IR_BADDR_FRAME(frame), .offset = offset))
@@ -996,10 +1008,11 @@ ir_insn_t *ir_add_lea_stack(ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame,
 }
 
 // Add a load effective address of a symbol to a code block.
-ir_insn_t *ir_add_lea_symbol(ir_insnloc_t loc, ir_var_t *dest, char const *symbol, uint64_t offset) {
+ir_insn_t *ir_add_lea_symbol(ir_insnloc_t loc, ir_retval_t dest, char const *symbol, uint64_t offset) {
     return ir_create_insn_va(
         loc,
         IR_INSN_LEA,
+        true,
         dest,
         1,
         IR_OPERAND_MEM(IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM((char *)symbol), .offset = offset))
@@ -1007,18 +1020,18 @@ ir_insn_t *ir_add_lea_symbol(ir_insnloc_t loc, ir_var_t *dest, char const *symbo
 }
 
 // Add a load effective address.
-ir_insn_t *ir_add_lea(ir_insnloc_t loc, ir_var_t *dest, ir_memref_t memref) {
-    return ir_create_insn_va(loc, IR_INSN_LEA, dest, 1, IR_OPERAND_MEM(memref));
+ir_insn_t *ir_add_lea(ir_insnloc_t loc, ir_retval_t dest, ir_memref_t memref) {
+    return ir_create_insn_va(loc, IR_INSN_LEA, true, dest, 1, IR_OPERAND_MEM(memref));
 }
 
 // Add a memory load to a code block.
-ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_memref_t memref) {
-    return ir_create_insn_va(loc, IR_INSN_LOAD, dest, 1, IR_OPERAND_MEM(memref));
+ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_retval_t dest, ir_memref_t memref) {
+    return ir_create_insn_va(loc, IR_INSN_LOAD, true, dest, 1, IR_OPERAND_MEM(memref));
 }
 
 // Add a memory store to a code block.
 ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_memref_t memref) {
-    return ir_create_insn_va(loc, IR_INSN_STORE, NULL, 2, IR_OPERAND_MEM(memref), src);
+    return ir_create_insn_va(loc, IR_INSN_STORE, false, (ir_retval_t){}, 2, IR_OPERAND_MEM(memref), src);
 }
 
 
@@ -1026,12 +1039,21 @@ ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_memref_t memref) 
 // Add a memory filling intrinsic.
 // The fill value must be either u8 or s8.
 ir_insn_t *ir_add_memset(ir_insnloc_t loc, ir_memref_t dest, ir_operand_t fill, ir_operand_t size) {
-    return ir_create_insn_va(loc, IR_INSN_MEMSET, NULL, 3, IR_OPERAND_MEM(dest), fill, size);
+    return ir_create_insn_va(loc, IR_INSN_MEMSET, false, (ir_retval_t){}, 3, IR_OPERAND_MEM(dest), fill, size);
 }
 
 // Add a memory copying intrinsic.
 ir_insn_t *ir_add_memcpy(ir_insnloc_t loc, ir_memref_t dest, ir_memref_t src, ir_operand_t size) {
-    return ir_create_insn_va(loc, IR_INSN_MEMCPY, NULL, 3, IR_OPERAND_MEM(dest), IR_OPERAND_MEM(src), size);
+    return ir_create_insn_va(
+        loc,
+        IR_INSN_MEMCPY,
+        false,
+        (ir_retval_t){},
+        3,
+        IR_OPERAND_MEM(dest),
+        IR_OPERAND_MEM(src),
+        size
+    );
 }
 
 // Implementation of `ir_add_memcpy_const` and `ir_add_memcpy`.
@@ -1097,7 +1119,7 @@ static ir_insn_t *ir_gen_memcpy_impl(
             ir_memref_t src_part  = *(ir_memref_t const *)src;
             src_part.data_type    = copy_prim;
             src_part.offset      += (int64_t)i;
-            loc                   = IR_AFTER_INSN(ir_add_load(loc, tmp, src_part));
+            loc                   = IR_AFTER_INSN(ir_add_load(loc, IR_RETVAL_VAR(tmp), src_part));
             data                  = IR_OPERAND_VAR(tmp);
         }
 
@@ -1153,27 +1175,25 @@ ir_insn_t *ir_gen_memcpy(
 
 // Add a function call.
 ir_insn_t *ir_add_call(
-    ir_insnloc_t        loc,
-    ir_memref_t         to,
-    size_t              returns_len,
-    ir_retval_t const  *returns,
-    size_t              operands_len,
-    ir_operand_t const *operands
+    ir_insnloc_t loc, ir_memref_t to, bool has_dest, ir_retval_t dest, size_t operands_len, ir_operand_t const *operands
 ) {
     ir_operand_t *operands_copy = strong_calloc(1 + operands_len, sizeof(ir_operand_t));
     operands_copy[0]            = IR_OPERAND_MEM(to);
     memcpy(operands_copy + 1, operands, operands_len * sizeof(ir_operand_t));
 
-    ir_retval_t *returns_copy = strong_calloc(returns_len, sizeof(ir_retval_t));
-    memcpy(returns_copy, returns, returns_len * sizeof(void *));
-
-    return ir_create_insn(loc, IR_INSN_CALL, NULL, 1 + operands_len, operands_copy);
+    return ir_create_insn(loc, IR_INSN_CALL, has_dest, dest, 1 + operands_len, operands_copy);
 }
 
 // Add an unconditional jump.
 ir_insn_t *ir_add_jump(ir_insnloc_t loc, ir_code_t *to) {
-    ir_insn_t *insn
-        = ir_create_insn_va(loc, IR_INSN_JUMP, NULL, 1, IR_OPERAND_MEM(IR_MEMREF(IR_N_PRIM, IR_BADDR_CODE(to))));
+    ir_insn_t *insn = ir_create_insn_va(
+        loc,
+        IR_INSN_JUMP,
+        false,
+        (ir_retval_t){},
+        1,
+        IR_OPERAND_MEM(IR_MEMREF(IR_N_PRIM, IR_BADDR_CODE(to)))
+    );
     set_add(&ir_insnloc_code(loc)->succ, to);
     set_add(&to->pred, ir_insnloc_code(loc));
     return insn;
@@ -1188,7 +1208,8 @@ ir_insn_t *ir_add_branch(ir_insnloc_t loc, ir_operand_t cond, ir_code_t *to) {
     ir_insn_t *insn = ir_create_insn_va(
         loc,
         IR_INSN_BRANCH,
-        NULL,
+        false,
+        (ir_retval_t){},
         2,
         IR_OPERAND_MEM(IR_MEMREF(IR_N_PRIM, IR_BADDR_CODE(to))),
         cond
@@ -1200,28 +1221,33 @@ ir_insn_t *ir_add_branch(ir_insnloc_t loc, ir_operand_t cond, ir_code_t *to) {
 
 // Add a return without value.
 ir_insn_t *ir_add_return0(ir_insnloc_t loc) {
-    return ir_create_insn_va(loc, IR_INSN_RETURN, NULL, 0);
+    return ir_create_insn_va(loc, IR_INSN_RETURN, false, (ir_retval_t){}, 0);
 }
 
 // Add a return with value.
 ir_insn_t *ir_add_return1(ir_insnloc_t loc, ir_operand_t value) {
-    return ir_create_insn_va(loc, IR_INSN_RETURN, NULL, 1, value);
+    return ir_create_insn_va(loc, IR_INSN_RETURN, false, (ir_retval_t){}, 1, value);
 }
 
 // Add a return.
 ir_insn_t *ir_add_return(ir_insnloc_t loc, size_t operands_len, ir_operand_t const *operands) {
     ir_operand_t *operands_copy = strong_calloc(operands_len, sizeof(ir_operand_t));
     memcpy(operands_copy, operands, operands_len * sizeof(ir_operand_t));
-    return ir_create_insn(loc, IR_INSN_RETURN, NULL, operands_len, operands_copy);
+    return ir_create_insn(loc, IR_INSN_RETURN, false, (ir_retval_t){}, operands_len, operands_copy);
 }
 
 // Add a machine instruction.
 ir_insn_t *ir_add_mach_insn(
-    ir_insnloc_t loc, ir_var_t *dest, insn_proto_t const *proto, size_t operands_len, ir_operand_t const *operands
+    ir_insnloc_t        loc,
+    bool                has_dest,
+    ir_retval_t         dest,
+    insn_proto_t const *proto,
+    size_t              operands_len,
+    ir_operand_t const *operands
 ) {
     ir_operand_t *operands_copy = strong_calloc(operands_len, sizeof(ir_operand_t));
     memcpy(operands_copy, operands, operands_len * sizeof(ir_operand_t));
-    ir_insn_t *insn = ir_create_insn(loc, IR_INSN_MACHINE, dest, operands_len, operands_copy);
+    ir_insn_t *insn = ir_create_insn(loc, IR_INSN_MACHINE, has_dest, dest, operands_len, operands_copy);
     insn->prototype = proto;
     return insn;
 }

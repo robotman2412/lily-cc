@@ -1072,7 +1072,7 @@ ir_operand_t c_cast_ir_operand(ir_code_t *code, ir_operand_t operand, ir_prim_t 
             return operand;
         }
         ir_var_t *dest = ir_var_create(code->func, type, NULL);
-        ir_add_expr1(IR_APPEND(code), dest, op1, operand);
+        ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(dest), op1, operand);
         return IR_OPERAND_VAR(dest);
     }
 }

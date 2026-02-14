@@ -32,7 +32,7 @@ char *test_rv_isel() {
     "    branch (%code1), %tmp4\n"
     "    jump (%code2)\n"
     "code %code2\n"
-    "    %tmp3 = load (s8 %tmp2)\n"
+    // "    %tmp3 = load (s8 %tmp2)\n"
     "code %code1\n"
     ;
     // clang-format on

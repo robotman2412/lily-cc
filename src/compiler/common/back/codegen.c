@@ -77,38 +77,73 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
     if (insn->op2 == IR_OP2_add && softfloat) {
         char buf[32];
         snprintf(buf, sizeof(buf) - 1, "__lily_add_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
-        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 2, insn->operands);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            2,
+            insn->operands
+        );
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_sub && softfloat) {
         char buf[32];
         snprintf(buf, sizeof(buf) - 1, "__lily_sub_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
-        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 2, insn->operands);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            2,
+            insn->operands
+        );
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_mul && (softfloat || !profile->has_mul)) {
         char buf[32];
         snprintf(buf, sizeof(buf) - 1, "__lily_mul_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
-        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 2, insn->operands);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            2,
+            insn->operands
+        );
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_div && (softfloat || !profile->has_div)) {
         char buf[32];
         snprintf(buf, sizeof(buf) - 1, "__lily_div_%s", ir_prim_names[prim]);
-        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 2, insn->operands);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            2,
+            insn->operands
+        );
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_rem && (softfloat || !profile->has_rem)) {
         char buf[32];
         snprintf(buf, sizeof(buf) - 1, "__lily_rem_%s", ir_prim_names[prim]);
-        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 2, insn->operands);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            2,
+            insn->operands
+        );
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_shr && insn->operands[1].type != IR_OPERAND_TYPE_CONST && !profile->has_var_shift) {
         char buf[32];
         snprintf(buf, sizeof(buf) - 1, "__lily_shr_%s", ir_prim_names[prim]);
         ir_var_t *tmp = ir_var_create(insn->code->func, IR_PRIM_u8, NULL); // __lily_shr_* uses u8 as shift amount
-        ir_add_expr1(IR_AFTER_INSN(insn), tmp, IR_OP1_mov, insn->operands[1]);
+        ir_add_expr1(IR_AFTER_INSN(insn), IR_RETVAL_VAR(tmp), IR_OP1_mov, insn->operands[1]);
         ir_add_call(
             IR_AFTER_INSN(insn),
             IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
-            1,
-            insn->returns,
+            true,
+            insn->returns[0],
             2,
             (ir_operand_t const[]){insn->operands[0], IR_OPERAND_VAR(tmp)}
         );
@@ -117,12 +152,12 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
         char buf[32];
         snprintf(buf, sizeof(buf) - 1, "__lily_shl_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
         ir_var_t *tmp = ir_var_create(insn->code->func, IR_PRIM_u8, NULL); // __lily_shl_u* uses u8 as shift amount
-        ir_add_expr1(IR_AFTER_INSN(insn), tmp, IR_OP1_mov, insn->operands[1]);
+        ir_add_expr1(IR_AFTER_INSN(insn), IR_RETVAL_VAR(tmp), IR_OP1_mov, insn->operands[1]);
         ir_add_call(
             IR_AFTER_INSN(insn),
             IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
-            1,
-            insn->returns,
+            true,
+            insn->returns[0],
             2,
             (ir_operand_t const[]){insn->operands[0], IR_OPERAND_VAR(tmp)}
         );
@@ -159,12 +194,26 @@ static void cg_functionize_expr1(backend_profile_t *profile, ir_insn_t *insn) {
             // Float to int.
             snprintf(buf, sizeof(buf) - 1, "__lily_ftoi_%s_%s", ir_prim_names[prim], ir_prim_names[ret_prim]);
         }
-        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 1, insn->operands);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            1,
+            insn->operands
+        );
         ir_insn_delete(insn);
     } else if (insn->op1 == IR_OP1_neg && softfloat) {
         char buf[32];
         snprintf(buf, sizeof(buf) - 1, "__lily_neg_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
-        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 1, insn->operands);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            1,
+            insn->operands
+        );
         ir_insn_delete(insn);
     }
     // TODO: Float comparisons.

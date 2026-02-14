@@ -91,9 +91,9 @@ void ir_insn_set_return(ir_insn_t *insn, size_t index, ir_retval_t dest);
 // Takes ownership of the `from` array.
 ir_insn_t *ir_add_combinator(ir_insnloc_t loc, ir_var_t *dest, size_t from_len, ir_combinator_t *from);
 // Add an expression to a code block.
-ir_insn_t *ir_add_expr1(ir_insnloc_t loc, ir_var_t *dest, ir_op1_type_t oper, ir_operand_t operand);
+ir_insn_t *ir_add_expr1(ir_insnloc_t loc, ir_retval_t dest, ir_op1_type_t oper, ir_operand_t operand);
 // Add an expression to a code block.
-ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_var_t *dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs);
+ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_retval_t dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs);
 // Add a clobbering intrinsic.
 ir_insn_t *ir_add_clobber(ir_insnloc_t loc, size_t returns_len, ir_retval_t const *returns);
 // Add a clobbering intrinsic.
@@ -101,13 +101,13 @@ ir_insn_t *ir_add_clobber(ir_insnloc_t loc, size_t returns_len, ir_retval_t cons
 ir_insn_t *ir_add_clobber_va(ir_insnloc_t loc, size_t returns_len, ...);
 
 // Add a load effective address of a stack frame to a code block.
-ir_insn_t *ir_add_lea_stack(ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame, uint64_t offset);
+ir_insn_t *ir_add_lea_stack(ir_insnloc_t loc, ir_retval_t dest, ir_frame_t *frame, uint64_t offset);
 // Add a load effective address of a symbol to a code block.
-ir_insn_t *ir_add_lea_symbol(ir_insnloc_t loc, ir_var_t *dest, char const *symbol, uint64_t offset);
+ir_insn_t *ir_add_lea_symbol(ir_insnloc_t loc, ir_retval_t dest, char const *symbol, uint64_t offset);
 // Add a load effective address.
-ir_insn_t *ir_add_lea(ir_insnloc_t loc, ir_var_t *dest, ir_memref_t memref);
+ir_insn_t *ir_add_lea(ir_insnloc_t loc, ir_retval_t dest, ir_memref_t memref);
 // Add a memory load to a code block.
-ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_var_t *dest, ir_memref_t memref);
+ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_retval_t dest, ir_memref_t memref);
 // Add a memory store to a code block.
 ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_memref_t memref);
 
@@ -147,12 +147,7 @@ ir_insn_t *ir_gen_memcpy(
 
 // Add a function call.
 ir_insn_t *ir_add_call(
-    ir_insnloc_t        from,
-    ir_memref_t         to,
-    size_t              returns_len,
-    ir_retval_t const  *returns,
-    size_t              params_len,
-    ir_operand_t const *params
+    ir_insnloc_t from, ir_memref_t to, bool has_dest, ir_retval_t dest, size_t params_len, ir_operand_t const *params
 );
 // Add an unconditional jump.
 ir_insn_t *ir_add_jump(ir_insnloc_t from, ir_code_t *to);
@@ -167,7 +162,12 @@ ir_insn_t *ir_add_return(ir_insnloc_t from, size_t values_len, ir_operand_t cons
 
 // Add a machine instruction.
 ir_insn_t *ir_add_mach_insn(
-    ir_insnloc_t loc, ir_var_t *dest, insn_proto_t const *proto, size_t operands_len, ir_operand_t const *operands
+    ir_insnloc_t        loc,
+    bool                has_dest,
+    ir_retval_t         dest,
+    insn_proto_t const *proto,
+    size_t              operands_len,
+    ir_operand_t const *operands
 );
 
 

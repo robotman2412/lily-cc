@@ -82,19 +82,31 @@ static bool strength_reduce_expr(ir_insn_t *expr) {
             ir_var_t *tmp4 = ir_var_create(expr->code->func, prim, NULL);
 
             ir_const_t shamt1 = {.prim_type = prim, .constl = ir_prim_sizes[prim] * 8 - 1};
-            ir_add_expr2(IR_BEFORE_INSN(expr), tmp1, IR_OP2_shr, lhs, IR_OPERAND_CONST(shamt1));
+            ir_add_expr2(IR_BEFORE_INSN(expr), IR_RETVAL_VAR(tmp1), IR_OP2_shr, lhs, IR_OPERAND_CONST(shamt1));
 
             ir_const_t shamt2 = {.prim_type = prim, .constl = ir_prim_sizes[prim] * 8 - bits};
-            ir_add_expr2(IR_BEFORE_INSN(expr), tmp2, IR_OP2_shr, IR_OPERAND_VAR(tmp1), IR_OPERAND_CONST(shamt2));
+            ir_add_expr2(
+                IR_BEFORE_INSN(expr),
+                IR_RETVAL_VAR(tmp2),
+                IR_OP2_shr,
+                IR_OPERAND_VAR(tmp1),
+                IR_OPERAND_CONST(shamt2)
+            );
 
-            ir_add_expr2(IR_BEFORE_INSN(expr), tmp3, IR_OP2_add, lhs, IR_OPERAND_VAR(tmp2));
+            ir_add_expr2(IR_BEFORE_INSN(expr), IR_RETVAL_VAR(tmp3), IR_OP2_add, lhs, IR_OPERAND_VAR(tmp2));
 
             ir_var_t *dest = expr->returns[0].dest_var;
             set_remove(&dest->assigned_at, expr);
             expr->returns[0].dest_var = tmp4;
             set_add(&tmp4->assigned_at, expr);
 
-            ir_add_expr2(IR_AFTER_INSN(expr), dest, IR_OP2_sub, IR_OPERAND_VAR(tmp4), IR_OPERAND_VAR(tmp2));
+            ir_add_expr2(
+                IR_AFTER_INSN(expr),
+                IR_RETVAL_VAR(dest),
+                IR_OP2_sub,
+                IR_OPERAND_VAR(tmp4),
+                IR_OPERAND_VAR(tmp2)
+            );
         }
         rhs.iconst.const128 = mask;
         oper                = IR_OP2_band;

@@ -138,7 +138,16 @@ typedef enum __attribute__((packed)) {
     // Machine instructions; target architecture-dependent.
     IR_INSN_MACHINE,
     // Clobber intrinsic; all destinations of this will have an undefined, useless value from now on.
+    // Should be placed immediately before the instruction that clobbers the registers.
     IR_INSN_CLOBBER,
+    // Allocate memory on the stack dynamically.
+    IR_INSN_ALLOCA,
+    // Enter a call frame.
+    // Typically decrements the stack pointer to match.
+    IR_INSN_CALLFRAME_ENTER,
+    // Exit a call frame.
+    // Typically increments the stack pointer to match.
+    IR_INSN_CALLFRAME_EXIT,
 } ir_insn_type_t;
 
 // Type of IR operand.
@@ -183,7 +192,7 @@ typedef enum __attribute__((packed)) {
     IR_ARG_TYPE_IGNORED,
 } ir_arg_type_t;
 
-// Types of IR return value.
+// Types of IR instruction return value.
 typedef enum __attribute__((packed)) {
     // Return value stored in IR variable.
     IR_RETVAL_TYPE_VAR,
@@ -193,6 +202,7 @@ typedef enum __attribute__((packed)) {
     IR_RETVAL_TYPE_STRUCT,
 } ir_retval_type_t;
 
+// Storage types of function return value.
 typedef enum __attribute__((packed)) {
     // Function returns nothing (or "void").
     IR_FUNCRET_NONE,
@@ -229,6 +239,11 @@ typedef struct ir_funcret    ir_funcret_t;
 // IR function.
 typedef struct ir_func       ir_func_t;
 
+// IR frame is a call frame.
+// Call frames are always at the bottom the the stack,
+// and always relative to the stack pointer register.
+#define IR_FRAME_FLAG_CALL_FRAME (1 << 0)
+
 // IR stack frame.
 struct ir_frame {
     // Function's frames list node.
@@ -237,6 +252,8 @@ struct ir_frame {
     char        *name;
     // Parent function.
     ir_func_t   *func;
+    // Flags (e.g. is a call frame).
+    uint32_t     flags;
     // Frame alignment.
     uint64_t     align;
     // Frame size.
@@ -407,6 +424,20 @@ static inline ir_prim_t ir_operand_prim(ir_operand_t oper) {
 // A register operand.
 #define IR_OPERAND_REG(regno_)        ((ir_operand_t){.type = IR_OPERAND_TYPE_REG, .regno = (regno_)})
 
+// Helper macro for performing an operation on all variables in an IR operand.
+#define IR_FOR_OPERAND_VARS(operand, name, action)                                                                     \
+    ({                                                                                                                 \
+        if ((operand).type == IR_OPERAND_TYPE_VAR) {                                                                   \
+            ir_var_t *name = (operand).var;                                                                            \
+            action                                                                                                     \
+        } else if ((operand).type == IR_OPERAND_TYPE_MEM) {                                                            \
+            if ((operand).mem.base_type == IR_MEMBASE_VAR) {                                                           \
+                ir_var_t *name = (operand).mem.base_var;                                                               \
+                action                                                                                                 \
+            }                                                                                                          \
+        }                                                                                                              \
+    })
+
 // IR combinator code block -> variable map.
 struct ir_combinator {
     // Previous code block.
@@ -429,17 +460,32 @@ struct ir_retval {
 #define IR_RETVAL_REG(dest_regno_)     ((ir_retval_t){.type = IR_RETVAL_TYPE_REG, .dest_regno = (dest_regno_)})
 #define IR_RETVAL_STRUCT(dest_struct_) ((ir_retval_t){.type = IR_RETVAL_TYPE_STRUCT, .dest_struct = (dest_struct_)})
 
+// Modifies the flags register.
+// Prevents reordering across calls or instructions that also have this flag set.
+#define IR_INSN_FLAG_SETS_FLAG_REG   (1 << 0)
+// Volatile memory access.
+// May not be re-ordered across calls or instructions that also have this flag set.
+#define IR_INSN_FLAG_VOLATILE        (1 << 1)
+// May not be re-ordered.
+#define IR_INSN_FLAG_NOREORDER       (1 << 2)
+// Function call or memory access without side-effects (does not write to non-stack memory).
+// May be re-ordered.
+#define IR_INSN_FLAG_NO_SIDE_EFFECTS (1 << 3)
+// Pure function call (depends only on inputs and does not read global state).
+// May be re-ordered, removed or combined with identical calls.
+#define IR_INSN_FLAG_PURE            (1 << 4)
+
 // IR instruction.
 struct ir_insn {
     // Code block's instruction list node.
     dlist_node_t   node;
     // Parent code block.
     ir_code_t     *code;
+    // Instruction flags (e.g. side effects).
+    uint32_t       flags;
     // Distinguishes between the types of instruction.
     ir_insn_type_t type;
     union {
-        // Instruction-specific flags.
-        uint32_t      flags;
         // Computation operator.
         ir_op1_type_t op1;
         // Computation operator.
@@ -512,10 +558,7 @@ struct ir_func {
     ir_var_t    *retval_ptr;
     // The stack frame for arguments passed to this function on the stack.
     // For variadic functions, may in reality be larger than what IR says.
-    ir_frame_t  *this_stackargs;
-    // The stack frame for arguments passed to callees on the stack.
-    // This may be larger than needed for some of the calls because it is re-used.
-    ir_frame_t  *callee_stackargs;
+    ir_frame_t  *call_frame;
     // Function arguments.
     ir_arg_t    *args;
     // Function entrypoint.

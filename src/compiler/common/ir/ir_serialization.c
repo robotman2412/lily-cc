@@ -160,6 +160,9 @@ void ir_insn_serialize(ir_insn_t const *insn, backend_profile_t const *profile_o
         case IR_INSN_MEMSET: fputs("memset", to); break;
         case IR_INSN_MACHINE: fprintf(to, "mach %s", insn->prototype->name); break;
         case IR_INSN_CLOBBER: fputs("clobber", to); break;
+        case IR_INSN_ALLOCA: fputs("alloca", to); break;
+        case IR_INSN_CALLFRAME_ENTER: fputs("callframe_enter", to); break;
+        case IR_INSN_CALLFRAME_EXIT: fputs("callframe_exit", to); break;
     }
 
     if (insn->type == IR_INSN_COMBINATOR) {
@@ -465,6 +468,9 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     case IR_KEYW_load:
                     case IR_KEYW_lea:
                     case IR_KEYW_jump:
+                    case IR_KEYW_alloca:
+                    case IR_KEYW_callframe_enter:
+                    case IR_KEYW_callframe_exit:
                         if (operands_len != 1) {
                             cctx_diagnostic(from->cctx, stmt->params[1].pos, DIAG_ERR, "Instruction takes 1 operand");
                             insn_ok = false;
@@ -504,6 +510,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     case IR_KEYW_load:
                     case IR_KEYW_lea:
                     case IR_KEYW_comb:
+                    case IR_KEYW_alloca:
                         if (returns_len != 1) {
                             cctx_diagnostic(from->cctx, stmt->params[1].pos, DIAG_ERR, "Instruction returns 1 value");
                             insn_ok = false;
@@ -514,6 +521,8 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     case IR_KEYW_branch:
                     case IR_KEYW_memcpy:
                     case IR_KEYW_memset:
+                    case IR_KEYW_callframe_enter:
+                    case IR_KEYW_callframe_exit:
                         if (returns_len != 0) {
                             cctx_diagnostic(from->cctx, stmt->params[1].pos, DIAG_ERR, "Instruction returns nothing");
                             insn_ok = false;
@@ -732,6 +741,46 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                             }
                         }
                         break;
+
+                    case IR_KEYW_alloca:
+                        // Operand must be of integer type.
+                        if (!ir_prim_is_integer(ir_operand_prim(operands[0]))) {
+                            cctx_diagnostic(
+                                from->cctx,
+                                stmt->params[2].params[0].pos,
+                                DIAG_ERR,
+                                "Operand must be of integer type"
+                            );
+                            insn_ok = false;
+                        }
+                        break;
+
+                    case IR_KEYW_callframe_enter:
+                    case IR_KEYW_callframe_exit:
+                        if (operands_len != 1) {
+                            cctx_diagnostic(from->cctx, stmt->params[1].pos, DIAG_ERR, "Instruction takes 1 operand");
+                            insn_ok = false;
+                        } else if (operands[0].type != IR_OPERAND_TYPE_MEM) {
+                            cctx_diagnostic(
+                                from->cctx,
+                                stmt->params[2].params[0].pos,
+                                DIAG_ERR,
+                                "Operand must be a memory operand"
+                            );
+                            insn_ok = false;
+                        } else if (operands[0].mem.base_type != IR_MEMBASE_FRAME) {
+                            cctx_diagnostic(
+                                from->cctx,
+                                stmt->params[2].params[0].pos,
+                                DIAG_ERR,
+                                "Memory reference must be a stack frame"
+                            );
+                            insn_ok = false;
+                        } else if (operands[0].mem.offset != 0) {
+                            cctx_diagnostic(from->cctx, stmt->params[2].params[0].pos, DIAG_ERR, "Offset must be 0");
+                            insn_ok = false;
+                        }
+                        break;
                 }
 
                 // Finally append the instruction.
@@ -793,6 +842,16 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                             break;
 
                         case IR_KEYW_clobber: ir_add_clobber(IR_APPEND(cur_code), returns_len, returns); break;
+
+                        case IR_KEYW_alloca: ir_add_alloca(IR_APPEND(cur_code), returns[0], operands[0]); break;
+
+                        case IR_KEYW_callframe_enter:
+                            ir_add_callframe_enter(IR_APPEND(cur_code), operands[0].mem.base_frame);
+                            break;
+
+                        case IR_KEYW_callframe_exit:
+                            ir_add_callframe_exit(IR_APPEND(cur_code), operands[0].mem.base_frame);
+                            break;
                     }
                 }
 

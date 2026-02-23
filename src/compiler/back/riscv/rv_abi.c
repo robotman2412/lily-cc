@@ -6,6 +6,7 @@
 // There are known issues with the implementation of the RISC-V floating-point ABIs:
 // See https://github.com/robotman2412/lily-cc/issues/1
 
+#include "backend.h"
 #include "ir.h"
 #include "ir_types.h"
 #include "rv_backend.h"
@@ -18,6 +19,62 @@
 
 
 
+// Helper function that loads a struct into registers.
+
+// Helper function the stores a struct from registers.
+static ir_insn_t *rv_reg_to_struct(
+    ir_insnloc_t loc, backend_profile_t *profile, ir_operand_t value, ir_frame_t *frame, int64_t offset, int64_t size
+) {
+    rv_profile_t   *rv_profile = (void *)profile;
+    // clang-format off
+    bool rv64;
+    switch (rv_profile->abi) {
+        case RV_ABI_ILP32:
+        case RV_ABI_ILP32E:
+        case RV_ABI_ILP32F:
+        case RV_ABI_ILP32D:  rv64 = false; break;
+        case RV_ABI_LP64:
+        case RV_ABI_LP64F:
+        case RV_ABI_LP64D:   rv64 = true;  break;
+    }
+    // clang-format on
+    uint64_t const  ptr_size   = rv64 ? 8 : 4;
+    ir_prim_t const ptr_prim   = rv64 ? IR_PRIM_u64 : IR_PRIM_u32;
+
+    ir_insn_t *new_node;
+    for (int64_t offset2 = 0; offset2 < size;) {
+        int copy_max_exp = __builtin_ctz(frame->align);
+        if (copy_max_exp > __builtin_ctz(size - offset2)) {
+            copy_max_exp = __builtin_ctz(size - offset2);
+        }
+        if (copy_max_exp > __builtin_ctz(ptr_size)) {
+            copy_max_exp = __builtin_ctz(ptr_size);
+        }
+
+        ir_prim_t copy_prim = copy_max_exp * 2;
+        ir_var_t *shr       = ir_var_create(ir_insnloc_code(loc)->func, ptr_prim, NULL);
+        loc                 = IR_AFTER_INSN(ir_add_expr2(
+            loc,
+            IR_RETVAL_VAR(shr),
+            IR_OP2_shr,
+            value,
+            IR_OPERAND_CONST(((ir_const_t){.prim_type = ptr_prim, .constl = offset2 * 8}))
+        ));
+        ir_var_t *mov       = ir_var_create(ir_insnloc_code(loc)->func, copy_prim, NULL);
+        loc                 = IR_AFTER_INSN(ir_add_expr1(loc, IR_RETVAL_VAR(mov), IR_OP1_mov, IR_OPERAND_VAR(shr)));
+        new_node            = ir_add_store(
+            loc,
+            IR_OPERAND_VAR(mov),
+            IR_MEMREF(IR_N_PRIM, IR_BADDR_FRAME(frame), .offset = offset + offset2)
+        );
+        loc = IR_AFTER_INSN(new_node);
+
+        offset2 += 1 << copy_max_exp;
+    }
+
+    return new_node;
+}
+
 // Helper type that stores the current state for the calling convention.
 typedef struct {
     // Amount of available argument GPRs.
@@ -26,8 +83,10 @@ typedef struct {
     unsigned const fpr_avl;
     // Location where next instruction shall be emitted.
     ir_insnloc_t   loc;
+    // Call frame, if needed.
+    ir_frame_t    *call_frame;
     // Amount of bytes so far used on stack parameters.
-    uint64_t       stack_args;
+    uint64_t       call_frame_offset;
     // Amount of integer registers used.
     unsigned       gpr_args;
     // Amount of float registers used.
@@ -118,55 +177,86 @@ replace:;
     return mach;
 }
 
-/*
-// Entrypoint ABI: Integer parameters.
-static void rv_xabi_call_int(
-    backend_profile_t *profile, ir_func_t *func, rv_ccstate_t *cc, ir_prim_t prim, ir_operand_t value
-) {
+// Helper that allocates bytes on the call frame.
+static void
+    rv_alloc_call_frame(backend_profile_t *profile, ir_func_t *func, rv_ccstate_t *cc, uint64_t align, uint64_t size) {
     rv_profile_t  *rv_profile = (void *)profile;
     // clang-format off
-    bool rve, rv64, f32, f64;
+    bool rv64;
     switch (rv_profile->abi) {
-        case RV_ABI_ILP32:  rve = false; rv64 = false; f32 = false; f64 = false; break;
-        case RV_ABI_ILP32E: rve = true;  rv64 = false; f32 = false; f64 = false; break;
-        case RV_ABI_ILP32F: rve = false; rv64 = false; f32 = true;  f64 = false; break;
-        case RV_ABI_ILP32D: rve = false; rv64 = false; f32 = true;  f64 = true;  break;
-        case RV_ABI_LP64:   rve = false; rv64 = true;  f32 = false; f64 = false; break;
-        case RV_ABI_LP64F:  rve = false; rv64 = true;  f32 = true;  f64 = false; break;
-        case RV_ABI_LP64D:  rve = false; rv64 = true;  f32 = true;  f64 = true;  break;
+        case RV_ABI_ILP32:
+        case RV_ABI_ILP32E:
+        case RV_ABI_ILP32F:
+        case RV_ABI_ILP32D: rv64 = false; break;
+        case RV_ABI_LP64:
+        case RV_ABI_LP64F:
+        case RV_ABI_LP64D:  rv64 = true;  break;
     }
     // clang-format on
     uint64_t const ptr_size   = rv64 ? 8 : 4;
 
+    if (align > 16) {
+        // Maximum alignment of items on the stack for RISC-V.
+        align = 16;
+    } else if (align < ptr_size) {
+        // Minimum alignment of items on the stack for RISC-V.
+        align = ptr_size;
+    }
+    if (size & (align - 1)) {
+        // Round up the size to the alignment.
+        size = (size & ~(align - 1)) + align;
+    }
+
+    if (!cc->call_frame) {
+        cc->call_frame         = ir_frame_create(func, size, 16, NULL);
+        cc->call_frame->flags |= IR_FRAME_FLAG_CALL_FRAME;
+        return;
+    }
+
+    if (cc->call_frame->size & (align - 1)) {
+        cc->call_frame->size = (cc->call_frame->size & ~(align - 1)) + align;
+    }
+    cc->call_frame_offset  = cc->call_frame->size;
+    cc->call_frame->size  += size;
+}
+
+// Function call ABI: Integer parameters.
+static void rv_xabi_call_int(
+    backend_profile_t *profile, ir_func_t *func, rv_ccstate_t *cc, ir_prim_t prim, ir_operand_t value
+) {
     if (cc->gpr_args >= cc->gpr_avl) {
         // Passed on the stack.
-        ir_frame_t *frame = ir_frame_create(func, ir_prim_sizes[prim], ir_prim_sizes[prim], NULL);
-        frame->offset     = (int64_t)(cc->stack_args * ptr_size);
-        cc->loc           = IR_AFTER_INSN(ir_add_store(cc->loc, value, IR_MEMREF(prim, IR_BADDR_FRAME(frame))));
-        cc->stack_args++;
+        uint64_t size = ir_prim_sizes[prim];
+        rv_alloc_call_frame(profile, func, cc, size, size);
+        cc->loc = IR_AFTER_INSN(ir_add_store(
+            cc->loc,
+            value,
+            IR_MEMREF(ir_operand_prim(value), IR_BADDR_FRAME(cc->call_frame), .offset = cc->call_frame_offset)
+        ));
 
     } else {
         // Passed in an integer register.
         size_t regno = 10 + cc->gpr_args;
         cc->gpr_args++;
+        cc->loc = IR_AFTER_INSN(ir_add_expr1(cc->loc, IR_RETVAL_REG(regno), IR_OP1_bitcast, value));
     }
 }
 
-// Entrypoint ABI: Struct parameters.
+// Function call ABI: Struct parameters.
 static void rv_xabi_call_struct(
     backend_profile_t *profile, ir_func_t *func, rv_ccstate_t *cc, uint64_t size, ir_frame_t *src_frame
 ) {
     rv_profile_t   *rv_profile = (void *)profile;
     // clang-format off
-    bool rve, rv64, f32, f64;
+    bool rv64;
     switch (rv_profile->abi) {
-        case RV_ABI_ILP32:  rve = false; rv64 = false; f32 = false; f64 = false; break;
-        case RV_ABI_ILP32E: rve = true;  rv64 = false; f32 = false; f64 = false; break;
-        case RV_ABI_ILP32F: rve = false; rv64 = false; f32 = true;  f64 = false; break;
-        case RV_ABI_ILP32D: rve = false; rv64 = false; f32 = true;  f64 = true;  break;
-        case RV_ABI_LP64:   rve = false; rv64 = true;  f32 = false; f64 = false; break;
-        case RV_ABI_LP64F:  rve = false; rv64 = true;  f32 = true;  f64 = false; break;
-        case RV_ABI_LP64D:  rve = false; rv64 = true;  f32 = true;  f64 = true;  break;
+        case RV_ABI_ILP32:
+        case RV_ABI_ILP32E:
+        case RV_ABI_ILP32F:
+        case RV_ABI_ILP32D: rv64 = false; break;
+        case RV_ABI_LP64:
+        case RV_ABI_LP64F:
+        case RV_ABI_LP64D:  rv64 = true;  break;
     }
     // clang-format on
     uint64_t const  ptr_size   = rv64 ? 8 : 4;
@@ -218,7 +308,7 @@ static void rv_xabi_call_struct(
     }
 }
 
-// Entrypoint ABI: Float parameters.
+// Function call ABI: Float parameters.
 static void rv_xabi_call_float(
     backend_profile_t *profile, ir_func_t *func, rv_ccstate_t *cc, ir_prim_t prim, ir_operand_t value
 ) {
@@ -228,17 +318,12 @@ static void rv_xabi_call_float(
     }
 
     size_t regno = 32 + 10 + cc->fpr_args;
-
     cc->fpr_args++;
+    cc->loc = IR_AFTER_INSN(ir_add_expr1(cc->loc, IR_RETVAL_REG(regno), IR_OP1_bitcast, value));
 }
-*/
 
 // Expand the ABI for a specific call instruction.
 ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
-    (void)profile;
-    (void)call_insn;
-    return NULL;
-    /*
     rv_profile_t   *rv_profile = (void *)profile;
     // clang-format off
     bool rve, rv64, f32, f64;
@@ -257,12 +342,15 @@ ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
     uint64_t const  fpr_size   = f64 ? 8 : 4;
 
     rv_ccstate_t cc = {
-        .gpr_avl    = rve ? 6 : 8,
-        .fpr_avl    = 8,
-        .loc        = IR_BEFORE_INSN(call_insn),
-        .stack_args = 0,
-        .gpr_args   = 0,
-        .fpr_args   = 0,
+        .gpr_avl           = rve ? 6 : 8,
+        .fpr_avl           = 8,
+        // Other isel and ABI functions use before but after is more convenient here.
+        // It's functionally equivalent because the call instruction will be deleted anyway.
+        .loc               = IR_AFTER_INSN(call_insn),
+        .gpr_args          = 0,
+        .fpr_args          = 0,
+        .call_frame        = NULL,
+        .call_frame_offset = 0,
     };
 
     bool retval_outparam = call_insn->returns_len && call_insn->returns[0].type == IR_RETVAL_TYPE_STRUCT
@@ -286,10 +374,16 @@ ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
     bool is_float_ret = (f32 && retval_prim == IR_PRIM_f32) || (f64 && retval_prim == IR_PRIM_f64);
     bool is_int_ret   = ret_size && ret_size <= 2 * ptr_size;
 
-    if (is_int_ret) {
-        // Return value passed through integer registers.
-    } else if (is_float_ret) {
-        // Return value passed through float registers.
+    for (size_t i = 0; i < call_insn->operands_len; i++) {
+        ir_operand_t const *oper = &call_insn->operands[i];
+        ir_prim_t           prim = ir_operand_prim(*oper);
+        if (oper->type == IR_OPERAND_TYPE_STRUCT) {
+            rv_xabi_call_struct(profile, call_insn->code->func, &cc, oper->struct_frame->size, oper->struct_frame);
+        } else if ((prim == IR_PRIM_f32 && f32) || (prim == IR_PRIM_f64 && f64)) {
+            rv_xabi_call_float(profile, call_insn->code->func, &cc, prim, *oper);
+        } else {
+            rv_xabi_call_int(profile, call_insn->code->func, &cc, prim, *oper);
+        }
     }
 
     // Register clobbers.
@@ -362,7 +456,58 @@ ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
 #undef f
 #undef c
     }
-    */
+
+    // Select actual call type.
+    insn_proto_t const *proto;
+    ir_operand_t        call_dest = call_insn->operands[0];
+    if (call_dest.mem.base_type == IR_MEMBASE_REG || call_dest.mem.base_type == IR_MEMBASE_VAR) {
+        proto = &rv_insn_jalr;
+    } else {
+        proto = &rv_insn_jal;
+    }
+    ir_insn_t *new_node = ir_add_mach_insn(cc.loc, false, (ir_retval_t){}, proto, 1, (ir_operand_t const[]){call_dest});
+    new_node->flags |= IR_INSN_FLAG_NOREORDER;
+    cc.loc           = IR_AFTER_INSN(new_node);
+
+    if (cc.call_frame) {
+        // Note: This callframe_enter ends up before any of the previously emitted instructions!
+        ir_add_callframe_enter(IR_AFTER_INSN(call_insn), cc.call_frame);
+        new_node = ir_add_callframe_exit(cc.loc, cc.call_frame);
+        cc.loc   = IR_AFTER_INSN(new_node);
+    }
+
+    if (is_float_ret) {
+        new_node = ir_add_expr1(cc.loc, call_insn->returns[0], IR_OP1_bitcast, IR_OPERAND_REG(RV_REG_FA(0)));
+        cc.loc   = IR_AFTER_INSN(new_node);
+    } else if (call_insn->returns[0].type == IR_RETVAL_TYPE_STRUCT && !retval_outparam) {
+        uint64_t tmp = ret_size;
+        if (tmp > ptr_size) {
+            tmp = ptr_size;
+        }
+        new_node = rv_reg_to_struct(
+            cc.loc,
+            profile,
+            IR_OPERAND_REG(RV_REG_A(0)),
+            call_insn->returns[0].dest_struct,
+            0,
+            (int64_t)tmp
+        );
+        if (ret_size > ptr_size) {
+            new_node = rv_reg_to_struct(
+                cc.loc,
+                profile,
+                IR_OPERAND_REG(RV_REG_A(1)),
+                call_insn->returns[0].dest_struct,
+                (int64_t)ptr_size,
+                (int64_t)(ret_size - ptr_size)
+            );
+        }
+    } else if (is_int_ret && !retval_outparam) {
+        new_node = ir_add_expr1(cc.loc, call_insn->returns[0], IR_OP1_bitcast, IR_OPERAND_REG(RV_REG_A(0)));
+        cc.loc   = IR_AFTER_INSN(new_node);
+    }
+
+    return new_node;
 }
 
 // Entrypoint ABI: Integer parameters.
@@ -386,19 +531,19 @@ static void rv_xabi_entry_int(
 
     if (cc->gpr_args >= cc->gpr_avl) {
         // Passed on the stack.
-        if (!func->this_stackargs) {
-            func->this_stackargs = ir_frame_create(func, 0, 16, NULL);
+        if (!func->call_frame) {
+            func->call_frame = ir_frame_create(func, 0, 16, NULL);
         }
 
         if (dest_reg_opt) {
             cc->loc = IR_AFTER_INSN(ir_add_load(
                 cc->loc,
                 IR_RETVAL_VAR(dest_reg_opt),
-                IR_MEMREF(prim, IR_BADDR_FRAME(func->this_stackargs), .offset = ptr_size * cc->stack_args)
+                IR_MEMREF(prim, IR_BADDR_FRAME(func->call_frame), .offset = cc->call_frame_offset)
             ));
         }
-        cc->stack_args++;
-        func->this_stackargs->size = cc->stack_args * ptr_size;
+        cc->call_frame_offset  += ptr_size;
+        func->call_frame->size  = cc->call_frame_offset;
 
     } else {
         // Passed in an integer register.
@@ -508,12 +653,12 @@ void rv_xabi_entry(backend_profile_t *profile, ir_func_t *func) {
     ir_prim_t const ptr_prim   = rv64 ? IR_PRIM_u64 : IR_PRIM_u32;
 
     rv_ccstate_t cc = {
-        .gpr_avl    = rve ? 6 : 8,
-        .fpr_avl    = 8,
-        .loc        = IR_PREPEND(func->entry),
-        .stack_args = 0,
-        .gpr_args   = 0,
-        .fpr_args   = 0,
+        .gpr_avl           = rve ? 6 : 8,
+        .fpr_avl           = 8,
+        .loc               = IR_PREPEND(func->entry),
+        .gpr_args          = 0,
+        .fpr_args          = 0,
+        .call_frame_offset = 0,
     };
 
     if (func->rettype.type == IR_FUNCRET_STRUCT && func->rettype.struct_type.size > 2 * ptr_size) {

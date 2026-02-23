@@ -56,21 +56,25 @@ typedef struct dlist_t {
 // Both lists must be non-NULL.
 void dlist_concat(dlist_t *front, dlist_t *back);
 
+// Iterate to the Nth element in the list, if it exists. Will return NULL if the index is out of range.
+// `list` must be non-NULL.
+dlist_node_t *dlist_index(dlist_t const *list, size_t index);
+// Iterate to the Nth element in the list in reverse order, if it exists. Will return NULL if the index is out of range.
+// `list` must be non-NULL.
+dlist_node_t *dlist_rindex(dlist_t const *list, size_t reverse_index);
+
 // Appends `node` after the `tail` of the `list`.
 // `node` must not be in `list` already.
 // Both `list` and `node` must be non-NULL.
 void dlist_append(dlist_t *list, dlist_node_t *node);
-
 // Prepends `node` before the `head` of the `list`.
 // `node` must not be in `list` already.
 // Both `list` and `node` must be non-NULL.
 void dlist_prepend(dlist_t *list, dlist_node_t *node);
-
 // Inserts `node` after `existing` in `list`.
 // `node` must not be in `list` already and `existing` must be in `list` already.
 // `list`, `node` and `existing` must be non-NULL.
 void dlist_insert_after(dlist_t *list, dlist_node_t *existing, dlist_node_t *node);
-
 // Inserts `node` before `existing` in `list`.
 // `node` must not be in `list` already and `existing` must be in `list` already.
 // `list`, `node` and `existing` must be non-NULL.
@@ -79,15 +83,13 @@ void dlist_insert_before(dlist_t *list, dlist_node_t *existing, dlist_node_t *no
 // Removes the `head` of the given `list`. Will return NULL if the list was empty.
 // `list` must be non-NULL.
 dlist_node_t *dlist_pop_front(dlist_t *list);
-
 // Removes the `tail` of the given `list`. Will return NULL if the list was empty.
 // `list` must be non-NULL.
 dlist_node_t *dlist_pop_back(dlist_t *list);
+// Removes `node` from `list`. `node` must be either an empty (non-inserted) node or must be contained in `list`.
+// Both `list` and `node` must be non-NULL.
+void          dlist_remove(dlist_t *list, dlist_node_t *node);
 
 // Checks if `list` contains the given `node`.
 // Both `list` and `node` must be non-NULL.
 bool dlist_contains(dlist_t const *list, dlist_node_t const *node);
-
-// Removes `node` from `list`. `node` must be either an empty (non-inserted) node or must be contained in `list`.
-// Both `list` and `node` must be non-NULL.
-void dlist_remove(dlist_t *list, dlist_node_t *node);

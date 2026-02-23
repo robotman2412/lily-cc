@@ -170,7 +170,7 @@ bool map_set(map_t *map, void const *key, void const *value) {
     }
     ent->node = DLIST_NODE_EMPTY;
     ent->key  = map->vtable->key_dup(key);
-    if (!ent->key) {
+    if (key && !ent->key) {
         free(ent);
         return false;
     }

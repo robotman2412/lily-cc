@@ -20,6 +20,22 @@
 #define map_foreach(varname, map)                                                                                      \
     for (map_ent_t const *varname = map_next(map, NULL); varname; varname = map_next(map, varname))
 
+// Iterate over all entries in the map.
+#define map_foreach_kv(ktype, kname, type, vname, map)                                                                 \
+    for (map_ent_t const *map_foreach = map_next(map, NULL); varname; varname = map_next(map, map_foreach))            \
+        for (__typeof__(ktype) const kname = map_foreach->key; kname; kname = (void *)0)                               \
+            for (__typeof__(type) const *vname = (void const *)map_foreach->value; vname; vname = (void *)0)
+
+// Iterate over all keys in the map.
+#define map_foreach_key(ktype, kname, map)                                                                             \
+    for (map_ent_t const *map_foreach = map_next(map, NULL); map_foreach; map_foreach = map_next(map, map_foreach))    \
+        for (__typeof__(ktype) const kname = map_foreach->key; kname; kname = (void *)0)
+
+// Iterate over all values in the map.
+#define map_foreach_value(type, vname, map)                                                                            \
+    for (map_ent_t const *map_foreach = map_next(map, NULL); map_foreach; map_foreach = map_next(map, map_foreach))    \
+        for (__typeof__(type) const *vname = (void const *)map_foreach->value; vname; vname = (void *)0)
+
 
 
 // Hash map.
@@ -50,7 +66,7 @@ struct map_ent {
     // Hash of key.
     uint32_t     hash;
     // Key.
-    char        *key;
+    void        *key;
     // Value.
     void        *value;
 };

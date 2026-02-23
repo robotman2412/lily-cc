@@ -107,26 +107,37 @@
 
 
 ## Generic codegen
+- Support
+    - Implicit calls for unsupported arithmetic ✓
+    - Conversion of arithmetic to fit physical register sizes
 - Generic optimizations
+    - Function call inlining
     - Constant propagation ✓
     - Loop unrolling
-    - Calculation deduplication
+    - Common subexpression elimination
     - Strength reduction ✓
     - Mem2reg pass
+    - Instruction rescheduling
 - IR function calls
-    - Returning multiple values
-    - Returning structs
-    - Parameter structs
-    - Implicit out pointers for large returns
-    - Implicit in pointers for large parameters
+    - Call ABI lowering
+    - Entry ABI lowering ✓
+    - Return ABI lowering ✓
+    - Returning structs ✓
+    - Parameter structs ✓
+    - Implicit out pointers for large returns ✓
+    - Implicit in pointers for large parameters ✓
     - Variadics
+    - `alloca`
 - IR support for memory ✓
     - Concept of stack frame ✓
     - Instruction to get stack variable pointer ✓
     - Memory load/store ✓
-- IR support for parameters
+- IR support for parameters ✓
     - In registers ✓
-    - In stack frames
+    - In stack frames ✓
+- Concept of side effects
+    - Only optimize out side-effectless instructions
+    - Re-ordering barriers
 
 
 ## RISC-V backend

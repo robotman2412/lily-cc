@@ -8,6 +8,7 @@ add_library(compiler-common STATIC
     back/codegen.c
     back/match_tree.c
     back/cand_tree.c
+    back/regalloc.c
     back/insn_proto.c
     back/sub_tree.c
     front/compiler.c

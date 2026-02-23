@@ -10,10 +10,10 @@
 
 
 // Strong malloc; abort if out of memory.
-void *strong_malloc(size_t size);
+void *strong_malloc(size_t size) __attribute__((__malloc__, __alloc_size__(1)));
 // Strong calloc; abort if out of memory.
-void *strong_calloc(size_t nmemb, size_t size);
+void *strong_calloc(size_t nmemb, size_t size) __attribute__((__malloc__, __alloc_size__(1, 2)));
 // Strong realloc; abort if out of memory.
-void *strong_realloc(void *ptr, size_t size);
+void *strong_realloc(void *ptr, size_t size) __attribute__((__warn_unused_result__, __alloc_size__(2)));
 // Strong stdup; abort if out of memory.
-char *strong_strdup(char const *str);
+char *strong_strdup(char const *str) __attribute__((__malloc__, __nonnull__(1)));

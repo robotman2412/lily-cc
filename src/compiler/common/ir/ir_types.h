@@ -134,9 +134,9 @@ typedef enum __attribute__((packed)) {
 typedef enum __attribute__((packed)) {
     // Constant / immediate value.
     IR_OPERAND_TYPE_CONST,
-    // Undefined variable.
+    // Undefined value.
     IR_OPERAND_TYPE_UNDEF,
-    // Compiler-managed register.
+    // Pseudo-register.
     IR_OPERAND_TYPE_VAR,
     // Memory location.
     IR_OPERAND_TYPE_MEM,

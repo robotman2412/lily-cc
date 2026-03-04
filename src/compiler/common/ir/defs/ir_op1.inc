@@ -22,6 +22,6 @@ IR_OP1_DEF(neg)
 // Bitwise negate.
 IR_OP1_DEF(bneg)
 
-// TODO: clz, ctz, popcnt, sqrt, abs
+// TODO: clz, ctz, popcnt, sqrt, abs, float classification
 
 #undef IR_OP1_DEF

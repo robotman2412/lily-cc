@@ -174,8 +174,6 @@ typedef enum __attribute__((packed)) {
 
 // IR stack frame.
 typedef struct ir_frame      ir_frame_t;
-// IR struct value.
-typedef struct ir_struct     ir_struct_t;
 // IR function argument.
 typedef struct ir_arg        ir_arg_t;
 // IR variable.
@@ -340,7 +338,7 @@ struct ir_operand {
         ir_prim_t   undef_type;
         // Variable / register.
         ir_var_t   *var;
-        // Struct stack fromae.
+        // Struct stack frame.
         ir_frame_t *struct_frame;
         // Memory location.
         ir_memref_t mem;

@@ -205,7 +205,7 @@ c_var_t *c_var_create(
     }
 
     // Enforce that it is a complete type.
-    size_t size, align;
+    uint64_t size, align;
     if (!c_type_get_size(ctx, type, &size, &align)) {
         c_comp_t   *comp = type->comp->data;
         char const *comp_var;
@@ -813,7 +813,7 @@ c_compile_expr_t c_compile_comp_init(
                 ir_const_to_blob(store->value.rvalue.operand.iconst, blob + store->offset, ctx->options.big_endian);
             } else {
                 assert(store->value.value_type == C_RVALUE_BINARY);
-                size_t write_size, write_align;
+                uint64_t write_size, write_align;
                 if (!c_type_get_size(ctx, store->value.c_type->data, &write_size, &write_align)) {
                     UNREACHABLE();
                 }

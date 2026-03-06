@@ -118,11 +118,11 @@ static void tkn_debug_print_r(
     if (token.pos.srcfile) {
         pindent(indent);
         printf(
-            "pos:        %s:%d:%d (len %ld)\n",
+            "pos:        %s:%d:%d (len %lld)\n",
             token.pos.srcfile->path,
             token.pos.line + 1,
             token.pos.col + 1,
-            token.pos.len
+            (long long)token.pos.len
         );
     }
     if (token.type == TOKENTYPE_AST) {
@@ -177,7 +177,7 @@ void tkn_debug_testcase_r(
     pindent(indent);
     printf("EXPECT_INT(%s.pos.col, %d);\n", access, token.pos.col);
     pindent(indent);
-    printf("EXPECT_INT(%s.pos.len, %ld);\n", access, token.pos.len);
+    printf("EXPECT_INT(%s.pos.len, %lld);\n", access, (long long)token.pos.len);
     pindent(indent);
     printf("EXPECT_INT(%s.type, %s);\n", access, tokentype_names[token.type]);
     if (token.type == TOKENTYPE_AST) {

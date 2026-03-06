@@ -175,7 +175,7 @@ static void
                     errors = true;
                     continue;
                 }
-                size_t field_size, field_align;
+                uint64_t field_size, field_align;
                 if (c_type_get_size(ctx, field_type->data, &field_size, &field_align)) {
                     if (offset % field_align) {
                         offset += field_align - offset % field_align;

@@ -195,7 +195,7 @@ void c_value_memcpy(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value, 
             break;
 
         case C_RVALUE_BINARY: {
-            size_t size, align;
+            uint64_t size, align;
             c_type_get_size(ctx, value->c_type->data, &size, &align);
             ir_prim_t usize_prim    = c_prim_to_ir_type(ctx, ctx->options.size_type);
             ir_prim_t copy_max_prim = IR_PRIM_u8 + 2 * __builtin_ctzll(ir_prim_sizes[usize_prim] | align);
@@ -225,7 +225,7 @@ void c_value_memcpy(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value, 
             memref = IR_MEMREF(IR_N_PRIM, IR_BADDR_FRAME(value->rvalue.frame));
             goto with_memcpy;
         with_memcpy: {
-            size_t size, align;
+            uint64_t size, align;
             c_type_get_size(ctx, value->c_type->data, &size, &align);
             ir_add_memcpy(
                 IR_APPEND(code),
@@ -248,7 +248,7 @@ c_value_t c_value_access_field(c_compiler_t *ctx, c_value_t const *value, token_
         abort();
     }
 
-    size_t           field_offset;
+    uint64_t         field_offset;
     c_field_t const *field = c_type_get_field(ctx, type, field_name->strval, &field_offset);
     if (!field) {
         cctx_diagnostic(ctx->cctx, field_name->pos, DIAG_ERR, "No such struct/union field");
@@ -281,7 +281,7 @@ c_value_t c_value_access_field(c_compiler_t *ctx, c_value_t const *value, token_
             };
         }
         case C_RVALUE_BINARY: {
-            size_t size, align;
+            uint64_t size, align;
             if (!c_type_get_size(ctx, field->type_rc->data, &size, &align)) {
                 UNREACHABLE();
             }
@@ -322,7 +322,7 @@ c_value_t c_value_clone(c_compiler_t *ctx, c_value_t const *value) {
         case C_RVALUE_OPERAND:
         case C_RVALUE_STACK: rc_share(value->c_type); return *value;
         case C_RVALUE_BINARY: {
-            size_t size, align;
+            uint64_t size, align;
             c_type_get_size(ctx, value->c_type->data, &size, &align);
             uint8_t *blob = strong_malloc(size);
             memcpy(blob, value->rvalue.blob, size);

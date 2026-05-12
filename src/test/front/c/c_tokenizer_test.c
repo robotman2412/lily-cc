@@ -31,7 +31,7 @@ static char *test_c_tkn_basic() {
     cctx_t    *cctx = cctx_create();
     srcfile_t *src  = srcfile_create(cctx, "<c_tkn_basic>", data, sizeof(data) - 1);
 
-    tokenizer_t *tkn_ctx = c_tkn_create(src, C_STD_max);
+    tokenizer_t *tkn_ctx = &c_tkn_create(src, C_STD_max)->base;
     token_t      tkn;
 
 
@@ -140,7 +140,7 @@ static char *test_c_tkn_litsuffix() {
     cctx_t    *cctx = cctx_create();
     srcfile_t *src  = srcfile_create(cctx, "<test_c_tkn_litsuffix>", data, sizeof(data) - 1);
 
-    tokenizer_t *tkn_ctx = c_tkn_create(src, C_STD_max);
+    tokenizer_t *tkn_ctx = &c_tkn_create(src, C_STD_max)->base;
     token_t      tkn;
 
     tkn = c_tkn_next(tkn_ctx); // 0xc0de (sint)
@@ -232,7 +232,7 @@ static char *test_c_tkn_errors() {
     cctx_t    *cctx = cctx_create();
     srcfile_t *src  = srcfile_create(cctx, "<c_tkn_errors>", data, sizeof(data) - 1);
 
-    tokenizer_t *tkn_ctx = c_tkn_create(src, C_STD_max);
+    tokenizer_t *tkn_ctx = &c_tkn_create(src, C_STD_max)->base;
     token_t      tkn;
     do {
         tkn = c_tkn_next(tkn_ctx);

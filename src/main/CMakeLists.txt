@@ -16,3 +16,8 @@ add_executable(lily-explainer
     explainer.c
 )
 target_link_libraries(lily-explainer PUBLIC c-frontend)
+
+add_executable(lily-cpp
+    cpp.c
+)
+target_link_libraries(lily-cpp PUBLIC c-frontend)

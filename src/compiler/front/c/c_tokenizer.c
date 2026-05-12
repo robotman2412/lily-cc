@@ -5,13 +5,14 @@
 
 #include "c_tokenizer.h"
 
-#include "c_compiler.h"
 #include "c_types.h"
 #include "compiler.h"
 #include "strong_malloc.h"
+#include "tokenizer.h"
 #include "utf8.h"
 
 #include <arrays.h>
+#include <assert.h>
 #include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,14 +53,14 @@ static long c_keyw_since[] = {
 
 
 // Create a new C tokenizer.
-tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std) {
+c_tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std) {
     c_tokenizer_t *tkn_ctx    = strong_calloc(sizeof(c_tokenizer_t), 1);
     tkn_ctx->base.cctx        = srcfile->ctx;
     tkn_ctx->base.pos.srcfile = srcfile;
     tkn_ctx->base.file        = srcfile;
     tkn_ctx->base.next        = c_tkn_next;
     tkn_ctx->c_std            = c_std;
-    return &tkn_ctx->base;
+    return tkn_ctx;
 }
 
 
@@ -284,7 +285,7 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
     ctx->pos = pos0;
 
     // Test for keywords.
-    c_keyw_t keyw = c_keyw_get(ctx, ptr);
+    c_keyw_t keyw = c_keyw_get(c_ctx->c_std, ptr);
     if (keyw < C_N_KEYWS && !c_ctx->preproc_mode) {
         // Replace alternate spellings with main spellings, even if the main spelling is from a later C standard.
 #define C_ALT_KEYW_DEF(main_spelling, alt_spelling)                                                                    \
@@ -430,6 +431,8 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
                         break;
                 }
             }
+        } else if (c >= 0x80) {
+            as_utf8 = true;
         }
         if (as_utf8) {
             uint8_t utf8_len = utf8_encode(NULL, 0, c);
@@ -477,19 +480,91 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
     }
 }
 
-// Skip past a line comment.
+// Angle-bracket `<>` string.
+static token_t c_tkn_anglestr(tokenizer_t *ctx, pos_t start_pos) {
+    size_t cap = 32;
+    size_t len = 0;
+    char  *buf = strong_malloc(cap);
+    pos_t  end_pos;
+
+    while (1) {
+        int c = srcfile_getc(ctx->file, &end_pos);
+        if (c == -1 || c == '\n') {
+            cctx_diagnostic(ctx->cctx, end_pos, DIAG_ERR, "Expected >");
+            cctx_diagnostic(ctx->cctx, start_pos, DIAG_HINT, "To match this <");
+            break;
+        } else if (c == '>') {
+            break;
+        } else {
+            if (c >= 0x80) {
+                uint8_t utf8_len = utf8_encode(NULL, 0, c);
+                array_lencap_resize_strong(&buf, 1, &len, &cap, len + utf8_len);
+                utf8_encode(buf + len - utf8_len, utf8_len, c);
+            } else {
+                uint8_t tmp = c;
+                array_lencap_insert_strong(&buf, 1, &len, &cap, &tmp, len);
+            }
+        }
+    }
+
+    array_lencap_insert_strong(&buf, 1, &len, &cap, "", len);
+    return (token_t){
+        .pos        = pos_including(start_pos, end_pos),
+        .type       = TOKENTYPE_SCONST,
+        .subtype    = C_STR_ANGLEBRAC,
+        .strval     = buf,
+        .strval_len = len - 1, // -1 excludes the NUL terminator
+    };
+}
+
+// Read in a span of whitespace as a token.
+static token_t c_tkn_whitespace(tokenizer_t *ctx, pos_t start_pos, c_whitespace_t subtype) {
+    bool esc  = false;
+    int  prev = 0;
+
+    while (1) {
+        pos_t pos = ctx->pos;
+        int   c   = srcfile_getc(ctx->file, &pos);
+        if (subtype == C_WHITESPACE) {
+            if (c >= 0x20) {
+                break;
+            }
+        } else if (subtype == C_LINE_COMMENT) {
+            if (c == '\\' && !esc) {
+                esc = true;
+            } else if (c == '\n' && !esc) {
+                break;
+            }
+        } else {
+            assert(subtype == C_BLOCK_COMMENT);
+            if (c == '/' && prev == '*') {
+                break;
+            }
+            prev = c;
+        }
+        ctx->pos = pos;
+    }
+
+    return (token_t){
+        .pos     = pos_including(start_pos, ctx->pos),
+        .type    = TOKENTYPE_WHITESPACE,
+        .subtype = subtype,
+    };
+}
+
+// A line comment.
 static void c_line_comment(tokenizer_t *ctx) {
     while (1) {
         int c = srcfile_getc(ctx->file, &ctx->pos);
         if (c == '\\') {
             srcfile_getc(ctx->file, &ctx->pos);
         } else if (c == '\n') {
-            return;
+            break;
         }
     }
 }
 
-// Skip past a block comment.
+// A block comment.
 static void c_block_comment(tokenizer_t *ctx) {
     int prev = 0;
     while (1) {
@@ -517,9 +592,19 @@ retry:
             .type = TOKENTYPE_EOF,
             .pos  = pos1,
         };
+    } else if (c_ctx->preproc_mode && c == '\n') {
+        // A newline is semantically significant to the preprocessor.
+        return (token_t){
+            .type = TOKENTYPE_EOL,
+            .pos  = pos_between(pos0, pos1),
+        };
     } else if (c <= 0x20) {
-        // Whitespace (is ignored).
-        goto retry;
+        if (c_ctx->preproc_mode) {
+            return c_tkn_whitespace(ctx, pos0, C_WHITESPACE);
+        } else {
+            // Only the preprocessor cares about whitespace.
+            goto retry;
+        }
     }
 
     // Strings.
@@ -527,6 +612,8 @@ retry:
         return c_tkn_str(ctx, pos0, true);
     } else if (c == '\"') {
         return c_tkn_str(ctx, pos0, false);
+    } else if (c == '<' && c_ctx->str_anglebrac) {
+        return c_tkn_anglestr(ctx, pos0);
     }
 
     // Numeric constants.
@@ -656,11 +743,20 @@ retry:
     } else if (c == '/') {
         if (c2 == '/') {
             ctx->pos = pos2;
-            c_line_comment(ctx);
-            goto retry;
+            if (c_ctx->preproc_mode) {
+                return c_tkn_whitespace(ctx, pos2, C_LINE_COMMENT);
+            } else {
+                c_line_comment(ctx);
+                goto retry;
+            }
         } else if (c2 == '*') {
             ctx->pos = pos2;
-            c_block_comment(ctx);
+            if (c_ctx->preproc_mode) {
+                return c_tkn_whitespace(ctx, pos2, C_BLOCK_COMMENT);
+            } else {
+                c_block_comment(ctx);
+                goto retry;
+            }
             goto retry;
         } else if (c2 == '=') {
             ctx->pos = pos2;
@@ -742,11 +838,9 @@ retry:
 
 // Try to find the matching C keyword.
 // Returns C_N_KEYWS if not a keyword in the current C standard.
-c_keyw_t c_keyw_get(tokenizer_t const *ctx, char const *name) {
-    c_tokenizer_t *c_ctx = (c_tokenizer_t *)ctx;
-
+c_keyw_t c_keyw_get(int c_std, char const *name) {
     array_binsearch_t res = array_binsearch(c_keywords, sizeof(char *), C_N_KEYWS, name, keyw_comp);
-    if (res.found && c_keyw_since[res.index] <= c_ctx->c_std) {
+    if (res.found && c_keyw_since[res.index] <= c_std) {
         return res.index;
     }
 

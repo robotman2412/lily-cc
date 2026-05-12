@@ -23,6 +23,24 @@ typedef enum {
     C_N_TKNS,
 } c_tokentype_t;
 
+// C string subtype.
+// Only used to distinguish `<>` from `""` strings used by `#embed` and `#include`.
+// In the language, it is safe to assume that `<>` strings do not occur.
+typedef enum {
+    C_STR_NORMAL,
+    C_STR_ANGLEBRAC,
+} c_strtype_t;
+
+// C whitespace subtype.
+typedef enum {
+    // Plain old unprintable / whitespace characters.
+    C_WHITESPACE,
+    // Line comment.
+    C_LINE_COMMENT,
+    // Block comment.
+    C_BLOCK_COMMENT,
+} c_whitespace_t;
+
 
 // C tokenizer handle.
 typedef struct c_tokenizer c_tokenizer_t;
@@ -34,8 +52,10 @@ struct c_tokenizer {
     tokenizer_t base;
     // Current C standard.
     int         c_std;
-    // Preprocessor tokenizer mode; keywords are left as idents.
+    // Preprocessor tokenizer mode; keywords are left as idents and whitespace is included.
     bool        preproc_mode;
+    // Enable the angle-bracket `<>` strings used by `#include`.
+    bool        str_anglebrac;
 };
 
 
@@ -54,16 +74,16 @@ extern char const *const c_tokens[];
 
 
 // Create a new C tokenizer.
-tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std);
+c_tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std);
 // Test whether a character is legal as the first in a C identifier.
-bool         c_is_first_sym_char(int c);
+bool           c_is_first_sym_char(int c);
 // Test whether a character is legal in a C identifier.
-bool         c_is_sym_char(int c);
+bool           c_is_sym_char(int c);
 // Get next token from C tokenizer.
-token_t      c_tkn_next(tokenizer_t *ctx);
+token_t        c_tkn_next(tokenizer_t *ctx);
 // Try to find the matching C keyword.
 // Returns -1 if not a keyword in the current C standard.
-c_keyw_t     c_keyw_get(tokenizer_t const *ctx, char const *name);
+c_keyw_t       c_keyw_get(int c_std, char const *name);
 
 
 // Test if a token is a certain keyword.

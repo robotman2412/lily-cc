@@ -56,6 +56,8 @@ struct c_preproc {
     int          c_std;
     // Whether the current line has non-whitespace tokens on it.
     bool         blank_line;
+    // If true, emit `TOKENTYPE_WHITESPACE` and `TOKENTYPE_EOL` tokens instead of stripping them.
+    bool         keep_whitespace;
 };
 
 // Include-file stack entry.

@@ -14,11 +14,14 @@
 #include "tokenizer.h"
 
 #include <assert.h>
+#include <ctype.h>
 #include <string.h>
 
 
 
 static void    c_preproc_destroy(tokenizer_t *tkn);
+static void    c_preproc_pragma(c_preproc_t *pre, pos_t pos, char const *pragma);
+static void    c_pragma_once(c_preproc_t *pre, pos_t pos, char const *args);
 static void    c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path);
 static void    c_incfile_pop(c_preproc_t *pre);
 static void    c_incfile_eof(c_preproc_t *pre);
@@ -32,7 +35,7 @@ static void    c_directive_define(c_preproc_t *pre);
 static void    c_directive_undef(c_preproc_t *pre);
 static void    c_preproc_until_eol(c_preproc_t *pre, bool warn_extra_tok);
 static bool    c_preproc_do_emit(c_preproc_t *pre);
-static token_t c_preproc_next_raw(c_preproc_t *pre, bool allow_next_file);
+static token_t c_preproc_next_raw(c_preproc_t *pre, bool skip_whitespace, bool skip_eol, bool allow_next_file);
 static void    c_preproc_directive(c_preproc_t *pre);
 
 
@@ -54,9 +57,10 @@ c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std) {
     pre->base.cleanup       = c_preproc_destroy;
     pre->cctx               = srcfile->ctx;
     pre->macros             = STR_MAP_EMPTY;
+    pre->once_files         = PTR_SET_EMPTY;
     pre->stack_len          = 1;
     pre->stack_cap          = 1;
-    pre->stack              = strong_malloc(sizeof(void *));
+    pre->stack              = strong_malloc(sizeof(c_incfile_t));
     pre->stack[0].tkn_ctx   = srctok;
     pre->stack[0].ifdir     = NULL;
     pre->stack[0].ifdir_len = 0;
@@ -90,6 +94,39 @@ static void c_preproc_destroy(tokenizer_t *tkn) {
     free(pre->files);
 }
 
+// Pragma: once.
+static void c_pragma_once(c_preproc_t *pre, pos_t pos, char const *args) {
+    if (*args) {
+        cctx_diagnostic(pre->cctx, pos, DIAG_WARN, "Extra tokens after #pragma once");
+    }
+    c_incfile_t *file = &pre->stack[pre->stack_len - 1];
+    set_add(&pre->once_files, file->tkn_ctx->base.file);
+}
+
+// Handle a #pragma directive or _Pragma operator.
+static void c_preproc_pragma(c_preproc_t *pre, pos_t pos, char const *pragma) {
+    while (isspace((unsigned char)*pragma)) {
+        pragma++;
+    }
+    if (!*pragma) {
+        return;
+    }
+    size_t name_len = 0;
+    while (pragma[name_len] && !isspace((unsigned char)pragma[name_len])) {
+        name_len++;
+    }
+    char const *args = pragma + name_len;
+    while (isspace((unsigned char)*args)) {
+        args++;
+    }
+
+    if (name_len == 4 && !memcmp(pragma, "once", 4)) {
+        c_pragma_once(pre, pos, args);
+    } else {
+        cctx_diagnostic(pre->cctx, pos, DIAG_WARN, "Unrecognized pragma: %.*s", (int)name_len, pragma);
+    }
+}
+
 // Search for an include file and push it into the include stack.
 static void c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path) {
     // TODO: Replace with _popen when include search paths are implemented.
@@ -110,6 +147,7 @@ static void c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path) {
         .ifdir_len = 0,
         .ifdir     = 0,
     };
+    incfile.tkn_ctx->preproc_mode = true;
     array_lencap_insert_strong(
         &pre->stack,
         sizeof(c_incfile_t),
@@ -122,7 +160,7 @@ static void c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path) {
 
 // Pop the top-most file off of the include stack.
 static void c_incfile_pop(c_preproc_t *pre) {
-    assert(pre->stack_len >= 2);
+    assert(pre->stack_len >= 1);
     c_incfile_t *incfile = &pre->stack[pre->stack_len - 1];
 
     c_incfile_eof(pre);
@@ -153,17 +191,11 @@ static void c_incfile_eof(c_preproc_t *pre) {
 
 // Preprocessor directive: include.
 static void c_directive_include(c_preproc_t *pre) {
-    c_incfile_t *file = &pre->stack[pre->stack_len - 1];
-    token_t      token;
-
-again:
+    c_incfile_t *file            = &pre->stack[pre->stack_len - 1];
     file->tkn_ctx->str_anglebrac = true;
-    token                        = c_preproc_next_raw(pre, false);
+    token_t token                = c_preproc_next_raw(pre, true, false, false);
     file->tkn_ctx->str_anglebrac = false;
-    if (token.type == TOKENTYPE_WHITESPACE) {
-        tkn_delete(token);
-        goto again;
-    } else if (token.type != TOKENTYPE_SCONST) {
+    if (token.type != TOKENTYPE_SCONST) {
         cctx_diagnostic(pre->cctx, token.pos, DIAG_ERR, "Expected a path");
         tkn_delete(token);
         return;
@@ -176,6 +208,45 @@ again:
 
 // Preprocessor directive: pragma.
 static void c_directive_pragma(c_preproc_t *pre) {
+    c_incfile_t *file = &pre->stack[pre->stack_len - 1];
+    pos_t        start_pos;
+    pos_t        end_pos;
+    bool         has_token = false;
+
+    while (1) {
+        token_t peek = tkn_peek(&file->tkn_ctx->base);
+        if (peek.type == TOKENTYPE_EOL || peek.type == TOKENTYPE_EOF) {
+            break;
+        }
+        token_t tkn = c_preproc_next_raw(pre, false, false, false);
+        if (tkn.type != TOKENTYPE_WHITESPACE) {
+            if (!has_token) {
+                start_pos = tkn.pos;
+                has_token = true;
+            }
+            end_pos = tkn.pos;
+        }
+        tkn_delete(tkn);
+    }
+
+    if (!has_token) {
+        return;
+    }
+
+    pos_t span = pos_including(start_pos, end_pos);
+    char *buf  = strong_malloc(span.len + 1);
+    for (off_t i = 0; i < span.len; i++) {
+        int c = srcfile_readb(span.srcfile, span.off + i);
+        if (c < 0) {
+            buf[i] = '\0';
+            break;
+        }
+        buf[i] = (char)c;
+    }
+    buf[span.len] = '\0';
+
+    c_preproc_pragma(pre, span, buf);
+    free(buf);
 }
 
 // Preprocessor directive: if/elif.
@@ -204,13 +275,8 @@ static void c_directive_undef(c_preproc_t *pre) {
 
 // Handle a preprocessor directive.
 static void c_preproc_directive(c_preproc_t *pre) {
-    token_t name;
-again:
-    name = c_preproc_next_raw(pre, false);
-    if (name.type == TOKENTYPE_WHITESPACE) {
-        tkn_delete(name);
-        goto again;
-    } else if (name.type != TOKENTYPE_IDENT) {
+    token_t name = c_preproc_next_raw(pre, true, false, false);
+    if (name.type != TOKENTYPE_IDENT) {
         cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Expected preprocessing directive name");
         tkn_delete(name);
         return;
@@ -261,7 +327,7 @@ static void c_preproc_until_eol(c_preproc_t *pre, bool warn_extra_tok) {
     pos_t extra;
 
     while (1) {
-        token_t tkn = c_preproc_next_raw(pre, false);
+        token_t tkn = c_preproc_next_raw(pre, false, false, false);
         if (tkn.type == TOKENTYPE_EOL || tkn.type == TOKENTYPE_EOF) {
             tkn_delete(tkn);
             break;
@@ -289,10 +355,16 @@ static bool c_preproc_do_emit(c_preproc_t *pre) {
 
 // Get the next token without preprocessing.
 // If `allow_next_file` is `false` and at the end of an include file, returns EOF.
-static token_t c_preproc_next_raw(c_preproc_t *pre, bool allow_next_file) {
+static token_t c_preproc_next_raw(c_preproc_t *pre, bool skip_whitespace, bool skip_eol, bool allow_next_file) {
     while (1) {
         assert(pre->stack_len >= 1);
-        token_t tkn = tkn_next(&pre->stack[pre->stack_len - 1].tkn_ctx->base);
+        token_t tkn;
+    again:
+        tkn = tkn_next(&pre->stack[pre->stack_len - 1].tkn_ctx->base);
+        if ((tkn.type == TOKENTYPE_WHITESPACE && skip_whitespace) || (tkn.type == TOKENTYPE_EOL && skip_eol)) {
+            tkn_delete(tkn);
+            goto again;
+        }
         if (tkn.type == TOKENTYPE_EOF) {
             c_incfile_eof(pre);
         }
@@ -321,7 +393,7 @@ again:
         goto emit;
     }
 
-    tkn = c_preproc_next_raw(pre, true);
+    tkn = c_preproc_next_raw(pre, !pre->keep_whitespace, !pre->keep_whitespace, true);
 
     if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_HASH && pre->blank_line) {
         // Always check for directives.
@@ -342,11 +414,8 @@ again:
     }
 
 emit:
-    if (tkn.type == TOKENTYPE_EOF) {
+    if (tkn.type == TOKENTYPE_EOF || tkn.type == TOKENTYPE_WHITESPACE || tkn.type == TOKENTYPE_EOL) {
         return tkn;
-    } else if (tkn.type == TOKENTYPE_WHITESPACE || tkn.type == TOKENTYPE_EOL) {
-        tkn_delete(tkn);
-        goto again;
     }
 
     if (tkn.type == TOKENTYPE_IDENT) {

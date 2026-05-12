@@ -322,7 +322,7 @@ err0:
 
 // Read a raw byte from a source file.
 // Returns -1 on EOF.
-static int srcfile_read_raw_byte(srcfile_t *file, off_t off) {
+int srcfile_readb(srcfile_t *file, off_t off) {
     if (file->is_ram_file) {
         if (off >= (off_t)file->content_len) {
             return -1;
@@ -345,7 +345,7 @@ static int srcfile_read_raw_byte(srcfile_t *file, off_t off) {
 int srcfile_getc_raw(srcfile_t *file, off_t *off) {
     // Read first UTF-8 byte.
     int val  = 0;
-    int head = srcfile_read_raw_byte(file, *off);
+    int head = srcfile_readb(file, *off);
     if (head < 0) {
         return -1;
     }
@@ -372,7 +372,7 @@ int srcfile_getc_raw(srcfile_t *file, off_t *off) {
 
     // Try to read this amount of remaining bytes.
     for (; size; --size) {
-        int data = srcfile_read_raw_byte(file, *off);
+        int data = srcfile_readb(file, *off);
         if (data < 0 || (data & 0xc0) != 0x80) {
             val = 0xfffd;
             break;

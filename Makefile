@@ -8,6 +8,7 @@ all:
 	cmake -B build src
 	cmake --build build --target lilycc
 	cmake --build build --target lily-explainer
+	cmake --build build --target lily-cpp
 	cmake --build build --target lily-test
 
 .PHONY: build
@@ -15,6 +16,7 @@ build:
 	cmake -B build src
 	cmake --build build --target lilycc
 	cmake --build build --target lily-explainer
+	cmake --build build --target lily-cpp
 
 .PHONY: clang-tidy
 clang-tidy:

@@ -197,6 +197,9 @@ srcfile_t *srcfile_open(cctx_t *ctx, char const *path);
 srcfile_t *srcfile_popen(cctx_t *ctx, char const *path, char const *const *search, size_t search_len);
 // Create a source file from binary data.
 srcfile_t *srcfile_create(cctx_t *ctx, char const *virt_path, void const *data, size_t len);
+// Read a single raw byte from a source file at `off`.
+// Returns the byte (0..255) or -1 on EOF. Does not do UTF-8 decoding.
+int        srcfile_readb(srcfile_t *file, off_t off);
 // Read a character from a source file and update offset.
 int        srcfile_getc_raw(srcfile_t *file, off_t *offset);
 // Read a character from a source file and update position.

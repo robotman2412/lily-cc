@@ -744,7 +744,7 @@ retry:
         if (c2 == '/') {
             ctx->pos = pos2;
             if (c_ctx->preproc_mode) {
-                return c_tkn_whitespace(ctx, pos2, C_LINE_COMMENT);
+                return c_tkn_whitespace(ctx, pos0, C_LINE_COMMENT);
             } else {
                 c_line_comment(ctx);
                 goto retry;
@@ -752,7 +752,7 @@ retry:
         } else if (c2 == '*') {
             ctx->pos = pos2;
             if (c_ctx->preproc_mode) {
-                return c_tkn_whitespace(ctx, pos2, C_BLOCK_COMMENT);
+                return c_tkn_whitespace(ctx, pos0, C_BLOCK_COMMENT);
             } else {
                 c_block_comment(ctx);
                 goto retry;

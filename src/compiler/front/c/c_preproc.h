@@ -15,16 +15,14 @@
 
 // C compiler context.
 typedef struct c_compiler c_compiler_t;
-
 // C preprocessor state.
-typedef struct c_preproc c_preproc_t;
+typedef struct c_preproc  c_preproc_t;
 // Include-file stack entry.
-typedef struct c_incfile c_incfile_t;
+typedef struct c_incfile  c_incfile_t;
 // If-directive stack entry.
-typedef struct c_ifdir   c_ifdir_t;
+typedef struct c_ifdir    c_ifdir_t;
 // A macro definition.
-typedef struct c_macro   c_macro_t;
-
+typedef struct c_macro    c_macro_t;
 
 
 // C preprocessor state.
@@ -84,16 +82,34 @@ struct c_ifdir {
 
 // A macro definition.
 struct c_macro {
-    // Number of non-variadic arguments.
-    size_t   args_len;
-    // Argument names.
-    char   **args;
-    // Number of token to expand.
-    size_t   tokens_len;
-    // Tokens to expand.
-    token_t *tokens;
-    // Variadic macros (with ...).
-    bool     variadic;
+    union {
+        // Uses a callback instead of subsitution tokens and args.
+        bool is_proc_macro;
+        struct {
+            // Alias of `is_proc_macro`.
+            bool     is_proc_macro;
+            // Variadic macros (with ...).
+            bool     variadic;
+            // Number of non-variadic arguments.
+            size_t   args_len;
+            // Argument names.
+            char   **args;
+            // Number of token to expand.
+            size_t   tokens_len;
+            // Tokens to expand.
+            token_t *tokens;
+        } regular;
+        struct {
+            // Alias of `is_proc_macro`.
+            bool is_proc_macro;
+            // Takes arguments; the amount is to be checked by the callback.
+            bool uses_args;
+            // Callback to run on invocation.
+            void (*callback)(c_preproc_t *pre);
+            // Cookie provided to the callback.
+            void *cookie;
+        } proc;
+    };
 };
 
 

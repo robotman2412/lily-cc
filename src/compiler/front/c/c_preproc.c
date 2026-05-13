@@ -25,17 +25,19 @@ static void    c_pragma_once(c_preproc_t *pre, pos_t pos, char const *args);
 static void    c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path);
 static void    c_incfile_pop(c_preproc_t *pre);
 static void    c_incfile_eof(c_preproc_t *pre);
-static void    c_directive_include(c_preproc_t *pre);
-static void    c_directive_pragma(c_preproc_t *pre);
-static void    c_directive_if(c_preproc_t *pre, bool elif, bool ifdef, bool ifndef);
-static void    c_directive_else(c_preproc_t *pre);
-static void    c_directive_endif(c_preproc_t *pre);
-static void    c_directive_warning(c_preproc_t *pre, bool is_error);
-static void    c_directive_define(c_preproc_t *pre);
-static void    c_directive_undef(c_preproc_t *pre);
+static void    c_directive_include(c_preproc_t *pre, pos_t pos);
+static void    c_directive_pragma(c_preproc_t *pre, pos_t pos);
+static void    c_directive_if(c_preproc_t *pre, pos_t pos, bool elif, bool ifdef, bool ifndef);
+static void    c_directive_else(c_preproc_t *pre, pos_t pos);
+static void    c_directive_endif(c_preproc_t *pre, pos_t pos);
+static void    c_directive_warning(c_preproc_t *pre, pos_t pos, bool is_error);
+static void    c_directive_define(c_preproc_t *pre, pos_t pos);
+static void    c_directive_undef(c_preproc_t *pre, pos_t pos);
+static char   *c_preproc_read_bytes(c_preproc_t *pre, pos_t *pos_out);
 static void    c_preproc_until_eol(c_preproc_t *pre, bool warn_extra_tok);
 static bool    c_preproc_do_emit(c_preproc_t *pre);
-static token_t c_preproc_next_raw(c_preproc_t *pre, bool skip_whitespace, bool skip_eol, bool allow_next_file);
+static token_t c_preproc_next_raw(c_preproc_t *pre, bool skip_whitespace, bool skip_eol, bool allow_next_line);
+static token_t c_preproc_next_expanded(c_preproc_t *pre);
 static void    c_preproc_directive(c_preproc_t *pre);
 
 
@@ -179,18 +181,18 @@ static void c_incfile_eof(c_preproc_t *pre) {
             pre->cctx,
             incfile->ifdir[i].pos,
             DIAG_ERR,
-            "Unterminated %s directive",
+            "Unterminated #%s directive",
             incfile->ifdir[i].allow_else ? "if" : "else"
         );
-        cctx_diagnostic(pre->cctx, incfile->tkn_ctx->base.pos, DIAG_HINT, "Add an #endif here");
     }
     free(incfile->ifdir);
+    incfile->ifdir     = NULL;
     incfile->ifdir_len = 0;
     incfile->ifdir_cap = 0;
 }
 
 // Preprocessor directive: include.
-static void c_directive_include(c_preproc_t *pre) {
+static void c_directive_include(c_preproc_t *pre, pos_t pos) {
     c_incfile_t *file            = &pre->stack[pre->stack_len - 1];
     file->tkn_ctx->str_anglebrac = true;
     token_t token                = c_preproc_next_raw(pre, true, false, false);
@@ -207,7 +209,175 @@ static void c_directive_include(c_preproc_t *pre) {
 }
 
 // Preprocessor directive: pragma.
-static void c_directive_pragma(c_preproc_t *pre) {
+static void c_directive_pragma(c_preproc_t *pre, pos_t pos) {
+    (void)pos;
+    pos_t span;
+    char *buf = c_preproc_read_bytes(pre, &span);
+    if (!buf) {
+        return;
+    }
+    c_preproc_pragma(pre, span, buf);
+    free(buf);
+}
+
+// Preprocessor directive: if/elif.
+static void c_directive_if(c_preproc_t *pre, pos_t pos, bool elif, bool ifdef, bool ifndef) {
+    c_incfile_t *file = &pre->stack[pre->stack_len - 1];
+
+    bool eval;
+    if (ifdef || ifndef) {
+        token_t tkn = c_preproc_next_raw(pre, true, false, false);
+        if (tkn.type != TOKENTYPE_IDENT) {
+            cctx_diagnostic(pre->cctx, tkn.pos, DIAG_ERR, "Expected an identifier");
+            return;
+        }
+        eval = map_get(&pre->macros, tkn.strval) != NULL;
+        if (ifndef) {
+            eval = !eval;
+        }
+    } else {
+        // TODO.
+        eval = false;
+    }
+
+    if (elif) {
+        if (!file->ifdir_len) {
+            cctx_diagnostic(pre->cctx, pos, DIAG_ERR, "#elif without matching #if");
+            return;
+        }
+        c_ifdir_t *ifdir = &file->ifdir[file->ifdir_len - 1];
+        if (!ifdir->allow_else) {
+            cctx_diagnostic(pre->cctx, pos, DIAG_ERR, "#elif without matching #if");
+            cctx_diagnostic(pre->cctx, ifdir->pos, DIAG_INFO, "Most recent #else directive");
+            cctx_diagnostic(pre->cctx, pos, DIAG_HINT, "Change the #elif into an #if");
+            return;
+        }
+        ifdir->pos       = pos;
+        ifdir->do_emit   = !ifdir->disabled && eval;
+        ifdir->disabled |= ifdir->do_emit;
+    } else {
+        c_ifdir_t ifdir = {
+            .pos        = pos,
+            .allow_else = true,
+            .disabled   = eval,
+            .do_emit    = eval,
+        };
+        array_lencap_insert_strong(
+            &file->ifdir,
+            sizeof(c_ifdir_t),
+            &file->ifdir_len,
+            &file->ifdir_cap,
+            &ifdir,
+            file->ifdir_len
+        );
+    }
+}
+
+// Preprocessor directive: else.
+static void c_directive_else(c_preproc_t *pre, pos_t pos) {
+    c_incfile_t *file = &pre->stack[pre->stack_len - 1];
+
+    if (!file->ifdir_len) {
+        cctx_diagnostic(pre->cctx, pos, DIAG_ERR, "#else without matching #if");
+        return;
+    }
+    c_ifdir_t *ifdir = &file->ifdir[file->ifdir_len - 1];
+
+    if (!ifdir->allow_else) {
+        cctx_diagnostic(pre->cctx, pos, DIAG_ERR, "Dangling #else");
+        cctx_diagnostic(pre->cctx, ifdir->pos, DIAG_INFO, "Earlier #else occurred here");
+        cctx_diagnostic(pre->cctx, pos, DIAG_HINT, "Write #endif here");
+        return;
+    }
+
+    ifdir->pos        = pos;
+    ifdir->allow_else = false;
+    ifdir->do_emit    = !ifdir->disabled;
+}
+
+// Preprocessor directive: endif.
+static void c_directive_endif(c_preproc_t *pre, pos_t pos) {
+    c_incfile_t *file = &pre->stack[pre->stack_len - 1];
+
+    if (!file->ifdir_len) {
+        cctx_diagnostic(pre->cctx, pos, DIAG_ERR, "#endif without matching #if");
+        return;
+    }
+    file->ifdir_len--;
+}
+
+// Preprocessor directive: warning.
+static void c_directive_warning(c_preproc_t *pre, pos_t pos, bool is_error) {
+    (void)pos;
+    pos_t span;
+    char *buf = c_preproc_read_bytes(pre, &span);
+    if (!buf) {
+        return;
+    }
+    cctx_diagnostic(pre->cctx, span, is_error ? DIAG_ERR : DIAG_WARN, "%s", buf);
+    free(buf);
+}
+
+// Preprocessor directive: define.
+static void c_directive_define(c_preproc_t *pre, pos_t pos) {
+}
+
+// Preprocessor directive: undef.
+static void c_directive_undef(c_preproc_t *pre, pos_t pos) {
+}
+
+// Handle a preprocessor directive.
+static void c_preproc_directive(c_preproc_t *pre) {
+    token_t name = c_preproc_next_raw(pre, true, false, false);
+    if (name.type == TOKENTYPE_EOL || name.type == TOKENTYPE_EOF) {
+        // Note: Counterintuitively, `#` followed by newline does nothing according to the spec.
+        return;
+    } else if (name.type != TOKENTYPE_IDENT) {
+        cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Expected preprocessing directive name");
+        tkn_delete(name);
+        return;
+    }
+
+    // The if directives are always processed.
+    if (!strcmp(name.strval, "if")) {
+        c_directive_if(pre, name.pos, false, false, false);
+    } else if (!strcmp(name.strval, "ifdef")) {
+        c_directive_if(pre, name.pos, false, true, false);
+    } else if (!strcmp(name.strval, "ifndef")) {
+        c_directive_if(pre, name.pos, false, false, true);
+    } else if (!strcmp(name.strval, "elif")) {
+        c_directive_if(pre, name.pos, true, false, false);
+    } else if (!strcmp(name.strval, "elifdef")) {
+        c_directive_if(pre, name.pos, true, true, false);
+    } else if (!strcmp(name.strval, "elifndef")) {
+        c_directive_if(pre, name.pos, true, false, true);
+    } else if (!strcmp(name.strval, "else")) {
+        c_directive_else(pre, name.pos);
+    } else if (!strcmp(name.strval, "endif")) {
+        c_directive_endif(pre, name.pos);
+    } else if (!c_preproc_do_emit(pre)) {
+        // Any remaining directives are only processed if the current if directive branch is active.
+        c_preproc_until_eol(pre, false);
+        return;
+    } else if (!strcmp(name.strval, "include")) {
+        c_directive_include(pre, name.pos);
+    } else if (!strcmp(name.strval, "pragma")) {
+        c_directive_pragma(pre, name.pos);
+    } else if (!strcmp(name.strval, "warning")) {
+        c_directive_warning(pre, name.pos, false);
+    } else if (!strcmp(name.strval, "error")) {
+        c_directive_warning(pre, name.pos, true);
+    } else if (!strcmp(name.strval, "define")) {
+        c_directive_define(pre, name.pos);
+    } else if (!strcmp(name.strval, "undef")) {
+        c_directive_undef(pre, name.pos);
+    }
+
+    c_preproc_until_eol(pre, true);
+}
+
+// Read bytes up to but excluding the next newline.
+static char *c_preproc_read_bytes(c_preproc_t *pre, pos_t *pos_out) {
     c_incfile_t *file = &pre->stack[pre->stack_len - 1];
     pos_t        start_pos;
     pos_t        end_pos;
@@ -230,7 +400,7 @@ static void c_directive_pragma(c_preproc_t *pre) {
     }
 
     if (!has_token) {
-        return;
+        return NULL;
     }
 
     pos_t span = pos_including(start_pos, end_pos);
@@ -245,79 +415,10 @@ static void c_directive_pragma(c_preproc_t *pre) {
     }
     buf[span.len] = '\0';
 
-    c_preproc_pragma(pre, span, buf);
-    free(buf);
-}
-
-// Preprocessor directive: if/elif.
-static void c_directive_if(c_preproc_t *pre, bool elif, bool ifdef, bool ifndef) {
-}
-
-// Preprocessor directive: else.
-static void c_directive_else(c_preproc_t *pre) {
-}
-
-// Preprocessor directive: endif.
-static void c_directive_endif(c_preproc_t *pre) {
-}
-
-// Preprocessor directive: warning.
-static void c_directive_warning(c_preproc_t *pre, bool is_error) {
-}
-
-// Preprocessor directive: define.
-static void c_directive_define(c_preproc_t *pre) {
-}
-
-// Preprocessor directive: undef.
-static void c_directive_undef(c_preproc_t *pre) {
-}
-
-// Handle a preprocessor directive.
-static void c_preproc_directive(c_preproc_t *pre) {
-    token_t name = c_preproc_next_raw(pre, true, false, false);
-    if (name.type != TOKENTYPE_IDENT) {
-        cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Expected preprocessing directive name");
-        tkn_delete(name);
-        return;
+    if (pos_out) {
+        *pos_out = span;
     }
-
-    // The if directives are always processed.
-    if (!strcmp(name.strval, "if")) {
-        c_directive_if(pre, false, false, false);
-    } else if (!strcmp(name.strval, "ifdef")) {
-        c_directive_if(pre, false, true, false);
-    } else if (!strcmp(name.strval, "ifndef")) {
-        c_directive_if(pre, false, false, true);
-    } else if (!strcmp(name.strval, "elif")) {
-        c_directive_if(pre, true, false, false);
-    } else if (!strcmp(name.strval, "elifdef")) {
-        c_directive_if(pre, true, true, false);
-    } else if (!strcmp(name.strval, "elifndef")) {
-        c_directive_if(pre, true, false, true);
-    } else if (!strcmp(name.strval, "else")) {
-        c_directive_else(pre);
-    } else if (!strcmp(name.strval, "endif")) {
-        c_directive_endif(pre);
-    } else if (!c_preproc_do_emit(pre)) {
-        // Any remaining directives are only processed if the current if directive branch is active.
-        c_preproc_until_eol(pre, false);
-        return;
-    } else if (!strcmp(name.strval, "include")) {
-        c_directive_include(pre);
-    } else if (!strcmp(name.strval, "pragma")) {
-        c_directive_pragma(pre);
-    } else if (!strcmp(name.strval, "warning")) {
-        c_directive_warning(pre, false);
-    } else if (!strcmp(name.strval, "error")) {
-        c_directive_warning(pre, true);
-    } else if (!strcmp(name.strval, "define")) {
-        c_directive_define(pre);
-    } else if (!strcmp(name.strval, "undef")) {
-        c_directive_undef(pre);
-    }
-
-    c_preproc_until_eol(pre, true);
+    return buf;
 }
 
 // Consume tokens up to and including the next newline.
@@ -355,29 +456,66 @@ static bool c_preproc_do_emit(c_preproc_t *pre) {
 
 // Get the next token without preprocessing.
 // If `allow_next_file` is `false` and at the end of an include file, returns EOF.
-static token_t c_preproc_next_raw(c_preproc_t *pre, bool skip_whitespace, bool skip_eol, bool allow_next_file) {
+static token_t c_preproc_next_raw(c_preproc_t *pre, bool skip_whitespace, bool skip_eol, bool allow_next_line) {
     while (1) {
         assert(pre->stack_len >= 1);
         token_t tkn;
     again:
-        tkn = tkn_next(&pre->stack[pre->stack_len - 1].tkn_ctx->base);
+        tkn = tkn_peek(&pre->stack[pre->stack_len - 1].tkn_ctx->base);
+        if (!allow_next_line && (tkn.type == TOKENTYPE_EOL || tkn.type == TOKENTYPE_EOF)) {
+            tkn_delete(tkn);
+            return (token_t){
+                .pos  = tkn.pos,
+                .type = TOKENTYPE_EOL,
+            };
+        }
+        tkn_next(&pre->stack[pre->stack_len - 1].tkn_ctx->base);
+        if (tkn.type == TOKENTYPE_EOF || tkn.type == TOKENTYPE_EOL) {
+            pre->blank_line = true;
+        } else {
+            pre->blank_line &= tkn.type == TOKENTYPE_WHITESPACE;
+        }
         if ((tkn.type == TOKENTYPE_WHITESPACE && skip_whitespace) || (tkn.type == TOKENTYPE_EOL && skip_eol)) {
             tkn_delete(tkn);
             goto again;
         }
-        if (tkn.type == TOKENTYPE_EOF) {
-            c_incfile_eof(pre);
-        }
-        if (tkn.type == TOKENTYPE_EOF || tkn.type == TOKENTYPE_EOL) {
-            pre->blank_line = true;
-        }
-        if (tkn.type != TOKENTYPE_EOF || pre->stack_len == 1 || !allow_next_file) {
+        if (tkn.type != TOKENTYPE_EOF || pre->stack_len == 1) {
             return tkn;
         }
 
         // Pop include file.
+        c_incfile_eof(pre);
         c_incfile_pop(pre);
+        pre->blank_line = true;
     }
+}
+
+// Get the next token on the current line after macro expansion.
+// Used by certain directives.
+static token_t c_preproc_next_expanded(c_preproc_t *pre) {
+    token_t tkn;
+
+again:
+    if (pre->expand_index < pre->expand_len) {
+        // A macro was expanded; return its tokens first.
+        tkn = pre->expand[pre->expand_index];
+        pre->expand_index++;
+        goto emit;
+    }
+
+    tkn = c_preproc_next_raw(pre, true, false, false);
+
+    if (tkn.type == TOKENTYPE_IDENT) {
+        c_macro_t const *macro = map_get(&pre->macros, tkn.strval);
+        if (macro) {
+            tkn_delete(tkn);
+            c_macro_expand(pre, macro);
+            goto again;
+        }
+    }
+
+emit:
+    return tkn;
 }
 
 // Get the next token from the preprocessor.
@@ -393,9 +531,11 @@ again:
         goto emit;
     }
 
-    tkn = c_preproc_next_raw(pre, !pre->keep_whitespace, !pre->keep_whitespace, true);
+    // Cache this before `c_preproc_next_raw` overwrites it.
+    bool blank_line = pre->blank_line;
+    tkn             = c_preproc_next_raw(pre, !pre->keep_whitespace, !pre->keep_whitespace, true);
 
-    if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_HASH && pre->blank_line) {
+    if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_HASH && blank_line) {
         // Always check for directives.
         tkn_delete(tkn);
         c_preproc_directive(pre);
@@ -434,20 +574,21 @@ emit:
         }
     }
 
-    pre->blank_line = false;
     return tkn;
 }
 
 // Destroy a macro.
 void c_macro_destroy(c_macro_t *macro) {
-    for (size_t i = 0; i < macro->args_len; i++) {
-        free(macro->args[i]);
+    if (!macro->is_proc_macro) {
+        for (size_t i = 0; i < macro->regular.args_len; i++) {
+            free(macro->regular.args[i]);
+        }
+        free(macro->regular.args);
+        for (size_t i = 0; i < macro->regular.tokens_len; i++) {
+            tkn_delete(macro->regular.tokens[i]);
+        }
+        free(macro->regular.tokens);
     }
-    free(macro->args);
-    for (size_t i = 0; i < macro->tokens_len; i++) {
-        tkn_delete(macro->tokens[i]);
-    }
-    free(macro->tokens);
     free(macro);
 }
 

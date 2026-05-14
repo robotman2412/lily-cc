@@ -221,6 +221,8 @@ static char *test_c_tkn_errors() {
     "02000000000000000000000\n"                                             // Constant is too large and was truncated to 0
     "0b01111111111111111111111111111111111111111111111111111111111111111\n"
     "0b10000000000000000000000000000000000000000000000000000000000000000\n" // Constant is too large and was truncated to 0
+    "0x0ffffffffffffffffffffffffffffffff_x128\n"
+    "0x100000000000000000000000000000000_x128\n"                            // Constant is too large and was truncated to 0
     "0x 0b\n"                                                               // Invalid hexadecimal/binary constant
     "0xg 0b2 1a 08\n"                                                       // Invalid hexadecimal/binary/decimal/octal constant
     "\"\\U0\\U00000000\\u0\\u0000\\x\\x0\"\n"                               // Invalid hexadecimal escape sequence (x3)
@@ -242,11 +244,11 @@ static char *test_c_tkn_errors() {
     // '
     diagnostic_t *diag = (diagnostic_t *)cctx->diagnostics.head;
     RETURN_ON_FALSE(diag);
+    EXPECT_STR(diag->msg, "Character constant spans end of line");
     EXPECT_INT(diag->pos.line, 0);
     EXPECT_INT(diag->pos.col, 0);
     EXPECT_INT(diag->pos.len, 1);
     EXPECT_INT(diag->lvl, DIAG_ERR);
-    EXPECT_STR(diag->msg, "Character constant spans end of line");
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
     EXPECT_STR(diag->msg, "Empty character constant");
@@ -260,88 +262,105 @@ static char *test_c_tkn_errors() {
     // 0x10000000000000000
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
+    EXPECT_STR(diag->msg, "Constant is too large and was truncated to 0 (0x0)");
     EXPECT_INT(diag->pos.line, 3);
     EXPECT_INT(diag->pos.col, 0);
     EXPECT_INT(diag->pos.len, 19);
     EXPECT_INT(diag->lvl, DIAG_WARN);
-    EXPECT_STR(diag->msg, "Constant is too large and was truncated to 0");
 
     // 18446744073709551616
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
+    EXPECT_STR(diag->msg, "Constant is too large and was truncated to 0 (0x0)");
     EXPECT_INT(diag->pos.line, 5);
     EXPECT_INT(diag->lvl, DIAG_WARN);
-    EXPECT_STR(diag->msg, "Constant is too large and was truncated to 0");
 
     // 01777777777777777777777
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
+    EXPECT_STR(diag->msg, "Constant is too large and was truncated to 0 (0x0)");
     EXPECT_INT(diag->pos.line, 7);
     EXPECT_INT(diag->lvl, DIAG_WARN);
-    EXPECT_STR(diag->msg, "Constant is too large and was truncated to 0");
 
     // 0b10000000000000000000000000000000000000000000000000000000000000000
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
+    EXPECT_STR(diag->msg, "Constant is too large and was truncated to 0 (0x0)");
     EXPECT_INT(diag->pos.line, 9);
     EXPECT_INT(diag->lvl, DIAG_WARN);
-    EXPECT_STR(diag->msg, "Constant is too large and was truncated to 0");
+
+    // 0x100000000000000000000000000000000_x128
+    diag = (diagnostic_t *)diag->node.next;
+    RETURN_ON_FALSE(diag);
+    EXPECT_STR(diag->msg, "Constant is too large and was truncated to 0 (0x0)");
+    EXPECT_INT(diag->pos.line, 11);
+    EXPECT_INT(diag->lvl, DIAG_WARN);
 
     // 0x
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
-    EXPECT_INT(diag->lvl, DIAG_ERR);
     EXPECT_STR(diag->msg, "Invalid hexadecimal constant");
+    EXPECT_INT(diag->pos.line, 12);
+    EXPECT_INT(diag->lvl, DIAG_ERR);
 
     // 0b
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
-    EXPECT_INT(diag->lvl, DIAG_ERR);
     EXPECT_STR(diag->msg, "Invalid binary constant");
+    EXPECT_INT(diag->pos.line, 12);
+    EXPECT_INT(diag->lvl, DIAG_ERR);
 
     // 0xg
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
-    EXPECT_INT(diag->lvl, DIAG_ERR);
     EXPECT_STR(diag->msg, "Invalid hexadecimal constant");
+    EXPECT_INT(diag->pos.line, 13);
+    EXPECT_INT(diag->lvl, DIAG_ERR);
 
     // 0b2
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
-    EXPECT_INT(diag->lvl, DIAG_ERR);
     EXPECT_STR(diag->msg, "Invalid binary constant");
+    EXPECT_INT(diag->pos.line, 13);
+    EXPECT_INT(diag->lvl, DIAG_ERR);
 
     // 1a
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
-    EXPECT_INT(diag->lvl, DIAG_ERR);
     EXPECT_STR(diag->msg, "Invalid decimal constant");
+    EXPECT_INT(diag->pos.line, 13);
+    EXPECT_INT(diag->lvl, DIAG_ERR);
 
     // 08
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
-    EXPECT_INT(diag->lvl, DIAG_ERR);
     EXPECT_STR(diag->msg, "Invalid octal constant");
+    EXPECT_INT(diag->pos.line, 13);
+    EXPECT_INT(diag->lvl, DIAG_ERR);
 
     // "\U0\U00000000\u0\u0000\x\x0"
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
-    EXPECT_INT(diag->lvl, DIAG_ERR);
     EXPECT_STR(diag->msg, "Invalid hexadecimal escape sequence");
+    EXPECT_INT(diag->pos.line, 14);
+    EXPECT_INT(diag->lvl, DIAG_ERR);
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
-    EXPECT_INT(diag->lvl, DIAG_ERR);
     EXPECT_STR(diag->msg, "Invalid hexadecimal escape sequence");
+    EXPECT_INT(diag->pos.line, 14);
+    EXPECT_INT(diag->lvl, DIAG_ERR);
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
-    EXPECT_INT(diag->lvl, DIAG_ERR);
     EXPECT_STR(diag->msg, "Invalid hexadecimal escape sequence");
+    EXPECT_INT(diag->pos.line, 14);
+    EXPECT_INT(diag->lvl, DIAG_ERR);
 
     // 0xc0dellll
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
-    EXPECT_INT(diag->lvl, DIAG_ERR);
     EXPECT_STR(diag->msg, "Invalid literal suffix");
+    EXPECT_INT(diag->pos.line, 15);
+    EXPECT_INT(diag->lvl, DIAG_ERR);
 
     tkn_ctx_delete(tkn_ctx);
     cctx_delete(cctx);

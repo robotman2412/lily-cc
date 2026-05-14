@@ -312,6 +312,7 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
     bool           has_bool     = false;
     bool           has_unsigned = false;
     bool           has_signed   = false;
+    bool           has_int128   = false;
 
     rc_t      type_rc = rc_new_strong(strong_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
     c_type_t *type    = type_rc->data;
@@ -335,6 +336,7 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
                 case C_KEYW_bool: has_bool = true; break;
                 case C_KEYW_signed: has_signed = true; break;
                 case C_KEYW_unsigned: has_unsigned = true; break;
+                case C_KEYW___int128: has_int128 = true; break;
 #ifndef NDEBUG
                 default:
                     printf(
@@ -344,8 +346,9 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
                     break;
 #endif
             }
-        } else if (param.type == TOKENTYPE_AST
-                   && (param.subtype == C_AST_ANON_STRUCT || param.subtype == C_AST_NAMED_STRUCT)) {
+        } else if (
+            param.type == TOKENTYPE_AST && (param.subtype == C_AST_ANON_STRUCT || param.subtype == C_AST_NAMED_STRUCT)
+        ) {
             if (struct_tkn) {
                 // TODO: Diagnostic.
             } else {
@@ -361,8 +364,12 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
 
     if (struct_tkn
         && (n_long || has_int || has_short || has_char || has_float || has_double || has_void || has_bool
-            || has_unsigned || has_signed)) {
+            || has_unsigned || has_signed || has_int128)) {
         cctx_diagnostic(ctx->cctx, list->pos, DIAG_ERR, "Cannot be both primitive and compound type");
+    }
+
+    if (has_signed && has_unsigned) {
+        cctx_diagnostic(ctx->cctx, list->pos, DIAG_ERR, "Type cannot be both signed and unsigned");
     }
 
     // C type parsing is messy, can't do much about that.
@@ -398,6 +405,15 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
             type->primitive = C_PRIM_SSHORT;
         }
         has_short    = false;
+        has_signed   = false;
+        has_unsigned = false;
+    } else if (has_int128) {
+        if (has_unsigned) {
+            type->primitive = C_PRIM_U128;
+        } else {
+            type->primitive = C_PRIM_S128;
+        }
+        has_int128   = false;
         has_signed   = false;
         has_unsigned = false;
     } else if (n_long == 2) {
@@ -448,7 +464,7 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
 
     if (!struct_tkn
         && (n_long || has_int || has_short || has_char || has_float || has_double || has_void || has_bool
-            || has_unsigned || has_signed)) {
+            || has_unsigned || has_signed || has_int128)) {
         cctx_diagnostic(ctx->cctx, list->pos, DIAG_ERR, "Invalid combination of type specifiers");
     }
 
@@ -670,6 +686,8 @@ bool c_type_is_scalar(c_type_t const *type) {
         case C_PRIM_ULONG:
         case C_PRIM_SLLONG:
         case C_PRIM_ULLONG:
+        case C_PRIM_S128:
+        case C_PRIM_U128:
         case C_PRIM_FLOAT:
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE:
@@ -711,6 +729,8 @@ bool c_type_is_pointer(c_type_t const *type) {
         case C_PRIM_ULONG:
         case C_PRIM_SLLONG:
         case C_PRIM_ULLONG:
+        case C_PRIM_S128:
+        case C_PRIM_U128:
         case C_PRIM_FLOAT:
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE:
@@ -753,6 +773,8 @@ bool c_type_is_identical(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b
         case C_PRIM_SLONG:
         case C_PRIM_ULLONG:
         case C_PRIM_SLLONG:
+        case C_PRIM_S128:
+        case C_PRIM_U128:
         case C_PRIM_FLOAT:
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE:
@@ -789,6 +811,8 @@ bool c_type_is_compatible(c_compiler_t *ctx, c_type_t const *a, c_type_t const *
         case C_PRIM_SLONG:
         case C_PRIM_ULLONG:
         case C_PRIM_SLLONG:
+        case C_PRIM_S128:
+        case C_PRIM_U128:
         case C_PRIM_FLOAT:
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE:
@@ -947,6 +971,8 @@ bool c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out
         case C_PRIM_SLONG: *align_out = *size_out = ctx->options.long64 ? 8 : 4; return true;
         case C_PRIM_ULLONG:
         case C_PRIM_SLLONG: *align_out = *size_out = 8; return true;
+        case C_PRIM_S128:
+        case C_PRIM_U128: *align_out = *size_out = 16; return true;
         case C_PRIM_FLOAT: *align_out = *size_out = 4; return true;
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE: *align_out = *size_out = 8; return true;
@@ -1031,6 +1057,8 @@ ir_prim_t c_prim_to_ir_type(c_compiler_t *ctx, c_prim_t prim) {
         case C_PRIM_SINT: return !ctx->options.int32 ? IR_PRIM_s16 : IR_PRIM_s32;
         case C_PRIM_ULONG: return !ctx->options.long64 ? IR_PRIM_u32 : IR_PRIM_u64;
         case C_PRIM_SLONG: return !ctx->options.long64 ? IR_PRIM_s32 : IR_PRIM_s64;
+        case C_PRIM_S128: return IR_PRIM_s128;
+        case C_PRIM_U128: return IR_PRIM_u128;
         case C_PRIM_ULLONG: return IR_PRIM_u64;
         case C_PRIM_SLLONG: return IR_PRIM_s64;
         case C_PRIM_FLOAT: return IR_PRIM_f32;

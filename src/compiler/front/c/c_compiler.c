@@ -970,9 +970,9 @@ static inline c_compile_expr_t
         return (c_compile_expr_t){
             .code = code,
             .res  = {
-                 .value_type     = C_RVALUE_OPERAND,
-                 .c_type         = rc_share(&ctx->prim_rcs[c_prim]),
-                 .rvalue.operand = IR_OPERAND_CONST(tmp),
+                .value_type     = C_RVALUE_OPERAND,
+                .c_type         = rc_share(&ctx->prim_rcs[c_prim]),
+                .rvalue.operand = IR_OPERAND_CONST(tmp),
             },
         };
     }
@@ -1251,8 +1251,9 @@ static inline c_compile_expr_t c_compile_expr_call(
             signature   = func_type;
             call_memref = func.lvalue.memref;
 
-        } else if (func_type->primitive == C_COMP_POINTER
-                   && ((c_type_t *)func_type->inner->data)->primitive == C_COMP_FUNCTION) {
+        } else if (
+            func_type->primitive == C_COMP_POINTER && ((c_type_t *)func_type->inner->data)->primitive == C_COMP_FUNCTION
+        ) {
             // Call by function pointer.
             signature        = func_type->inner->data;
             ir_operand_t ptr = c_value_read(ctx, code, &func);
@@ -1337,9 +1338,9 @@ c_compile_expr_t
             return (c_compile_expr_t){
                 .code = code,
                 .res  = {
-                     .value_type     = C_RVALUE_OPERAND,
-                     .c_type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
-                     .rvalue.operand = IR_OPERAND_CONST(iconst),
+                    .value_type     = C_RVALUE_OPERAND,
+                    .c_type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
+                    .rvalue.operand = IR_OPERAND_CONST(iconst),
                 },
             };
         }
@@ -1378,14 +1379,14 @@ c_compile_expr_t
         return (c_compile_expr_t){
             .code = code,
             .res  = {
-                 .value_type     = C_RVALUE_OPERAND,
-                 .c_type         = rc_share(&ctx->prim_rcs[expr->subtype]),
-                 .rvalue.operand = {
-                     .type   = IR_OPERAND_TYPE_CONST,
-                     .iconst = {
-                         .prim_type = c_prim_to_ir_type(ctx, expr->subtype),
-                         .constl    = expr->ival,
-                         .consth    = expr->ivalh,
+                .value_type     = C_RVALUE_OPERAND,
+                .c_type         = rc_share(&ctx->prim_rcs[expr->subtype]),
+                .rvalue.operand = {
+                    .type   = IR_OPERAND_TYPE_CONST,
+                    .iconst = {
+                        .prim_type = c_prim_to_ir_type(ctx, expr->subtype),
+                        .constl    = expr->ival,
+                        .consth    = expr->ivalh,
                     },
                 },
             },
@@ -1487,9 +1488,9 @@ c_compile_expr_t
             return (c_compile_expr_t){
                 .code = code,
                 .res  = {
-                     .value_type     = C_RVALUE_OPERAND,
-                     .c_type         = cast_rc,
-                     .rvalue.operand = IR_OPERAND_UNDEF(IR_PRIM_u8),
+                    .value_type     = C_RVALUE_OPERAND,
+                    .c_type         = cast_rc,
+                    .rvalue.operand = IR_OPERAND_UNDEF(IR_PRIM_u8),
                 },
             };
         }
@@ -1499,9 +1500,9 @@ c_compile_expr_t
             // Can be evaluated at compile time.
             ir_const_t new_const = ir_cast(c_type_to_ir_type(ctx, new_type), res.res.rvalue.operand.iconst);
             c_value_t  rvalue    = {
-                    .value_type     = C_RVALUE_OPERAND,
-                    .c_type         = cast_rc,
-                    .rvalue.operand = IR_OPERAND_CONST(new_const),
+                .value_type     = C_RVALUE_OPERAND,
+                .c_type         = cast_rc,
+                .rvalue.operand = IR_OPERAND_CONST(new_const),
             };
             c_value_destroy(res.res);
             return (c_compile_expr_t){
@@ -1733,8 +1734,10 @@ c_compile_expr_t
             .res  = c_value_access_field(ctx, &res.res, &expr->params[2]),
         };
 
-    } else if (expr->subtype == C_AST_EXPR_INFIX
-               && (expr->params[0].subtype == C_TKN_LOR || expr->params[0].subtype == C_TKN_LAND)) {
+    } else if (
+        expr->subtype == C_AST_EXPR_INFIX
+        && (expr->params[0].subtype == C_TKN_LOR || expr->params[0].subtype == C_TKN_LAND)
+    ) {
         // Logical ANR/OR expression.
         c_compile_expr_t res;
         bool const       is_land = expr->params[0].subtype == C_TKN_LAND;
@@ -1794,12 +1797,12 @@ c_compile_expr_t
             return (c_compile_expr_t){
                 .code = code,
                 .res  = (c_value_t){
-                     .value_type     = C_RVALUE_OPERAND,
-                     .c_type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
-                     .rvalue.operand = IR_OPERAND_CONST(((ir_const_t){
-                         .prim_type = c_prim_to_ir_type(ctx, C_PRIM_SINT),
-                         .consth    = 0,
-                         .constl    = res,
+                    .value_type     = C_RVALUE_OPERAND,
+                    .c_type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
+                    .rvalue.operand = IR_OPERAND_CONST(((ir_const_t){
+                        .prim_type = c_prim_to_ir_type(ctx, C_PRIM_SINT),
+                        .consth    = 0,
+                        .constl    = res,
                     })),
                 },
             };
@@ -1836,9 +1839,9 @@ c_compile_expr_t
         return (c_compile_expr_t){
             .code = exit_code,
             .res  = (c_value_t){
-                 .value_type     = C_RVALUE_OPERAND,
-                 .c_type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
-                 .rvalue.operand = IR_OPERAND_VAR(resvar2),
+                .value_type     = C_RVALUE_OPERAND,
+                .c_type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
+                .rvalue.operand = IR_OPERAND_VAR(resvar2),
             },
         };
 
@@ -2134,9 +2137,9 @@ c_compile_expr_t
                 return (c_compile_expr_t){
                     .code = code,
                     .res  = {
-                         .value_type = C_RVALUE_OPERAND,
-                         .c_type     = type,
-                         .rvalue.operand
+                        .value_type = C_RVALUE_OPERAND,
+                        .c_type     = type,
+                        .rvalue.operand
                         = IR_OPERAND_CONST(ir_calc1(c_op1_to_ir_op1(expr->params[0].subtype), ir_value.iconst)),
                     },
                 };
@@ -2517,6 +2520,8 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
                 case C_PRIM_ULONG:
                 case C_PRIM_SLLONG:
                 case C_PRIM_ULLONG:
+                case C_PRIM_S128:
+                case C_PRIM_U128:
                 case C_PRIM_FLOAT:
                 case C_PRIM_DOUBLE:
                 case C_PRIM_LDOUBLE:

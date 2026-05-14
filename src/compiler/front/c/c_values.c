@@ -357,6 +357,8 @@ bool c_value_is_assignable(c_compiler_t *ctx, c_value_t const *value, pos_t diag
         case C_PRIM_SLONG:
         case C_PRIM_ULLONG:
         case C_PRIM_SLLONG:
+        case C_PRIM_S128:
+        case C_PRIM_U128:
         case C_PRIM_FLOAT:
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE: return true;

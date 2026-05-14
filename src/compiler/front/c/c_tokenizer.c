@@ -5,6 +5,7 @@
 
 #include "c_tokenizer.h"
 
+#include "arith128.h"
 #include "c_types.h"
 #include "compiler.h"
 #include "strong_malloc.h"
@@ -14,6 +15,8 @@
 #include <arrays.h>
 #include <assert.h>
 #include <inttypes.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -105,10 +108,10 @@ bool c_is_sym_char(int c) {
 
 // Tokenize integer constant.
 static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int base) {
-    uint64_t val      = 0;
-    bool     hasdat   = false;
-    bool     toolarge = false;
-    bool     invalid  = false;
+    i128_t val      = int128(0, 0);
+    bool   hasdat   = false;
+    bool   toolarge = false;
+    bool   invalid  = false;
 
     pos_t pos0 = ctx->pos;
     pos_t pos1;
@@ -129,37 +132,43 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         if (digit >= base) {
             invalid = true;
         }
-        if (val * base + digit < val) {
+        i128_t next = add128(mul128(val, int128(0, base)), int128(0, digit));
+        if (cmp128u(next, val) < 0) {
             toolarge = true;
         }
-        val    = val * base + digit;
+        val    = next;
         hasdat = true;
         pos0   = pos1;
     }
     pos1 = pos0;
 
     // Check for literal suffixes.
-    pos_t    lit_end    = pos0;
-    c_prim_t c_prim     = C_PRIM_SINT;
-    bool     bad_suffix = false;
-    bool     u_suffix   = false;
-    bool     l_suffix   = false;
-    bool     ll_suffix  = false;
-    int      c          = srcfile_getc(ctx->file, &pos1);
+    pos_t    lit_end     = pos0;
+    c_prim_t c_prim      = C_PRIM_SINT;
+    bool     bad_suffix  = false;
+    bool     u_suffix    = false;
+    bool     l_suffix    = false;
+    bool     ll_suffix   = false;
+    bool     i128_suffix = false;
+    int      c           = srcfile_getc(ctx->file, &pos1);
 
     // Promote the primitive to be bigger if necessary.
-    int opt_int_bits   = 32; // TODO: Tokenizer is currently not aware of the C options.
-    int opt_long_bits  = 32;
-    int opt_llong_bits = 64;
-    if (val <= ((1llu << (opt_int_bits - 1)) - 1)) {
+    // TODO: Tokenizer is currently not aware of the C options.
+    i128_t const i32_max = int128(0, INT32_MAX);
+    i128_t const u32_max = int128(0, UINT32_MAX);
+    i128_t const i64_max = int128(0, INT64_MAX);
+    i128_t const u64_max = int128(0, UINT64_MAX);
+    // Note: No automatic promotion to 128-bit without explicit suffix;
+    // 128-bit literals are a Lily-C (not even GCC/clang) extension.
+    if (cmp128u(val, i32_max) < 0) {
         c_prim = C_PRIM_SINT;
-    } else if (val <= ((1llu << opt_int_bits) - 1)) {
+    } else if (cmp128u(val, u32_max) < 0) {
         c_prim = C_PRIM_UINT;
-    } else if (val <= ((1llu << (opt_long_bits - 1)) - 1)) {
+    } else if (cmp128u(val, i64_max) < 0) {
         c_prim = C_PRIM_SLONG;
-    } else if (val <= ((1llu << opt_long_bits) - 1)) {
+    } else if (cmp128u(val, u64_max) < 0) {
         c_prim = C_PRIM_ULONG;
-    } else if (val <= ((1llu << opt_llong_bits) - 1)) {
+    } else if (cmp128u(val, i64_max) < 0) {
         c_prim = C_PRIM_SLLONG;
     } else {
         c_prim = C_PRIM_ULLONG;
@@ -170,11 +179,11 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         u_suffix = true;
         pos0     = pos1;
         c        = srcfile_getc(ctx->file, &pos1);
-        if (c != 'l' && c != 'L' && (c == '_' || ((c | 0x20) >= 'a' && (c | 0x20) <= 'z'))) {
+        if (c != 'l' && c != 'L' && ((c | 0x20) >= 'a' && (c | 0x20) <= 'z')) {
             bad_suffix = true;
         }
     }
-    // Long / long long.
+    // Long / long long / _x128.
     if (!bad_suffix && (c == 'l' || c == 'L')) {
         pos0   = pos1;
         int c2 = c;
@@ -183,12 +192,25 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
             pos0      = pos1;
             c         = srcfile_getc(ctx->file, &pos1);
             ll_suffix = true;
-        } else if (c != 'u' && (c == '_' || ((c | 0x20) >= 'a' && (c | 0x20) <= 'z'))) {
+        } else if (c != 'u' && ((c | 0x20) >= 'a' && (c | 0x20) <= 'z')) {
             bad_suffix = true;
         } else {
             l_suffix = true;
         }
-    } else if (c == '_' || ((c | 0x20) >= 'a' && (c | 0x20) <= 'z')) {
+    } else if (!bad_suffix && c == '_') {
+        pos_t pos2 = pos1;
+        int   c_x  = srcfile_getc(ctx->file, &pos2);
+        int   c_1  = srcfile_getc(ctx->file, &pos2);
+        int   c_2  = srcfile_getc(ctx->file, &pos2);
+        int   c_8  = srcfile_getc(ctx->file, &pos2);
+        if ((c_x == 'x' || c_x == 'X') && c_1 == '1' && c_2 == '2' && c_8 == '8') {
+            pos0 = pos1 = pos2;
+            c           = srcfile_getc(ctx->file, &pos1);
+            i128_suffix = true;
+        } else {
+            bad_suffix = true;
+        }
+    } else if (((c | 0x20) >= 'a' && (c | 0x20) <= 'z')) {
         bad_suffix = true;
     }
     // Unsigned (after).
@@ -205,10 +227,16 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
     }
 
     // Change primitive type according to literal suffix.
-    if (ll_suffix && c_prim < C_PRIM_SLLONG) {
+    if (i128_suffix && c_prim < C_PRIM_S128) {
+        c_prim = C_PRIM_S128;
+    } else if (ll_suffix && c_prim < C_PRIM_SLLONG) {
         c_prim = C_PRIM_SLLONG;
     } else if (l_suffix && c_prim < C_PRIM_SLONG) {
         c_prim = C_PRIM_SLONG;
+    }
+    if (hi64(val) != 0 && !i128_suffix) {
+        val      = int128(0, lo64(val));
+        toolarge = true;
     }
     if (u_suffix) {
         c_prim |= 1; // Unsigned primitives have uneven encoding in the enum.
@@ -242,12 +270,21 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
             .params     = NULL,
         };
     } else if (toolarge) {
-        cctx_diagnostic(ctx->cctx, pos, DIAG_WARN, "Constant is too large and was truncated to %" PRId64, val);
+        char dec[40];
+        itoa128(val, 1, dec);
+        char hex[33];
+        if (hi64(val) == 0) {
+            snprintf(hex, sizeof(hex), "%" PRIx64, lo64(val));
+        } else {
+            snprintf(hex, sizeof(hex), "%" PRIx64 "%016" PRIx64, hi64(val), lo64(val));
+        }
+        cctx_diagnostic(ctx->cctx, pos, DIAG_WARN, "Constant is too large and was truncated to %s (0x%s)", dec, hex);
     }
     return (token_t){
         .type       = TOKENTYPE_ICONST,
         .pos        = pos,
-        .ival       = val,
+        .ival       = lo64(val),
+        .ivalh      = hi64(val),
         .subtype    = c_prim,
         .strval     = NULL,
         .strval_len = 0,

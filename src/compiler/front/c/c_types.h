@@ -41,6 +41,10 @@ typedef enum {
     C_PRIM_SLLONG,
     // `unsigned long long (int)`
     C_PRIM_ULLONG,
+    // `(signed) __int128`
+    C_PRIM_S128,
+    // `unsigned __int128`
+    C_PRIM_U128,
 
     // `float`
     C_PRIM_FLOAT,
@@ -83,7 +87,9 @@ static inline bool c_prim_is_int(c_prim_t prim) {
         case C_PRIM_ULONG:
         case C_PRIM_SLONG:
         case C_PRIM_ULLONG:
-        case C_PRIM_SLLONG: return true;
+        case C_PRIM_SLLONG:
+        case C_PRIM_S128:
+        case C_PRIM_U128: return true;
         case C_PRIM_FLOAT:
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE:
@@ -113,6 +119,8 @@ static inline bool c_prim_is_scalar(c_prim_t prim) {
         case C_PRIM_SLONG:
         case C_PRIM_ULLONG:
         case C_PRIM_SLLONG:
+        case C_PRIM_S128:
+        case C_PRIM_U128:
         case C_PRIM_FLOAT:
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE: return true;
@@ -266,8 +274,8 @@ bool     c_type_is_compatible(c_compiler_t *ctx, c_type_t const *a, c_type_t con
 // Determine whether two types can be used with a certain operator token.
 // Produces a diagnostic if they cannot.
 bool     c_type_arith_compatible(
-        c_compiler_t *ctx, c_type_t const *a, c_type_t const *b, c_tokentype_t oper_tkn, pos_t diag_pos
-    );
+    c_compiler_t *ctx, c_type_t const *a, c_type_t const *b, c_tokentype_t oper_tkn, pos_t diag_pos
+);
 // Get the alignment and size of a C type.
 // Returns false if it is an incomplete type and the layout is therefor unknown.
 bool             c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out, uint64_t *align_out);

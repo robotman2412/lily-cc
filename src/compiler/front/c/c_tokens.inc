@@ -10,6 +10,10 @@
 #define C_TOKEN_DEF(id, val)
 #endif
 
+// The following two are used only by the preprocessor:
+C_TOKEN_DEF(HASH     /* # */, "#")
+C_TOKEN_DEF(PASTE    /* ## */, "##")
+
 C_TOKEN_DEF(SEMIC    /* ; */, ";")
 C_TOKEN_DEF(COMMA    /* , */, ",")
 C_TOKEN_DEF(RPAR     /* ) */, ")")
@@ -63,9 +67,5 @@ C_TOKEN_DEF(DOT      /* . */, ".")
 C_TOKEN_DEF(VARARG   /* ... */, "...")
 C_TOKEN_DEF(ARROW    /* -> */, "->")
 C_TOKEN_DEF(ASSIGN   /* = */, "=")
-
-// The following two are used only by the preprocessor:
-C_TOKEN_DEF(HASH     /* # */, "#")
-C_TOKEN_DEF(PASTE    /* ## */, "##")
 
 #undef C_TOKEN_DEF

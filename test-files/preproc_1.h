@@ -8,6 +8,16 @@
 
 #define YES
 
+// Expression test: evaluates to false
+#if 2 + 2 * -1
+#error fail
+#endif
+
+// Expression test: evaluates to false
+#if !0 - 1
+#error fail
+#endif
+
 // Should be: branch 1
 #ifdef YES
 // Branch 1

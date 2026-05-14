@@ -5,6 +5,7 @@
 
 #include "c_preproc.h"
 
+#include "arith128.h"
 #include "arrays.h"
 #include "c_tokenizer.h"
 #include "compiler.h"
@@ -26,6 +27,11 @@ static void    c_pragma_once(c_preproc_t *pre, pos_t pos, char const *args);
 static void    c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path);
 static void    c_incfile_pop(c_preproc_t *pre);
 static void    c_incfile_eof(c_preproc_t *pre);
+static int     c_preproc_op_precedence(c_tokentype_t type);
+static bool    c_preproc_is_prefix_op(c_tokentype_t type);
+static i128_t  c_preproc_eval_prefix(c_tokentype_t oper, i128_t value);
+static i128_t  c_preproc_eval_infix(bool is_signed, i128_t lhs, c_tokentype_t oper, i128_t rhs);
+static bool    c_preproc_eval(c_preproc_t *pre, pos_t pos);
 static void    c_directive_include(c_preproc_t *pre, pos_t pos);
 static void    c_directive_pragma(c_preproc_t *pre, pos_t pos);
 static void    c_directive_if(c_preproc_t *pre, pos_t pos, bool elif, bool ifdef, bool ifndef);
@@ -193,6 +199,284 @@ static void c_incfile_eof(c_preproc_t *pre) {
     incfile->ifdir_cap = 0;
 }
 
+// Get operator precedence.
+// Returns -1 if not an operator token.
+// Note: Unlike C proper, there are no suffix operators.
+// In addition, prefix operators have higher precedence than all infix operators.
+static int c_preproc_op_precedence(c_tokentype_t type) {
+    switch (type) {
+        case C_TKN_MUL:
+        case C_TKN_DIV:
+        case C_TKN_MOD: return 10;
+
+        case C_TKN_ADD:
+        case C_TKN_SUB: return 9;
+
+        case C_TKN_SHL:
+        case C_TKN_SHR: return 8;
+
+        case C_TKN_LT:
+        case C_TKN_LE:
+        case C_TKN_GT:
+        case C_TKN_GE: return 7;
+
+        case C_TKN_NE:
+        case C_TKN_EQ: return 6;
+
+        case C_TKN_AND: return 5;
+
+        case C_TKN_XOR: return 4;
+
+        case C_TKN_OR: return 3;
+
+        case C_TKN_LAND: return 2;
+
+        case C_TKN_LOR: return 1;
+
+        default: return -1;
+    }
+}
+
+// Is this a valid prefix operator token?
+static bool c_preproc_is_prefix_op(c_tokentype_t type) {
+    switch (type) {
+        case C_TKN_ADD:
+        case C_TKN_SUB:
+        case C_TKN_NOT:
+        case C_TKN_LNOT: return true;
+        default: return false;
+    }
+}
+
+// Evaluate a prefix expression.
+static i128_t c_preproc_eval_prefix(c_tokentype_t oper, i128_t value) {
+    switch (oper) {
+        case C_TKN_ADD: return value;
+        case C_TKN_SUB: return neg128(value);
+        case C_TKN_NOT: return bneg128(value);
+        case C_TKN_LNOT: return int128(0, cmp128u(value, int128(0, 0)) == 0);
+        default: abort();
+    }
+}
+
+// Evaluate an infix expression.
+static i128_t c_preproc_eval_infix(bool is_signed, i128_t lhs, c_tokentype_t oper, i128_t rhs) {
+    switch (oper) {
+        case C_TKN_MUL: return mul128(lhs, rhs);
+        case C_TKN_DIV:
+            if (is_signed) {
+                return div128s(lhs, rhs);
+            } else {
+                return div128u(lhs, rhs);
+            }
+        case C_TKN_MOD:
+            if (is_signed) {
+                return rem128s(lhs, rhs);
+            } else {
+                return rem128u(lhs, rhs);
+            }
+
+        case C_TKN_ADD: return add128(lhs, rhs);
+        case C_TKN_SUB: return add128(lhs, neg128(rhs));
+
+        case C_TKN_SHL: return shl128(lhs, lo64(rhs));
+        case C_TKN_SHR:
+            if (is_signed) {
+                return shr128s(lhs, lo64(rhs));
+            } else {
+                return shr128u(lhs, lo64(rhs));
+            }
+
+        case C_TKN_LT:
+            if (is_signed) {
+                return int128(0, cmp128s(lhs, rhs) < 0);
+            } else {
+                return int128(0, cmp128u(lhs, rhs) < 0);
+            }
+        case C_TKN_LE:
+            if (is_signed) {
+                return int128(0, cmp128s(lhs, rhs) <= 0);
+            } else {
+                return int128(0, cmp128u(lhs, rhs) <= 0);
+            }
+        case C_TKN_GT:
+            if (is_signed) {
+                return int128(0, cmp128s(lhs, rhs) > 0);
+            } else {
+                return int128(0, cmp128u(lhs, rhs) > 0);
+            }
+        case C_TKN_GE:
+            if (is_signed) {
+                return int128(0, cmp128s(lhs, rhs) >= 0);
+            } else {
+                return int128(0, cmp128u(lhs, rhs) >= 0);
+            }
+
+        case C_TKN_NE: return int128(0, cmp128u(lhs, rhs) != 0);
+        case C_TKN_EQ: return int128(0, cmp128u(lhs, rhs) == 0);
+
+        case C_TKN_AND: return and128(lhs, rhs);
+
+        case C_TKN_XOR: return xor128(lhs, rhs);
+
+        case C_TKN_OR: return or128(lhs, rhs);
+
+        case C_TKN_LAND: return int128(0, cmp128u(lhs, int128(0, 0)) && cmp128u(rhs, int128(0, 0)));
+
+        case C_TKN_LOR: return int128(0, cmp128u(lhs, int128(0, 0)) || cmp128u(rhs, int128(0, 0)));
+
+        default: abort();
+    }
+}
+
+// Evaluate the condition for an `#if` or `#elif` directive.
+static bool c_preproc_eval(c_preproc_t *pre, pos_t pos) {
+    enum entry_type {
+        ENTRY_TOKEN,
+        ENTRY_VALUE,
+        ENTRY_GARBAGE,
+    };
+    struct entry {
+        enum entry_type type;
+        pos_t           pos;
+        union {
+            c_tokentype_t token;
+            struct {
+                i128_t value;
+                bool   is_signed;
+            } value;
+        };
+    };
+
+    struct entry *stack     = NULL;
+    size_t        stack_len = 0;
+    size_t        stack_cap = 0;
+    bool          has_peek;
+    struct entry  peek;
+
+#pragma region
+    // Push a node/token to the stack.
+#define push(thing)                                                                                                    \
+    do {                                                                                                               \
+        struct entry push_temporary_value = thing;                                                                     \
+        array_lencap_insert_strong(                                                                                    \
+            &stack,                                                                                                    \
+            sizeof(struct entry),                                                                                      \
+            &stack_len,                                                                                                \
+            &stack_cap,                                                                                                \
+            &push_temporary_value,                                                                                     \
+            stack_len                                                                                                  \
+        );                                                                                                             \
+    } while (0)
+    // Pop a node/token from the stack.
+#define pop()                                                                                                          \
+    ({                                                                                                                 \
+        struct entry pop_temporary_value = stack[stack_len - 1];                                                       \
+        stack_len--;                                                                                                   \
+        pop_temporary_value;                                                                                           \
+    })
+    // Index by depth.
+#define by_depth(depth) stack[stack_len - (depth) - 1]
+    // Is this a specific kind of token?
+#define is_token2(depth, subtype)                                                                                      \
+    (stack_len > (depth) && by_depth(depth).type == ENTRY_TOKEN && by_depth(depth).token == (subtype))
+    // Is this a token?
+#define is_token(depth) (stack_len > (depth) && by_depth(depth).type == ENTRY_TOKEN)
+    // Is this a value?
+#define is_value(depth) (stack_len > (depth) && by_depth(depth).type == ENTRY_VALUE)
+    // Read the next token into peek.
+#define peek()                                                                                                         \
+    do {                                                                                                               \
+        token_t tkn;                                                                                                   \
+        do {                                                                                                           \
+            tkn = c_preproc_next_expanded(pre);                                                                        \
+        } while (tkn.type == TOKENTYPE_WHITESPACE);                                                                    \
+        has_peek = tkn.type != TOKENTYPE_EOL;                                                                          \
+        if (has_peek) {                                                                                                \
+            peek.pos = tkn.pos;                                                                                        \
+            if (tkn.type == TOKENTYPE_ICONST || tkn.type == TOKENTYPE_CCONST) {                                        \
+                peek.type            = ENTRY_VALUE;                                                                    \
+                peek.value.value     = int128(tkn.ivalh, tkn.ival);                                                    \
+                peek.value.is_signed = (tkn.subtype & 1) == 0;                                                         \
+            } else if (                                                                                                \
+                tkn.type == TOKENTYPE_OTHER                                                                            \
+                && (tkn.subtype == C_TKN_LPAR || tkn.subtype == C_TKN_RPAR                                             \
+                    || c_preproc_op_precedence(tkn.subtype) != -1 || c_preproc_is_prefix_op(tkn.subtype))              \
+            ) {                                                                                                        \
+                peek.type  = ENTRY_TOKEN;                                                                              \
+                peek.token = tkn.subtype;                                                                              \
+            } else if (tkn.type == TOKENTYPE_IDENT) {                                                                  \
+                peek.type            = ENTRY_VALUE;                                                                    \
+                peek.value.is_signed = true;                                                                           \
+                peek.value.value     = int128(0, !strcmp(tkn.strval, "true"));                                         \
+            } else {                                                                                                   \
+                peek.type = ENTRY_GARBAGE;                                                                             \
+            }                                                                                                          \
+        }                                                                                                              \
+        tkn_delete(tkn);                                                                                               \
+    } while (0)
+#pragma endregion
+
+    peek();
+    while (1) {
+        if (is_token2(2, C_TKN_LPAR) && is_value(1) && is_token2(0, C_TKN_RPAR)) {
+            // Reduce parentheses.
+            struct entry rpar = pop();
+            struct entry tmp  = pop();
+            struct entry lpar = pop();
+            tmp.pos           = pos_including(lpar.pos, rpar.pos);
+            push(tmp);
+        } else if (!is_value(2) && is_token(1) && c_preproc_is_prefix_op(by_depth(1).token) && is_value(0)) {
+            // Reduce prefix.
+            struct entry value = pop();
+            struct entry oper  = pop();
+            value.value.value  = c_preproc_eval_prefix(oper.token, value.value.value);
+            value.pos          = pos_including(oper.pos, value.pos);
+            push(value);
+        } else if (
+            is_value(2) && is_token(1) && is_value(0)
+            && (!has_peek || peek.type != ENTRY_TOKEN
+                || c_preproc_op_precedence(by_depth(1).token) >= c_preproc_op_precedence(peek.token))
+        ) {
+            // Reduce infix.
+            struct entry rhs       = pop();
+            struct entry oper      = pop();
+            struct entry lhs       = pop();
+            bool         is_signed = lhs.value.is_signed && rhs.value.is_signed;
+            struct entry res       = {
+                .type  = ENTRY_VALUE,
+                .value = {
+                    .value     = c_preproc_eval_infix(is_signed, lhs.value.value, oper.token, rhs.value.value),
+                    .is_signed = is_signed,
+                },
+            };
+            push(res);
+        } else if (has_peek) {
+            // Push a token.
+            push(peek);
+            peek();
+        } else {
+            // Nothing to push, can't reduce anymore.
+            break;
+        }
+    }
+
+    if (stack_len == 0) {
+        cctx_diagnostic(pre->cctx, pos, DIAG_ERR, "Expected preprocessor expression");
+        return 0;
+    } else if (stack_len == 1 && stack[0].type == ENTRY_VALUE) {
+        return cmp128u(stack[0].value.value, int128(0, 0)) != 0;
+    } else {
+        cctx_diagnostic(
+            pre->cctx,
+            pos_including(stack[0].pos, stack[stack_len - 1].pos),
+            DIAG_ERR,
+            "Invalid preprocessor expression"
+        );
+        return 0;
+    }
+}
+
 // Preprocessor directive: include.
 static void c_directive_include(c_preproc_t *pre, pos_t pos) {
     c_incfile_t *file            = &pre->stack[pre->stack_len - 1];
@@ -238,10 +522,10 @@ static void c_directive_if(c_preproc_t *pre, pos_t pos, bool elif, bool ifdef, b
             eval = !eval;
         }
     } else {
-        // TODO.
-        eval = false;
+        eval = c_preproc_eval(pre, pos);
     }
 
+    bool parent_emit = file->ifdir_len < 2 || file->ifdir[file->ifdir_len - 2].do_emit;
     if (elif) {
         if (!file->ifdir_len) {
             cctx_diagnostic(pre->cctx, pos, DIAG_ERR, "#elif without matching #if");
@@ -255,14 +539,14 @@ static void c_directive_if(c_preproc_t *pre, pos_t pos, bool elif, bool ifdef, b
             return;
         }
         ifdir->pos       = pos;
-        ifdir->do_emit   = !ifdir->disabled && eval;
+        ifdir->do_emit   = !ifdir->disabled && eval && parent_emit;
         ifdir->disabled |= ifdir->do_emit;
     } else {
         c_ifdir_t ifdir = {
             .pos        = pos,
             .allow_else = true,
             .disabled   = eval,
-            .do_emit    = eval,
+            .do_emit    = eval && parent_emit,
         };
         array_lencap_insert_strong(
             &file->ifdir,
@@ -283,7 +567,8 @@ static void c_directive_else(c_preproc_t *pre, pos_t pos) {
         cctx_diagnostic(pre->cctx, pos, DIAG_ERR, "#else without matching #if");
         return;
     }
-    c_ifdir_t *ifdir = &file->ifdir[file->ifdir_len - 1];
+    c_ifdir_t *ifdir       = &file->ifdir[file->ifdir_len - 1];
+    bool       parent_emit = file->ifdir_len < 2 || file->ifdir[file->ifdir_len - 2].do_emit;
 
     if (!ifdir->allow_else) {
         cctx_diagnostic(pre->cctx, pos, DIAG_ERR, "Dangling #else");
@@ -294,7 +579,7 @@ static void c_directive_else(c_preproc_t *pre, pos_t pos) {
 
     ifdir->pos        = pos;
     ifdir->allow_else = false;
-    ifdir->do_emit    = !ifdir->disabled;
+    ifdir->do_emit    = parent_emit && !ifdir->disabled;
 }
 
 // Preprocessor directive: endif.

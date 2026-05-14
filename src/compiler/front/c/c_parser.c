@@ -155,7 +155,7 @@ static int oper_precedence(token_t token, bool is_prefix) {
     if (token.type != TOKENTYPE_OTHER) {
         return -1;
     }
-    // TODO: sizeof, alignof, compount literal.
+    // TODO: sizeof, alignof, compound literal.
     switch (token.subtype) {
         case C_TKN_LPAR:
         case C_TKN_LBRAC:

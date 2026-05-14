@@ -39,6 +39,7 @@ static bool    c_preproc_do_emit(c_preproc_t *pre);
 static token_t c_preproc_next_raw(c_preproc_t *pre, bool skip_whitespace, bool skip_eol, bool allow_next_line);
 static token_t c_preproc_next_expanded(c_preproc_t *pre);
 static void    c_preproc_directive(c_preproc_t *pre);
+static void    c_macro_expand(c_preproc_t *pre, c_macro_t const *macro);
 
 
 
@@ -324,6 +325,27 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
 
 // Preprocessor directive: undef.
 static void c_directive_undef(c_preproc_t *pre, pos_t pos) {
+    (void)pos;
+    token_t name = c_preproc_next_raw(pre, true, false, false);
+    if (name.type == TOKENTYPE_EOL) {
+        cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Expected macro name");
+        return;
+    } else if (name.type != TOKENTYPE_IDENT) {
+        cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Macro name must be an identifier");
+        return;
+    }
+
+    c_macro_t *macro = map_get(&pre->macros, name.strval);
+    if (!macro) {
+        // Nothing to do.
+        return;
+    }
+
+    if (macro->is_builtin) {
+        cctx_diagnostic(pre->cctx, name.pos, DIAG_WARN, "Undefining a built-in macro");
+    }
+    map_remove(&pre->macros, name.strval);
+    c_macro_destroy(macro);
 }
 
 // Handle a preprocessor directive.
@@ -577,6 +599,22 @@ emit:
     return tkn;
 }
 
+// Create a regular macro.
+c_macro_t *c_macro_create(char const *virt_file, char const *spec) {
+    // TODO.
+    abort();
+}
+
+// Create a procedural macro.
+c_macro_t *c_proc_macro_create(bool uses_args, c_proc_macro_cb_t callback, void *cookie) {
+    c_macro_t *macro      = strong_malloc(sizeof(c_macro_t));
+    macro->is_proc_macro  = true;
+    macro->proc.uses_args = uses_args;
+    macro->proc.callback  = callback;
+    macro->proc.cookie    = cookie;
+    return macro;
+}
+
 // Destroy a macro.
 void c_macro_destroy(c_macro_t *macro) {
     if (!macro->is_proc_macro) {
@@ -593,5 +631,5 @@ void c_macro_destroy(c_macro_t *macro) {
 }
 
 // Perform macro-expansion.
-void c_macro_expand(c_preproc_t *pre, c_macro_t const *macro) {
+static void c_macro_expand(c_preproc_t *pre, c_macro_t const *macro) {
 }

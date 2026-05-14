@@ -14,16 +14,19 @@
 
 
 // C compiler context.
-typedef struct c_compiler c_compiler_t;
+typedef struct c_compiler  c_compiler_t;
 // C preprocessor state.
-typedef struct c_preproc  c_preproc_t;
+typedef struct c_preproc   c_preproc_t;
 // Include-file stack entry.
-typedef struct c_incfile  c_incfile_t;
+typedef struct c_incfile   c_incfile_t;
 // If-directive stack entry.
-typedef struct c_ifdir    c_ifdir_t;
+typedef struct c_ifdir     c_ifdir_t;
 // A macro definition.
-typedef struct c_macro    c_macro_t;
-
+typedef struct c_macro     c_macro_t;
+// Expanded macro value.
+typedef struct c_expansion c_expansion_t;
+// Procedural macro callback.
+typedef c_expansion_t (*c_proc_macro_cb_t)(c_preproc_t *pre, token_t *args, size_t args_len, void *cookie);
 
 // C preprocessor state.
 struct c_preproc {
@@ -83,11 +86,17 @@ struct c_ifdir {
 // A macro definition.
 struct c_macro {
     union {
-        // Uses a callback instead of subsitution tokens and args.
-        bool is_proc_macro;
+        struct {
+            // Uses a callback instead of subsitution tokens and args.
+            bool is_proc_macro;
+            // Is a built-in macro (that shouldn't be undefined).
+            bool is_builtin;
+        };
         struct {
             // Alias of `is_proc_macro`.
             bool     is_proc_macro;
+            // Alias of `is_builtin`.
+            bool     is_builtin;
             // Variadic macros (with ...).
             bool     variadic;
             // Number of non-variadic arguments.
@@ -101,15 +110,23 @@ struct c_macro {
         } regular;
         struct {
             // Alias of `is_proc_macro`.
-            bool is_proc_macro;
+            bool              is_proc_macro;
+            // Alias of `is_builtin`.
+            bool              is_builtin;
             // Takes arguments; the amount is to be checked by the callback.
-            bool uses_args;
+            bool              uses_args;
             // Callback to run on invocation.
-            void (*callback)(c_preproc_t *pre);
+            c_proc_macro_cb_t callback;
             // Cookie provided to the callback.
-            void *cookie;
+            void             *cookie;
         } proc;
     };
+};
+
+// Expanded macro value.
+struct c_expansion {
+    size_t   tokens_len;
+    token_t *tokens;
 };
 
 
@@ -119,9 +136,12 @@ c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std);
 // Get the next token from the preprocessor.
 token_t      c_preproc_next(tokenizer_t *tkn_ctx);
 // Add a pre-defined macro.
-void         c_preproc_predef_macro(c_preproc_t *pre, char const *name, char const *expansion);
+void         c_preproc_predef_macro(c_preproc_t *pre, char const *name, c_macro_t *macro);
 
+// Create a regular macro by parsing it from a string.
+// Prints an error message and returns NULL if malformed.
+c_macro_t *c_macro_create(char const *virt_file, char const *spec);
+// Create a procedural macro.
+c_macro_t *c_proc_macro_create(bool uses_args, c_proc_macro_cb_t callback, void *cookie);
 // Destroy a macro.
-void c_macro_destroy(c_macro_t *macro);
-// Perform macro-expansion.
-void c_macro_expand(c_preproc_t *pre, c_macro_t const *macro);
+void       c_macro_destroy(c_macro_t *macro);

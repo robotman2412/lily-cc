@@ -5,7 +5,11 @@ A work-in-progress C compiler for fun. It aims to one day be C23 (and some GNU e
 # Lily-CC current progress
 
 ## C preprocessor
-No preprocessor exists at all
+### Directives
+- `#include` (but not `#include_next`)
+- `#pragma`
+- `#defin` and `#undef`
+- `#error` and `#warning`
 
 ## C compiler
 ### Tokenizer

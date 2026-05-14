@@ -40,10 +40,11 @@
 ### C preprocessor
 - `#include` and `#include_next`
 - `#embed`
-- `#define` and `#undef`
-- `#pragma` and `_Pragma` operator
-- `#error` and `#warning`
-- `#(el)?if(n?def)?`, `#else` and `#endif`
+- `#define` and `#undef` ✓
+- `#pragma` ✓
+- `_Pragma` operator
+- `#error` and `#warning` ✓
+- `#(el)?if(n?def)?`, `#else` and `#endif` ✓
 - `#line`
 - Macro expansion
     - `__VA_ARGS__` and `__VA_OPT__(x)`

@@ -15,6 +15,7 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <stdlib.h>
 #include <string.h>
 
 
@@ -39,7 +40,7 @@ static bool    c_preproc_do_emit(c_preproc_t *pre);
 static token_t c_preproc_next_raw(c_preproc_t *pre, bool skip_whitespace, bool skip_eol, bool allow_next_line);
 static token_t c_preproc_next_expanded(c_preproc_t *pre);
 static void    c_preproc_directive(c_preproc_t *pre);
-static void    c_macro_expand(c_preproc_t *pre, c_macro_t const *macro);
+static void    c_macro_expand(c_preproc_t *pre, token_t name);
 
 
 
@@ -321,6 +322,138 @@ static void c_directive_warning(c_preproc_t *pre, pos_t pos, bool is_error) {
 
 // Preprocessor directive: define.
 static void c_directive_define(c_preproc_t *pre, pos_t pos) {
+    (void)pos;
+    token_t name = c_preproc_next_raw(pre, true, false, false);
+    if (name.type == TOKENTYPE_EOL) {
+        cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Expected macro name");
+        return;
+    } else if (name.type != TOKENTYPE_IDENT) {
+        cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Macro name must be an identifier");
+        return;
+    }
+
+    token_t *tokens          = NULL;
+    size_t   tokens_len      = 0;
+    size_t   tokens_cap      = 0;
+    char   **params          = NULL;
+    size_t   params_len      = 0;
+    size_t   params_cap      = 0;
+    bool     skip_whitespace = true;
+    bool     variadic        = false;
+
+    token_t tkn = c_preproc_next_raw(pre, false, false, false);
+    if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_LPAR) {
+        // Collect parameter list.
+        pos_t list_start = tkn.pos;
+        tkn_delete(tkn);
+        bool need_arg   = false;
+        bool must_close = false;
+        while (1) {
+            tkn = c_preproc_next_raw(pre, true, false, false);
+            if (tkn.type == TOKENTYPE_EOL) {
+                // Abrupt end of line.
+                cctx_diagnostic(pre->cctx, list_start, DIAG_ERR, "Missing `(` to match this `)`");
+                tkn_delete(tkn);
+                goto error;
+            } else if (!need_arg && tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_RPAR) {
+                // Empty parameter list.
+                tkn_delete(tkn);
+                break;
+            } else if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_VARARG) {
+                // Elipsis (`...`).
+                variadic   = true;
+                must_close = true;
+                tkn_delete(tkn);
+            } else if (tkn.type == TOKENTYPE_IDENT) {
+                if (!strcmp(tkn.strval, "__VA_ARGS__") || !strcmp(tkn.strval, "__VA_OPT__")) {
+                    cctx_diagnostic(
+                        pre->cctx,
+                        tkn.pos,
+                        DIAG_WARN,
+                        "Macro parameters should not be called %s",
+                        tkn.strval
+                    );
+                }
+                array_lencap_insert_strong(&params, sizeof(token_t), &params_len, &params_cap, &tkn, params_len);
+            } else {
+                cctx_diagnostic(pre->cctx, tkn.pos, DIAG_ERR, "Expected an identifier or `...`");
+                tkn_delete(tkn);
+                goto error;
+            }
+
+            tkn = c_preproc_next_raw(pre, true, false, false);
+            if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_RPAR) {
+                tkn_delete(tkn);
+                break;
+            } else if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_COMMA) {
+                if (must_close) {
+                    cctx_diagnostic(
+                        pre->cctx,
+                        tkn.pos,
+                        DIAG_ERR,
+                        "`...` must appear last in the argument list of a variadic macro"
+                    );
+                    tkn_delete(tkn);
+                    goto error;
+                }
+                tkn_delete(tkn);
+            }
+        }
+
+    } else if (tkn.type != TOKENTYPE_EOL) {
+        // Does not have a parameter list.
+        if (!variadic && (!strcmp(tkn.strval, "__VA_ARGS__") || !strcmp(tkn.strval, "__VA_OPT__"))) {
+            cctx_diagnostic(pre->cctx, tkn.pos, DIAG_WARN, "%s in non-variadic macro", tkn.strval);
+        }
+        array_lencap_insert_strong(&tokens, sizeof(token_t), &tokens_len, &tokens_cap, &tkn, tokens_len);
+        skip_whitespace = false;
+    }
+
+    // Collect all tokens after parameter list.
+    while (1) {
+        tkn = c_preproc_next_raw(pre, skip_whitespace, false, false);
+        if (tkn.type == TOKENTYPE_EOL) {
+            tkn_delete(tkn);
+            break;
+        }
+        if (!variadic && (!strcmp(tkn.strval, "__VA_ARGS__") || !strcmp(tkn.strval, "__VA_OPT__"))) {
+            cctx_diagnostic(pre->cctx, tkn.pos, DIAG_WARN, "%s in non-variadic macro", tkn.strval);
+        }
+        array_lencap_insert_strong(&tokens, sizeof(token_t), &tokens_len, &tokens_cap, &tkn, tokens_len);
+        skip_whitespace = false;
+    }
+
+    // Strip trailing whitespace.
+    while (tokens_len && tokens[tokens_len - 1].type == TOKENTYPE_WHITESPACE) {
+        tkn_delete(tokens[tokens_len - 1]);
+        tokens_len--;
+    }
+
+    c_macro_t *existing = map_get(&pre->macros, name.strval);
+    if (existing) {
+        cctx_diagnostic(
+            pre->cctx,
+            name.pos,
+            DIAG_WARN,
+            "Redefinition of %smacro `%s`",
+            existing->is_builtin ? "built-in " : "",
+            name.strval
+        );
+        c_macro_destroy(existing);
+    }
+
+    c_macro_t *macro          = strong_calloc(1, sizeof(c_macro_t));
+    macro->is_proc_macro      = false;
+    macro->is_builtin         = false;
+    macro->regular.variadic   = variadic;
+    macro->regular.tokens     = tokens;
+    macro->regular.tokens_len = tokens_len;
+    map_set(&pre->macros, name.strval, macro);
+    return;
+
+error:
+    free(tokens);
+    free(params);
 }
 
 // Preprocessor directive: undef.
@@ -531,7 +664,7 @@ again:
         c_macro_t const *macro = map_get(&pre->macros, tkn.strval);
         if (macro) {
             tkn_delete(tkn);
-            c_macro_expand(pre, macro);
+            c_macro_expand(pre, tkn);
             goto again;
         }
     }
@@ -570,7 +703,7 @@ again:
         c_macro_t const *macro = map_get(&pre->macros, tkn.strval);
         if (macro) {
             tkn_delete(tkn);
-            c_macro_expand(pre, macro);
+            c_macro_expand(pre, tkn);
             goto again;
         }
     }
@@ -600,9 +733,174 @@ emit:
 }
 
 // Create a regular macro.
-c_macro_t *c_macro_create(char const *virt_file, char const *spec) {
-    // TODO.
-    abort();
+c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_out) {
+    cctx_t    *cctx     = cctx_create();
+    size_t     spec_len = strlen(spec);
+    srcfile_t *src      = srcfile_create(cctx, virt_file, spec, spec_len);
+
+    c_macro_t     *macro      = strong_calloc(1, sizeof(c_macro_t));
+    char          *name       = NULL;
+    c_tokenizer_t *tkn        = NULL;
+    size_t         args_cap   = 0;
+    size_t         tokens_cap = 0;
+
+    size_t i = 0;
+
+    // Skip leading whitespace.
+    while (i < spec_len && isspace((unsigned char)spec[i])) {
+        i++;
+    }
+
+    // Parse the macro name.
+    if (i >= spec_len || !c_is_first_sym_char((unsigned char)spec[i])) {
+        printf("%s:%zu: Expected macro name\n", virt_file, i);
+        goto error;
+    }
+    size_t name_start = i;
+    while (i < spec_len && c_is_sym_char((unsigned char)spec[i])) {
+        i++;
+    }
+    size_t name_len = i - name_start;
+    name            = strong_malloc(name_len + 1);
+    memcpy(name, spec + name_start, name_len);
+    name[name_len] = '\0';
+
+    // Optional parameter list.
+    if (i < spec_len && spec[i] == '(') {
+        i++;
+        bool need_arg = false;
+        while (1) {
+            while (i < spec_len && isspace((unsigned char)spec[i])) {
+                i++;
+            }
+            if (i >= spec_len) {
+                printf("%s:%zu: Unterminated parameter list\n", virt_file, i);
+                goto error;
+            }
+            if (spec[i] == ')') {
+                if (need_arg) {
+                    printf("%s:%zu: Expected parameter name after ','\n", virt_file, i);
+                    goto error;
+                }
+                i++;
+                break;
+            }
+            if (i + 2 < spec_len && spec[i] == '.' && spec[i + 1] == '.' && spec[i + 2] == '.') {
+                i                       += 3;
+                macro->regular.variadic  = true;
+                while (i < spec_len && isspace((unsigned char)spec[i])) {
+                    i++;
+                }
+                if (i >= spec_len || spec[i] != ')') {
+                    printf("%s:%zu: Expected ')' after '...'\n", virt_file, i);
+                    goto error;
+                }
+                i++;
+                break;
+            }
+            if (!c_is_first_sym_char((unsigned char)spec[i])) {
+                printf("%s:%zu: Expected parameter name\n", virt_file, i);
+                goto error;
+            }
+            size_t arg_start = i;
+            while (i < spec_len && c_is_sym_char((unsigned char)spec[i])) {
+                i++;
+            }
+            size_t arg_len = i - arg_start;
+            char  *arg     = strong_malloc(arg_len + 1);
+            memcpy(arg, spec + arg_start, arg_len);
+            arg[arg_len] = '\0';
+            array_lencap_insert_strong(
+                &macro->regular.args,
+                sizeof(char *),
+                &macro->regular.args_len,
+                &args_cap,
+                &arg,
+                macro->regular.args_len
+            );
+            while (i < spec_len && isspace((unsigned char)spec[i])) {
+                i++;
+            }
+            if (i >= spec_len) {
+                printf("%s:%zu: Unterminated parameter list\n", virt_file, i);
+                goto error;
+            }
+            if (spec[i] == ',') {
+                i++;
+                need_arg = true;
+                continue;
+            }
+            if (spec[i] == ')') {
+                i++;
+                break;
+            }
+            printf("%s:%zu: Expected ',' or ')' in parameter list\n", virt_file, i);
+            goto error;
+        }
+    }
+
+    // Skip whitespace before optional '='.
+    while (i < spec_len && isspace((unsigned char)spec[i])) {
+        i++;
+    }
+
+    if (i < spec_len) {
+        if (spec[i] != '=') {
+            printf("%s:%zu: Expected '=' or end of spec\n", virt_file, i);
+            goto error;
+        }
+        i++;
+
+        // Tokenize the body with a C tokenizer in preprocessor mode, starting
+        // just past the '='.
+        tkn               = c_tkn_create(src, C_STD_def);
+        tkn->preproc_mode = true;
+        tkn->base.pos.off = (off_t)i;
+        tkn->base.pos.col = (int)i;
+        while (1) {
+            token_t t = tkn_next(&tkn->base);
+            if (t.type == TOKENTYPE_EOF) {
+                tkn_delete(t);
+                break;
+            }
+            array_lencap_insert_strong(
+                &macro->regular.tokens,
+                sizeof(token_t),
+                &macro->regular.tokens_len,
+                &tokens_cap,
+                &t,
+                macro->regular.tokens_len
+            );
+        }
+    }
+
+    if (cctx->diagnostics.len) {
+        dlist_foreach_node(diagnostic_t, d, &cctx->diagnostics) {
+            print_diagnostic(d, stdout);
+        }
+        goto error;
+    }
+
+    if (tkn) {
+        tkn_ctx_delete(&tkn->base);
+    }
+    cctx_delete(cctx);
+    *name_out = name;
+    return macro;
+
+error:
+    if (cctx->diagnostics.len) {
+        dlist_foreach_node(diagnostic_t, d, &cctx->diagnostics) {
+            print_diagnostic(d, stdout);
+        }
+    }
+    free(name);
+    if (tkn) {
+        tkn_ctx_delete(&tkn->base);
+    }
+    c_macro_destroy(macro);
+    cctx_delete(cctx);
+    return NULL;
 }
 
 // Create a procedural macro.
@@ -631,5 +929,6 @@ void c_macro_destroy(c_macro_t *macro) {
 }
 
 // Perform macro-expansion.
-static void c_macro_expand(c_preproc_t *pre, c_macro_t const *macro) {
+static void c_macro_expand(c_preproc_t *pre, token_t name) {
+    // TODO.
 }

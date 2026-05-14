@@ -139,8 +139,10 @@ token_t      c_preproc_next(tokenizer_t *tkn_ctx);
 void         c_preproc_predef_macro(c_preproc_t *pre, char const *name, c_macro_t *macro);
 
 // Create a regular macro by parsing it from a string.
-// Prints an error message and returns NULL if malformed.
-c_macro_t *c_macro_create(char const *virt_file, char const *spec);
+// On success, `*name_out` is set to a heap-allocated copy of the parsed macro
+// name (caller takes ownership). On failure, prints diagnostics to stdout,
+// returns NULL, and leaves `*name_out` unchanged.
+c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_out);
 // Create a procedural macro.
 c_macro_t *c_proc_macro_create(bool uses_args, c_proc_macro_cb_t callback, void *cookie);
 // Destroy a macro.

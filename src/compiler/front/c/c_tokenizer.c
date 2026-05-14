@@ -6,6 +6,7 @@
 #include "c_tokenizer.h"
 
 #include "arith128.h"
+#include "c_std.h"
 #include "c_types.h"
 #include "compiler.h"
 #include "strong_malloc.h"
@@ -108,10 +109,11 @@ bool c_is_sym_char(int c) {
 
 // Tokenize integer constant.
 static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int base) {
-    i128_t val      = int128(0, 0);
-    bool   hasdat   = false;
-    bool   toolarge = false;
-    bool   invalid  = false;
+    c_tokenizer_t *c_ctx    = (c_tokenizer_t *)ctx;
+    i128_t         val      = int128(0, 0);
+    bool           hasdat   = false;
+    bool           toolarge = false;
+    bool           invalid  = false;
 
     pos_t pos0 = ctx->pos;
     pos_t pos1;
@@ -125,6 +127,11 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         } else if ((c | 0x20) >= 'a' && (c | 0x20) <= 'f') {
             // Valid digit a-f / A-F.
             digit = (c | 0x20) - 'a' + 10;
+        } else if (hasdat && c == '\'' && c_ctx->c_std >= C_STD_C23) {
+            // A separator.
+            hasdat = false;
+            pos0   = pos1;
+            continue;
         } else {
             // End of constant.
             break;

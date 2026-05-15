@@ -30,7 +30,7 @@ char const *const c_keyw_name[] = {
 };
 
 // Enum names of `c_tokentype_t` values.
-char const *const c_tokentype_name[] = {
+char const *const c_token_id[] = {
 #define C_TOKEN_DEF(id, name) "C_TKN_" #id,
 #include "c_tokens.inc"
 };
@@ -42,7 +42,7 @@ char const *const c_keywords[] = {
 };
 
 // List of tokens.
-char const *const c_tokens[] = {
+char const *const c_token_name[] = {
 #define C_TOKEN_DEF(id, name) name,
 #include "c_tokens.inc"
 };
@@ -683,7 +683,7 @@ static token_t c_tkn_whitespace(tokenizer_t *ctx, pos_t start_pos, c_whitespace_
         pos_t pos = ctx->pos;
         int   c   = srcfile_getc(ctx->file, &pos);
         if (subtype == C_WHITESPACE) {
-            if (c >= 0x20) {
+            if (c > 0x20) {
                 break;
             }
         } else if (subtype == C_LINE_COMMENT) {
@@ -764,6 +764,7 @@ retry:
         };
     } else if (c <= 0x20) {
         if (c_ctx->preproc_mode) {
+            ctx->pos = pos0;
             return c_tkn_whitespace(ctx, pos0, C_WHITESPACE);
         } else {
             // Only the preprocessor cares about whitespace.
@@ -1046,7 +1047,7 @@ void c_tkn_print_src(token_t const *pre_tkn, FILE *to) {
                 default: abort(); // Not a valid preprocessor token.
             }
             break;
-        case TOKENTYPE_OTHER: fputs(c_tokentype_name[pre_tkn->subtype], to); break;
+        case TOKENTYPE_OTHER: fputs(c_token_name[pre_tkn->subtype], to); break;
         case TOKENTYPE_IDENT:
         case TOKENTYPE_GARBAGE:
         case TOKENTYPE_WHITESPACE:
@@ -1061,6 +1062,47 @@ void c_tkn_print_src(token_t const *pre_tkn, FILE *to) {
             }
             break;
         case TOKENTYPE_EOL: fputc('\n', to); break;
+        case TOKENTYPE_EOF: break;
+        default: abort(); // Not a valid preprocessor token.
+    }
+}
+
+// Append the source representation of a token to a heap-allocated string.
+// WARNING: Does not NUL-terminate!
+void c_tkn_append_src(token_t const *pre_tkn, char **buf_ptr, size_t *len_ptr, size_t *cap_ptr) {
+#define append_cstr(what) array_lencap_insert_n_strong(buf_ptr, 1, len_ptr, cap_ptr, (what), *len_ptr, strlen(what))
+    switch (pre_tkn->type) {
+        case TOKENTYPE_KEYWORD: append_cstr(c_keywords[pre_tkn->subtype]); break;
+        case TOKENTYPE_SCONST:
+            switch (pre_tkn->subtype) {
+                case C_STR_ANGLEBRAC: append_cstr("<"); break;
+                case C_STR_RAW_DQUOT: append_cstr("\""); break;
+                case C_STR_RAW_SQUOT: append_cstr("\'"); break;
+                default: abort(); // Not a valid preprocessor token.
+            }
+            array_lencap_insert_n_strong(buf_ptr, 1, len_ptr, cap_ptr, pre_tkn->strval, *len_ptr, pre_tkn->strval_len);
+            switch (pre_tkn->subtype) {
+                case C_STR_ANGLEBRAC: append_cstr(">"); break;
+                case C_STR_RAW_DQUOT: append_cstr("\""); break;
+                case C_STR_RAW_SQUOT: append_cstr("\'"); break;
+                default: abort(); // Not a valid preprocessor token.
+            }
+            break;
+        case TOKENTYPE_OTHER: append_cstr(c_token_name[pre_tkn->subtype]); break;
+        case TOKENTYPE_IDENT:
+        case TOKENTYPE_GARBAGE:
+        case TOKENTYPE_WHITESPACE:
+            if (pre_tkn->subtype == C_LINE_COMMENT) {
+                append_cstr("//");
+            } else if (pre_tkn->subtype == C_BLOCK_COMMENT) {
+                append_cstr("/*");
+            }
+            array_lencap_insert_n_strong(buf_ptr, 1, len_ptr, cap_ptr, pre_tkn->strval, *len_ptr, pre_tkn->strval_len);
+            if (pre_tkn->subtype == C_BLOCK_COMMENT) {
+                append_cstr("*/");
+            }
+            break;
+        case TOKENTYPE_EOL: append_cstr("\n"); break;
         case TOKENTYPE_EOF: break;
         default: abort(); // Not a valid preprocessor token.
     }

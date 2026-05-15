@@ -339,10 +339,7 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
                 case C_KEYW___int128: has_int128 = true; break;
 #ifndef NDEBUG
                 default:
-                    printf(
-                        "Ignoring spec-qual-list token %s because it is unsupported\n",
-                        c_tokentype_name[param.subtype]
-                    );
+                    printf("Ignoring spec-qual-list token %s because it is unsupported\n", c_token_id[param.subtype]);
                     break;
 #endif
             }
@@ -843,7 +840,7 @@ static bool c_type_ptrarith_compatible(
         case C_TKN_ADD:
             if (!c_prim_is_int(other->primitive)) {
                 // Pointer addition requires a pointer and an integer.
-                cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_tokens[oper_tkn]);
+                cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_token_id[oper_tkn]);
                 return false;
             }
             return true;
@@ -851,7 +848,7 @@ static bool c_type_ptrarith_compatible(
         case C_TKN_ADD_S:
             if (is_swapped || ptr->primitive != C_COMP_POINTER || !c_prim_is_int(other->primitive)) {
                 // Pointer addition requires a pointer and an integer.
-                cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_tokens[oper_tkn]);
+                cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_token_id[oper_tkn]);
                 return false;
             }
             return true;
@@ -870,7 +867,7 @@ static bool c_type_ptrarith_compatible(
             }
             if (!c_prim_is_int(other->primitive)) {
                 // Pointer subtraction requires a pointer and an integer or another pointer.
-                cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_tokens[oper_tkn]);
+                cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_token_id[oper_tkn]);
                 return false;
             }
             return true;
@@ -878,7 +875,7 @@ static bool c_type_ptrarith_compatible(
         case C_TKN_SUB_S:
             if (is_swapped || ptr->primitive != C_COMP_POINTER || !c_prim_is_int(other->primitive)) {
                 // Pointer subtraction requires a pointer and an integer or another pointer.
-                cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_tokens[oper_tkn]);
+                cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_token_id[oper_tkn]);
                 return false;
             }
             return true;
@@ -900,7 +897,7 @@ static bool c_type_ptrarith_compatible(
         case C_TKN_XOR:
         case C_TKN_XOR_S:
             // Cannot do any of these operations on a pointer.
-            cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_tokens[oper_tkn]);
+            cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_token_id[oper_tkn]);
             return false;
 
         case C_TKN_EQ:
@@ -919,7 +916,7 @@ static bool c_type_ptrarith_compatible(
                 }
             } else if (!c_prim_is_int(other->primitive)) {
                 // Comparison can only be integers and pointers.
-                cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_tokens[oper_tkn]);
+                cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_token_id[oper_tkn]);
                 return false;
             } else {
                 // Warn of integer-pointer comparison.
@@ -945,7 +942,7 @@ bool c_type_arith_compatible(
 
     // Otherwise, they are arithmetic compatible if both types are primitives.
     if (a->primitive >= C_N_PRIM || b->primitive >= C_N_PRIM) {
-        cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_tokens[oper_tkn]);
+        cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Invalid operands to %s", c_token_id[oper_tkn]);
         return false;
     }
 

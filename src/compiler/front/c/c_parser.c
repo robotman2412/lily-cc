@@ -1245,11 +1245,11 @@ static void c_eat_delim(tokenizer_t *tkn_ctx, bool include_comma) {
 #ifndef NDEBUG
 // Print a token.
 void c_tkn_debug_print(token_t token) {
-    tkn_debug_print(token, c_keyw_name, c_asttype_name, c_tokentype_name);
+    tkn_debug_print(token, c_keyw_name, c_asttype_name, c_token_id);
 }
 
 // Build a test case that asserts an exact value for a token.
 void c_tkn_debug_testcase(token_t token) {
-    tkn_debug_testcase(token, c_keyw_name, c_asttype_name, c_tokentype_name);
+    tkn_debug_testcase(token, c_keyw_name, c_asttype_name, c_token_id);
 }
 #endif

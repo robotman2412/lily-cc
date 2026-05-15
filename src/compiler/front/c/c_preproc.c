@@ -16,10 +16,28 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
 
+
+// Mode that `c_preproc_get_tkn` uses.
+// No-expand mode only causes no *new* expansions; it still reads out expanded tokens first.
+typedef enum {
+    // Expand macros, allow newline.
+    NEXT_EXPAND,
+    // Only file tokens, allow newline.
+    NEXT_RAW,
+    // Expand macros, current line.
+    LINE_EXPAND,
+    // Only file tokens, current line.
+    LINE_RAW,
+    // Expand macros, skip whitespace (even on peek), current line.
+    LINE_NOWS_EXPAND,
+    // Expand macros, skip whitespace (even on peek), current line.
+    LINE_NOWS_RAW,
+} next_mode_t;
 
 static void    c_preproc_destroy(tokenizer_t *tkn);
 static void    c_preproc_pragma(c_preproc_t *pre, pos_t pos, char const *pragma);
@@ -43,10 +61,9 @@ static void    c_directive_undef(c_preproc_t *pre, pos_t pos);
 static char   *c_preproc_read_bytes(c_preproc_t *pre, pos_t *pos_out);
 static void    c_preproc_until_eol(c_preproc_t *pre, bool warn_extra_tok);
 static bool    c_preproc_do_emit(c_preproc_t *pre);
-static token_t c_preproc_next_raw(c_preproc_t *pre, bool skip_whitespace, bool skip_eol, bool allow_next_line);
-static token_t c_preproc_next_expanded(c_preproc_t *pre);
+static token_t c_preproc_get_tkn(c_preproc_t *pre, next_mode_t mode);
 static void    c_preproc_directive(c_preproc_t *pre);
-static void    c_macro_expand(c_preproc_t *pre, token_t name);
+static void    c_macro_expand(c_preproc_t *pre, c_macro_t const *macro);
 
 
 
@@ -90,8 +107,12 @@ static void c_preproc_destroy(tokenizer_t *tkn) {
     }
     map_clear(&pre->macros);
 
-    for (size_t i = pre->expand_index; i < pre->expand_len; i++) {
-        tkn_delete(pre->expand[i]);
+    for (size_t i = 0; i < pre->expand_len; i++) {
+        c_expansion_t *expand = &pre->expand[i];
+        for (size_t x = expand->index; x < expand->tokens_len; x++) {
+            tkn_delete(expand->tokens[x]);
+        }
+        free(expand->tokens);
     }
     free(pre->expand);
 
@@ -387,11 +408,8 @@ static bool c_preproc_eval(c_preproc_t *pre, pos_t pos) {
     // Read the next token into peek.
 #define peek()                                                                                                         \
     do {                                                                                                               \
-        token_t tkn;                                                                                                   \
-        do {                                                                                                           \
-            tkn = c_preproc_next_expanded(pre);                                                                        \
-        } while (tkn.type == TOKENTYPE_WHITESPACE);                                                                    \
-        has_peek = tkn.type != TOKENTYPE_EOL;                                                                          \
+        token_t tkn = c_preproc_get_tkn(pre, LINE_NOWS_EXPAND);                                                        \
+        has_peek    = tkn.type != TOKENTYPE_EOL;                                                                       \
         if (has_peek) {                                                                                                \
             peek.pos = tkn.pos;                                                                                        \
             if (tkn.type == TOKENTYPE_ICONST || tkn.type == TOKENTYPE_CCONST) {                                        \
@@ -479,15 +497,18 @@ static bool c_preproc_eval(c_preproc_t *pre, pos_t pos) {
 
 // Preprocessor directive: include.
 static void c_directive_include(c_preproc_t *pre, pos_t pos) {
+    (void)pos;
     c_incfile_t *file            = &pre->stack[pre->stack_len - 1];
     file->tkn_ctx->str_anglebrac = true;
-    token_t token                = c_preproc_next_raw(pre, true, false, false);
+    token_t token                = c_preproc_get_tkn(pre, LINE_NOWS_EXPAND);
     file->tkn_ctx->str_anglebrac = false;
     if (token.type != TOKENTYPE_SCONST) {
         cctx_diagnostic(pre->cctx, token.pos, DIAG_ERR, "Expected a path");
         tkn_delete(token);
         return;
     }
+    // This needs to happen *before* the include file is pushed.
+    c_preproc_until_eol(pre, true);
 
     // TODO: Is there a difference between `<>` and `""` style strings for `#include`?
     c_incfile_push(pre, token.pos, token.strval);
@@ -512,7 +533,7 @@ static void c_directive_if(c_preproc_t *pre, pos_t pos, bool elif, bool ifdef, b
 
     bool eval;
     if (ifdef || ifndef) {
-        token_t tkn = c_preproc_next_raw(pre, true, false, false);
+        token_t tkn = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
         if (tkn.type != TOKENTYPE_IDENT) {
             cctx_diagnostic(pre->cctx, tkn.pos, DIAG_ERR, "Expected an identifier");
             return;
@@ -608,7 +629,7 @@ static void c_directive_warning(c_preproc_t *pre, pos_t pos, bool is_error) {
 // Preprocessor directive: define.
 static void c_directive_define(c_preproc_t *pre, pos_t pos) {
     (void)pos;
-    token_t name = c_preproc_next_raw(pre, true, false, false);
+    token_t name = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
     if (name.type == TOKENTYPE_EOL) {
         cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Expected macro name");
         return;
@@ -617,16 +638,16 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
         return;
     }
 
-    token_t *tokens          = NULL;
-    size_t   tokens_len      = 0;
-    size_t   tokens_cap      = 0;
-    char   **params          = NULL;
-    size_t   params_len      = 0;
-    size_t   params_cap      = 0;
-    bool     skip_whitespace = true;
-    bool     variadic        = false;
+    token_t    *tokens          = NULL;
+    size_t      tokens_len      = 0;
+    size_t      tokens_cap      = 0;
+    char      **params          = NULL;
+    size_t      params_len      = 0;
+    size_t      params_cap      = 0;
+    next_mode_t skip_whitespace = LINE_NOWS_RAW;
+    bool        variadic        = false;
 
-    token_t tkn = c_preproc_next_raw(pre, false, false, false);
+    token_t tkn = c_preproc_get_tkn(pre, LINE_RAW);
     if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_LPAR) {
         // Collect parameter list.
         pos_t list_start = tkn.pos;
@@ -634,7 +655,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
         bool need_arg   = false;
         bool must_close = false;
         while (1) {
-            tkn = c_preproc_next_raw(pre, true, false, false);
+            tkn = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
             if (tkn.type == TOKENTYPE_EOL) {
                 // Abrupt end of line.
                 cctx_diagnostic(pre->cctx, list_start, DIAG_ERR, "Missing `(` to match this `)`");
@@ -666,7 +687,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
                 goto error;
             }
 
-            tkn = c_preproc_next_raw(pre, true, false, false);
+            tkn = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
             if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_RPAR) {
                 tkn_delete(tkn);
                 break;
@@ -691,12 +712,12 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
             cctx_diagnostic(pre->cctx, tkn.pos, DIAG_WARN, "%s in non-variadic macro", tkn.strval);
         }
         array_lencap_insert_strong(&tokens, sizeof(token_t), &tokens_len, &tokens_cap, &tkn, tokens_len);
-        skip_whitespace = false;
+        skip_whitespace = LINE_RAW;
     }
 
     // Collect all tokens after parameter list.
     while (1) {
-        tkn = c_preproc_next_raw(pre, skip_whitespace, false, false);
+        tkn = c_preproc_get_tkn(pre, skip_whitespace);
         if (tkn.type == TOKENTYPE_EOL) {
             tkn_delete(tkn);
             break;
@@ -705,7 +726,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
             cctx_diagnostic(pre->cctx, tkn.pos, DIAG_WARN, "%s in non-variadic macro", tkn.strval);
         }
         array_lencap_insert_strong(&tokens, sizeof(token_t), &tokens_len, &tokens_cap, &tkn, tokens_len);
-        skip_whitespace = false;
+        skip_whitespace = LINE_RAW;
     }
 
     // Strip trailing whitespace.
@@ -744,7 +765,7 @@ error:
 // Preprocessor directive: undef.
 static void c_directive_undef(c_preproc_t *pre, pos_t pos) {
     (void)pos;
-    token_t name = c_preproc_next_raw(pre, true, false, false);
+    token_t name = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
     if (name.type == TOKENTYPE_EOL) {
         cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Expected macro name");
         return;
@@ -768,7 +789,7 @@ static void c_directive_undef(c_preproc_t *pre, pos_t pos) {
 
 // Handle a preprocessor directive.
 static void c_preproc_directive(c_preproc_t *pre) {
-    token_t name = c_preproc_next_raw(pre, true, false, false);
+    token_t name = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
     if (name.type == TOKENTYPE_EOL || name.type == TOKENTYPE_EOF) {
         // Note: Counterintuitively, `#` followed by newline does nothing according to the spec.
         return;
@@ -801,6 +822,7 @@ static void c_preproc_directive(c_preproc_t *pre) {
         return;
     } else if (!strcmp(name.strval, "include")) {
         c_directive_include(pre, name.pos);
+        return; // `#include` pushes files to the stack, so it consumes until EOL itself.
     } else if (!strcmp(name.strval, "pragma")) {
         c_directive_pragma(pre, name.pos);
     } else if (!strcmp(name.strval, "warning")) {
@@ -823,41 +845,40 @@ static char *c_preproc_read_bytes(c_preproc_t *pre, pos_t *pos_out) {
     pos_t        end_pos;
     bool         has_token = false;
 
+    size_t len = 0;
+    size_t cap = 64;
+    char  *buf = strong_malloc(cap);
+
     while (1) {
         token_t peek = tkn_peek(&file->tkn_ctx->base);
         if (peek.type == TOKENTYPE_EOL || peek.type == TOKENTYPE_EOF) {
             break;
         }
-        token_t tkn = c_preproc_next_raw(pre, false, false, false);
-        if (tkn.type != TOKENTYPE_WHITESPACE) {
-            if (!has_token) {
-                start_pos = tkn.pos;
-                has_token = true;
-            }
+        token_t tkn = tkn_next(&file->tkn_ctx->base);
+        if (tkn.type != TOKENTYPE_WHITESPACE && !has_token) {
+            start_pos = tkn.pos;
+        }
+        if (has_token) {
+            c_tkn_append_src(&tkn, &buf, &len, &cap);
             end_pos = tkn.pos;
         }
         tkn_delete(tkn);
     }
 
-    if (!has_token) {
+    if (!len) {
+        free(buf);
         return NULL;
     }
 
-    pos_t span = pos_including(start_pos, end_pos);
-    char *buf  = strong_malloc(span.len + 1);
-    for (off_t i = 0; i < span.len; i++) {
-        int c = srcfile_readb(span.srcfile, span.off + i);
-        if (c < 0) {
-            buf[i] = '\0';
-            break;
+    for (size_t i = 0; i < len; i++) {
+        // Since NUL is treated as whitespace but the output needs to be a C-string,
+        // silently replace NUL with something printable instead.
+        if (buf[i] == 0) {
+            buf[i] = ' ';
         }
-        buf[i] = (char)c;
     }
-    buf[span.len] = '\0';
-
-    if (pos_out) {
-        *pos_out = span;
-    }
+    array_lencap_insert_strong(&buf, 1, &len, &cap, "", len);
+    *pos_out = pos_including(start_pos, end_pos);
     return buf;
 }
 
@@ -868,7 +889,7 @@ static void c_preproc_until_eol(c_preproc_t *pre, bool warn_extra_tok) {
     pos_t extra;
 
     while (1) {
-        token_t tkn = c_preproc_next_raw(pre, false, false, false);
+        token_t tkn = c_preproc_get_tkn(pre, NEXT_RAW);
         if (tkn.type == TOKENTYPE_EOL || tkn.type == TOKENTYPE_EOF) {
             tkn_delete(tkn);
             break;
@@ -894,127 +915,170 @@ static bool c_preproc_do_emit(c_preproc_t *pre) {
     return file->ifdir_len == 0 || file->ifdir[file->ifdir_len - 1].do_emit;
 }
 
-// Get the next token without preprocessing.
-// If `allow_next_file` is `false` and at the end of an include file, returns EOF.
-static token_t c_preproc_next_raw(c_preproc_t *pre, bool skip_whitespace, bool skip_eol, bool allow_next_line) {
-    while (1) {
-        assert(pre->stack_len >= 1);
-        token_t tkn;
-    again:
-        tkn = tkn_peek(&pre->stack[pre->stack_len - 1].tkn_ctx->base);
-        if (!allow_next_line && (tkn.type == TOKENTYPE_EOL || tkn.type == TOKENTYPE_EOF)) {
-            tkn_delete(tkn);
-            return (token_t){
-                .pos  = tkn.pos,
-                .type = TOKENTYPE_EOL,
-            };
+// Helper function for `c_preproc_get_tkn` that peeks raw tokens, first from macros, then from the srcfiles.
+static token_t c_preproc_raw_peek(c_preproc_t *pre) {
+    // First check the macro stack.
+    for (size_t i = pre->expand_len - 1; i != SIZE_MAX; i--) {
+        c_expansion_t *expand = &pre->expand[i];
+        if (expand->index < expand->tokens_len) {
+            return expand->tokens[expand->index];
         }
-        tkn_next(&pre->stack[pre->stack_len - 1].tkn_ctx->base);
-        if (tkn.type == TOKENTYPE_EOF || tkn.type == TOKENTYPE_EOL) {
-            pre->blank_line = true;
-        } else {
-            pre->blank_line &= tkn.type == TOKENTYPE_WHITESPACE;
-        }
-        if ((tkn.type == TOKENTYPE_WHITESPACE && skip_whitespace) || (tkn.type == TOKENTYPE_EOL && skip_eol)) {
-            tkn_delete(tkn);
-            goto again;
-        }
-        if (tkn.type != TOKENTYPE_EOF || pre->stack_len == 1) {
-            return tkn;
-        }
-
-        // Pop include file.
-        c_incfile_eof(pre);
-        c_incfile_pop(pre);
-        pre->blank_line = true;
     }
+
+    // Not to be found in macros; check include files.
+    for (size_t i = pre->stack_len - 1; i >= 1; i--) {
+        token_t peek = tkn_peek(&pre->stack[i].tkn_ctx->base);
+        if (peek.type != TOKENTYPE_EOF) {
+            return peek;
+        }
+    }
+
+    // Check source file.
+    return tkn_peek(&pre->stack[0].tkn_ctx->base);
 }
 
-// Get the next token on the current line after macro expansion.
-// Used by certain directives.
-static token_t c_preproc_next_expanded(c_preproc_t *pre) {
+// Helper function for `c_preproc_get_tkn` that gets raw tokens, first from macros, then from the srcfiles.
+static token_t c_preproc_raw_next(c_preproc_t *pre) {
     token_t tkn;
 
-again:
-    if (pre->expand_index < pre->expand_len) {
-        // A macro was expanded; return its tokens first.
-        tkn = pre->expand[pre->expand_index];
-        pre->expand_index++;
-        goto emit;
-    }
-
-    tkn = c_preproc_next_raw(pre, true, false, false);
-
-    if (tkn.type == TOKENTYPE_IDENT) {
-        c_macro_t const *macro = map_get(&pre->macros, tkn.strval);
-        if (macro) {
-            tkn_delete(tkn);
-            c_macro_expand(pre, tkn);
-            goto again;
+    // First check the macro stack.
+    for (size_t i = pre->expand_len - 1; i != SIZE_MAX; i--) {
+        c_expansion_t *expand = &pre->expand[i];
+        if (expand->index < expand->tokens_len) {
+            tkn = expand->tokens[expand->index++];
+            goto emit;
         }
+        free(expand->tokens);
+        pre->expand_len--;
     }
+
+    // Not to be found in macros; check include files.
+    while (pre->stack_len >= 2) {
+        tkn = tkn_next(&pre->stack[pre->stack_len - 1].tkn_ctx->base);
+        if (tkn.type == TOKENTYPE_EOF) {
+            tkn_delete(tkn);
+        } else {
+            goto emit;
+        }
+        c_incfile_eof(pre);
+        c_incfile_pop(pre);
+    }
+
+    // Check source file; if it EOFs, just return it verbatim.
+    tkn = tkn_next(&pre->stack[0].tkn_ctx->base);
 
 emit:
+    if (tkn.type == TOKENTYPE_EOL) {
+        pre->blank_line = true;
+    } else if (tkn.type != TOKENTYPE_WHITESPACE) {
+        pre->blank_line = false;
+    }
+
     return tkn;
 }
 
-// Get the next token from the preprocessor.
+// Get the next token for preprocessing.
+static token_t c_preproc_get_tkn(c_preproc_t *pre, next_mode_t mode) {
+    bool do_expand;
+    bool skip_whitespace;
+    bool allow_next_line;
+    switch (mode) {
+        case NEXT_EXPAND:
+            do_expand       = true;
+            skip_whitespace = false;
+            allow_next_line = true;
+            break;
+        case NEXT_RAW:
+            do_expand       = false;
+            skip_whitespace = false;
+            allow_next_line = true;
+            break;
+        case LINE_EXPAND:
+            do_expand       = true;
+            skip_whitespace = false;
+            allow_next_line = false;
+            break;
+        case LINE_RAW:
+            do_expand       = false;
+            skip_whitespace = false;
+            allow_next_line = false;
+            break;
+        case LINE_NOWS_EXPAND:
+            do_expand       = true;
+            skip_whitespace = true;
+            allow_next_line = false;
+            break;
+        case LINE_NOWS_RAW:
+            do_expand       = false;
+            skip_whitespace = true;
+            allow_next_line = false;
+            break;
+    }
+
+    token_t peek;
+again:
+    peek = c_preproc_raw_peek(pre);
+    if (skip_whitespace) {
+        while (peek.type == TOKENTYPE_WHITESPACE) {
+            c_preproc_raw_next(pre);
+            peek = c_preproc_raw_peek(pre);
+        }
+    }
+
+    if (peek.type == TOKENTYPE_EOL && !allow_next_line) {
+        return (token_t){
+            .pos  = peek.pos,
+            .type = TOKENTYPE_EOL,
+        };
+    }
+
+    // Is this a macro?
+    token_t tkn = c_preproc_raw_next(pre);
+    if (tkn.type != TOKENTYPE_IDENT || !do_expand) {
+        return tkn;
+    }
+    c_macro_t const *macro = map_get(&pre->macros, tkn.strval);
+    if (!macro) {
+        return tkn;
+    }
+    // Check that this macro wasn't already expanded.
+    for (size_t i = 0; i < pre->expand_len; i++) {
+        if (pre->expand[i].macro == macro) {
+            return tkn;
+        }
+    }
+
+    c_macro_expand(pre, macro);
+    goto again;
+}
+
+// Get the next preprocessed token.
 token_t c_preproc_next(tokenizer_t *ctx) {
     c_preproc_t *pre = (c_preproc_t *)ctx;
-    token_t      tkn;
 
 again:
-    if (pre->expand_index < pre->expand_len) {
-        // A macro was expanded; return its tokens first.
-        tkn = pre->expand[pre->expand_index];
-        pre->expand_index++;
+    if (!pre->blank_line) {
+        goto emit;
+    }
+    token_t peek = c_preproc_raw_peek(pre);
+    if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_HASH) {
         goto emit;
     }
 
-    // Cache this before `c_preproc_next_raw` overwrites it.
-    bool blank_line = pre->blank_line;
-    tkn             = c_preproc_next_raw(pre, !pre->raw_mode, !pre->raw_mode, true);
-
-    if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_HASH && blank_line) {
-        // Always check for directives.
-        tkn_delete(tkn);
-        c_preproc_directive(pre);
-        goto again;
-    } else if (!c_preproc_do_emit(pre)) {
-        // Anything else while not emitting is ignored.
-        tkn_delete(tkn);
-        goto again;
-    } else if (tkn.type == TOKENTYPE_IDENT) {
-        c_macro_t const *macro = map_get(&pre->macros, tkn.strval);
-        if (macro) {
-            tkn_delete(tkn);
-            c_macro_expand(pre, tkn);
-            goto again;
-        }
-    }
+    // Blank line, verbatim `#` in the source -> process directives.
+    tkn_delete(c_preproc_raw_next(pre)); // Consumes the `#` peeked earlier.
+    c_preproc_directive(pre);
+    goto again;
 
 emit:
-    if (tkn.type == TOKENTYPE_EOF || tkn.type == TOKENTYPE_WHITESPACE || tkn.type == TOKENTYPE_EOL) {
-        return tkn;
+    if (c_preproc_do_emit(pre)) {
+        return c_preproc_get_tkn(pre, NEXT_EXPAND);
+    } else {
+        do {
+            tkn_delete(c_preproc_get_tkn(pre, NEXT_RAW));
+        } while (!pre->blank_line);
+        goto again;
     }
-
-    if (tkn.type == TOKENTYPE_IDENT) {
-        assert(tkn.strval_len >= 1);
-        if ('0' <= tkn.strval[0] && tkn.strval[0] <= '9') {
-            // TODO: Numeric.
-        } else {
-            c_keyw_t keyw = c_keyw_get(pre->c_std, tkn.strval);
-            if (keyw < C_N_KEYWS) {
-                free(tkn.strval);
-                tkn.strval     = NULL;
-                tkn.strval_len = 0;
-                tkn.type       = TOKENTYPE_KEYWORD;
-                tkn.subtype    = keyw;
-            }
-        }
-    }
-
-    return tkn;
 }
 
 // Convert a preprocessor token to a C token.
@@ -1217,6 +1281,6 @@ void c_macro_destroy(c_macro_t *macro) {
 }
 
 // Perform macro-expansion.
-static void c_macro_expand(c_preproc_t *pre, token_t name) {
+static void c_macro_expand(c_preproc_t *pre, c_macro_t const *macro) {
     // TODO.
 }

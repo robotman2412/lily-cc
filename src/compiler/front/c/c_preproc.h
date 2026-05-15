@@ -31,34 +31,32 @@ typedef c_expansion_t (*c_proc_macro_cb_t)(c_preproc_t *pre, token_t *args, size
 // C preprocessor state.
 struct c_preproc {
     // Base tokenizer.
-    tokenizer_t  base;
+    tokenizer_t    base;
     // Parent compiler context.
-    cctx_t      *cctx;
+    cctx_t        *cctx;
     // Macro definitions by name.
     // Map of `char *` -> `c_macro_t *`.
-    map_t        macros;
-    // How many tokens from `expand` have been used so far.
-    size_t       expand_index;
+    map_t          macros;
     // Queue of tokens to emit from macro expansions.
-    size_t       expand_len, expand_cap;
+    size_t         expand_len, expand_cap;
     // Queue of tokens to emit from macro expansions.
-    token_t     *expand;
+    c_expansion_t *expand;
     // Include-file tokenizer stack, bottom is the original file.
-    size_t       stack_len, stack_cap;
+    size_t         stack_len, stack_cap;
     // Include-file tokenizer stack, bottom is the original file.
-    c_incfile_t *stack;
+    c_incfile_t   *stack;
     // All files in order of first opened.
-    size_t       files_len, files_cap;
+    size_t         files_len, files_cap;
     // All files in order of first opened.
-    srcfile_t   *files;
+    srcfile_t     *files;
     // Set of files which have already executed a `#pragma once`.
-    set_t        once_files;
+    set_t          once_files;
     // Current C standard.
-    int          c_std;
+    int            c_std;
     // Whether the current line has non-whitespace tokens on it.
-    bool         blank_line;
+    bool           blank_line;
     // Do not convert tokens to C tokens before emitting them.
-    bool         raw_mode;
+    bool           raw_mode;
 };
 
 // Include-file stack entry.
@@ -125,8 +123,14 @@ struct c_macro {
 
 // Expanded macro value.
 struct c_expansion {
-    size_t   tokens_len;
-    token_t *tokens;
+    // Source macro; as the return value of a procedural macro, this field is ignored.
+    c_macro_t const *macro;
+    // Number of tokens already expanded.
+    size_t           index;
+    // Total number of tokens to expand.
+    size_t           tokens_len;
+    // Tokens to expand.
+    token_t         *tokens;
 };
 
 

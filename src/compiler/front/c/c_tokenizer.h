@@ -68,11 +68,11 @@ struct c_tokenizer {
 // Enum names of `c_keyw_t` values.
 extern char const *const c_keyw_name[];
 // Enum names of `c_tokentype_t` values.
-extern char const *const c_tokentype_name[];
+extern char const *const c_token_id[];
 // List of keywords.
 extern char const *const c_keywords[];
 // List of tokens.
-extern char const *const c_tokens[];
+extern char const *const c_token_name[];
 
 
 // Create a new C tokenizer.
@@ -94,6 +94,9 @@ token_t  c_tkn_next(tokenizer_t *ctx);
 c_keyw_t c_keyw_get(int c_std, char const *name);
 // Print the source representation of a token.
 void     c_tkn_print_src(token_t const *pre_tkn, FILE *to);
+// Append the source representation of a token to a heap-allocated string.
+// WARNING: Does not NUL-terminate!
+void     c_tkn_append_src(token_t const *pre_tkn, char **buf_ptr, size_t *len_ptr, size_t *cap_ptr);
 
 
 // Test if a token is a certain keyword.

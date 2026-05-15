@@ -24,10 +24,15 @@ typedef enum {
 } c_tokentype_t;
 
 // C string subtype.
-// Only used to distinguish `<>` from `""` strings used by `#embed` and `#include`.
-// In the language, it is safe to assume that `<>` strings do not occur.
+// Only relevant to the preprocessor.
 typedef enum {
+    // A normal string token as the C frontend wants it.
     C_STR_NORMAL,
+    // A raw double quotes string.
+    C_STR_RAW_DQUOT,
+    // A raw single quotes string.
+    C_STR_RAW_SQUOT,
+    // An angle-brackets raw string.
     C_STR_ANGLEBRAC,
 } c_strtype_t;
 
@@ -60,13 +65,10 @@ struct c_tokenizer {
 
 
 
-#ifndef NDEBUG
 // Enum names of `c_keyw_t` values.
 extern char const *const c_keyw_name[];
 // Enum names of `c_tokentype_t` values.
 extern char const *const c_tokentype_name[];
-#endif
-
 // List of keywords.
 extern char const *const c_keywords[];
 // List of tokens.
@@ -79,11 +81,17 @@ c_tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std);
 bool           c_is_first_sym_char(int c);
 // Test whether a character is legal in a C identifier.
 bool           c_is_sym_char(int c);
+
+// Convert preprocessing number token to C number token.
+token_t c_tkn_conv_number(tokenizer_t *ctx, token_t const *pre_tkn);
+// Tokenize string or character constant.
+token_t c_tkn_conv_str(tokenizer_t *ctx, token_t const *pre_tkn);
+
 // Get next token from C tokenizer.
-token_t        c_tkn_next(tokenizer_t *ctx);
+token_t  c_tkn_next(tokenizer_t *ctx);
 // Try to find the matching C keyword.
 // Returns -1 if not a keyword in the current C standard.
-c_keyw_t       c_keyw_get(int c_std, char const *name);
+c_keyw_t c_keyw_get(int c_std, char const *name);
 
 
 // Test if a token is a certain keyword.

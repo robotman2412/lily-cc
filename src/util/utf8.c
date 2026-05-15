@@ -54,3 +54,53 @@ uint8_t utf8_encode(char *str, size_t cap, int val) {
 
     return min_len;
 }
+
+/// UTF-8 decode a single character.
+/// @param str Buffer to read from
+/// @param len Buffer length in bytes
+/// @param offset In/out current buffer offset
+/// @return A UTF-8 codepoint, or 0xFFFD if incorrectly encoded.
+int utf8_decode(char const *str, size_t len, size_t *offset) {
+    // Read first UTF-8 byte.
+    int val = 0;
+    if (*offset >= len) {
+        return -1;
+    }
+    char head = str[*offset];
+    ++*offset;
+
+    // Determine number of UTF-8 bytes after this one to read.
+    size_t size;
+    if ((head & 0xf4) == 0xf0) {
+        size = 3;
+        val  = head & 0x07;
+    } else if ((head & 0xf0) == 0xe0) {
+        size = 2;
+        val  = head & 0x0f;
+    } else if ((head & 0xe0) == 0xc0) {
+        size = 1;
+        val  = head & 0x1f;
+    } else if ((head & 0x80) == 0x00) {
+        size = 0;
+        val  = (int)(head & 0xff);
+    } else {
+        size = 0;
+        val  = 0xfffd;
+    }
+
+    // Try to read this amount of remaining bytes.
+    for (; size; --size) {
+        if (*offset >= len) {
+            return 0xfffd;
+        }
+        char data = str[*offset];
+        if ((data & 0xc0) != 0x80) {
+            val = 0xfffd;
+            break;
+        }
+        ++*offset;
+        val = (val << 6) | (data & 0x3f);
+    }
+
+    return val;
+}

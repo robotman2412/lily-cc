@@ -30,7 +30,7 @@ static void preprocess(char const *path) {
         cctx_delete(cctx);
         return;
     }
-    pre->keep_whitespace = true;
+    pre->raw_mode = true;
 
     // pos_t prev = {0};
     while (1) {

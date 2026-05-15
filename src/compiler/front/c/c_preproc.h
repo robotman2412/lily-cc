@@ -57,8 +57,8 @@ struct c_preproc {
     int          c_std;
     // Whether the current line has non-whitespace tokens on it.
     bool         blank_line;
-    // If true, emit `TOKENTYPE_WHITESPACE` and `TOKENTYPE_EOL` tokens instead of stripping them.
-    bool         keep_whitespace;
+    // Do not convert tokens to C tokens before emitting them.
+    bool         raw_mode;
 };
 
 // Include-file stack entry.
@@ -135,6 +135,8 @@ struct c_expansion {
 c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std);
 // Get the next token from the preprocessor.
 token_t      c_preproc_next(tokenizer_t *tkn_ctx);
+// Convert a preprocessor token to a C token.
+token_t      c_preproc_tkn_to_c_tkn(c_preproc_t *pre, token_t tkn);
 // Add a pre-defined macro.
 void         c_preproc_predef_macro(c_preproc_t *pre, char const *name, c_macro_t *macro);
 

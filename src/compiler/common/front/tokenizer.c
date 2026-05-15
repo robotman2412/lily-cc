@@ -7,6 +7,7 @@
 
 #include "char_repr.h"
 #include "strong_malloc.h"
+#include "utf8.h"
 
 #include <inttypes.h>
 #include <stdlib.h>
@@ -69,6 +70,25 @@ void tkn_unget(tokenizer_t *tkn_ctx, token_t token) {
         abort();
     }
     tkn_ctx->tkn_buffer[tkn_ctx->tkn_buffer_len++] = token;
+}
+
+
+// Read a character from a token's `strval` and update offset.
+// Returns -1 on end of token.
+int tkn_getc(token_t const *tkn, tknoff_t *off) {
+    size_t off1 = off->offset;
+    int    c    = utf8_decode(tkn->strval, tkn->strval_len, &off1);
+    if (c == -1) {
+        return -1;
+    }
+    if (c == '\n') {
+        off->col_offset = -tkn->pos.col;
+        off->line_offset++;
+    } else {
+        off->col_offset++;
+    }
+    off->offset = off1;
+    return c;
 }
 
 

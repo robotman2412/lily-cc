@@ -18,6 +18,8 @@
 
 // Abstract tokenizer handle.
 typedef struct tokenizer tokenizer_t;
+// Offset type for `tkn_getc`.
+typedef struct tknoff    tknoff_t;
 
 
 // Abstract tokenizer handle.
@@ -38,6 +40,13 @@ struct tokenizer {
     void (*cleanup)(tokenizer_t *tkn_ctx);
 };
 
+// Offset type for `tkn_getc`.
+struct tknoff {
+    size_t offset;
+    int    col_offset;
+    int    line_offset;
+};
+
 
 
 // Delete a tokenizer context.
@@ -54,6 +63,10 @@ token_t tkn_peek_n(tokenizer_t *tkn_ctx, int depth);
 // Opposite of tkn_next; stuff up to one token back into the buffer.
 // Will abort if there is already a token there.
 void    tkn_unget(tokenizer_t *tkn_ctx, token_t token);
+
+// Read a character from a token's `strval` and update offset.
+// Returns -1 on end of token.
+int tkn_getc(token_t const *tkn, tknoff_t *off);
 
 // Delete a token's dynamic memory (`strval` and `params`).
 void tkn_delete(token_t token);

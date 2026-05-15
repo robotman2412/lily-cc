@@ -1,5 +1,5 @@
 
-// SPDX-FileCopyrightText: 2024-2025 Julian Scheffers <julian@scheffers.net>
+// SPDX-FileCopyrightText: 2024-2026 Julian Scheffers <julian@scheffers.net>
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
@@ -18,3 +18,10 @@
 /// @param val Character code point to write
 /// @return How many bytes of capacity would have been needed (1-4), or 0 if `val` not encodeable
 uint8_t utf8_encode(char *str, size_t cap, int val);
+
+/// UTF-8 decode a single character.
+/// @param str Buffer to read from
+/// @param len Buffer length in bytes
+/// @param offset In/out current buffer offset
+/// @return A UTF-8 codepoint, or 0xFFFD if incorrectly encoded.
+int utf8_decode(char const *str, size_t len, size_t *offset);

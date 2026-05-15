@@ -211,8 +211,8 @@ LILY_TEST_CASE(test_c_tkn_litsuffix)
 static char *test_c_tkn_errors() {
     // clang-format off
     char const data[] =
-    "\'\n"                                                                  // Character constant spans end of line
-    "\"\n"                                                                  // String constant spans end of line
+    "\'\n"                                                                  // Expected '
+    "\"\n"                                                                  // Expected "
     "0x0ffffffffffffffff\n"
     "0x10000000000000000\n"                                                 // Constant is too large and was truncated to 0
     "18446744073709551615\n"
@@ -244,11 +244,17 @@ static char *test_c_tkn_errors() {
     // '
     diagnostic_t *diag = (diagnostic_t *)cctx->diagnostics.head;
     RETURN_ON_FALSE(diag);
-    EXPECT_STR(diag->msg, "Character constant spans end of line");
+    EXPECT_STR(diag->msg, "Expected \'");
+    EXPECT_INT(diag->pos.line, 0);
+    EXPECT_INT(diag->pos.col, 1);
+    EXPECT_INT(diag->pos.len, 0);
+    EXPECT_INT(diag->lvl, DIAG_ERR);
+    diag = (diagnostic_t *)diag->node.next;
+    RETURN_ON_FALSE(diag);
+    EXPECT_STR(diag->msg, "To match this \'");
     EXPECT_INT(diag->pos.line, 0);
     EXPECT_INT(diag->pos.col, 0);
     EXPECT_INT(diag->pos.len, 1);
-    EXPECT_INT(diag->lvl, DIAG_ERR);
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
     EXPECT_STR(diag->msg, "Empty character constant");
@@ -257,7 +263,16 @@ static char *test_c_tkn_errors() {
     diag = (diagnostic_t *)diag->node.next;
     RETURN_ON_FALSE(diag);
     EXPECT_INT(diag->lvl, DIAG_ERR);
-    EXPECT_STR(diag->msg, "String constant spans end of line");
+    EXPECT_STR(diag->msg, "Expected \"");
+    EXPECT_INT(diag->pos.line, 1);
+    EXPECT_INT(diag->pos.col, 1);
+    EXPECT_INT(diag->pos.len, 0);
+    diag = (diagnostic_t *)diag->node.next;
+    RETURN_ON_FALSE(diag);
+    EXPECT_STR(diag->msg, "To match this \"");
+    EXPECT_INT(diag->pos.line, 1);
+    EXPECT_INT(diag->pos.col, 0);
+    EXPECT_INT(diag->pos.len, 1);
 
     // 0x10000000000000000
     diag = (diagnostic_t *)diag->node.next;

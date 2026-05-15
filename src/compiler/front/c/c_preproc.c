@@ -973,7 +973,7 @@ again:
 
     // Cache this before `c_preproc_next_raw` overwrites it.
     bool blank_line = pre->blank_line;
-    tkn             = c_preproc_next_raw(pre, !pre->keep_whitespace, !pre->keep_whitespace, true);
+    tkn             = c_preproc_next_raw(pre, !pre->raw_mode, !pre->raw_mode, true);
 
     if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_HASH && blank_line) {
         // Always check for directives.
@@ -1016,6 +1016,9 @@ emit:
 
     return tkn;
 }
+
+// Convert a preprocessor token to a C token.
+token_t c_preproc_tkn_to_c_tkn(c_preproc_t *pre, token_t tkn);
 
 // Create a regular macro.
 c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_out) {

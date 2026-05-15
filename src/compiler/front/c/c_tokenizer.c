@@ -23,7 +23,6 @@
 
 
 
-#ifndef NDEBUG
 // Enum names of `c_keyw_t` values.
 char const *const c_keyw_name[] = {
 #define C_KEYW_DEF(since, deprecated, name) "C_KEYW_" #name,
@@ -35,7 +34,6 @@ char const *const c_tokentype_name[] = {
 #define C_TOKEN_DEF(id, name) "C_TKN_" #id,
 #include "c_tokens.inc"
 };
-#endif
 
 // List of keywords.
 char const *const c_keywords[] = {
@@ -107,20 +105,98 @@ bool c_is_sym_char(int c) {
 }
 
 
-// Tokenize integer constant.
-static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int base) {
+// Preprocessing number token.
+static token_t c_tkn_pre_number(tokenizer_t *ctx) {
+    size_t len = 0;
+    size_t cap = 8;
+    char  *buf = strong_malloc(cap);
+
+    pos_t pos0 = ctx->pos;
+    int   c    = srcfile_getc(ctx->file, &ctx->pos);
+    array_lencap_insert_strong(&buf, 1, &len, &cap, (char[]){(char)c}, len);
+    if (c == '.') {
+        // `.` followed by digit (otherwise, just a digit).
+        c = srcfile_getc(ctx->file, &ctx->pos);
+        array_lencap_insert_strong(&buf, 1, &len, &cap, (char[]){(char)c}, len);
+    }
+
+    while (1) {
+        pos_t pos1 = ctx->pos;
+        c          = srcfile_getc(ctx->file, &pos1);
+        if (c == '.') {
+            array_lencap_insert_strong(&buf, 1, &len, &cap, ".", len);
+            ctx->pos = pos1;
+        } else if (c == 'e' || c == 'E' || c == 'p' || c == 'P') {
+            pos_t pos2 = pos1;
+            int   c2   = srcfile_getc(ctx->file, &pos2);
+            if (c2 == '+' || c2 == '-') {
+                char enc[] = {(char)c, (char)c2};
+                array_lencap_insert_n_strong(&buf, 1, &len, &cap, enc, len, 2);
+                ctx->pos = pos1;
+            } else {
+                array_lencap_insert_strong(&buf, 1, &len, &cap, (char[]){(char)c}, len);
+                ctx->pos = pos1;
+            }
+        } else if (c_is_sym_char(c)) {
+            char enc[4];
+            int  enc_len = utf8_encode(enc, 4, c);
+            array_lencap_insert_n_strong(&buf, 1, &len, &cap, enc, len, enc_len);
+            ctx->pos = pos1;
+        } else if (c == '\'') {
+            int c2 = srcfile_getc(ctx->file, &pos1);
+            if (c_is_sym_char(c2)) {
+                char enc[5]  = {'\''};
+                int  enc_len = utf8_encode(enc + 1, 4, c2);
+                array_lencap_insert_n_strong(&buf, 1, &len, &cap, enc, len, enc_len + 1);
+                ctx->pos = pos1;
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    array_lencap_insert_strong(&buf, 1, &len, &cap, "", len);
+    return (token_t){
+        .pos        = pos_including(pos0, ctx->pos),
+        .type       = TOKENTYPE_IDENT,
+        .strval     = buf,
+        .strval_len = len - 1,
+    };
+}
+
+// Convert preprocessing number token to C number token.
+token_t c_tkn_conv_number(tokenizer_t *ctx, token_t const *pre_tkn) {
     c_tokenizer_t *c_ctx    = (c_tokenizer_t *)ctx;
     i128_t         val      = int128(0, 0);
     bool           hasdat   = false;
     bool           toolarge = false;
     bool           invalid  = false;
 
-    pos_t pos0 = ctx->pos;
-    pos_t pos1;
+    tknoff_t     off0 = {0};
+    tknoff_t     off1 = off0;
+    unsigned int base;
+    int          c = tkn_getc(pre_tkn, &off1);
+    if (c == '0') {
+        c = tkn_getc(pre_tkn, &off1);
+        if ((c | 0x20) == 'x') {
+            base = 16;
+            off0 = off1;
+        } else if ((c | 0x20) == 'b') {
+            base = 2;
+            off0 = off1;
+        } else {
+            base = 8;
+        }
+    } else {
+        base = 10;
+    }
+
     while (1) {
         unsigned int digit;
-        pos1  = pos0;
-        int c = srcfile_getc(ctx->file, &pos1);
+        off1  = off0;
+        int c = tkn_getc(pre_tkn, &off1);
         if (c >= '0' && c <= '9') {
             // Valid digit 0-9.
             digit = c - '0';
@@ -130,7 +206,7 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         } else if (hasdat && c == '\'' && c_ctx->c_std >= C_STD_C23) {
             // A separator.
             hasdat = false;
-            pos0   = pos1;
+            off0   = off1;
             continue;
         } else {
             // End of constant.
@@ -145,19 +221,19 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         }
         val    = next;
         hasdat = true;
-        pos0   = pos1;
+        off0   = off1;
     }
-    pos1 = pos0;
+    off1 = off0;
 
     // Check for literal suffixes.
-    pos_t    lit_end     = pos0;
+    tknoff_t lit_end     = off0;
     c_prim_t c_prim      = C_PRIM_SINT;
     bool     bad_suffix  = false;
     bool     u_suffix    = false;
     bool     l_suffix    = false;
     bool     ll_suffix   = false;
     bool     i128_suffix = false;
-    int      c           = srcfile_getc(ctx->file, &pos1);
+    c                    = tkn_getc(pre_tkn, &off1);
 
     // Promote the primitive to be bigger if necessary.
     // TODO: Tokenizer is currently not aware of the C options.
@@ -184,20 +260,20 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
     // Unsigned (before).
     if (c == 'u' || c == 'U') {
         u_suffix = true;
-        pos0     = pos1;
-        c        = srcfile_getc(ctx->file, &pos1);
+        off0     = off1;
+        c        = tkn_getc(pre_tkn, &off1);
         if (c != 'l' && c != 'L' && ((c | 0x20) >= 'a' && (c | 0x20) <= 'z')) {
             bad_suffix = true;
         }
     }
     // Long / long long / _x128.
     if (!bad_suffix && (c == 'l' || c == 'L')) {
-        pos0   = pos1;
+        off0   = off1;
         int c2 = c;
-        c      = srcfile_getc(ctx->file, &pos1);
+        c      = tkn_getc(pre_tkn, &off1);
         if (c == c2) {
-            pos0      = pos1;
-            c         = srcfile_getc(ctx->file, &pos1);
+            off0      = off1;
+            c         = tkn_getc(pre_tkn, &off1);
             ll_suffix = true;
         } else if (c != 'u' && ((c | 0x20) >= 'a' && (c | 0x20) <= 'z')) {
             bad_suffix = true;
@@ -205,14 +281,14 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
             l_suffix = true;
         }
     } else if (!bad_suffix && c == '_') {
-        pos_t pos2 = pos1;
-        int   c_x  = srcfile_getc(ctx->file, &pos2);
-        int   c_1  = srcfile_getc(ctx->file, &pos2);
-        int   c_2  = srcfile_getc(ctx->file, &pos2);
-        int   c_8  = srcfile_getc(ctx->file, &pos2);
+        tknoff_t pos2 = off1;
+        int      c_x  = tkn_getc(pre_tkn, &pos2);
+        int      c_1  = tkn_getc(pre_tkn, &pos2);
+        int      c_2  = tkn_getc(pre_tkn, &pos2);
+        int      c_8  = tkn_getc(pre_tkn, &pos2);
         if ((c_x == 'x' || c_x == 'X') && c_1 == '1' && c_2 == '2' && c_8 == '8') {
-            pos0 = pos1 = pos2;
-            c           = srcfile_getc(ctx->file, &pos1);
+            off0 = off1 = pos2;
+            c           = tkn_getc(pre_tkn, &off1);
             i128_suffix = true;
         } else {
             bad_suffix = true;
@@ -222,14 +298,14 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
     }
     // Unsigned (after).
     if (!bad_suffix && !u_suffix && c_prim != C_PRIM_SINT && (c == 'u' || c == 'U')) {
-        pos0     = pos1;
-        c        = srcfile_getc(ctx->file, &pos1);
+        off0     = off1;
+        c        = tkn_getc(pre_tkn, &off1);
         u_suffix = true;
     } else if (c == '_' || ((c | 0x20) >= 'a' && (c | 0x20) <= 'z')) {
         bad_suffix = true;
     }
     // Assert the suffix to end now.
-    if (!bad_suffix && (c == '_' || ((c | 0x20) >= 'a' && (c | 0x20) <= 'z'))) {
+    if (!bad_suffix && c != -1) {
         bad_suffix = true;
     }
 
@@ -250,11 +326,14 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
     }
 
     if (bad_suffix && hasdat) {
-        cctx_diagnostic(ctx->cctx, pos_including(lit_end, pos0), DIAG_ERR, "Invalid literal suffix");
+        pos_t pos  = pre_tkn->pos;
+        pos.off   += (off_t)lit_end.offset;
+        pos.len   -= (off_t)lit_end.offset;
+        pos.col   += lit_end.col_offset;
+        pos.line  += lit_end.line_offset;
+        cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Invalid literal suffix");
     }
 
-    ctx->pos  = pos0;
-    pos_t pos = pos_including(start_pos, pos0);
     if (invalid || !hasdat) {
         // Report error (invalid constant).
         char const *ctype;
@@ -265,10 +344,10 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
             case 16: ctype = "hexadecimal"; break;
             default: abort();
         }
-        cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Invalid %s constant", ctype);
+        cctx_diagnostic(ctx->cctx, pre_tkn->pos, DIAG_ERR, "Invalid %s constant", ctype);
         return (token_t){
-            .type       = TOKENTYPE_GARBAGE,
-            .pos        = pos,
+            .type       = TOKENTYPE_ICONST,
+            .pos        = pre_tkn->pos,
             .ival       = 0,
             .subtype    = 0,
             .strval     = NULL,
@@ -285,11 +364,18 @@ static token_t c_tkn_integer(tokenizer_t *ctx, pos_t start_pos, unsigned int bas
         } else {
             snprintf(hex, sizeof(hex), "%" PRIx64 "%016" PRIx64, hi64(val), lo64(val));
         }
-        cctx_diagnostic(ctx->cctx, pos, DIAG_WARN, "Constant is too large and was truncated to %s (0x%s)", dec, hex);
+        cctx_diagnostic(
+            ctx->cctx,
+            pre_tkn->pos,
+            DIAG_WARN,
+            "Constant is too large and was truncated to %s (0x%s)",
+            dec,
+            hex
+        );
     }
     return (token_t){
         .type       = TOKENTYPE_ICONST,
-        .pos        = pos,
+        .pos        = pre_tkn->pos,
         .ival       = lo64(val),
         .ivalh      = hi64(val),
         .subtype    = c_prim,
@@ -361,14 +447,77 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
     };
 }
 
+// Preprocessing string token.
+static token_t c_tkn_pre_str(tokenizer_t *ctx, pos_t start_pos, c_strtype_t subtype) {
+    size_t cap     = 32;
+    size_t len     = 0;
+    char  *buf     = strong_malloc(cap);
+    pos_t  end_pos = start_pos;
+    bool   do_esc;
+    char   start;
+    char   end;
+    switch (subtype) {
+        default: abort();
+        case C_STR_RAW_DQUOT:
+            start = end = '\"';
+            do_esc      = true;
+            break;
+        case C_STR_RAW_SQUOT:
+            start = end = '\'';
+            do_esc      = true;
+            break;
+        case C_STR_ANGLEBRAC:
+            start  = '<';
+            end    = '>';
+            do_esc = false;
+            break;
+    }
+
+    // Skip start char.
+    srcfile_getc(ctx->file, &end_pos);
+    pos_t open_pos = pos_between(start_pos, end_pos);
+    bool  esc      = false;
+    while (1) {
+        pos_t pos1 = end_pos;
+        int   c    = srcfile_getc(ctx->file, &end_pos);
+        if (c == -1 || c == '\n') {
+            cctx_diagnostic(ctx->cctx, pos1, DIAG_ERR, "Expected %c", end);
+            cctx_diagnostic(ctx->cctx, open_pos, DIAG_HINT, "To match this %c", start);
+            break;
+        } else if (c == end && !esc) {
+            break;
+        } else {
+            esc = c == '\\' && do_esc && !esc;
+            if (c >= 0x80) {
+                uint8_t utf8_len = utf8_encode(NULL, 0, c);
+                array_lencap_resize_strong(&buf, 1, &len, &cap, len + utf8_len);
+                utf8_encode(buf + len - utf8_len, utf8_len, c);
+            } else {
+                uint8_t tmp = c;
+                array_lencap_insert_strong(&buf, 1, &len, &cap, &tmp, len);
+            }
+        }
+    }
+
+    array_lencap_insert_strong(&buf, 1, &len, &cap, "", len);
+    ctx->pos = end_pos;
+    return (token_t){
+        .pos        = pos_including(start_pos, end_pos),
+        .type       = TOKENTYPE_SCONST,
+        .subtype    = subtype,
+        .strval     = buf,
+        .strval_len = len - 1, // -1 excludes the NUL terminator
+    };
+}
+
 // Hex parsing helper for strings.
-static int c_str_hex(tokenizer_t *ctx, pos_t start_pos, int min_w, int max_w) {
-    int   value = 0;
-    pos_t pos0  = ctx->pos;
-    pos_t pos1;
+static int c_str_conv_hex(tokenizer_t *ctx, token_t const *pre_tkn, tknoff_t *off, int min_w, int max_w) {
+    int      value = 0;
+    tknoff_t off0  = *off;
+    tknoff_t off1;
     for (int i = 0; i < max_w; i++) {
-        pos1  = pos0;
-        int c = srcfile_getc(ctx->file, &pos1);
+        off1  = off0;
+        int c = tkn_getc(pre_tkn, &off1);
         if (c >= '0' && c <= '9') {
             value <<= 4;
             value  |= c - '0';
@@ -377,85 +526,77 @@ static int c_str_hex(tokenizer_t *ctx, pos_t start_pos, int min_w, int max_w) {
             value  |= (c | 0x20) - 'a' + 0xa;
         } else {
             if (i < min_w) {
-                cctx_diagnostic(
-                    ctx->cctx,
-                    pos_between(start_pos, pos0),
-                    DIAG_ERR,
-                    "Invalid hexadecimal escape sequence"
-                );
+                pos_t pos  = pre_tkn->pos;
+                pos.off   += (off_t)off->offset;
+                pos.col   += off->col_offset;
+                pos.line  += off->line_offset;
+                pos.len    = (off_t)(off0.offset - off->offset);
+                cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Invalid hexadecimal escape sequence");
             }
             break;
         }
-        pos0 = pos1;
+        off0 = off1;
     }
-    ctx->pos = pos0;
+    *off = off0;
     return value;
 }
 
 // Octal parsing helper for strings.
-static int c_str_octal(tokenizer_t *ctx, pos_t start_pos, int first, int max_w) {
-    (void)start_pos;
-    int   value = first - '0';
-    pos_t pos0  = ctx->pos;
-    pos_t pos1;
+static int c_str_conv_octal(tokenizer_t *ctx, token_t const *pre_tkn, tknoff_t *off, int first, int max_w) {
+    (void)ctx;
+    int      value = first - '0';
+    tknoff_t off0  = *off;
+    tknoff_t off1;
     for (int i = 1; i < max_w; i++) {
-        pos1  = pos0;
-        int c = srcfile_getc(ctx->file, &pos1);
+        off1  = off0;
+        int c = tkn_getc(pre_tkn, &off1);
         if (c < '0' || c > '7') {
             break;
         } else {
             value <<= 3;
             value  |= c - '0';
         }
-        pos0 = pos1;
+        off0 = off1;
     }
-    ctx->pos = pos0;
+    *off = off0;
     return value;
 }
 
-// Tokenize string or character constant.
-static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
-    size_t cap = 32;
-    size_t len = 0;
-    char  *ptr = strong_malloc(cap);
+// Convert preprocessing string token to C string token.
+token_t c_tkn_conv_str(tokenizer_t *ctx, token_t const *pre_tkn) {
+    size_t cap     = 32;
+    size_t len     = 0;
+    char  *ptr     = strong_malloc(cap);
+    bool   is_char = pre_tkn->subtype == C_STR_RAW_SQUOT;
 
+    tknoff_t off = {0};
     while (1) {
-        pos_t pos0    = ctx->pos;
-        int   c       = srcfile_getc(ctx->file, &ctx->pos);
-        bool  as_utf8 = false;
-        if (c == -1 || c == '\n') {
-            cctx_diagnostic(
-                ctx->cctx,
-                pos_between(start_pos, pos0),
-                DIAG_ERR,
-                "%s constant spans end of %s",
-                is_char ? "Character" : "String",
-                c == '\n' ? "line" : "file"
-            );
-            break;
-        } else if (c == (is_char ? '\'' : '\"')) {
+        tknoff_t off0    = off;
+        int      c       = tkn_getc(pre_tkn, &off);
+        bool     as_utf8 = false;
+        if (c == -1) {
             // End of string.
             break;
         } else if (c == '\\') {
             // Escape sequence.
-            c = srcfile_getc(ctx->file, &ctx->pos);
+            c = tkn_getc(pre_tkn, &off);
 
             if (c == 'U') {
                 // 8-hexit unicode point.
-                c = c_str_hex(ctx, start_pos, 8, 8);
+                c = c_str_conv_hex(ctx, pre_tkn, &off, 8, 8);
             } else if (c == 'u') {
                 // 4-hexit unicode point.
                 as_utf8 = true;
-                c       = c_str_hex(ctx, start_pos, 4, 4);
+                c       = c_str_conv_hex(ctx, pre_tkn, &off, 4, 4);
             } else if (c == 'x') {
                 // Hexadecimal (of any length (because of course that's logical (it isn't))).
-                c = c_str_hex(ctx, start_pos, 1, 32767);
+                c = c_str_conv_hex(ctx, pre_tkn, &off, 1, 32767);
             } else if (c >= '0' && c <= '3') {
                 // 1- to 3-digit octal.
-                c = c_str_octal(ctx, start_pos, c, 3);
+                c = c_str_conv_octal(ctx, pre_tkn, &off, c, 3);
             } else if (c >= '4' && c <= '7') {
                 // 1- or 2-digit octal.
-                c = c_str_octal(ctx, start_pos, c, 2);
+                c = c_str_conv_octal(ctx, pre_tkn, &off, c, 2);
             } else {
                 // Single-character escape sequences.
                 switch (c) {
@@ -466,13 +607,19 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
                     case 'a': c = '\a'; break;
                     case 'b': c = '\b'; break;
                     case 'f': c = '\f'; break;
+                    case '\n':
                     case 'n': c = '\n'; break;
                     case 'r': c = '\r'; break;
                     case 't': c = '\t'; break;
                     case 'v': c = '\v'; break;
-                    default:
-                        cctx_diagnostic(ctx->cctx, pos_between(pos0, ctx->pos), DIAG_ERR, "Invalid escape sequence");
-                        break;
+                    default: {
+                        pos_t pos  = pre_tkn->pos;
+                        pos.off   += (off_t)off0.offset;
+                        pos.col   += off0.col_offset;
+                        pos.line  += off0.line_offset;
+                        pos.len    = (off_t)(off.offset - off0.offset);
+                        cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Invalid escape sequence");
+                    } break;
                 }
             }
         } else if (c >= 0x80) {
@@ -488,7 +635,6 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
         }
     }
 
-    pos_t pos = pos_between(start_pos, ctx->pos);
     if (is_char) {
         uint64_t val = 0;
         for (size_t i = 0; i < len; i++) {
@@ -496,13 +642,13 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
             val  |= ptr[i];
         }
         if (len == 0) {
-            cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Empty character constant");
+            cctx_diagnostic(ctx->cctx, pre_tkn->pos, DIAG_ERR, "Empty character constant");
         } else if (len > 1) {
-            cctx_diagnostic(ctx->cctx, pos, DIAG_WARN, "Multi-character character constant");
+            cctx_diagnostic(ctx->cctx, pre_tkn->pos, DIAG_WARN, "Multi-character character constant");
         }
         free(ptr);
         return (token_t){
-            .pos        = pos,
+            .pos        = pre_tkn->pos,
             .type       = TOKENTYPE_CCONST,
             .ival       = val,
             .strval     = NULL,
@@ -513,7 +659,7 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
     } else {
         array_lencap_insert_strong(&ptr, 1, &len, &cap, "", len);
         return (token_t){
-            .pos        = pos,
+            .pos        = pre_tkn->pos,
             .type       = TOKENTYPE_SCONST,
             .strval     = ptr,
             .strval_len = len - 1,
@@ -522,43 +668,6 @@ static token_t c_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
             .params     = NULL,
         };
     }
-}
-
-// Angle-bracket `<>` string.
-static token_t c_tkn_anglestr(tokenizer_t *ctx, pos_t start_pos) {
-    size_t cap = 32;
-    size_t len = 0;
-    char  *buf = strong_malloc(cap);
-    pos_t  end_pos;
-
-    while (1) {
-        int c = srcfile_getc(ctx->file, &end_pos);
-        if (c == -1 || c == '\n') {
-            cctx_diagnostic(ctx->cctx, end_pos, DIAG_ERR, "Expected >");
-            cctx_diagnostic(ctx->cctx, start_pos, DIAG_HINT, "To match this <");
-            break;
-        } else if (c == '>') {
-            break;
-        } else {
-            if (c >= 0x80) {
-                uint8_t utf8_len = utf8_encode(NULL, 0, c);
-                array_lencap_resize_strong(&buf, 1, &len, &cap, len + utf8_len);
-                utf8_encode(buf + len - utf8_len, utf8_len, c);
-            } else {
-                uint8_t tmp = c;
-                array_lencap_insert_strong(&buf, 1, &len, &cap, &tmp, len);
-            }
-        }
-    }
-
-    array_lencap_insert_strong(&buf, 1, &len, &cap, "", len);
-    return (token_t){
-        .pos        = pos_including(start_pos, end_pos),
-        .type       = TOKENTYPE_SCONST,
-        .subtype    = C_STR_ANGLEBRAC,
-        .strval     = buf,
-        .strval_len = len - 1, // -1 excludes the NUL terminator
-    };
 }
 
 // Read in a span of whitespace as a token.
@@ -653,37 +762,53 @@ retry:
 
     // Strings.
     if (c == '\'') {
-        return c_tkn_str(ctx, pos0, true);
+        token_t tkn = c_tkn_pre_str(ctx, pos0, C_STR_RAW_SQUOT);
+        if (c_ctx->preproc_mode) {
+            return tkn;
+        }
+        token_t res = c_tkn_conv_str(ctx, &tkn);
+        tkn_delete(tkn);
+        return res;
     } else if (c == '\"') {
-        return c_tkn_str(ctx, pos0, false);
+        token_t tkn = c_tkn_pre_str(ctx, pos0, C_STR_RAW_DQUOT);
+        if (c_ctx->preproc_mode) {
+            return tkn;
+        }
+        token_t res = c_tkn_conv_str(ctx, &tkn);
+        tkn_delete(tkn);
+        return res;
     } else if (c == '<' && c_ctx->str_anglebrac) {
-        return c_tkn_anglestr(ctx, pos0);
+        return c_tkn_pre_str(ctx, pos0, C_STR_ANGLEBRAC);
     }
 
     // Numeric constants.
-    if (c == '0') {
+    if (c == '.') {
         // Hex, binary, octal.
         pos_t pos2 = ctx->pos;
         int   c2   = srcfile_getc(ctx->file, &pos2);
-        if (c2 == 'x' || c2 == 'X') {
-            // Hexadecimal.
-            ctx->pos = pos2;
-            return c_tkn_integer(ctx, pos0, 16);
-        } else if (c2 == 'b' || c2 == 'B') {
-            // GNU extension: Binary.
-            ctx->pos = pos2;
-            return c_tkn_integer(ctx, pos0, 2);
-        } else {
-            // Octal.
-            ctx->pos = pos0;
-            return c_tkn_integer(ctx, pos0, 8);
+        if (c2 >= '0' && c2 <= '9') {
+            // Numeric (starting with `.` and digit).
+            ctx->pos    = pos2;
+            token_t tkn = c_tkn_pre_number(ctx);
+            if (c_ctx->preproc_mode) {
+                return tkn;
+            }
+            token_t res = c_tkn_conv_number(ctx, &tkn);
+            tkn_delete(tkn);
+            return res;
         }
     }
 
-    // Decimal constants.
-    if (c >= '1' && c <= '9') {
-        ctx->pos = pos0;
-        return c_tkn_integer(ctx, pos0, 10);
+    // Numeric (starting with a digit).
+    if (c >= '0' && c <= '9') {
+        ctx->pos    = pos0;
+        token_t tkn = c_tkn_pre_number(ctx);
+        if (c_ctx->preproc_mode) {
+            return tkn;
+        }
+        token_t res = c_tkn_conv_number(ctx, &tkn);
+        tkn_delete(tkn);
+        return res;
     }
 
     // Identifiers.

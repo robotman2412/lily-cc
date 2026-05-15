@@ -4,18 +4,9 @@
 // SPDX-License-Identifier: MIT
 
 #include "c_preproc.h"
+#include "c_tokenizer.h"
 
 #include <stdio.h>
-#include <stdlib.h>
-
-static void print_srcfile_range(srcfile_t *src, off_t off, off_t len, FILE *to) {
-    for (off_t i = 0; i < len; i++) {
-        int c = srcfile_readb(src, off + i);
-        if (c < 0)
-            break;
-        fputc(c, to);
-    }
-}
 
 static void preprocess(char const *path) {
     cctx_t    *cctx = cctx_create();
@@ -32,17 +23,13 @@ static void preprocess(char const *path) {
     }
     pre->raw_mode = true;
 
-    // pos_t prev = {0};
     while (1) {
         token_t tkn = c_preproc_next(&pre->base);
         if (tkn.type == TOKENTYPE_EOF) {
             tkn_delete(tkn);
             break;
         }
-
-        print_srcfile_range(tkn.pos.srcfile, tkn.pos.off, tkn.pos.len, stdout);
-
-        // prev = tkn.pos;
+        c_tkn_print_src(&tkn, stdout);
         tkn_delete(tkn);
     }
     fputc('\n', stdout);

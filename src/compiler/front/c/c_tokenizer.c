@@ -1049,7 +1049,17 @@ void c_tkn_print_src(token_t const *pre_tkn, FILE *to) {
         case TOKENTYPE_OTHER: fputs(c_tokentype_name[pre_tkn->subtype], to); break;
         case TOKENTYPE_IDENT:
         case TOKENTYPE_GARBAGE:
-        case TOKENTYPE_WHITESPACE: fwrite(pre_tkn->strval, 1, pre_tkn->strval_len, to); break;
+        case TOKENTYPE_WHITESPACE:
+            if (pre_tkn->subtype == C_LINE_COMMENT) {
+                fputs("//", to);
+            } else if (pre_tkn->subtype == C_BLOCK_COMMENT) {
+                fputs("/*", to);
+            }
+            fwrite(pre_tkn->strval, 1, pre_tkn->strval_len, to);
+            if (pre_tkn->subtype == C_BLOCK_COMMENT) {
+                fputs("*/", to);
+            }
+            break;
         case TOKENTYPE_EOL: fputc('\n', to); break;
         case TOKENTYPE_EOF: break;
         default: abort(); // Not a valid preprocessor token.

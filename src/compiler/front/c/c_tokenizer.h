@@ -92,6 +92,8 @@ token_t  c_tkn_next(tokenizer_t *ctx);
 // Try to find the matching C keyword.
 // Returns -1 if not a keyword in the current C standard.
 c_keyw_t c_keyw_get(int c_std, char const *name);
+// Print the source representation of a token.
+void     c_tkn_print_src(token_t const *pre_tkn, FILE *to);
 
 
 // Test if a token is a certain keyword.

@@ -675,6 +675,10 @@ static token_t c_tkn_whitespace(tokenizer_t *ctx, pos_t start_pos, c_whitespace_
     bool esc  = false;
     int  prev = 0;
 
+    size_t len = 0;
+    size_t cap = 32;
+    char  *buf = strong_malloc(cap);
+
     while (1) {
         pos_t pos = ctx->pos;
         int   c   = srcfile_getc(ctx->file, &pos);
@@ -691,17 +695,24 @@ static token_t c_tkn_whitespace(tokenizer_t *ctx, pos_t start_pos, c_whitespace_
         } else {
             assert(subtype == C_BLOCK_COMMENT);
             if (c == '/' && prev == '*') {
+                len--; // Exclude the `*` from the `*/`.
                 break;
             }
             prev = c;
         }
+        char    enc[4];
+        uint8_t enc_len = utf8_encode(enc, sizeof(enc), c);
+        array_lencap_insert_n_strong(&buf, 1, &len, &cap, enc, len, enc_len);
         ctx->pos = pos;
     }
 
+    array_lencap_insert_strong(&buf, 1, &len, &cap, "", len);
     return (token_t){
-        .pos     = pos_including(start_pos, ctx->pos),
-        .type    = TOKENTYPE_WHITESPACE,
-        .subtype = subtype,
+        .pos        = pos_including(start_pos, ctx->pos),
+        .type       = TOKENTYPE_WHITESPACE,
+        .subtype    = subtype,
+        .strval     = buf,
+        .strval_len = len - 1,
     };
 }
 
@@ -1014,4 +1025,33 @@ c_keyw_t c_keyw_get(int c_std, char const *name) {
     }
 
     return C_N_KEYWS;
+}
+
+// Print the source representation of a token.
+void c_tkn_print_src(token_t const *pre_tkn, FILE *to) {
+    switch (pre_tkn->type) {
+        case TOKENTYPE_KEYWORD: fputs(c_keywords[pre_tkn->subtype], to); break;
+        case TOKENTYPE_SCONST:
+            switch (pre_tkn->subtype) {
+                case C_STR_ANGLEBRAC: fputc('<', to); break;
+                case C_STR_RAW_DQUOT: fputc('\"', to); break;
+                case C_STR_RAW_SQUOT: fputc('\'', to); break;
+                default: abort(); // Not a valid preprocessor token.
+            }
+            fwrite(pre_tkn->strval, 1, pre_tkn->strval_len, to);
+            switch (pre_tkn->subtype) {
+                case C_STR_ANGLEBRAC: fputc('>', to); break;
+                case C_STR_RAW_DQUOT: fputc('\"', to); break;
+                case C_STR_RAW_SQUOT: fputc('\'', to); break;
+                default: abort(); // Not a valid preprocessor token.
+            }
+            break;
+        case TOKENTYPE_OTHER: fputs(c_tokentype_name[pre_tkn->subtype], to); break;
+        case TOKENTYPE_IDENT:
+        case TOKENTYPE_GARBAGE:
+        case TOKENTYPE_WHITESPACE: fwrite(pre_tkn->strval, 1, pre_tkn->strval_len, to); break;
+        case TOKENTYPE_EOL: fputc('\n', to); break;
+        case TOKENTYPE_EOF: break;
+        default: abort(); // Not a valid preprocessor token.
+    }
 }

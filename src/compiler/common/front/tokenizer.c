@@ -105,6 +105,34 @@ void tkn_delete(token_t token) {
     }
 }
 
+// Perform a deep copy of a token.
+token_t tkn_clone(token_t const *token) {
+    token_t out = {
+        .pos        = token->pos,
+        .type       = token->type,
+        .subtype    = token->subtype,
+        .ival       = token->ival,
+        .ivalh      = token->ivalh,
+        .strval_len = token->strval_len,
+        .params_len = token->params_len,
+    };
+
+    if (token->strval_len) {
+        out.strval = strong_malloc(token->strval_len + 1);
+        memcpy(out.strval, token->strval, token->strval_len);
+        out.strval[token->strval_len] = 0;
+    }
+
+    if (token->params_len) {
+        out.params = strong_calloc(token->params_len, sizeof(token_t));
+        for (size_t i = 0; i < token->params_len; i++) {
+            out.params[i] = tkn_clone(&token->params[i]);
+        }
+    }
+
+    return out;
+}
+
 // Delete an array of tokens and each token within.
 void tkn_arr_delete(size_t tokens_len, token_t *tokens) {
     for (size_t i = 0; i < tokens_len; i++) {

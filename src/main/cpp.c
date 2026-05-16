@@ -16,7 +16,7 @@ static void preprocess(char const *path) {
         cctx_delete(cctx);
         return;
     }
-    c_preproc_t *pre = c_preproc_create(src, C_STD_def);
+    c_preproc_t *pre = c_preproc_create(src, C_STD_def, true, true);
     if (!pre) {
         cctx_delete(cctx);
         return;

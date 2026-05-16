@@ -1,0 +1,34 @@
+
+// This file breaks clang-format, even with the following comment.
+// Make sure to save without formatting (`^Ks` in VS code).
+// clang-format off
+
+#define COMMA ,
+
+#define F0() F1()
+#define F1   F0
+F0() // F0()
+
+#define A(A, B, C) A | B | C
+A(A, B, C) // A | B | C
+A(, , )    // | |
+
+#define PASTE(A, B) A##B
+PASTE(foo, .123)    // Invalid paste
+PASTE(.123, foo)    // .123foo
+PASTE(COMMA, COMMA) // Invalid paste
+PASTE(0abc0, .123)  // 0abc0.123
+PASTE(foo, bar)     // foobar
+
+#define STR(x)  # x
+#define STR2(x) STR(x)
+STR(This is some text) // "This is some text"
+STR(PASTE(foo, bar))   // "PASTE(foo, bar)"
+STR2(PASTE(foo, bar))  // "foobar"
+STR(, )                // Too many arguments
+
+#define STR3(x) # # x // Invalid definition
+#define F2(,)         // Invalid definition
+#define F2(           // Invalid definition
+#define F2(a,         // Invalid definition
+#define F2(a          // Invalid definition

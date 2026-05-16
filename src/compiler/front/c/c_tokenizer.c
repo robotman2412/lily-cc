@@ -112,23 +112,23 @@ static token_t c_tkn_pre_number(tokenizer_t *ctx) {
     char  *buf = strong_malloc(cap);
 
     pos_t pos0 = ctx->pos;
-    int   c    = srcfile_getc(ctx->file, &ctx->pos);
+    int   c    = c_srcfile_getc(ctx->file, &ctx->pos);
     array_lencap_insert_strong(&buf, 1, &len, &cap, (char[]){(char)c}, len);
     if (c == '.') {
         // `.` followed by digit (otherwise, just a digit).
-        c = srcfile_getc(ctx->file, &ctx->pos);
+        c = c_srcfile_getc(ctx->file, &ctx->pos);
         array_lencap_insert_strong(&buf, 1, &len, &cap, (char[]){(char)c}, len);
     }
 
     while (1) {
         pos_t pos1 = ctx->pos;
-        c          = srcfile_getc(ctx->file, &pos1);
+        c          = c_srcfile_getc(ctx->file, &pos1);
         if (c == '.') {
             array_lencap_insert_strong(&buf, 1, &len, &cap, ".", len);
             ctx->pos = pos1;
         } else if (c == 'e' || c == 'E' || c == 'p' || c == 'P') {
             pos_t pos2 = pos1;
-            int   c2   = srcfile_getc(ctx->file, &pos2);
+            int   c2   = c_srcfile_getc(ctx->file, &pos2);
             if (c2 == '+' || c2 == '-') {
                 char enc[] = {(char)c, (char)c2};
                 array_lencap_insert_n_strong(&buf, 1, &len, &cap, enc, len, 2);
@@ -143,7 +143,7 @@ static token_t c_tkn_pre_number(tokenizer_t *ctx) {
             array_lencap_insert_n_strong(&buf, 1, &len, &cap, enc, len, enc_len);
             ctx->pos = pos1;
         } else if (c == '\'') {
-            int c2 = srcfile_getc(ctx->file, &pos1);
+            int c2 = c_srcfile_getc(ctx->file, &pos1);
             if (c_is_sym_char(c2)) {
                 char enc[5]  = {'\''};
                 int  enc_len = utf8_encode(enc + 1, 4, c2);
@@ -398,7 +398,7 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
     pos_t pos1;
     while (1) {
         pos1  = pos0;
-        int c = srcfile_getc(ctx->file, &pos1);
+        int c = c_srcfile_getc(ctx->file, &pos1);
         if (!c_is_sym_char(c)) {
             // End of identifier.
             break;
@@ -474,12 +474,12 @@ static token_t c_tkn_pre_str(tokenizer_t *ctx, pos_t start_pos, c_strtype_t subt
     }
 
     // Skip start char.
-    srcfile_getc(ctx->file, &end_pos);
+    c_srcfile_getc(ctx->file, &end_pos);
     pos_t open_pos = pos_between(start_pos, end_pos);
     bool  esc      = false;
     while (1) {
         pos_t pos1 = end_pos;
-        int   c    = srcfile_getc(ctx->file, &end_pos);
+        int   c    = c_srcfile_getc(ctx->file, &end_pos);
         if (c == -1 || c == '\n') {
             cctx_diagnostic(ctx->cctx, pos1, DIAG_ERR, "Expected %c", end);
             cctx_diagnostic(ctx->cctx, open_pos, DIAG_HINT, "To match this %c", start);
@@ -672,43 +672,54 @@ token_t c_tkn_conv_str(tokenizer_t *ctx, token_t const *pre_tkn) {
 
 // Read in a span of whitespace as a token.
 static token_t c_tkn_whitespace(tokenizer_t *ctx, pos_t start_pos, c_whitespace_t subtype) {
-    bool esc  = false;
-    int  prev = 0;
+    c_tokenizer_t *c_ctx = (c_tokenizer_t *)ctx;
+    int            prev  = 0;
 
     size_t len = 0;
     size_t cap = 32;
     char  *buf = strong_malloc(cap);
 
+    pos_t pos;
     while (1) {
-        pos_t pos = ctx->pos;
-        int   c   = srcfile_getc(ctx->file, &pos);
+        pos   = ctx->pos;
+        int c = c_srcfile_getc(ctx->file, &pos);
         if (subtype == C_WHITESPACE) {
-            if (c > 0x20) {
+            if (c > 0x20 || c == -1) {
                 break;
             }
         } else if (subtype == C_LINE_COMMENT) {
-            if (c == '\\' && !esc) {
-                esc = true;
-            } else if (c == '\n' && !esc) {
+            if (c == '\n' || c == -1) {
                 break;
             }
         } else {
             assert(subtype == C_BLOCK_COMMENT);
-            if (c == '/' && prev == '*') {
+            if (c == -1) {
+                cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Unterminated block comment");
+                break;
+            } else if (c == '/' && prev == '*') {
                 len--; // Exclude the `*` from the `*/`.
                 break;
             }
             prev = c;
         }
-        char    enc[4];
-        uint8_t enc_len = utf8_encode(enc, sizeof(enc), c);
-        array_lencap_insert_n_strong(&buf, 1, &len, &cap, enc, len, enc_len);
+        if (c_ctx->keep_comments || subtype == C_WHITESPACE) {
+            char    enc[4];
+            uint8_t enc_len = utf8_encode(enc, sizeof(enc), c);
+            array_lencap_insert_n_strong(&buf, 1, &len, &cap, enc, len, enc_len);
+        }
         ctx->pos = pos;
     }
 
-    array_lencap_insert_strong(&buf, 1, &len, &cap, "", len);
+    if (c_ctx->keep_comments || subtype == C_WHITESPACE) {
+        array_lencap_insert_strong(&buf, 1, &len, &cap, "", len);
+    } else {
+        buf[0]  = ' ';
+        buf[1]  = 0;
+        len     = 2;
+        subtype = C_WHITESPACE;
+    }
     return (token_t){
-        .pos        = pos_including(start_pos, ctx->pos),
+        .pos        = pos_between(start_pos, pos),
         .type       = TOKENTYPE_WHITESPACE,
         .subtype    = subtype,
         .strval     = buf,
@@ -719,9 +730,9 @@ static token_t c_tkn_whitespace(tokenizer_t *ctx, pos_t start_pos, c_whitespace_
 // A line comment.
 static void c_line_comment(tokenizer_t *ctx) {
     while (1) {
-        int c = srcfile_getc(ctx->file, &ctx->pos);
+        int c = c_srcfile_getc(ctx->file, &ctx->pos);
         if (c == '\\') {
-            srcfile_getc(ctx->file, &ctx->pos);
+            c_srcfile_getc(ctx->file, &ctx->pos);
         } else if (c == '\n') {
             break;
         }
@@ -732,12 +743,32 @@ static void c_line_comment(tokenizer_t *ctx) {
 static void c_block_comment(tokenizer_t *ctx) {
     int prev = 0;
     while (1) {
-        int c = srcfile_getc(ctx->file, &ctx->pos);
+        int c = c_srcfile_getc(ctx->file, &ctx->pos);
         if (c == '/' && prev == '*') {
             return;
         }
         prev = c;
     }
+}
+
+// Wrapper around `srcfile_getc` that handles `\` for newline escapes.
+int c_srcfile_getc(srcfile_t *file, pos_t *pos) {
+    int c = srcfile_getc(file, pos);
+
+    if (c == '\\') {
+        pos_t pos1 = *pos;
+        while (1) {
+            int c2 = srcfile_getc(file, &pos1);
+            if (c2 == '\n') {
+                *pos = pos1;
+                return srcfile_getc(file, pos);
+            } else if (c2 == -1 || c > 0x20) {
+                break;
+            }
+        }
+    }
+
+    return c;
 }
 
 // Get next token from C tokenizer.
@@ -747,7 +778,7 @@ token_t c_tkn_next(tokenizer_t *ctx) {
 
 retry:
     pos0  = ctx->pos;
-    int c = srcfile_getc(ctx->file, &ctx->pos);
+    int c = c_srcfile_getc(ctx->file, &ctx->pos);
 #define pos1 ctx->pos
 
     if (c == -1) {
@@ -797,7 +828,7 @@ retry:
     if (c == '.') {
         // Hex, binary, octal.
         pos_t pos2 = ctx->pos;
-        int   c2   = srcfile_getc(ctx->file, &pos2);
+        int   c2   = c_srcfile_getc(ctx->file, &pos2);
         if (c2 >= '0' && c2 <= '9') {
             // Numeric (starting with `.` and digit).
             ctx->pos    = pos2;
@@ -846,7 +877,7 @@ retry:
 
     // Possibly multi-character tokens.
     pos_t pos2 = ctx->pos;
-    int   c2   = srcfile_getc(ctx->file, &pos2);
+    int   c2   = c_srcfile_getc(ctx->file, &pos2);
     if (c == '#' && c_ctx->preproc_mode) {
         if (c2 == '#') {
             ctx->pos = pos2;
@@ -857,7 +888,7 @@ retry:
     } else if (c == '.') {
         if (c2 == '.') {
             pos_t pos3 = pos2;
-            int   c3   = srcfile_getc(ctx->file, &pos3);
+            int   c3   = c_srcfile_getc(ctx->file, &pos3);
             if (c3 == '.') {
                 ctx->pos = pos3;
                 return other_tkn(C_TKN_VARARG, pos0, pos3);
@@ -948,7 +979,7 @@ retry:
     } else if (c == '<') {
         if (c2 == '<') {
             pos_t pos3 = pos2;
-            int   c3   = srcfile_getc(ctx->file, &pos3);
+            int   c3   = c_srcfile_getc(ctx->file, &pos3);
             if (c3 == '=') {
                 ctx->pos = pos3;
                 return other_tkn(C_TKN_SHL_S, pos0, pos3);
@@ -965,7 +996,7 @@ retry:
     } else if (c == '>') {
         if (c2 == '>') {
             pos_t pos3 = pos2;
-            int   c3   = srcfile_getc(ctx->file, &pos3);
+            int   c3   = c_srcfile_getc(ctx->file, &pos3);
             if (c3 == '=') {
                 ctx->pos = pos3;
                 return other_tkn(C_TKN_SHR_S, pos0, pos3);
@@ -1006,10 +1037,14 @@ retry:
     }
 
     // At this point, it's garbage.
+    char   *c_str     = malloc(5);
+    uint8_t c_str_len = utf8_encode(c_str, 4, c);
+    c_str[c_str_len]  = 0;
     return (token_t){
         .pos        = pos2,
         .type       = TOKENTYPE_GARBAGE,
-        .strval     = NULL,
+        .strval     = c_str,
+        .strval_len = c_str_len,
         .ival       = 0,
         .params_len = 0,
         .params     = NULL,

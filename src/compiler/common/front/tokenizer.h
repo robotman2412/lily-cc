@@ -69,9 +69,11 @@ void    tkn_unget(tokenizer_t *tkn_ctx, token_t token);
 int tkn_getc(token_t const *tkn, tknoff_t *off);
 
 // Delete a token's dynamic memory (`strval` and `params`).
-void tkn_delete(token_t token);
+void    tkn_delete(token_t token);
+// Perform a deep copy of a token.
+token_t tkn_clone(token_t const *token);
 // Delete an array of tokens and each token within.
-void tkn_arr_delete(size_t tokens_len, token_t *tokens);
+void    tkn_arr_delete(size_t tokens_len, token_t *tokens);
 
 // Tests whether a character is a valid hexadecimal constant character ([0-9a-fA-F]).
 bool is_hex_char(int c);

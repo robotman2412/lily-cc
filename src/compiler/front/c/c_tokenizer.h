@@ -61,6 +61,8 @@ struct c_tokenizer {
     bool        preproc_mode;
     // Enable the angle-bracket `<>` strings used by `#include`.
     bool        str_anglebrac;
+    // Keep comments instead of replacing them with a single space each.
+    bool        keep_comments;
 };
 
 
@@ -87,6 +89,8 @@ token_t c_tkn_conv_number(tokenizer_t *ctx, token_t const *pre_tkn);
 // Tokenize string or character constant.
 token_t c_tkn_conv_str(tokenizer_t *ctx, token_t const *pre_tkn);
 
+// Wrapper around `srcfile_getc` that handles `\` for newline escapes.
+int      c_srcfile_getc(srcfile_t *srcfile, pos_t *pos);
 // Get next token from C tokenizer.
 token_t  c_tkn_next(tokenizer_t *ctx);
 // Try to find the matching C keyword.

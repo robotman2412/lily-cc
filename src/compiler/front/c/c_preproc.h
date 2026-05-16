@@ -26,7 +26,7 @@ typedef struct c_macro     c_macro_t;
 // Expanded macro value.
 typedef struct c_expansion c_expansion_t;
 // Procedural macro callback.
-typedef c_expansion_t (*c_proc_macro_cb_t)(c_preproc_t *pre, token_t *args, size_t args_len, void *cookie);
+typedef c_expansion_t (*c_proc_macro_cb_t)(c_preproc_t *pre, token_t const *args, size_t args_len, void *cookie);
 
 // C preprocessor state.
 struct c_preproc {
@@ -57,6 +57,10 @@ struct c_preproc {
     bool           blank_line;
     // Do not convert tokens to C tokens before emitting them.
     bool           raw_mode;
+    // Keep comments instead of replacing them with a single space each.
+    bool           keep_comments;
+    // Next value for `__COUNTER__`.
+    uint64_t       counter_macro;
 };
 
 // Include-file stack entry.
@@ -89,6 +93,8 @@ struct c_macro {
             bool is_proc_macro;
             // Is a built-in macro (that shouldn't be undefined).
             bool is_builtin;
+            // Is a function-like macro.
+            bool uses_args;
         };
         struct {
             // Alias of `is_proc_macro`.
@@ -97,6 +103,8 @@ struct c_macro {
             bool     is_builtin;
             // Variadic macros (with ...).
             bool     variadic;
+            // Alias of `uses_args`; the amount is specifiead by `args_len`.
+            bool     uses_args;
             // Number of non-variadic arguments.
             size_t   args_len;
             // Argument names.
@@ -111,7 +119,7 @@ struct c_macro {
             bool              is_proc_macro;
             // Alias of `is_builtin`.
             bool              is_builtin;
-            // Takes arguments; the amount is to be checked by the callback.
+            // Alias of `uses_args`; the amount is to be checked by the callback.
             bool              uses_args;
             // Callback to run on invocation.
             c_proc_macro_cb_t callback;
@@ -136,7 +144,9 @@ struct c_expansion {
 
 
 // Create a preprocessor for a certain file.
-c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std);
+// See `c_preproc_t` for details about `raw_mode` and `keep_comments`.
+// Applying either flag after creation of the preprocessor will create incorrect output.
+c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std, bool raw_mode, bool keep_comments);
 // Get the next token from the preprocessor.
 token_t      c_preproc_next(tokenizer_t *tkn_ctx);
 // Convert a preprocessor token to a C token.

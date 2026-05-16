@@ -115,8 +115,6 @@ diagnostic_t *cctx_diagnostic(cctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const
     return diag;
 }
 
-// Helper function that determines what
-
 // Print a diagnostic.
 void print_diagnostic(diagnostic_t const *diag, FILE *to) {
     char const *const color[] = {
@@ -164,22 +162,29 @@ void print_diagnostic(diagnostic_t const *diag, FILE *to) {
     off_t line_start = off;
     bool  draw       = false;
     fprintf(to, "%5d | ", line);
-    for (int x = 0; x < max_chars; x++) {
+    bool eof = false;
+    for (int x = 0; x < max_chars && !eof; x++) {
         // The bit that prints the line.
         if (off == diag->pos.off + diag->pos.len) {
             color_fputs(ANSI_DEFAULT, to);
         } else if (off == diag->pos.off) {
             color_fputs(color[diag->lvl], to);
         }
-        int c = srcfile_getc_raw(pos.srcfile, &off);
-        if (c < 0) {
-            break;
+        int c;
+        if (x == max_chars - 1) {
+            c = '\n';
+        } else {
+            c = srcfile_getc_raw(pos.srcfile, &off);
+            if (c < 0) {
+                eof = true;
+                c   = '\n';
+            }
         }
         char buf[4];
         fwrite(buf, 1, utf8_encode(buf, 4, c), to);
 
         // The bit that prints the arrow.
-        if (c == '\n' || x >= max_chars) {
+        if (c == '\n') {
             if (draw) {
                 color_fputs(ANSI_DEFAULT, to);
             }

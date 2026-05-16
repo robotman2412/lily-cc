@@ -18,6 +18,28 @@
 #error fail
 #endif
 
+// Expression test: evaluates to false
+#if defined NO
+#error fail
+#endif
+
+// Expression test: evaluates to false
+#if defined ( NO )
+#error fail
+#endif
+
+// Expression test: evaluates to true
+#if defined YES
+#else
+#error fail
+#endif
+
+// Expression test: evaluates to true
+#if defined ( YES )
+#else
+#error fail
+#endif
+
 // Should be: branch 1
 #ifdef YES
 // Branch 1

@@ -161,18 +161,18 @@ static token_t c_tkn_pre_number(tokenizer_t *ctx) {
     return (token_t){
         .pos        = pos_including(pos0, ctx->pos),
         .type       = TOKENTYPE_IDENT,
+        .subtype    = C_PPNUMBER,
         .strval     = buf,
         .strval_len = len - 1,
     };
 }
 
 // Convert preprocessing number token to C number token.
-token_t c_tkn_conv_number(tokenizer_t *ctx, token_t const *pre_tkn) {
-    c_tokenizer_t *c_ctx    = (c_tokenizer_t *)ctx;
-    i128_t         val      = int128(0, 0);
-    bool           hasdat   = false;
-    bool           toolarge = false;
-    bool           invalid  = false;
+token_t c_tkn_conv_number(cctx_t *cctx, int c_std, token_t const *pre_tkn) {
+    i128_t val      = int128(0, 0);
+    bool   hasdat   = false;
+    bool   toolarge = false;
+    bool   invalid  = false;
 
     tknoff_t     off0 = {0};
     tknoff_t     off1 = off0;
@@ -203,7 +203,7 @@ token_t c_tkn_conv_number(tokenizer_t *ctx, token_t const *pre_tkn) {
         } else if ((c | 0x20) >= 'a' && (c | 0x20) <= 'f') {
             // Valid digit a-f / A-F.
             digit = (c | 0x20) - 'a' + 10;
-        } else if (hasdat && c == '\'' && c_ctx->c_std >= C_STD_C23) {
+        } else if (hasdat && c == '\'' && c_std >= C_STD_C23) {
             // A separator.
             hasdat = false;
             off0   = off1;
@@ -331,7 +331,7 @@ token_t c_tkn_conv_number(tokenizer_t *ctx, token_t const *pre_tkn) {
         pos.len   -= (off_t)lit_end.offset;
         pos.col   += lit_end.col_offset;
         pos.line  += lit_end.line_offset;
-        cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Invalid literal suffix");
+        cctx_diagnostic(cctx, pos, DIAG_ERR, "Invalid literal suffix");
     }
 
     if (invalid || !hasdat) {
@@ -344,7 +344,7 @@ token_t c_tkn_conv_number(tokenizer_t *ctx, token_t const *pre_tkn) {
             case 16: ctype = "hexadecimal"; break;
             default: abort();
         }
-        cctx_diagnostic(ctx->cctx, pre_tkn->pos, DIAG_ERR, "Invalid %s constant", ctype);
+        cctx_diagnostic(cctx, pre_tkn->pos, DIAG_ERR, "Invalid %s constant", ctype);
         return (token_t){
             .type       = TOKENTYPE_ICONST,
             .pos        = pre_tkn->pos,
@@ -365,7 +365,7 @@ token_t c_tkn_conv_number(tokenizer_t *ctx, token_t const *pre_tkn) {
             snprintf(hex, sizeof(hex), "%" PRIx64 "%016" PRIx64, hi64(val), lo64(val));
         }
         cctx_diagnostic(
-            ctx->cctx,
+            cctx,
             pre_tkn->pos,
             DIAG_WARN,
             "Constant is too large and was truncated to %s (0x%s)",
@@ -441,7 +441,7 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
         .type       = TOKENTYPE_IDENT,
         .strval     = ptr,
         .strval_len = len,
-        .subtype    = 0,
+        .subtype    = C_IDENT,
         .params_len = 0,
         .params     = NULL,
     };
@@ -511,7 +511,7 @@ static token_t c_tkn_pre_str(tokenizer_t *ctx, pos_t start_pos, c_strtype_t subt
 }
 
 // Hex parsing helper for strings.
-static int c_str_conv_hex(tokenizer_t *ctx, token_t const *pre_tkn, tknoff_t *off, int min_w, int max_w) {
+static int c_str_conv_hex(cctx_t *cctx, token_t const *pre_tkn, tknoff_t *off, int min_w, int max_w) {
     int      value = 0;
     tknoff_t off0  = *off;
     tknoff_t off1;
@@ -531,7 +531,7 @@ static int c_str_conv_hex(tokenizer_t *ctx, token_t const *pre_tkn, tknoff_t *of
                 pos.col   += off->col_offset;
                 pos.line  += off->line_offset;
                 pos.len    = (off_t)(off0.offset - off->offset);
-                cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Invalid hexadecimal escape sequence");
+                cctx_diagnostic(cctx, pos, DIAG_ERR, "Invalid hexadecimal escape sequence");
             }
             break;
         }
@@ -542,8 +542,8 @@ static int c_str_conv_hex(tokenizer_t *ctx, token_t const *pre_tkn, tknoff_t *of
 }
 
 // Octal parsing helper for strings.
-static int c_str_conv_octal(tokenizer_t *ctx, token_t const *pre_tkn, tknoff_t *off, int first, int max_w) {
-    (void)ctx;
+static int c_str_conv_octal(cctx_t *cctx, token_t const *pre_tkn, tknoff_t *off, int first, int max_w) {
+    (void)cctx;
     int      value = first - '0';
     tknoff_t off0  = *off;
     tknoff_t off1;
@@ -563,7 +563,8 @@ static int c_str_conv_octal(tokenizer_t *ctx, token_t const *pre_tkn, tknoff_t *
 }
 
 // Convert preprocessing string token to C string token.
-token_t c_tkn_conv_str(tokenizer_t *ctx, token_t const *pre_tkn) {
+token_t c_tkn_conv_str(cctx_t *cctx, int c_std, token_t const *pre_tkn) {
+    (void)c_std;
     size_t cap     = 32;
     size_t len     = 0;
     char  *ptr     = strong_malloc(cap);
@@ -583,20 +584,20 @@ token_t c_tkn_conv_str(tokenizer_t *ctx, token_t const *pre_tkn) {
 
             if (c == 'U') {
                 // 8-hexit unicode point.
-                c = c_str_conv_hex(ctx, pre_tkn, &off, 8, 8);
+                c = c_str_conv_hex(cctx, pre_tkn, &off, 8, 8);
             } else if (c == 'u') {
                 // 4-hexit unicode point.
                 as_utf8 = true;
-                c       = c_str_conv_hex(ctx, pre_tkn, &off, 4, 4);
+                c       = c_str_conv_hex(cctx, pre_tkn, &off, 4, 4);
             } else if (c == 'x') {
                 // Hexadecimal (of any length (because of course that's logical (it isn't))).
-                c = c_str_conv_hex(ctx, pre_tkn, &off, 1, 32767);
+                c = c_str_conv_hex(cctx, pre_tkn, &off, 1, 32767);
             } else if (c >= '0' && c <= '3') {
                 // 1- to 3-digit octal.
-                c = c_str_conv_octal(ctx, pre_tkn, &off, c, 3);
+                c = c_str_conv_octal(cctx, pre_tkn, &off, c, 3);
             } else if (c >= '4' && c <= '7') {
                 // 1- or 2-digit octal.
-                c = c_str_conv_octal(ctx, pre_tkn, &off, c, 2);
+                c = c_str_conv_octal(cctx, pre_tkn, &off, c, 2);
             } else {
                 // Single-character escape sequences.
                 switch (c) {
@@ -618,7 +619,7 @@ token_t c_tkn_conv_str(tokenizer_t *ctx, token_t const *pre_tkn) {
                         pos.col   += off0.col_offset;
                         pos.line  += off0.line_offset;
                         pos.len    = (off_t)(off.offset - off0.offset);
-                        cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Invalid escape sequence");
+                        cctx_diagnostic(cctx, pos, DIAG_ERR, "Invalid escape sequence");
                     } break;
                 }
             }
@@ -642,9 +643,9 @@ token_t c_tkn_conv_str(tokenizer_t *ctx, token_t const *pre_tkn) {
             val  |= ptr[i];
         }
         if (len == 0) {
-            cctx_diagnostic(ctx->cctx, pre_tkn->pos, DIAG_ERR, "Empty character constant");
+            cctx_diagnostic(cctx, pre_tkn->pos, DIAG_ERR, "Empty character constant");
         } else if (len > 1) {
-            cctx_diagnostic(ctx->cctx, pre_tkn->pos, DIAG_WARN, "Multi-character character constant");
+            cctx_diagnostic(cctx, pre_tkn->pos, DIAG_WARN, "Multi-character character constant");
         }
         free(ptr);
         return (token_t){
@@ -809,7 +810,7 @@ retry:
         if (c_ctx->preproc_mode) {
             return tkn;
         }
-        token_t res = c_tkn_conv_str(ctx, &tkn);
+        token_t res = c_tkn_conv_str(ctx->cctx, c_ctx->c_std, &tkn);
         tkn_delete(tkn);
         return res;
     } else if (c == '\"') {
@@ -817,7 +818,7 @@ retry:
         if (c_ctx->preproc_mode) {
             return tkn;
         }
-        token_t res = c_tkn_conv_str(ctx, &tkn);
+        token_t res = c_tkn_conv_str(ctx->cctx, c_ctx->c_std, &tkn);
         tkn_delete(tkn);
         return res;
     } else if (c == '<' && c_ctx->str_anglebrac) {
@@ -836,7 +837,7 @@ retry:
             if (c_ctx->preproc_mode) {
                 return tkn;
             }
-            token_t res = c_tkn_conv_number(ctx, &tkn);
+            token_t res = c_tkn_conv_number(ctx->cctx, c_ctx->c_std, &tkn);
             tkn_delete(tkn);
             return res;
         }
@@ -849,7 +850,7 @@ retry:
         if (c_ctx->preproc_mode) {
             return tkn;
         }
-        token_t res = c_tkn_conv_number(ctx, &tkn);
+        token_t res = c_tkn_conv_number(ctx->cctx, c_ctx->c_std, &tkn);
         tkn_delete(tkn);
         return res;
     }

@@ -51,6 +51,7 @@ static int     c_preproc_op_precedence(c_tokentype_t type);
 static bool    c_preproc_is_prefix_op(c_tokentype_t type);
 static i128_t  c_preproc_eval_prefix(c_tokentype_t oper, i128_t value);
 static i128_t  c_preproc_eval_infix(bool is_signed, i128_t lhs, c_tokentype_t oper, i128_t rhs);
+static token_t c_preproc_eval_get_helper(c_preproc_t *pre);
 static bool    c_preproc_eval(c_preproc_t *pre, pos_t pos);
 static void    c_directive_include(c_preproc_t *pre, pos_t pos);
 static void    c_directive_pragma(c_preproc_t *pre, pos_t pos);
@@ -392,6 +393,51 @@ static i128_t c_preproc_eval_infix(bool is_signed, i128_t lhs, c_tokentype_t ope
     }
 }
 
+// Helper for `c_preproc_eval` that parses and evaluates `defined ...` and `defined (...)` and converts constants.
+static token_t c_preproc_eval_get_helper(c_preproc_t *pre) {
+    token_t oper = c_preproc_get_tkn(pre, LINE_NOWS_EXPAND);
+    if (oper.type == TOKENTYPE_SCONST) {
+        token_t res = c_tkn_conv_str(pre->cctx, pre->c_std, &oper);
+        tkn_delete(oper);
+        return res;
+    } else if (oper.type == TOKENTYPE_IDENT && strcmp(oper.strval, "defined") != 0) {
+        if (oper.subtype == C_PPNUMBER) {
+            token_t res = c_tkn_conv_number(pre->cctx, pre->c_std, &oper);
+            tkn_delete(oper);
+            return res;
+        } else {
+            return oper;
+        }
+    } else if (oper.type != TOKENTYPE_IDENT) {
+        return oper;
+    }
+    pos_t pos = oper.pos;
+
+    bool    eval = false;
+    token_t lpar = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
+    if (lpar.type == TOKENTYPE_IDENT && lpar.subtype == C_IDENT) {
+        eval = map_get(&pre->macros, lpar.strval) != NULL;
+    } else if (lpar.type == TOKENTYPE_OTHER && lpar.subtype == C_TKN_LPAR) {
+        token_t name = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
+        token_t rpar = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
+        if (name.type != TOKENTYPE_IDENT || name.subtype != C_IDENT) {
+            cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Expected identifier");
+        } else if (rpar.type != TOKENTYPE_OTHER || rpar.subtype != C_TKN_RPAR) {
+            cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Expected )");
+        } else {
+            eval = map_get(&pre->macros, name.strval) != NULL;
+        }
+    } else {
+        cctx_diagnostic(pre->cctx, lpar.pos, DIAG_ERR, "Expected identifier or (");
+    }
+
+    return (token_t){
+        .pos  = pos,
+        .type = TOKENTYPE_ICONST,
+        .ival = eval,
+    };
+}
+
 // Evaluate the condition for an `#if` or `#elif` directive.
 static bool c_preproc_eval(c_preproc_t *pre, pos_t pos) {
     enum entry_type {
@@ -450,7 +496,7 @@ static bool c_preproc_eval(c_preproc_t *pre, pos_t pos) {
     // Read the next token into peek.
 #define peek()                                                                                                         \
     do {                                                                                                               \
-        token_t tkn = c_preproc_get_tkn(pre, LINE_NOWS_EXPAND);                                                        \
+        token_t tkn = c_preproc_eval_get_helper(pre);                                                                  \
         has_peek    = tkn.type != TOKENTYPE_EOL;                                                                       \
         if (has_peek) {                                                                                                \
             peek.pos = tkn.pos;                                                                                        \

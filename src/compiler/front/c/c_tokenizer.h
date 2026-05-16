@@ -46,6 +46,13 @@ typedef enum {
     C_BLOCK_COMMENT,
 } c_whitespace_t;
 
+// C identifier subtype.
+// Only relevant to the preprocessor.
+typedef enum {
+    C_IDENT,
+    C_PPNUMBER,
+} c_identtype_t;
+
 
 // C tokenizer handle.
 typedef struct c_tokenizer c_tokenizer_t;
@@ -85,9 +92,9 @@ bool           c_is_first_sym_char(int c);
 bool           c_is_sym_char(int c);
 
 // Convert preprocessing number token to C number token.
-token_t c_tkn_conv_number(tokenizer_t *ctx, token_t const *pre_tkn);
+token_t c_tkn_conv_number(cctx_t *cctx, int c_std, token_t const *pre_tkn);
 // Tokenize string or character constant.
-token_t c_tkn_conv_str(tokenizer_t *ctx, token_t const *pre_tkn);
+token_t c_tkn_conv_str(cctx_t *cctx, int c_std, token_t const *pre_tkn);
 
 // Wrapper around `srcfile_getc` that handles `\` for newline escapes.
 int      c_srcfile_getc(srcfile_t *srcfile, pos_t *pos);

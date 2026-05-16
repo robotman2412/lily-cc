@@ -192,6 +192,8 @@ static void c_preproc_pragma(c_preproc_t *pre, pos_t pos, char const *pragma) {
 
     if (name_len == 4 && !memcmp(pragma, "once", 4)) {
         c_pragma_once(pre, pos, args);
+    } else if ((name_len == 6 && !memcmp(pragma, "region", 4)) || (name_len == 9 && !memcmp(pragma, "endregion", 4))) {
+        // These pragmas are recognised but ignored.
     } else {
         cctx_diagnostic(pre->cctx, pos, DIAG_WARN, "Unrecognized pragma: %.*s", (int)name_len, pragma);
     }

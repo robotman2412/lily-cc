@@ -3,8 +3,6 @@
 // Make sure to save without formatting (`^Ks` in VS code).
 // clang-format off
 
-#define COMMA ,
-
 #define F0() F1()
 #define F1   F0
 F0() // F0()
@@ -14,9 +12,9 @@ A(A, B, C) // A | B | C
 A(, , )    // | |
 
 #define PASTE(A, B) A##B
+#define PASTE2(A, B) PASTE(A, B)
 PASTE(foo, .123)    // Invalid paste
 PASTE(.123, foo)    // .123foo
-PASTE(COMMA, COMMA) // Invalid paste
 PASTE(0abc0, .123)  // 0abc0.123
 PASTE(foo, bar)     // foobar
 

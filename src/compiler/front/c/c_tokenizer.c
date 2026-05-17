@@ -832,7 +832,7 @@ retry:
         int   c2   = c_srcfile_getc(ctx->file, &pos2);
         if (c2 >= '0' && c2 <= '9') {
             // Numeric (starting with `.` and digit).
-            ctx->pos    = pos2;
+            ctx->pos    = pos0;
             token_t tkn = c_tkn_pre_number(ctx);
             if (c_ctx->preproc_mode) {
                 return tkn;
@@ -1085,7 +1085,7 @@ void c_tkn_print_src(token_t const *pre_tkn, FILE *to) {
             break;
         case TOKENTYPE_OTHER: fputs(c_token_name[pre_tkn->subtype], to); break;
         case TOKENTYPE_IDENT:
-        case TOKENTYPE_GARBAGE:
+        case TOKENTYPE_GARBAGE: fwrite(pre_tkn->strval, 1, pre_tkn->strval_len, to); break;
         case TOKENTYPE_WHITESPACE:
             if (pre_tkn->subtype == C_LINE_COMMENT) {
                 fputs("//", to);
@@ -1127,6 +1127,8 @@ void c_tkn_append_src(token_t const *pre_tkn, char **buf_ptr, size_t *len_ptr, s
         case TOKENTYPE_OTHER: append_cstr(c_token_name[pre_tkn->subtype]); break;
         case TOKENTYPE_IDENT:
         case TOKENTYPE_GARBAGE:
+            array_lencap_insert_n_strong(buf_ptr, 1, len_ptr, cap_ptr, pre_tkn->strval, *len_ptr, pre_tkn->strval_len);
+            break;
         case TOKENTYPE_WHITESPACE:
             if (pre_tkn->subtype == C_LINE_COMMENT) {
                 append_cstr("//");

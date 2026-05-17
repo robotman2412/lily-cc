@@ -87,24 +87,16 @@ struct c_ifdir {
 
 // A macro definition.
 struct c_macro {
+    // Uses a callback instead of subsitution tokens and args.
+    bool is_proc_macro;
+    // Is a built-in macro (that shouldn't be undefined).
+    bool is_builtin;
+    // Is a function-like macro.
+    bool uses_args;
     union {
         struct {
-            // Uses a callback instead of subsitution tokens and args.
-            bool is_proc_macro;
-            // Is a built-in macro (that shouldn't be undefined).
-            bool is_builtin;
-            // Is a function-like macro.
-            bool uses_args;
-        };
-        struct {
-            // Alias of `is_proc_macro`.
-            bool     is_proc_macro;
-            // Alias of `is_builtin`.
-            bool     is_builtin;
             // Variadic macros (with ...).
-            bool     variadic;
-            // Alias of `uses_args`; the amount is specifiead by `args_len`.
-            bool     uses_args;
+            bool     is_variadic;
             // Number of non-variadic arguments.
             size_t   args_len;
             // Argument names.
@@ -115,12 +107,6 @@ struct c_macro {
             token_t *tokens;
         } regular;
         struct {
-            // Alias of `is_proc_macro`.
-            bool              is_proc_macro;
-            // Alias of `is_builtin`.
-            bool              is_builtin;
-            // Alias of `uses_args`; the amount is to be checked by the callback.
-            bool              uses_args;
             // Callback to run on invocation.
             c_proc_macro_cb_t callback;
             // Cookie provided to the callback.

@@ -30,3 +30,12 @@ STR(, )                // Too many arguments
 #define F2(           // Invalid definition
 #define F2(a,         // Invalid definition
 #define F2(a          // Invalid definition
+
+#define J (
+#define K )
+#define K1(x) x
+#define K2(x) x
+#define K3(x) x
+#define K4 K3( K2 J K1 J foo K K )
+K4 // foo
+ 

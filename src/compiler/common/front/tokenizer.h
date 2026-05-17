@@ -13,9 +13,6 @@
 
 
 
-// Maximum depth for peeking minus one.
-#define TKN_PEEK_MAX 1
-
 // Abstract tokenizer handle.
 typedef struct tokenizer tokenizer_t;
 // Offset type for `tkn_getc`.
@@ -31,9 +28,11 @@ struct tokenizer {
     // Current file position.
     pos_t      pos;
     // Number of buffered tokens.
-    uint8_t    tkn_buffer_len;
-    // Buffered token.
-    token_t    tkn_buffer[TKN_PEEK_MAX + 1];
+    size_t     tkn_buffer_len;
+    // Allocated capacity of the buffered-token array.
+    size_t     tkn_buffer_cap;
+    // Buffered tokens (FIFO; index 0 is the next token returned).
+    token_t   *tkn_buffer;
     // Function to call to get next token.
     token_t (*next)(tokenizer_t *tkn_ctx);
     // Extra function to call to clean up tokenizer.
@@ -58,10 +57,9 @@ token_t tkn_next(tokenizer_t *tkn_ctx);
 // Peek at (do not consume) next token from the tokenizer.
 token_t tkn_peek(tokenizer_t *tkn_ctx);
 // Peek at (do not consume) next token from the tokenizer.
-// Depth 0 is one ahead, depth 1 is two ahead, etc.
-token_t tkn_peek_n(tokenizer_t *tkn_ctx, int depth);
-// Opposite of tkn_next; stuff up to one token back into the buffer.
-// Will abort if there is already a token there.
+// Depth 0 is one ahead, depth 1 is two ahead, etc. The buffer grows as needed.
+token_t tkn_peek_n(tokenizer_t *tkn_ctx, size_t depth);
+// Opposite of tkn_next; stuff a token back to the front of the buffer.
 void    tkn_unget(tokenizer_t *tkn_ctx, token_t token);
 
 // Read a character from a token's `strval` and update offset.

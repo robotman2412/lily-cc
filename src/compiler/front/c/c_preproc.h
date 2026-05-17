@@ -125,6 +125,9 @@ struct c_macro_arg {
     size_t   tokens_len;
     // Tokens making up this argument.
     token_t *tokens;
+    // Per-token: was there whitespace (or newlines) before this token in the
+    // original argument source? The first token's entry is always false.
+    bool    *ws_before;
 };
 
 // A single substitution position within a regular macro's body.

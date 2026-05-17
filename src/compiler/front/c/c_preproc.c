@@ -71,7 +71,7 @@ static void    c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macr
 
 
 
-static c_expansion_t c_proc_macro_counter(c_preproc_t *pre, token_t const *args, size_t args_len, void *cookie) {
+static c_expansion_t c_proc_macro_counter(c_preproc_t *pre, c_macro_arg_t const *args, size_t args_len, void *cookie) {
     (void)cookie;
     (void)args;
     (void)args_len;
@@ -726,14 +726,14 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
         return;
     }
 
-    token_t *tokens     = NULL;
-    size_t   tokens_len = 0;
-    size_t   tokens_cap = 0;
-    char   **params     = NULL;
-    size_t   params_len = 0;
-    size_t   params_cap = 0;
-    bool     variadic   = false;
-    bool     uses_args  = false;
+    c_macro_subst_t *tokens     = NULL;
+    size_t           tokens_len = 0;
+    size_t           tokens_cap = 0;
+    char           **params     = NULL;
+    size_t           params_len = 0;
+    size_t           params_cap = 0;
+    bool             variadic   = false;
+    bool             uses_args  = false;
 
     token_t tkn = c_preproc_get_tkn(pre, LINE_RAW);
     if (tkn.type == TOKENTYPE_WHITESPACE) {
@@ -822,31 +822,39 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
             && (!strcmp(tkn.strval, "__VA_ARGS__") || !strcmp(tkn.strval, "__VA_OPT__"))) {
             cctx_diagnostic(pre->cctx, tkn.pos, DIAG_WARN, "%s in non-variadic macro", tkn.strval);
         }
+        c_macro_subst_t subst = {0};
+        bool            matched = false;
         if (tkn.type == TOKENTYPE_IDENT) {
             for (size_t i = 0; i < params_len; i++) {
                 if (!strcmp(tkn.strval, params[i])) {
                     tkn_delete(tkn);
-                    tkn = (token_t){
-                        .pos  = tkn.pos,
-                        .type = TOKENTYPE_IDENT,
-                        .ival = i,
-                    };
+                    subst.is_arg    = true;
+                    subst.stringize = false;
+                    subst.arg_index = i;
+                    matched         = true;
                     break;
                 }
             }
         }
-        array_lencap_insert_strong(&tokens, sizeof(token_t), &tokens_len, &tokens_cap, &tkn, tokens_len);
+        if (!matched) {
+            subst.is_arg  = false;
+            subst.literal = tkn;
+        }
+        array_lencap_insert_strong(&tokens, sizeof(c_macro_subst_t), &tokens_len, &tokens_cap, &subst, tokens_len);
         tkn = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
     }
 
-    if (tokens_len && tokens[tokens_len - 1].type == TOKENTYPE_OTHER && tokens[tokens_len - 1].subtype == C_TKN_PASTE) {
-        cctx_diagnostic(
-            pre->cctx,
-            tokens[tokens_len - 1].pos,
-            DIAG_ERR,
-            "`##` is not allowed at the start/end of macro expansion lists"
-        );
-        goto error;
+    if (tokens_len) {
+        c_macro_subst_t const *last = &tokens[tokens_len - 1];
+        if (!last->is_arg && last->literal.type == TOKENTYPE_OTHER && last->literal.subtype == C_TKN_PASTE) {
+            cctx_diagnostic(
+                pre->cctx,
+                last->literal.pos,
+                DIAG_ERR,
+                "`##` is not allowed at the start/end of macro expansion lists"
+            );
+            goto error;
+        }
     }
 
     c_macro_t *existing = map_get(&pre->macros, name.strval);
@@ -1355,26 +1363,33 @@ c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_o
                 tkn_delete(t);
                 break;
             }
+            c_macro_subst_t subst = {0};
             if (t.type == TOKENTYPE_IDENT) {
+                bool matched = false;
                 for (size_t i = 0; i < macro->regular.args_len; i++) {
                     if (!strcmp(t.strval, macro->regular.args[i])) {
                         tkn_delete(t);
-                        // Ident but instead of strval it has an index, this will be replaced by the macro expander.
-                        t = (token_t){
-                            .pos  = t.pos,
-                            .type = TOKENTYPE_IDENT,
-                            .ival = i,
-                        };
+                        subst.is_arg    = true;
+                        subst.stringize = false;
+                        subst.arg_index = i;
+                        matched         = true;
                         break;
                     }
                 }
+                if (!matched) {
+                    subst.is_arg  = false;
+                    subst.literal = t;
+                }
+            } else {
+                subst.is_arg  = false;
+                subst.literal = t;
             }
             array_lencap_insert_strong(
                 &macro->regular.tokens,
-                sizeof(token_t),
+                sizeof(c_macro_subst_t),
                 &macro->regular.tokens_len,
                 &tokens_cap,
-                &t,
+                &subst,
                 macro->regular.tokens_len
             );
         }
@@ -1427,7 +1442,9 @@ void c_macro_destroy(c_macro_t *macro) {
         }
         free(macro->regular.args);
         for (size_t i = 0; i < macro->regular.tokens_len; i++) {
-            tkn_delete(macro->regular.tokens[i]);
+            if (!macro->regular.tokens[i].is_arg) {
+                tkn_delete(macro->regular.tokens[i].literal);
+            }
         }
         free(macro->regular.tokens);
     }
@@ -1524,9 +1541,9 @@ static bool c_preproc_tkn_paste(c_preproc_t *pre, token_t const *lhs, token_t co
 
 // Perform macro-expansion.
 static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) {
-    size_t   args_len = 0;
-    size_t   args_cap = 0;
-    token_t *args     = NULL;
+    size_t         args_len = 0;
+    size_t         args_cap = 0;
+    c_macro_arg_t *args     = NULL;
 
     if (macro->uses_args) {
         // Consume the opening `(` (already peeked by the caller).
@@ -1548,11 +1565,10 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
         } else {
             // Collect tokens for each argument. Parentheses nest, and at depth > 0
             // commas are part of the argument rather than separators.
-            int      depth     = 0;
-            size_t   cur_len   = 0;
-            size_t   cur_cap   = 0;
-            token_t *cur       = NULL;
-            pos_t    arg_start = peek.pos;
+            int      depth   = 0;
+            size_t   cur_len = 0;
+            size_t   cur_cap = 0;
+            token_t *cur     = NULL;
 
             while (1) {
                 token_t p = c_preproc_raw_peek(pre);
@@ -1575,20 +1591,17 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
                 if (depth == 0 && p.type == TOKENTYPE_OTHER && (p.subtype == C_TKN_RPAR || p.subtype == C_TKN_COMMA)) {
                     bool is_end = p.subtype == C_TKN_RPAR;
                     tkn_delete(c_preproc_raw_next(pre));
-                    token_t wrap = {
-                        .pos        = arg_start,
-                        .type       = TOKENTYPE_AST,
-                        .params_len = cur_len,
-                        .params     = cur,
+                    c_macro_arg_t arg = {
+                        .tokens_len = cur_len,
+                        .tokens     = cur,
                     };
-                    array_lencap_insert_strong(&args, sizeof(token_t), &args_len, &args_cap, &wrap, args_len);
+                    array_lencap_insert_strong(&args, sizeof(c_macro_arg_t), &args_len, &args_cap, &arg, args_len);
                     if (is_end) {
                         break;
                     }
-                    cur       = NULL;
-                    cur_len   = 0;
-                    cur_cap   = 0;
-                    arg_start = c_preproc_raw_peek(pre).pos;
+                    cur     = NULL;
+                    cur_len = 0;
+                    cur_cap = 0;
                     continue;
                 }
 
@@ -1642,11 +1655,12 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
         expand.tokens_len = 0;
         expand.tokens     = 0;
         for (size_t i = 0; i < macro->regular.tokens_len; i++) {
-            if (macro->regular.tokens[i].type == TOKENTYPE_IDENT && macro->regular.tokens[i].strval == NULL) {
+            c_macro_subst_t const *subst = &macro->regular.tokens[i];
+            if (subst->is_arg) {
                 // This is a macro argument.
-                token_t const *ast = &args[macro->regular.tokens[i].ival];
-                for (size_t x = 0; x < ast->params_len; x++) {
-                    token_t tkn = tkn_clone(&ast->params[x]);
+                c_macro_arg_t const *arg = &args[subst->arg_index];
+                for (size_t x = 0; x < arg->tokens_len; x++) {
+                    token_t tkn = tkn_clone(&arg->tokens[x]);
                     tkn.pos     = pos;
                     array_lencap_insert_strong(
                         &expand.tokens,
@@ -1658,8 +1672,8 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
                     );
                 }
             } else {
-                // Regular token to expand.
-                token_t tkn = tkn_clone(&macro->regular.tokens[i]);
+                // Literal token to emit.
+                token_t tkn = tkn_clone(&subst->literal);
                 tkn.pos     = pos;
                 array_lencap_insert_strong(
                     &expand.tokens,
@@ -1745,7 +1759,10 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
 
 exit:
     for (size_t i = 0; i < args_len; i++) {
-        tkn_delete(args[i]);
+        for (size_t j = 0; j < args[i].tokens_len; j++) {
+            tkn_delete(args[i].tokens[j]);
+        }
+        free(args[i].tokens);
     }
     free(args);
 }

@@ -22,11 +22,15 @@ typedef struct c_incfile   c_incfile_t;
 // If-directive stack entry.
 typedef struct c_ifdir     c_ifdir_t;
 // A macro definition.
-typedef struct c_macro     c_macro_t;
+typedef struct c_macro       c_macro_t;
+// A single substitution position within a regular macro's body.
+typedef struct c_macro_subst c_macro_subst_t;
+// A single collected argument to a function-like macro.
+typedef struct c_macro_arg   c_macro_arg_t;
 // Expanded macro value.
-typedef struct c_expansion c_expansion_t;
+typedef struct c_expansion   c_expansion_t;
 // Procedural macro callback.
-typedef c_expansion_t (*c_proc_macro_cb_t)(c_preproc_t *pre, token_t const *args, size_t args_len, void *cookie);
+typedef c_expansion_t (*c_proc_macro_cb_t)(c_preproc_t *pre, c_macro_arg_t const *args, size_t args_len, void *cookie);
 
 // C preprocessor state.
 struct c_preproc {
@@ -96,15 +100,15 @@ struct c_macro {
     union {
         struct {
             // Variadic macros (with ...).
-            bool     is_variadic;
+            bool             is_variadic;
             // Number of non-variadic arguments.
-            size_t   args_len;
+            size_t           args_len;
             // Argument names.
-            char   **args;
-            // Number of token to expand.
-            size_t   tokens_len;
-            // Tokens to expand.
-            token_t *tokens;
+            char           **args;
+            // Number of substitution positions in the body.
+            size_t           tokens_len;
+            // Substitution positions in the body.
+            c_macro_subst_t *tokens;
         } regular;
         struct {
             // Callback to run on invocation.
@@ -112,6 +116,28 @@ struct c_macro {
             // Cookie provided to the callback.
             void             *cookie;
         } proc;
+    };
+};
+
+// A single collected argument to a function-like macro.
+struct c_macro_arg {
+    // Number of tokens in this argument.
+    size_t   tokens_len;
+    // Tokens making up this argument.
+    token_t *tokens;
+};
+
+// A single substitution position within a regular macro's body.
+struct c_macro_subst {
+    // True for an argument substitution; false for a literal token.
+    bool is_arg;
+    // For argument substitutions: stringize the argument with `#`.
+    bool stringize;
+    union {
+        // Literal token to emit (when `is_arg` is false).
+        token_t literal;
+        // Index into the macro argument list (when `is_arg` is true).
+        size_t  arg_index;
     };
 };
 

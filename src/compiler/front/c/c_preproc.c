@@ -77,15 +77,15 @@ static c_expansion_t c_proc_macro_counter(c_preproc_t *pre, c_macro_arg_t const 
     (void)args;
     (void)args_len;
 
-    int cap = snprintf(NULL, 0, "%" PRIu64, pre->counter_macro);
+    int cap = snprintf(NULL, 0, "%" PRIu64, pre->shared->counter_macro);
     if (cap < 0) {
         perror("snprintf");
         abort();
     }
     cap       += 1;
     char *buf  = malloc(cap);
-    int   len  = snprintf(buf, cap, "%" PRIu64, pre->counter_macro);
-    pre->counter_macro++;
+    int   len  = snprintf(buf, cap, "%" PRIu64, pre->shared->counter_macro);
+    pre->shared->counter_macro++;
 
     token_t tkn = {
         .pos        = {0},
@@ -115,12 +115,19 @@ c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std, bool raw_mode, bool
     srctok->preproc_mode  = true;
     srctok->keep_comments = keep_comments;
 
+    c_preproc_shared_t *shared = strong_calloc(1, sizeof(c_preproc_shared_t));
+    shared->cctx          = srcfile->ctx;
+    shared->macros        = STR_MAP_EMPTY;
+    shared->once_files    = PTR_SET_EMPTY;
+    shared->c_std         = c_std;
+    shared->raw_mode      = raw_mode;
+    shared->keep_comments = keep_comments;
+
     // Note: `base` has a `pos` and `file`, but we do not use either.
     pre->base.next          = c_preproc_next;
     pre->base.cleanup       = c_preproc_destroy;
-    pre->cctx               = srcfile->ctx;
-    pre->macros             = STR_MAP_EMPTY;
-    pre->once_files         = PTR_SET_EMPTY;
+    pre->shared             = shared;
+    pre->owns_shared        = true;
     pre->stack_len          = 1;
     pre->stack_cap          = 1;
     pre->stack              = strong_malloc(sizeof(c_incfile_t));
@@ -128,10 +135,7 @@ c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std, bool raw_mode, bool
     pre->stack[0].ifdir     = NULL;
     pre->stack[0].ifdir_len = 0;
     pre->stack[0].ifdir_cap = 0;
-    pre->c_std              = c_std;
     pre->blank_line         = true;
-    pre->raw_mode           = raw_mode;
-    pre->keep_comments      = keep_comments;
 
     c_macro_t *counter_macro = c_proc_macro_create(false, c_proc_macro_counter, NULL);
     c_preproc_predef_macro(pre, "__COUNTER__", counter_macro);
@@ -139,14 +143,22 @@ c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std, bool raw_mode, bool
     return pre;
 }
 
+// Create a nested preprocessor that shares macro/file/pragma state with `parent`.
+c_preproc_t *c_preproc_create_nested(c_preproc_t *parent) {
+    c_preproc_t *pre = strong_calloc(1, sizeof(c_preproc_t));
+
+    pre->base.next    = c_preproc_next;
+    pre->base.cleanup = c_preproc_destroy;
+    pre->shared       = parent->shared;
+    pre->owns_shared  = false;
+    pre->blank_line   = true;
+
+    return pre;
+}
+
 // Destroy a preprocessor.
 static void c_preproc_destroy(tokenizer_t *tkn) {
     c_preproc_t *pre = (c_preproc_t *)tkn;
-
-    map_foreach(ent, &pre->macros) {
-        c_macro_destroy(ent->value);
-    }
-    map_clear(&pre->macros);
 
     for (size_t i = 0; i < pre->expand_len; i++) {
         c_expansion_t *expand = &pre->expand[i];
@@ -162,17 +174,24 @@ static void c_preproc_destroy(tokenizer_t *tkn) {
     }
     free(pre->stack);
 
-    // Note: The source files are kept alive by the associated cctx_t.
-    free(pre->files);
+    if (pre->owns_shared) {
+        map_foreach(ent, &pre->shared->macros) {
+            c_macro_destroy(ent->value);
+        }
+        map_clear(&pre->shared->macros);
+        // Note: The source files are kept alive by the associated cctx_t.
+        free(pre->shared->files);
+        free(pre->shared);
+    }
 }
 
 // Pragma: once.
 static void c_pragma_once(c_preproc_t *pre, pos_t pos, char const *args) {
     if (*args) {
-        cctx_diagnostic(pre->cctx, pos, DIAG_WARN, "Extra tokens after #pragma once");
+        cctx_diagnostic(pre->shared->cctx, pos, DIAG_WARN, "Extra tokens after #pragma once");
     }
     c_incfile_t *file = &pre->stack[pre->stack_len - 1];
-    set_add(&pre->once_files, file->tkn_ctx->base.file);
+    set_add(&pre->shared->once_files, file->tkn_ctx->base.file);
 }
 
 // Handle a #pragma directive or _Pragma operator.
@@ -197,27 +216,27 @@ static void c_preproc_pragma(c_preproc_t *pre, pos_t pos, char const *pragma) {
     } else if ((name_len == 6 && !memcmp(pragma, "region", 4)) || (name_len == 9 && !memcmp(pragma, "endregion", 4))) {
         // These pragmas are recognised but ignored.
     } else {
-        cctx_diagnostic(pre->cctx, pos, DIAG_WARN, "Unrecognized pragma: %.*s", (int)name_len, pragma);
+        cctx_diagnostic(pre->shared->cctx, pos, DIAG_WARN, "Unrecognized pragma: %.*s", (int)name_len, pragma);
     }
 }
 
 // Search for an include file and push it into the include stack.
 static void c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path) {
     // TODO: Replace with _popen when include search paths are implemented.
-    srcfile_t *file = srcfile_open(pre->cctx, path);
+    srcfile_t *file = srcfile_open(pre->shared->cctx, path);
     if (!file) {
-        cctx_diagnostic(pre->cctx, pos, DIAG_ERR, "Cannot open include file: %s", path);
+        cctx_diagnostic(pre->shared->cctx, pos, DIAG_ERR, "Cannot open include file: %s", path);
         return;
     }
 
-    if (set_contains(&pre->once_files, file)) {
+    if (set_contains(&pre->shared->once_files, file)) {
         // A `#pragma once` for this file already occurred.
         return;
     }
 
     // TODO: Add include stack info to the tokenizer's position.
     c_incfile_t incfile = {
-        .tkn_ctx   = c_tkn_create(file, pre->c_std),
+        .tkn_ctx   = c_tkn_create(file, pre->shared->c_std),
         .ifdir_cap = 0,
         .ifdir_len = 0,
         .ifdir     = 0,
@@ -251,7 +270,7 @@ static void c_incfile_eof(c_preproc_t *pre) {
 
     for (size_t i = 0; i < incfile->ifdir_len; i++) {
         cctx_diagnostic(
-            pre->cctx,
+            pre->shared->cctx,
             incfile->ifdir[i].pos,
             DIAG_ERR,
             "Unterminated #%s directive",
@@ -398,12 +417,12 @@ static i128_t c_preproc_eval_infix(bool is_signed, i128_t lhs, c_tokentype_t ope
 static token_t c_preproc_eval_get_helper(c_preproc_t *pre) {
     token_t oper = c_preproc_get_tkn(pre, LINE_NOWS_EXPAND);
     if (oper.type == TOKENTYPE_SCONST) {
-        token_t res = c_tkn_conv_str(pre->cctx, pre->c_std, &oper);
+        token_t res = c_tkn_conv_str(pre->shared->cctx, pre->shared->c_std, &oper);
         tkn_delete(oper);
         return res;
     } else if (oper.type == TOKENTYPE_IDENT && strcmp(oper.strval, "defined") != 0) {
         if (oper.subtype == C_PPNUMBER) {
-            token_t res = c_tkn_conv_number(pre->cctx, pre->c_std, &oper);
+            token_t res = c_tkn_conv_number(pre->shared->cctx, pre->shared->c_std, &oper);
             tkn_delete(oper);
             return res;
         } else {
@@ -417,19 +436,19 @@ static token_t c_preproc_eval_get_helper(c_preproc_t *pre) {
     bool    eval = false;
     token_t lpar = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
     if (lpar.type == TOKENTYPE_IDENT && lpar.subtype == C_IDENT) {
-        eval = map_get(&pre->macros, lpar.strval) != NULL;
+        eval = map_get(&pre->shared->macros, lpar.strval) != NULL;
     } else if (lpar.type == TOKENTYPE_OTHER && lpar.subtype == C_TKN_LPAR) {
         token_t name = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
         token_t rpar = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
         if (name.type != TOKENTYPE_IDENT || name.subtype != C_IDENT) {
-            cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Expected identifier");
+            cctx_diagnostic(pre->shared->cctx, name.pos, DIAG_ERR, "Expected identifier");
         } else if (rpar.type != TOKENTYPE_OTHER || rpar.subtype != C_TKN_RPAR) {
-            cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Expected )");
+            cctx_diagnostic(pre->shared->cctx, name.pos, DIAG_ERR, "Expected )");
         } else {
-            eval = map_get(&pre->macros, name.strval) != NULL;
+            eval = map_get(&pre->shared->macros, name.strval) != NULL;
         }
     } else {
-        cctx_diagnostic(pre->cctx, lpar.pos, DIAG_ERR, "Expected identifier or (");
+        cctx_diagnostic(pre->shared->cctx, lpar.pos, DIAG_ERR, "Expected identifier or (");
     }
 
     return (token_t){
@@ -515,7 +534,7 @@ static bool c_preproc_eval(c_preproc_t *pre, pos_t pos) {
             } else if (tkn.type == TOKENTYPE_IDENT) {                                                                  \
                 peek.type            = ENTRY_VALUE;                                                                    \
                 peek.value.is_signed = true;                                                                           \
-                peek.value.value     = int128(0, pre->c_std >= C_STD_C23 && !strcmp(tkn.strval, "true"));              \
+                peek.value.value     = int128(0, pre->shared->c_std >= C_STD_C23 && !strcmp(tkn.strval, "true"));              \
             } else {                                                                                                   \
                 peek.type = ENTRY_GARBAGE;                                                                             \
             }                                                                                                          \
@@ -569,13 +588,13 @@ static bool c_preproc_eval(c_preproc_t *pre, pos_t pos) {
     }
 
     if (stack_len == 0) {
-        cctx_diagnostic(pre->cctx, pos, DIAG_ERR, "Expected preprocessor expression");
+        cctx_diagnostic(pre->shared->cctx, pos, DIAG_ERR, "Expected preprocessor expression");
         return 0;
     } else if (stack_len == 1 && stack[0].type == ENTRY_VALUE) {
         return cmp128u(stack[0].value.value, int128(0, 0)) != 0;
     } else {
         cctx_diagnostic(
-            pre->cctx,
+            pre->shared->cctx,
             pos_including(stack[0].pos, stack[stack_len - 1].pos),
             DIAG_ERR,
             "Invalid preprocessor expression"
@@ -592,7 +611,7 @@ static void c_directive_include(c_preproc_t *pre, pos_t pos) {
     token_t token                = c_preproc_get_tkn(pre, LINE_NOWS_EXPAND);
     file->tkn_ctx->str_anglebrac = false;
     if (token.type != TOKENTYPE_SCONST) {
-        cctx_diagnostic(pre->cctx, token.pos, DIAG_ERR, "Expected a path");
+        cctx_diagnostic(pre->shared->cctx, token.pos, DIAG_ERR, "Expected a path");
         tkn_delete(token);
         return;
     }
@@ -624,10 +643,10 @@ static void c_directive_if(c_preproc_t *pre, pos_t pos, bool elif, bool ifdef, b
     if (ifdef || ifndef) {
         token_t tkn = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
         if (tkn.type != TOKENTYPE_IDENT) {
-            cctx_diagnostic(pre->cctx, tkn.pos, DIAG_ERR, "Expected an identifier");
+            cctx_diagnostic(pre->shared->cctx, tkn.pos, DIAG_ERR, "Expected an identifier");
             return;
         }
-        eval = map_get(&pre->macros, tkn.strval) != NULL;
+        eval = map_get(&pre->shared->macros, tkn.strval) != NULL;
         if (ifndef) {
             eval = !eval;
         }
@@ -638,14 +657,14 @@ static void c_directive_if(c_preproc_t *pre, pos_t pos, bool elif, bool ifdef, b
     bool parent_emit = file->ifdir_len < 2 || file->ifdir[file->ifdir_len - 2].do_emit;
     if (elif) {
         if (!file->ifdir_len) {
-            cctx_diagnostic(pre->cctx, pos, DIAG_ERR, "#elif without matching #if");
+            cctx_diagnostic(pre->shared->cctx, pos, DIAG_ERR, "#elif without matching #if");
             return;
         }
         c_ifdir_t *ifdir = &file->ifdir[file->ifdir_len - 1];
         if (!ifdir->allow_else) {
-            cctx_diagnostic(pre->cctx, pos, DIAG_ERR, "#elif without matching #if");
-            cctx_diagnostic(pre->cctx, ifdir->pos, DIAG_INFO, "Most recent #else directive");
-            cctx_diagnostic(pre->cctx, pos, DIAG_HINT, "Change the #elif into an #if");
+            cctx_diagnostic(pre->shared->cctx, pos, DIAG_ERR, "#elif without matching #if");
+            cctx_diagnostic(pre->shared->cctx, ifdir->pos, DIAG_INFO, "Most recent #else directive");
+            cctx_diagnostic(pre->shared->cctx, pos, DIAG_HINT, "Change the #elif into an #if");
             return;
         }
         ifdir->pos       = pos;
@@ -674,16 +693,16 @@ static void c_directive_else(c_preproc_t *pre, pos_t pos) {
     c_incfile_t *file = &pre->stack[pre->stack_len - 1];
 
     if (!file->ifdir_len) {
-        cctx_diagnostic(pre->cctx, pos, DIAG_ERR, "#else without matching #if");
+        cctx_diagnostic(pre->shared->cctx, pos, DIAG_ERR, "#else without matching #if");
         return;
     }
     c_ifdir_t *ifdir       = &file->ifdir[file->ifdir_len - 1];
     bool       parent_emit = file->ifdir_len < 2 || file->ifdir[file->ifdir_len - 2].do_emit;
 
     if (!ifdir->allow_else) {
-        cctx_diagnostic(pre->cctx, pos, DIAG_ERR, "Dangling #else");
-        cctx_diagnostic(pre->cctx, ifdir->pos, DIAG_INFO, "Earlier #else occurred here");
-        cctx_diagnostic(pre->cctx, pos, DIAG_HINT, "Write #endif here");
+        cctx_diagnostic(pre->shared->cctx, pos, DIAG_ERR, "Dangling #else");
+        cctx_diagnostic(pre->shared->cctx, ifdir->pos, DIAG_INFO, "Earlier #else occurred here");
+        cctx_diagnostic(pre->shared->cctx, pos, DIAG_HINT, "Write #endif here");
         return;
     }
 
@@ -697,7 +716,7 @@ static void c_directive_endif(c_preproc_t *pre, pos_t pos) {
     c_incfile_t *file = &pre->stack[pre->stack_len - 1];
 
     if (!file->ifdir_len) {
-        cctx_diagnostic(pre->cctx, pos, DIAG_ERR, "#endif without matching #if");
+        cctx_diagnostic(pre->shared->cctx, pos, DIAG_ERR, "#endif without matching #if");
         return;
     }
     file->ifdir_len--;
@@ -711,8 +730,30 @@ static void c_directive_warning(c_preproc_t *pre, pos_t pos, bool is_error) {
     if (!buf) {
         return;
     }
-    cctx_diagnostic(pre->cctx, span, is_error ? DIAG_ERR : DIAG_WARN, "%s", buf);
+    cctx_diagnostic(pre->shared->cctx, span, is_error ? DIAG_ERR : DIAG_WARN, "%s", buf);
     free(buf);
+}
+
+// Mark argument substitutions adjacent to a `##` token with the `pasting` flag.
+static void c_macro_mark_pasting(c_macro_subst_t *tokens, size_t tokens_len) {
+    for (size_t i = 0; i < tokens_len; i++) {
+        if (!tokens[i].is_arg) {
+            continue;
+        }
+        if (i > 0) {
+            c_macro_subst_t const *prev = &tokens[i - 1];
+            if (!prev->is_arg && prev->literal.type == TOKENTYPE_OTHER && prev->literal.subtype == C_TKN_PASTE) {
+                tokens[i].pasting = true;
+                continue;
+            }
+        }
+        if (i + 1 < tokens_len) {
+            c_macro_subst_t const *next = &tokens[i + 1];
+            if (!next->is_arg && next->literal.type == TOKENTYPE_OTHER && next->literal.subtype == C_TKN_PASTE) {
+                tokens[i].pasting = true;
+            }
+        }
+    }
 }
 
 // Preprocessor directive: define.
@@ -720,10 +761,10 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
     (void)pos;
     token_t name = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
     if (name.type == TOKENTYPE_EOL) {
-        cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Expected macro name");
+        cctx_diagnostic(pre->shared->cctx, name.pos, DIAG_ERR, "Expected macro name");
         return;
     } else if (name.type != TOKENTYPE_IDENT) {
-        cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Macro name must be an identifier");
+        cctx_diagnostic(pre->shared->cctx, name.pos, DIAG_ERR, "Macro name must be an identifier");
         return;
     }
 
@@ -752,7 +793,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
             tkn = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
             if (tkn.type == TOKENTYPE_EOL) {
                 // Abrupt end of line.
-                cctx_diagnostic(pre->cctx, list_start, DIAG_ERR, "Missing `(` to match this `)`");
+                cctx_diagnostic(pre->shared->cctx, list_start, DIAG_ERR, "Missing `(` to match this `)`");
                 tkn_delete(tkn);
                 goto error;
             } else if (!need_arg && tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_RPAR) {
@@ -767,7 +808,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
             } else if (tkn.type == TOKENTYPE_IDENT) {
                 if (!strcmp(tkn.strval, "__VA_ARGS__") || !strcmp(tkn.strval, "__VA_OPT__")) {
                     cctx_diagnostic(
-                        pre->cctx,
+                        pre->shared->cctx,
                         tkn.pos,
                         DIAG_WARN,
                         "Macro parameters should not be called %s",
@@ -778,7 +819,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
                 array_lencap_insert_strong(&params, sizeof(char *), &params_len, &params_cap, &str, params_len);
                 tkn_delete(tkn);
             } else {
-                cctx_diagnostic(pre->cctx, tkn.pos, DIAG_ERR, "Expected an identifier or `...`");
+                cctx_diagnostic(pre->shared->cctx, tkn.pos, DIAG_ERR, "Expected an identifier or `...`");
                 tkn_delete(tkn);
                 goto error;
             }
@@ -790,7 +831,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
             } else if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_COMMA) {
                 if (must_close) {
                     cctx_diagnostic(
-                        pre->cctx,
+                        pre->shared->cctx,
                         tkn.pos,
                         DIAG_ERR,
                         "`...` must appear last in the argument list of a variadic macro"
@@ -808,7 +849,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
     while (1) {
         if (tokens_len == 0 && tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_PASTE) {
             cctx_diagnostic(
-                pre->cctx,
+                pre->shared->cctx,
                 tkn.pos,
                 DIAG_ERR,
                 "`##` is not allowed at the start/end of macro expansion lists"
@@ -821,7 +862,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
         }
         if (!variadic && tkn.type == TOKENTYPE_IDENT
             && (!strcmp(tkn.strval, "__VA_ARGS__") || !strcmp(tkn.strval, "__VA_OPT__"))) {
-            cctx_diagnostic(pre->cctx, tkn.pos, DIAG_WARN, "%s in non-variadic macro", tkn.strval);
+            cctx_diagnostic(pre->shared->cctx, tkn.pos, DIAG_WARN, "%s in non-variadic macro", tkn.strval);
         }
         c_macro_subst_t subst   = {0};
         bool            matched = false;
@@ -829,7 +870,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
             pos_t   hash_pos = tkn.pos;
             token_t next     = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
             if (next.type != TOKENTYPE_IDENT) {
-                cctx_diagnostic(pre->cctx, hash_pos, DIAG_ERR, "`#` must be followed by a macro parameter name");
+                cctx_diagnostic(pre->shared->cctx, hash_pos, DIAG_ERR, "`#` must be followed by a macro parameter name");
                 tkn_delete(tkn);
                 tkn_delete(next);
                 goto error;
@@ -845,7 +886,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
                 }
             }
             if (!found) {
-                cctx_diagnostic(pre->cctx, hash_pos, DIAG_ERR, "`#` must be followed by a macro parameter name");
+                cctx_diagnostic(pre->shared->cctx, hash_pos, DIAG_ERR, "`#` must be followed by a macro parameter name");
                 tkn_delete(tkn);
                 tkn_delete(next);
                 goto error;
@@ -877,7 +918,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
         c_macro_subst_t const *last = &tokens[tokens_len - 1];
         if (!last->is_arg && last->literal.type == TOKENTYPE_OTHER && last->literal.subtype == C_TKN_PASTE) {
             cctx_diagnostic(
-                pre->cctx,
+                pre->shared->cctx,
                 last->literal.pos,
                 DIAG_ERR,
                 "`##` is not allowed at the start/end of macro expansion lists"
@@ -886,10 +927,12 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
         }
     }
 
-    c_macro_t *existing = map_get(&pre->macros, name.strval);
+    c_macro_mark_pasting(tokens, tokens_len);
+
+    c_macro_t *existing = map_get(&pre->shared->macros, name.strval);
     if (existing) {
         cctx_diagnostic(
-            pre->cctx,
+            pre->shared->cctx,
             name.pos,
             DIAG_WARN,
             "Redefinition of %smacro `%s`",
@@ -908,7 +951,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
     macro->regular.tokens_len  = tokens_len;
     macro->regular.args        = params;
     macro->regular.args_len    = params_len;
-    map_set(&pre->macros, name.strval, macro);
+    map_set(&pre->shared->macros, name.strval, macro);
     return;
 
 error:
@@ -927,23 +970,23 @@ static void c_directive_undef(c_preproc_t *pre, pos_t pos) {
     (void)pos;
     token_t name = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
     if (name.type == TOKENTYPE_EOL) {
-        cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Expected macro name");
+        cctx_diagnostic(pre->shared->cctx, name.pos, DIAG_ERR, "Expected macro name");
         return;
     } else if (name.type != TOKENTYPE_IDENT) {
-        cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Macro name must be an identifier");
+        cctx_diagnostic(pre->shared->cctx, name.pos, DIAG_ERR, "Macro name must be an identifier");
         return;
     }
 
-    c_macro_t *macro = map_get(&pre->macros, name.strval);
+    c_macro_t *macro = map_get(&pre->shared->macros, name.strval);
     if (!macro) {
         // Nothing to do.
         return;
     }
 
     if (macro->is_builtin) {
-        cctx_diagnostic(pre->cctx, name.pos, DIAG_WARN, "Undefining a built-in macro");
+        cctx_diagnostic(pre->shared->cctx, name.pos, DIAG_WARN, "Undefining a built-in macro");
     }
-    map_remove(&pre->macros, name.strval);
+    map_remove(&pre->shared->macros, name.strval);
     c_macro_destroy(macro);
 }
 
@@ -954,7 +997,7 @@ static void c_preproc_directive(c_preproc_t *pre) {
         // Note: Counterintuitively, `#` followed by newline does nothing according to the spec.
         return;
     } else if (name.type != TOKENTYPE_IDENT) {
-        cctx_diagnostic(pre->cctx, name.pos, DIAG_ERR, "Expected preprocessing directive name");
+        cctx_diagnostic(pre->shared->cctx, name.pos, DIAG_ERR, "Expected preprocessing directive name");
         tkn_delete(name);
         return;
     }
@@ -1064,7 +1107,7 @@ static void c_preproc_until_eol(c_preproc_t *pre, bool warn_extra_tok) {
     }
 
     if (warn_extra_tok && has_extra) {
-        cctx_diagnostic(pre->cctx, extra, DIAG_WARN, "Extra tokens ignored");
+        cctx_diagnostic(pre->shared->cctx, extra, DIAG_WARN, "Extra tokens ignored");
     }
 }
 
@@ -1246,7 +1289,7 @@ again:
     if (tkn.type != TOKENTYPE_IDENT || !do_expand) {
         return tkn;
     }
-    c_macro_t const *macro = map_get(&pre->macros, tkn.strval);
+    c_macro_t const *macro = map_get(&pre->shared->macros, tkn.strval);
     if (!macro) {
         return tkn;
     }
@@ -1307,7 +1350,7 @@ token_t c_preproc_tkn_to_c_tkn(c_preproc_t *pre, token_t tkn);
 
 // Add a pre-defined macro.
 void c_preproc_predef_macro(c_preproc_t *pre, char const *name, c_macro_t *macro) {
-    map_set(&pre->macros, name, macro);
+    map_set(&pre->shared->macros, name, macro);
 }
 
 // Create a regular macro.
@@ -1506,6 +1549,8 @@ c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_o
         }
     }
 
+    c_macro_mark_pasting(macro->regular.tokens, macro->regular.tokens_len);
+
     if (cctx->diagnostics.len) {
         dlist_foreach_node(diagnostic_t, d, &cctx->diagnostics) {
             print_diagnostic(d, stdout);
@@ -1640,7 +1685,7 @@ static bool c_preproc_tkn_paste(c_preproc_t *pre, token_t const *lhs, token_t co
 
     // If we get here, the resulting token is invalid.
     cctx_diagnostic(
-        pre->cctx,
+        pre->shared->cctx,
         tkn.pos,
         DIAG_ERR,
         "Pasting would create `%s`, an invalid preprocessing token",
@@ -1730,7 +1775,7 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
             while (1) {
                 token_t p = c_preproc_raw_peek(pre);
                 if (p.type == TOKENTYPE_EOF) {
-                    cctx_diagnostic(pre->cctx, p.pos, DIAG_ERR, "Unexpected end of file in macro argument list");
+                    cctx_diagnostic(pre->shared->cctx, p.pos, DIAG_ERR, "Unexpected end of file in macro argument list");
                     for (size_t i = 0; i < cur_len; i++) {
                         tkn_delete(cur[i]);
                     }
@@ -1794,7 +1839,7 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
         if (macro->regular.is_variadic) {
             if (args_len < macro->regular.args_len) {
                 cctx_diagnostic(
-                    pre->cctx,
+                    pre->shared->cctx,
                     pos,
                     DIAG_ERR,
                     "Macro expects at least %zu argument%s, got %zu",
@@ -1807,7 +1852,7 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
         } else {
             if (args_len != macro->regular.args_len) {
                 cctx_diagnostic(
-                    pre->cctx,
+                    pre->shared->cctx,
                     pos,
                     DIAG_ERR,
                     "Macro expects exactly %zu argument%s, got %zu",

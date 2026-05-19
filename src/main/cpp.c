@@ -21,7 +21,7 @@ static void preprocess(char const *path) {
         cctx_delete(cctx);
         return;
     }
-    pre->raw_mode = true;
+    pre->shared->raw_mode = true;
 
     while (1) {
         token_t tkn = c_preproc_next(&pre->base);

@@ -38,4 +38,30 @@ STR(, )                // Too many arguments
 #define K3(x) x
 #define K4 K3( K2 J K1 J foo K K )
 K4 // foo
- 
+
+#define BAR(x) x
+#define FOO BAR(
+// Corner case where an encosed ( is allowed to match with a ) outside of the expansion.
+// This is only possible for the outer-most macro expansion.
+FOO yes ) // yes
+// The second FOO is expanded within the parentheses of the first here,
+// which means it can never find the closing parenthesis.
+FOO FOO yes )) // Missing )
+
+// Taking the example with FOO up here further
+#define R2() fin
+#define R1() R2(
+#define R0 R1(
+R0)) // fin
+
+// Nested function-like macros.
+#define Q0() fin
+#define Q1() Q0
+#define Q2() Q1
+Q2()()() // fin
+
+// Corner case of hidden LPAR and stringification
+#define W0(x) #x
+#define W1(x) W0(x
+#define W2 W1(
+W2 PASTE(thing, ok) )) // thingok

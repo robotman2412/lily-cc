@@ -14,13 +14,15 @@
 
 
 // C compiler context.
-typedef struct c_compiler  c_compiler_t;
+typedef struct c_compiler    c_compiler_t;
+// State shared between a root preprocessor and any nested expansion contexts.
+typedef struct c_preproc_shared c_preproc_shared_t;
 // C preprocessor state.
-typedef struct c_preproc   c_preproc_t;
+typedef struct c_preproc     c_preproc_t;
 // Include-file stack entry.
-typedef struct c_incfile   c_incfile_t;
+typedef struct c_incfile     c_incfile_t;
 // If-directive stack entry.
-typedef struct c_ifdir     c_ifdir_t;
+typedef struct c_ifdir       c_ifdir_t;
 // A macro definition.
 typedef struct c_macro       c_macro_t;
 // A single substitution position within a regular macro's body.
@@ -32,39 +34,51 @@ typedef struct c_expansion   c_expansion_t;
 // Procedural macro callback.
 typedef c_expansion_t (*c_proc_macro_cb_t)(c_preproc_t *pre, c_macro_arg_t const *args, size_t args_len, void *cookie);
 
+// State shared between a root preprocessor and any nested expansion contexts.
+// Nested contexts (used for recursive argument expansion) hold a pointer to
+// the same `c_preproc_shared_t` as the root, so macro definitions, pragma
+// state, and the diagnostics sink stay consistent across all expansions.
+struct c_preproc_shared {
+    // Parent compiler context.
+    cctx_t    *cctx;
+    // Macro definitions by name.
+    // Map of `char *` -> `c_macro_t *`.
+    map_t      macros;
+    // All files in order of first opened.
+    size_t     files_len, files_cap;
+    // All files in order of first opened.
+    srcfile_t *files;
+    // Set of files which have already executed a `#pragma once`.
+    set_t      once_files;
+    // Current C standard.
+    int        c_std;
+    // Do not convert tokens to C tokens before emitting them.
+    bool       raw_mode;
+    // Keep comments instead of replacing them with a single space each.
+    bool       keep_comments;
+    // Next value for `__COUNTER__`.
+    uint64_t   counter_macro;
+};
+
 // C preprocessor state.
 struct c_preproc {
     // Base tokenizer.
-    tokenizer_t    base;
-    // Parent compiler context.
-    cctx_t        *cctx;
-    // Macro definitions by name.
-    // Map of `char *` -> `c_macro_t *`.
-    map_t          macros;
+    tokenizer_t         base;
+    // State shared with the root preprocessor.
+    c_preproc_shared_t *shared;
+    // Whether this preprocessor owns `shared` and should free it on destroy.
+    // True for the root preprocessor; false for nested expansion contexts.
+    bool                owns_shared;
     // Queue of tokens to emit from macro expansions.
-    size_t         expand_len, expand_cap;
+    size_t              expand_len, expand_cap;
     // Queue of tokens to emit from macro expansions.
-    c_expansion_t *expand;
+    c_expansion_t      *expand;
     // Include-file tokenizer stack, bottom is the original file.
-    size_t         stack_len, stack_cap;
+    size_t              stack_len, stack_cap;
     // Include-file tokenizer stack, bottom is the original file.
-    c_incfile_t   *stack;
-    // All files in order of first opened.
-    size_t         files_len, files_cap;
-    // All files in order of first opened.
-    srcfile_t     *files;
-    // Set of files which have already executed a `#pragma once`.
-    set_t          once_files;
-    // Current C standard.
-    int            c_std;
+    c_incfile_t        *stack;
     // Whether the current line has non-whitespace tokens on it.
-    bool           blank_line;
-    // Do not convert tokens to C tokens before emitting them.
-    bool           raw_mode;
-    // Keep comments instead of replacing them with a single space each.
-    bool           keep_comments;
-    // Next value for `__COUNTER__`.
-    uint64_t       counter_macro;
+    bool                blank_line;
 };
 
 // Include-file stack entry.
@@ -136,6 +150,8 @@ struct c_macro_subst {
     bool is_arg;
     // For argument substitutions: stringize the argument with `#`.
     bool stringize;
+    // For argument substitutions: is surrounded by `##` on one or both sides.
+    bool pasting;
     union {
         // Literal token to emit (when `is_arg` is false).
         token_t literal;
@@ -162,6 +178,12 @@ struct c_expansion {
 // See `c_preproc_t` for details about `raw_mode` and `keep_comments`.
 // Applying either flag after creation of the preprocessor will create incorrect output.
 c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std, bool raw_mode, bool keep_comments);
+// Create a nested preprocessor that shares macro/file/pragma state with `parent`.
+// Used for recursively expanding a function-like macro's arguments before
+// they are substituted. The caller is responsible for feeding input tokens
+// into the returned context (via its `expand` queue or include stack) and
+// for destroying it with `tkn_ctx_delete(&nested->base)` once done.
+c_preproc_t *c_preproc_create_nested(c_preproc_t *parent);
 // Get the next token from the preprocessor.
 token_t      c_preproc_next(tokenizer_t *tkn_ctx);
 // Convert a preprocessor token to a C token.

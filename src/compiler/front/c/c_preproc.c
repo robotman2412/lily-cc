@@ -90,6 +90,7 @@ static c_expansion_t c_proc_macro_counter(c_preproc_t *pre, c_macro_arg_t const 
     token_t tkn = {
         .pos        = {0},
         .type       = TOKENTYPE_IDENT,
+        .subtype    = C_PPNUMBER,
         .strval     = buf,
         .strval_len = len,
     };
@@ -1363,7 +1364,11 @@ again:
 
 emit:
     if (c_preproc_do_emit(pre)) {
-        return c_preproc_get_tkn(pre, NEXT_EXPAND);
+        token_t tkn = c_preproc_get_tkn(pre, NEXT_EXPAND);
+        if (!pre->raw_mode) {
+            tkn = c_preproc_tkn_to_c_tkn(pre, tkn);
+        }
+        return tkn;
     } else {
         do {
             tkn_delete(c_preproc_get_tkn(pre, NEXT_RAW));
@@ -1373,7 +1378,40 @@ emit:
 }
 
 // Convert a preprocessor token to a C token.
-token_t c_preproc_tkn_to_c_tkn(c_preproc_t *pre, token_t tkn);
+// Identifiers whose spelling is a keyword become keyword tokens; preprocessing
+// numbers go through `c_tkn_conv_number`; preprocessing string/char tokens go
+// through `c_tkn_conv_str`. Other token types pass through unchanged.
+token_t c_preproc_tkn_to_c_tkn(c_preproc_t *pre, token_t tkn) {
+    if (tkn.type == TOKENTYPE_IDENT && tkn.subtype == C_PPNUMBER) {
+        token_t res = c_tkn_conv_number(pre->shared->cctx, pre->shared->c_std, &tkn);
+        tkn_delete(tkn);
+        return res;
+    } else if (tkn.type == TOKENTYPE_IDENT) {
+        c_keyw_t keyw = c_keyw_get(pre->shared->c_std, tkn.strval);
+        if (keyw >= C_N_KEYWS) {
+            return tkn;
+        }
+        // Replace alternate spellings with the main spelling, matching the
+        // mapping the C tokenizer applies when not in preprocessor mode.
+#define C_ALT_KEYW_DEF(main_spelling, alt_spelling)                                                                    \
+    if (keyw == C_KEYW_##main_spelling) {                                                                              \
+        keyw = C_KEYW_##alt_spelling;                                                                                  \
+    }
+#include "c_keywords.inc"
+        pos_t pos = tkn.pos;
+        tkn_delete(tkn);
+        return (token_t){
+            .pos     = pos,
+            .type    = TOKENTYPE_KEYWORD,
+            .subtype = keyw,
+        };
+    } else if (tkn.type == TOKENTYPE_SCONST && tkn.subtype != C_STR_ANGLEBRAC) {
+        token_t res = c_tkn_conv_str(pre->shared->cctx, pre->shared->c_std, &tkn);
+        tkn_delete(tkn);
+        return res;
+    }
+    return tkn;
+}
 
 #pragma region macros
 

@@ -14,23 +14,23 @@
 
 
 // C compiler context.
-typedef struct c_compiler    c_compiler_t;
+typedef struct c_compiler       c_compiler_t;
 // State shared between a root preprocessor and any nested expansion contexts.
 typedef struct c_preproc_shared c_preproc_shared_t;
 // C preprocessor state.
-typedef struct c_preproc     c_preproc_t;
+typedef struct c_preproc        c_preproc_t;
 // Include-file stack entry.
-typedef struct c_incfile     c_incfile_t;
+typedef struct c_incfile        c_incfile_t;
 // If-directive stack entry.
-typedef struct c_ifdir       c_ifdir_t;
+typedef struct c_ifdir          c_ifdir_t;
 // A macro definition.
-typedef struct c_macro       c_macro_t;
+typedef struct c_macro          c_macro_t;
 // A single substitution position within a regular macro's body.
-typedef struct c_macro_subst c_macro_subst_t;
+typedef struct c_macro_subst    c_macro_subst_t;
 // A single collected argument to a function-like macro.
-typedef struct c_macro_arg   c_macro_arg_t;
+typedef struct c_macro_arg      c_macro_arg_t;
 // Expanded macro value.
-typedef struct c_expansion   c_expansion_t;
+typedef struct c_expansion      c_expansion_t;
 // Procedural macro callback.
 typedef c_expansion_t (*c_proc_macro_cb_t)(c_preproc_t *pre, c_macro_arg_t const *args, size_t args_len, void *cookie);
 
@@ -52,10 +52,6 @@ struct c_preproc_shared {
     set_t      once_files;
     // Current C standard.
     int        c_std;
-    // Do not convert tokens to C tokens before emitting them.
-    bool       raw_mode;
-    // Keep comments instead of replacing them with a single space each.
-    bool       keep_comments;
     // Next value for `__COUNTER__`.
     uint64_t   counter_macro;
 };
@@ -79,16 +75,22 @@ struct c_preproc {
     c_incfile_t        *stack;
     // Whether the current line has non-whitespace tokens on it.
     bool                blank_line;
+    // Do not convert tokens to C tokens before emitting them.
+    bool                raw_mode;
+    // Keep comments instead of replacing them with a single space each.
+    bool                keep_comments;
+    // Disable processing of directives.
+    bool                no_directives;
 };
 
 // Include-file stack entry.
 struct c_incfile {
     // Associated tokenizer.
-    c_tokenizer_t *tkn_ctx;
+    tokenizer_t *tkn_ctx;
     // Active if/ifdef/ifndef directives.
-    size_t         ifdir_len, ifdir_cap;
+    size_t       ifdir_len, ifdir_cap;
     // Active if/ifdef/ifndef directives.
-    c_ifdir_t     *ifdir;
+    c_ifdir_t   *ifdir;
 };
 
 // If-directive stack entry.
@@ -135,6 +137,8 @@ struct c_macro {
 
 // A single collected argument to a function-like macro.
 struct c_macro_arg {
+    // Position of this argument (may be 0-length).
+    pos_t    pos;
     // Number of tokens in this argument.
     size_t   tokens_len;
     // Tokens making up this argument.
@@ -142,6 +146,12 @@ struct c_macro_arg {
     // Per-token: was there whitespace (or newlines) before this token in the
     // original argument source? The first token's entry is always false.
     bool    *ws_before;
+    // Lazily-computed stringized version.
+    char    *stringized;
+    // Lazily-computed macro-expanded version.
+    size_t   expanded_len;
+    // Lazily-computed macro-expanded version.
+    token_t *expanded;
 };
 
 // A single substitution position within a regular macro's body.

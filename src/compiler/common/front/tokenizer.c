@@ -80,6 +80,27 @@ void tkn_unget(tokenizer_t *tkn_ctx, token_t token) {
 }
 
 
+// Next-token callback for `tkn_array_t`.
+static token_t tkn_array_next(tokenizer_t *tkn_ctx) {
+    tkn_array_t *ctx = (tkn_array_t *)tkn_ctx;
+    if (ctx->index >= ctx->tokens_len) {
+        return (token_t){.pos = ctx->eof_pos, .type = TOKENTYPE_EOF};
+    }
+    return tkn_clone(&ctx->tokens[ctx->index++]);
+}
+
+// Create an array-backed tokenizer.
+tkn_array_t *tkn_array_create(token_t const *tokens, size_t tokens_len, pos_t eof_pos) {
+    tkn_array_t *ctx = strong_calloc(1, sizeof(tkn_array_t));
+    ctx->base.next   = tkn_array_next;
+    ctx->base.pos    = eof_pos;
+    ctx->tokens      = tokens;
+    ctx->tokens_len  = tokens_len;
+    ctx->eof_pos     = eof_pos;
+    return ctx;
+}
+
+
 // Read a character from a token's `strval` and update offset.
 // Returns -1 on end of token.
 int tkn_getc(token_t const *tkn, tknoff_t *off) {

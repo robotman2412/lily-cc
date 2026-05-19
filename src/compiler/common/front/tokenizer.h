@@ -15,6 +15,8 @@
 
 // Abstract tokenizer handle.
 typedef struct tokenizer tokenizer_t;
+// Tokenizer that yields tokens from a pre-built array.
+typedef struct tkn_array tkn_array_t;
 // Offset type for `tkn_getc`.
 typedef struct tknoff    tknoff_t;
 
@@ -39,6 +41,24 @@ struct tokenizer {
     void (*cleanup)(tokenizer_t *tkn_ctx);
 };
 
+// Tokenizer that yields tokens from a pre-built array verbatim, one by one,
+// and then returns EOF tokens forever. The source array is borrowed; the
+// tokenizer neither copies it on creation nor frees it on destroy. Each
+// emitted token is a deep clone, so the caller owns it and may free it
+// independently of the source array.
+struct tkn_array {
+    // Base tokenizer (must be first).
+    tokenizer_t    base;
+    // Source token array (borrowed).
+    token_t const *tokens;
+    // Number of tokens in the source array.
+    size_t         tokens_len;
+    // Index of the next token to emit.
+    size_t         index;
+    // Position to use for synthesized EOF tokens once the array is exhausted.
+    pos_t          eof_pos;
+};
+
 // Offset type for `tkn_getc`.
 struct tknoff {
     size_t offset;
@@ -61,6 +81,12 @@ token_t tkn_peek(tokenizer_t *tkn_ctx);
 token_t tkn_peek_n(tokenizer_t *tkn_ctx, size_t depth);
 // Opposite of tkn_next; stuff a token back to the front of the buffer.
 void    tkn_unget(tokenizer_t *tkn_ctx, token_t token);
+
+// Create an array-backed tokenizer. The token array is borrowed (not copied
+// and not freed on destroy); it must outlive the returned tokenizer. Each
+// emitted token is a deep clone of the corresponding source-array entry.
+// `eof_pos` is used as the position of synthesized EOF tokens.
+tkn_array_t *tkn_array_create(token_t const *tokens, size_t tokens_len, pos_t eof_pos);
 
 // Read a character from a token's `strval` and update offset.
 // Returns -1 on end of token.

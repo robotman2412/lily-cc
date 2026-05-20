@@ -766,7 +766,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
         return;
     }
 
-    c_macro_t *macro     = strong_calloc(1, sizeof(c_macro_t));
+    c_macro_t *macro      = strong_calloc(1, sizeof(c_macro_t));
     size_t     params_cap = 0;
 
     // A `(` immediately after the name (no intervening whitespace) makes this a
@@ -1344,12 +1344,7 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
         token_t tkn = tkn_next(tkn_ctx);
 
         if (macro->regular.subst_len == 0 && tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_PASTE) {
-            cctx_diagnostic(
-                cctx,
-                tkn.pos,
-                DIAG_ERR,
-                "`##` is not allowed at the start/end of macro expansion lists"
-            );
+            cctx_diagnostic(cctx, tkn.pos, DIAG_ERR, "`##` is not allowed at the start/end of macro expansion lists");
             tkn_delete(tkn);
             return false;
         }
@@ -1392,6 +1387,85 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
             tkn_delete(tkn);
             tkn_delete(next);
             matched = true;
+        } else if (tkn.type == TOKENTYPE_IDENT && !strcmp(tkn.strval, "__VA_OPT__")) {
+            pos_t opt_pos = tkn.pos;
+            tkn_delete(tkn);
+
+            // Skip whitespace before `(`.
+            token_t pp = tkn_peek(tkn_ctx);
+            while (pp.type == TOKENTYPE_WHITESPACE) {
+                tkn_delete(tkn_next(tkn_ctx));
+                pp = tkn_peek(tkn_ctx);
+            }
+            if (pp.type != TOKENTYPE_OTHER || pp.subtype != C_TKN_LPAR) {
+                cctx_diagnostic(cctx, opt_pos, DIAG_ERR, "`__VA_OPT__` must be followed by `(`");
+                return false;
+            }
+            token_t lpar    = tkn_next(tkn_ctx);
+            pos_t   end_pos = lpar.pos;
+            tkn_delete(lpar);
+
+            // Read tokens until the matching `)`; `(` and `)` nest. Whitespace
+            // does not appear in stored tokens but `ws_before[i]` records whether
+            // whitespace preceded the i-th token in the original input.
+            token_t *opt_tokens     = NULL;
+            size_t   opt_tokens_len = 0;
+            size_t   opt_tokens_cap = 0;
+            bool    *opt_ws         = NULL;
+            size_t   opt_ws_cap     = 0;
+            bool     saw_ws         = false;
+            int      depth          = 0;
+            while (1) {
+                token_t p = tkn_peek(tkn_ctx);
+                if (p.type == TOKENTYPE_EOL || p.type == TOKENTYPE_EOF) {
+                    cctx_diagnostic(cctx, opt_pos, DIAG_ERR, "Unterminated `__VA_OPT__(`");
+                    for (size_t x = 0; x < opt_tokens_len; x++) {
+                        tkn_delete(opt_tokens[x]);
+                    }
+                    free(opt_tokens);
+                    free(opt_ws);
+                    return false;
+                }
+                if (p.type == TOKENTYPE_WHITESPACE) {
+                    tkn_delete(tkn_next(tkn_ctx));
+                    saw_ws = true;
+                    continue;
+                }
+                if (p.type == TOKENTYPE_OTHER && p.subtype == C_TKN_RPAR && depth == 0) {
+                    token_t rpar = tkn_next(tkn_ctx);
+                    end_pos      = rpar.pos;
+                    tkn_delete(rpar);
+                    break;
+                }
+                token_t t = tkn_next(tkn_ctx);
+                if (t.type == TOKENTYPE_OTHER && t.subtype == C_TKN_LPAR) {
+                    depth++;
+                } else if (t.type == TOKENTYPE_OTHER && t.subtype == C_TKN_RPAR) {
+                    depth--;
+                }
+                bool   ws     = opt_tokens_len > 0 && saw_ws;
+                size_t ws_len = opt_tokens_len;
+                saw_ws        = false;
+                array_lencap_insert_strong(&opt_ws, sizeof(bool), &ws_len, &opt_ws_cap, &ws, ws_len);
+                array_lencap_insert_strong(
+                    &opt_tokens,
+                    sizeof(token_t),
+                    &opt_tokens_len,
+                    &opt_tokens_cap,
+                    &t,
+                    opt_tokens_len
+                );
+            }
+
+            subst.type              = C_SUBST_VA_OPT;
+            subst.va_opt.pos        = pos_including(opt_pos, end_pos);
+            subst.va_opt.tokens     = opt_tokens;
+            subst.va_opt.tokens_len = opt_tokens_len;
+            subst.va_opt.ws_before  = opt_ws;
+            matched                 = true;
+        } else if (tkn.type == TOKENTYPE_IDENT && !strcmp(tkn.strval, "__VA_ARGS__")) {
+            subst.type = C_SUBST_VA_ARGS;
+            matched    = true;
         } else if (tkn.type == TOKENTYPE_IDENT) {
             for (size_t i = 0; i < macro->regular.args_len; i++) {
                 if (!strcmp(tkn.strval, macro->regular.args[i])) {
@@ -1883,7 +1957,7 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
             size_t   lim        = SIZE_MAX;
             pos_t    pos; // Start position of the argument.
             if (!macro->is_proc_macro && macro->regular.is_variadic) {
-                lim = macro->regular.args_len + 1;
+                lim = macro->regular.args_len;
             }
 
             while (1) {
@@ -1916,8 +1990,10 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
                 }
 
                 // At depth 0, `)` ends the argument list and `,` separates arguments.
-                if (depth == 0 && args_len < lim && p.type == TOKENTYPE_OTHER
-                    && (p.subtype == C_TKN_RPAR || p.subtype == C_TKN_COMMA)) {
+                // Once we have collected enough regular args, commas inside the
+                // variadic tail are kept verbatim, but `)` still ends the list.
+                if (depth == 0 && p.type == TOKENTYPE_OTHER
+                    && (p.subtype == C_TKN_RPAR || (p.subtype == C_TKN_COMMA && args_len < lim))) {
                     bool is_end = p.subtype == C_TKN_RPAR;
                     tkn_delete(c_preproc_raw_next(pre));
                     c_macro_arg_t arg = {

@@ -206,6 +206,7 @@ static char *test_preproc_va_args() {
     c_preproc_t *pre  = c_preproc_create(src, C_STD_max, false, false);
 
     EXPECT_IDENT(pre, "yes1");
+    EXPECT_PUNCT(pre, C_TKN_COMMA);
     EXPECT_IDENT(pre, "yes2");
     EXPECT_EOF(pre);
 

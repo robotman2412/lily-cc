@@ -72,6 +72,8 @@ struct c_preproc_shared {
 struct c_preproc {
     // Base tokenizer.
     tokenizer_t         base;
+    // Pointer to the root preprocessor (may be pointer to self).
+    c_preproc_t        *root;
     // State shared with the root preprocessor.
     c_preproc_shared_t *shared;
     // Whether this preprocessor owns `shared` and should free it on destroy.
@@ -212,8 +214,8 @@ c_preproc_t *c_preproc_create_nested(c_preproc_t *parent);
 token_t      c_preproc_next(tokenizer_t *tkn_ctx);
 // Convert a preprocessor token to a C token.
 token_t      c_preproc_tkn_to_c_tkn(c_preproc_t *pre, token_t tkn);
-// Add a pre-defined macro.
-void         c_preproc_predef_macro(c_preproc_t *pre, char const *name, c_macro_t *macro);
+// Add a command-line or predefined macro.
+void         c_preproc_add_macro(c_preproc_t *pre, char const *name, c_macro_t *macro);
 
 // Create a regular macro by parsing it from a string.
 // On success, `*name_out` is set to a heap-allocated copy of the parsed macro

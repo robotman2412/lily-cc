@@ -17,10 +17,12 @@
 #include <assert.h>
 #include <ctype.h>
 #include <inttypes.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 
 
@@ -42,6 +44,7 @@ typedef enum {
 } next_mode_t;
 
 static void    c_preproc_destroy(tokenizer_t *tkn);
+static void    c_preproc_builtin_macros(c_preproc_t *preproc);
 static void    c_preproc_pragma(c_preproc_t *pre, pos_t pos, char const *pragma);
 static void    c_pragma_once(c_preproc_t *pre, pos_t pos, char const *args);
 static void    c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path);
@@ -67,6 +70,7 @@ static bool    c_preproc_do_emit(c_preproc_t *pre);
 static token_t c_preproc_get_tkn(c_preproc_t *pre, next_mode_t mode);
 static void    c_preproc_directive(c_preproc_t *pre);
 static bool    c_preproc_tkn_paste(c_preproc_t *pre, token_t const *lhs, token_t const *rhs, token_t *out);
+static char   *c_preproc_esc_str(char const *raw);
 static token_t c_preproc_raw_peek(c_preproc_t *pre);
 static token_t c_preproc_raw_next(c_preproc_t *pre);
 static bool    c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx);
@@ -76,6 +80,8 @@ static void    c_macro_arg_preexpand(c_preproc_t *pre, c_macro_arg_t *arg);
 static void    c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro);
 
 
+
+#pragma region builtins
 
 // Implementation of `__COUNTER__`.
 static c_expansion_t c_proc_macro_counter(c_preproc_t *pre, c_macro_arg_t const *args, size_t args_len, void *cookie) {
@@ -110,6 +116,146 @@ static c_expansion_t c_proc_macro_counter(c_preproc_t *pre, c_macro_arg_t const 
     return expand;
 }
 
+// Implementation of `__FILE__`.
+static c_expansion_t c_proc_macro_file(c_preproc_t *pre, c_macro_arg_t const *args, size_t args_len, void *cookie) {
+    (void)args;
+    (void)args_len;
+    (void)cookie;
+
+    token_t peek = c_preproc_raw_peek(pre->root);
+    char   *path;
+    if (peek.pos.srcfile && peek.pos.srcfile->path) {
+        path = c_preproc_esc_str(peek.pos.srcfile->path);
+    } else {
+        path = strong_strdup("<unknown>");
+    }
+
+    token_t tkn = {
+        .pos        = {0},
+        .type       = TOKENTYPE_SCONST,
+        .subtype    = C_STR_RAW_DQUOT,
+        .strval     = path,
+        .strval_len = strlen(path),
+    };
+    c_expansion_t expand = {
+        .tokens_len = 1,
+        .tokens_cap = 1,
+        .tokens     = strong_malloc(sizeof(token_t)),
+    };
+    *expand.tokens = tkn;
+
+    return expand;
+}
+
+// Implementation of `__LINE__`.
+static c_expansion_t c_proc_macro_line(c_preproc_t *pre, c_macro_arg_t const *args, size_t args_len, void *cookie) {
+    (void)cookie;
+    (void)args;
+    (void)args_len;
+
+    token_t peek = c_preproc_raw_peek(pre->root);
+
+    int cap = snprintf(NULL, 0, "%d", peek.pos.line);
+    if (cap < 0) {
+        perror("snprintf");
+        abort();
+    }
+    cap       += 1;
+    char *buf  = malloc(cap);
+    int   len  = snprintf(buf, cap, "%d", peek.pos.line);
+
+    token_t tkn = {
+        .pos        = {0},
+        .type       = TOKENTYPE_IDENT,
+        .subtype    = C_PPNUMBER,
+        .strval     = buf,
+        .strval_len = len,
+    };
+    c_expansion_t expand = {
+        .tokens_len = 1,
+        .tokens_cap = 1,
+        .tokens     = strong_malloc(sizeof(token_t)),
+    };
+    *expand.tokens = tkn;
+
+    return expand;
+}
+
+// Format-print a macro definition for `c_preproc_predef_macros`.
+__attribute__((format(printf, 2, 3))) static void c_preproc_fmt_builtin_macro(c_preproc_t *pre, char const *fmt, ...) {
+    va_list vl;
+    va_start(vl, fmt);
+    int cap = vsnprintf(NULL, 0, fmt, vl);
+    va_end(vl);
+
+    char *spec = malloc(cap + 1);
+    va_start(vl, fmt);
+    vsnprintf(spec, cap + 1, fmt, vl);
+    va_end(vl);
+
+    char      *name;
+    c_macro_t *macro  = c_macro_create("<built-in>", spec, &name);
+    macro->is_builtin = true;
+    c_preproc_add_macro(pre, name, macro);
+    free(name);
+    free(spec);
+}
+
+// Create all (standard and extension) pre-defined macros for a given C frontend.
+static void c_preproc_builtin_macros(c_preproc_t *pre) {
+    time_t    ts       = time(NULL);
+    struct tm datetime = *localtime(&ts);
+
+    // __DATE__
+    char const *month[] = {
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+    };
+    c_preproc_fmt_builtin_macro(
+        pre,
+        "__DATE__=\"%s %02d %04d\"",
+        month[datetime.tm_mon],
+        datetime.tm_mday,
+        datetime.tm_year + 1900
+    );
+
+    // __TIME__
+    c_preproc_fmt_builtin_macro(pre, "__TIME__=\"%02d:%02d:%02d\"", datetime.tm_hour, datetime.tm_min, datetime.tm_sec);
+
+    // __STDC__
+    c_preproc_fmt_builtin_macro(pre, "__STDC__=1");
+
+    // __STDC_VERSION__
+    c_preproc_fmt_builtin_macro(pre, "__STDC_VERSION__=%dL", pre->shared->c_std);
+
+    // __COUNTER__
+    c_macro_t *counter_macro  = c_proc_macro_create(false, c_proc_macro_counter, NULL);
+    counter_macro->is_builtin = true;
+    c_preproc_add_macro(pre, "__COUNTER__", counter_macro);
+
+    // __FILE__
+    c_macro_t *file_macro  = c_proc_macro_create(false, c_proc_macro_file, NULL);
+    file_macro->is_builtin = true;
+    c_preproc_add_macro(pre, "__FILE__", file_macro);
+
+    // __LINE__
+    c_macro_t *line_macro  = c_proc_macro_create(false, c_proc_macro_line, NULL);
+    line_macro->is_builtin = true;
+    c_preproc_add_macro(pre, "__LINE__", line_macro);
+}
+
+#pragma endregion builtins
+
 // Create a preprocessor for a certain file.
 // See `c_preproc_t` for details about `raw_mode` and `keep_comments`.
 // Applying either flag after creation of the preprocessor will create incorrect output.
@@ -133,6 +279,7 @@ c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std, bool raw_mode, bool
     // Note: `base` has a `pos` and `file`, but we do not use either.
     pre->base.next          = c_preproc_next;
     pre->base.cleanup       = c_preproc_destroy;
+    pre->root               = pre;
     pre->shared             = shared;
     pre->owns_shared        = true;
     pre->stack_len          = 1;
@@ -146,8 +293,7 @@ c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std, bool raw_mode, bool
     pre->raw_mode           = raw_mode;
     pre->keep_comments      = keep_comments;
 
-    c_macro_t *counter_macro = c_proc_macro_create(false, c_proc_macro_counter, NULL);
-    c_preproc_predef_macro(pre, "__COUNTER__", counter_macro);
+    c_preproc_builtin_macros(pre);
 
     return pre;
 }
@@ -159,6 +305,7 @@ c_preproc_t *c_preproc_create_nested(c_preproc_t *parent) {
     pre->base.next     = c_preproc_next;
     pre->base.cleanup  = c_preproc_destroy;
     pre->shared        = parent->shared;
+    pre->root          = parent->root;
     pre->owns_shared   = false;
     pre->blank_line    = true;
     pre->raw_mode      = true;
@@ -950,6 +1097,26 @@ static void c_preproc_directive(c_preproc_t *pre) {
 
 #pragma region tokenizing
 
+// Escape a string so that it can be made into a preprocessing string.
+static char *c_preproc_esc_str(char const *raw) {
+    size_t n_esc = 0;
+    for (size_t i = 0; raw[i]; i++) {
+        if (raw[i] == '\\' || raw[i] == '\"') {
+            n_esc++;
+        }
+    }
+    char  *res = malloc(strlen(raw) + n_esc + 1);
+    size_t o   = 0;
+    for (size_t i = 0; raw[i]; i++) {
+        if (raw[i] == '\\' || raw[i] == '\"') {
+            res[o++] = '\\';
+        }
+        res[o++] = raw[i];
+    }
+    res[o++] = 0;
+    return res;
+}
+
 // Read bytes up to but excluding the next newline.
 static char *c_preproc_read_bytes(c_preproc_t *pre, pos_t *pos_out) {
     c_incfile_t *file = &pre->stack[pre->stack_len - 1];
@@ -1298,8 +1465,8 @@ token_t c_preproc_tkn_to_c_tkn(c_preproc_t *pre, token_t tkn) {
 
 #pragma region macros
 
-// Add a pre-defined macro.
-void c_preproc_predef_macro(c_preproc_t *pre, char const *name, c_macro_t *macro) {
+// Add a command-line or predefined macro.
+void c_preproc_add_macro(c_preproc_t *pre, char const *name, c_macro_t *macro) {
     map_set(&pre->shared->macros, name, macro);
 }
 
@@ -1650,7 +1817,11 @@ c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_o
         tkn_ctx_delete(&tkn->base);
     }
     cctx_delete(cctx);
-    *name_out = name;
+    if (name_out) {
+        *name_out = name;
+    } else {
+        free(name);
+    }
     return macro;
 
 error:

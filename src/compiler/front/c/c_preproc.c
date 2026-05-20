@@ -620,9 +620,12 @@ static token_t c_preproc_eval_defined(c_preproc_t *pre, pos_t pos) {
         } else {
             eval = map_get(&pre->shared->macros, name.strval) != NULL;
         }
+        tkn_delete(name);
+        tkn_delete(rpar);
     } else {
         cctx_diagnostic(pre->shared->cctx, lpar.pos, DIAG_ERR, "Expected identifier or (");
     }
+    tkn_delete(lpar);
 
     return (token_t){
         .pos  = pos,
@@ -680,27 +683,28 @@ static token_t c_preproc_eval_has_attribute(c_preproc_t *pre, pos_t pos, bool is
 // and converts PP numbers to C iconst.
 static token_t c_preproc_eval_get_helper(c_preproc_t *pre) {
     token_t oper = c_preproc_get_tkn(pre, LINE_NOWS_EXPAND);
+    token_t res;
     if (oper.type == TOKENTYPE_IDENT && !strcmp(oper.strval, "defined")) {
-        return c_preproc_eval_defined(pre, oper.pos);
+        res = c_preproc_eval_defined(pre, oper.pos);
     } else if (oper.type == TOKENTYPE_IDENT && !strcmp(oper.strval, "__has_include")) {
-        return c_preproc_eval_has_include(pre, oper.pos);
+        res = c_preproc_eval_has_include(pre, oper.pos);
     } else if (oper.type == TOKENTYPE_IDENT && !strcmp(oper.strval, "__has_embed")) {
-        return c_preproc_eval_has_embed(pre, oper.pos);
+        res = c_preproc_eval_has_embed(pre, oper.pos);
     } else if (oper.type == TOKENTYPE_IDENT && !strcmp(oper.strval, "__has_attribute")) {
-        return c_preproc_eval_has_attribute(pre, oper.pos, false);
+        res = c_preproc_eval_has_attribute(pre, oper.pos, false);
     } else if (oper.type == TOKENTYPE_IDENT && !strcmp(oper.strval, "__has_c_attribute")) {
-        return c_preproc_eval_has_attribute(pre, oper.pos, true);
+        res = c_preproc_eval_has_attribute(pre, oper.pos, true);
     } else if (oper.type == TOKENTYPE_IDENT) {
         if (oper.subtype == C_PPNUMBER) {
-            token_t res = c_tkn_conv_number(pre->shared->cctx, pre->shared->c_std, &oper);
-            tkn_delete(oper);
-            return res;
+            res = c_tkn_conv_number(pre->shared->cctx, pre->shared->c_std, &oper);
         } else {
             return oper;
         }
     } else {
         return c_preproc_tkn_to_c_tkn(pre, oper);
     }
+    tkn_delete(oper);
+    return res;
 }
 
 // Evaluate the condition for an `#if` or `#elif` directive.
@@ -968,9 +972,11 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
     (void)pos;
     token_t name = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
     if (name.type == TOKENTYPE_EOL) {
+        tkn_delete(name);
         cctx_diagnostic(pre->shared->cctx, name.pos, DIAG_ERR, "Expected macro name");
         return;
     } else if (name.type != TOKENTYPE_IDENT) {
+        tkn_delete(name);
         cctx_diagnostic(pre->shared->cctx, name.pos, DIAG_ERR, "Macro name must be an identifier");
         return;
     }
@@ -1059,6 +1065,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
         c_macro_destroy(existing);
     }
     map_set(&pre->shared->macros, name.strval, macro);
+    tkn_delete(name);
     return;
 
 error:
@@ -1069,6 +1076,7 @@ error:
         del = c_preproc_get_tkn(pre, LINE_RAW);
     }
     tkn_delete(del);
+    tkn_delete(name);
 }
 
 // Preprocessor directive: undef.
@@ -1128,9 +1136,11 @@ static void c_preproc_directive(c_preproc_t *pre) {
     } else if (!c_preproc_do_emit(pre)) {
         // Any remaining directives are only processed if the current if directive branch is active.
         c_preproc_until_eol(pre, false);
+        tkn_delete(name);
         return;
     } else if (!strcmp(name.strval, "include")) {
         c_directive_include(pre, name.pos);
+        tkn_delete(name);
         return; // `#include` pushes files to the stack, so it consumes until EOL itself.
     } else if (!strcmp(name.strval, "pragma")) {
         c_directive_pragma(pre, name.pos);
@@ -1144,6 +1154,7 @@ static void c_preproc_directive(c_preproc_t *pre) {
         c_directive_undef(pre, name.pos);
     }
 
+    tkn_delete(name);
     c_preproc_until_eol(pre, true);
 }
 
@@ -1283,8 +1294,8 @@ static void c_preproc_until_eol(c_preproc_t *pre, bool warn_extra_tok) {
             } else {
                 extra = tkn.pos;
             }
-            tkn_delete(tkn);
         }
+        tkn_delete(tkn);
     }
 
     if (warn_extra_tok && has_extra) {
@@ -1453,7 +1464,7 @@ again:
     peek = c_preproc_raw_peek(pre);
     if (skip_whitespace) {
         while (peek.type == TOKENTYPE_WHITESPACE) {
-            c_preproc_raw_next(pre);
+            tkn_delete(c_preproc_raw_next(pre));
             peek = c_preproc_raw_peek(pre);
         }
     }
@@ -1655,12 +1666,10 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
                 tkn_delete(next);
                 return false;
             }
-            tkn_delete(tkn);
             tkn_delete(next);
             matched = true;
         } else if (tkn.type == TOKENTYPE_IDENT && !strcmp(tkn.strval, "__VA_OPT__")) {
             pos_t opt_pos = tkn.pos;
-            tkn_delete(tkn);
 
             // Skip whitespace before `(`.
             token_t pp = tkn_peek(tkn_ctx);
@@ -1728,7 +1737,6 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
         } else if (tkn.type == TOKENTYPE_IDENT) {
             for (size_t i = 0; i < macro->regular.args.len; i++) {
                 if (!strcmp(tkn.strval, macro->regular.args.arr[i])) {
-                    tkn_delete(tkn);
                     subst.type      = C_SUBST_ARG;
                     subst.stringize = false;
                     subst.arg_index = i;
@@ -1740,6 +1748,8 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
         if (!matched) {
             subst.type  = C_SUBST_TOKEN;
             subst.token = tkn;
+        } else {
+            tkn_delete(tkn);
         }
         vec_push(&macro->regular.subst, subst);
     }

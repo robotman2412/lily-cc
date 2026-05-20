@@ -86,17 +86,17 @@ struct srcfile {
     char *realpath;
 #endif
     // File name; view of name in file path.
-    char    *name;
+    char const *name;
     // Is this stored in RAM (as opposed to on disk)?
-    bool     is_ram_file;
+    bool        is_ram_file;
     // Current offset of file descriptor (for file on disk).
-    off_t    fd_off;
+    off_t       fd_off;
     // File descriptor (for files on disk).
-    FILE    *fd;
+    FILE       *fd;
     // File content size (for files in RAM).
-    size_t   content_len;
+    size_t      content_len;
     // File content pointer (for files in RAM).
-    uint8_t *content;
+    uint8_t    *content;
 #ifdef SRCFILE_CHECK_INO
     // Inode number (used for deduplication).
     ino_t ino;

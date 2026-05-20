@@ -262,6 +262,12 @@ srcfile_t *srcfile_open(cctx_t *ctx, char const *path) {
     file->is_ram_file = false;
     file->fd          = fd;
     file->path        = strong_strdup(path);
+    char *sep         = strrchr(file->path, '/');
+    if (sep) {
+        file->name = sep + 1;
+    } else {
+        file->name = file->path;
+    }
 
     array_lencap_insert_strong(&ctx->srcs, sizeof(void *), &ctx->srcs_len, &ctx->srcs_cap, &file, ctx->srcs_len);
 

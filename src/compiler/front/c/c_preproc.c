@@ -124,8 +124,40 @@ static c_expansion_t c_proc_macro_file(c_preproc_t *pre, c_macro_arg_t const *ar
 
     token_t peek = c_preproc_raw_peek(pre->root);
     char   *path;
-    if (peek.pos.srcfile && peek.pos.srcfile->path) {
+    if (peek.pos.srcfile) {
         path = c_preproc_esc_str(peek.pos.srcfile->path);
+    } else {
+        path = strong_strdup("<unknown>");
+    }
+
+    token_t tkn = {
+        .pos        = {0},
+        .type       = TOKENTYPE_SCONST,
+        .subtype    = C_STR_RAW_DQUOT,
+        .strval     = path,
+        .strval_len = strlen(path),
+    };
+    c_expansion_t expand = {
+        .tokens_len = 1,
+        .tokens_cap = 1,
+        .tokens     = strong_malloc(sizeof(token_t)),
+    };
+    *expand.tokens = tkn;
+
+    return expand;
+}
+
+// Implementation of `__FILE_NAME__`.
+static c_expansion_t
+    c_proc_macro_file_name(c_preproc_t *pre, c_macro_arg_t const *args, size_t args_len, void *cookie) {
+    (void)args;
+    (void)args_len;
+    (void)cookie;
+
+    token_t peek = c_preproc_raw_peek(pre->root);
+    char   *path;
+    if (peek.pos.srcfile) {
+        path = c_preproc_esc_str(peek.pos.srcfile->name);
     } else {
         path = strong_strdup("<unknown>");
     }
@@ -247,6 +279,11 @@ static void c_preproc_builtin_macros(c_preproc_t *pre) {
     c_macro_t *file_macro  = c_proc_macro_create(false, c_proc_macro_file, NULL);
     file_macro->is_builtin = true;
     c_preproc_add_macro(pre, "__FILE__", file_macro);
+
+    // __FILE_NAME__
+    c_macro_t *filename_macro  = c_proc_macro_create(false, c_proc_macro_file_name, NULL);
+    filename_macro->is_builtin = true;
+    c_preproc_add_macro(pre, "__FILE_NAME__", filename_macro);
 
     // __LINE__
     c_macro_t *line_macro  = c_proc_macro_create(false, c_proc_macro_line, NULL);

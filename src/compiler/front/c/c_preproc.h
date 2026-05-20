@@ -13,6 +13,18 @@
 
 
 
+// Type of C macro substitution.
+typedef enum __attribute__((packed)) {
+    // Plain token.
+    C_SUBST_TOKEN,
+    // Function-like macro argument.
+    C_SUBST_ARG,
+    // The value of `__VA_ARGS__`.
+    C_SUBST_VA_ARGS,
+    // The tokens of `__VA_OPT__`.
+    C_SUBST_VA_OPT,
+} c_subst_type_t;
+
 // C compiler context.
 typedef struct c_compiler       c_compiler_t;
 // State shared between a root preprocessor and any nested expansion contexts.
@@ -122,9 +134,9 @@ struct c_macro {
             // Argument names.
             char           **args;
             // Number of substitution positions in the body.
-            size_t           tokens_len;
+            size_t           subst_len;
             // Substitution positions in the body.
-            c_macro_subst_t *tokens;
+            c_macro_subst_t *subst;
         } regular;
         struct {
             // Callback to run on invocation.
@@ -156,17 +168,19 @@ struct c_macro_arg {
 
 // A single substitution position within a regular macro's body.
 struct c_macro_subst {
-    // True for an argument substitution; false for a literal token.
-    bool is_arg;
+    // Type of substitution.
+    c_subst_type_t type;
     // For argument substitutions: stringize the argument with `#`.
-    bool stringize;
+    bool           stringize;
     // For argument substitutions: is surrounded by `##` on one or both sides.
-    bool pasting;
+    bool           pasting;
     union {
-        // Literal token to emit (when `is_arg` is false).
-        token_t literal;
-        // Index into the macro argument list (when `is_arg` is true).
-        size_t  arg_index;
+        // Literal token to emit (`C_SUBST_TOKEN`).
+        token_t       token;
+        // Index into the macro argument list (`C_SUBST_ARG` and `C_SUBST_STRINGIZE`).
+        size_t        arg_index;
+        // Synthetic arg for `__VA_OPT__` value.
+        c_macro_arg_t va_opt;
     };
 };
 
@@ -176,8 +190,8 @@ struct c_expansion {
     c_macro_t const *macro;
     // Number of tokens already expanded.
     size_t           index;
-    // Total number of tokens to expand.
-    size_t           tokens_len;
+    // Tokens to expand.
+    size_t           tokens_len, tokens_cap;
     // Tokens to expand.
     token_t         *tokens;
 };

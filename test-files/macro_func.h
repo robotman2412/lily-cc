@@ -65,3 +65,17 @@ Q2()()() // fin
 #define W1(x) W0(x
 #define W2 W1(
 W2 PASTE(thing, ok) )) // thingok
+
+// Variadics.
+#define V0(...) __VA_ARGS__
+V0(a, b) // a, b
+V0() // Blank line
+#define V1(a, ...) __VA_ARGS__
+V1(a, b) // b
+V1(a) // Blank line
+#define V2(...) #__VA_ARGS__
+V2(This, thing) // "This, thing"
+V2() // ""
+#define V3(...) #__VA_OPT__(,)
+V3(a) // ","
+V3()  // ""

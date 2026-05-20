@@ -6,6 +6,7 @@
 #pragma once
 
 #include "list.h"
+#include "vec.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -172,6 +173,8 @@ struct token {
     // Parameters for AST node.
     token_t    *params;
 };
+
+VEC_TYPE_DEF(vec_token_t, token_t)
 
 
 

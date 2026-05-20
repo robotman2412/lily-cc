@@ -43,8 +43,15 @@ typedef struct c_macro_subst    c_macro_subst_t;
 typedef struct c_macro_arg      c_macro_arg_t;
 // Expanded macro value.
 typedef struct c_expansion      c_expansion_t;
+
+VEC_TYPE_DEF(vec_incfile_t, c_incfile_t)
+VEC_TYPE_DEF(vec_ifdir_t, c_ifdir_t)
+VEC_TYPE_DEF(vec_macro_subst_t, c_macro_subst_t)
+VEC_TYPE_DEF(vec_macro_arg_t, c_macro_arg_t)
+VEC_TYPE_DEF(vec_expansion_t, c_expansion_t)
+
 // Procedural macro callback.
-typedef c_expansion_t (*c_proc_macro_cb_t)(c_preproc_t *pre, c_macro_arg_t const *args, size_t args_len, void *cookie);
+typedef c_expansion_t (*c_proc_macro_cb_t)(c_preproc_t *pre, vec_macro_arg_t const *args, void *cookie);
 
 // State shared between a root preprocessor and any nested expansion contexts.
 // Nested contexts (used for recursive argument expansion) hold a pointer to
@@ -52,20 +59,16 @@ typedef c_expansion_t (*c_proc_macro_cb_t)(c_preproc_t *pre, c_macro_arg_t const
 // state, and the diagnostics sink stay consistent across all expansions.
 struct c_preproc_shared {
     // Parent compiler context.
-    cctx_t    *cctx;
+    cctx_t  *cctx;
     // Macro definitions by name.
     // Map of `char *` -> `c_macro_t *`.
-    map_t      macros;
-    // All files in order of first opened.
-    size_t     files_len, files_cap;
-    // All files in order of first opened.
-    srcfile_t *files;
+    map_t    macros;
     // Set of files which have already executed a `#pragma once`.
-    set_t      once_files;
+    set_t    once_files;
     // Current C standard.
-    int        c_std;
+    int      c_std;
     // Next value for `__COUNTER__`.
-    uint64_t   counter_macro;
+    uint64_t counter_macro;
 };
 
 // C preprocessor state.
@@ -80,13 +83,9 @@ struct c_preproc {
     // True for the root preprocessor; false for nested expansion contexts.
     bool                owns_shared;
     // Queue of tokens to emit from macro expansions.
-    size_t              expand_len, expand_cap;
-    // Queue of tokens to emit from macro expansions.
-    c_expansion_t      *expand;
+    vec_expansion_t     expand;
     // Include-file tokenizer stack, bottom is the original file.
-    size_t              stack_len, stack_cap;
-    // Include-file tokenizer stack, bottom is the original file.
-    c_incfile_t        *stack;
+    vec_incfile_t       stack;
     // Whether the current line has non-whitespace tokens on it.
     bool                blank_line;
     // Do not convert tokens to C tokens before emitting them.
@@ -102,9 +101,7 @@ struct c_incfile {
     // Associated tokenizer.
     tokenizer_t *tkn_ctx;
     // Active if/ifdef/ifndef directives.
-    size_t       ifdir_len, ifdir_cap;
-    // Active if/ifdef/ifndef directives.
-    c_ifdir_t   *ifdir;
+    vec_ifdir_t  ifdir;
 };
 
 // If-directive stack entry.
@@ -130,15 +127,11 @@ struct c_macro {
     union {
         struct {
             // Variadic macros (with ...).
-            bool             is_variadic;
-            // Number of non-variadic arguments.
-            size_t           args_len;
+            bool              is_variadic;
             // Argument names.
-            char           **args;
-            // Number of substitution positions in the body.
-            size_t           subst_len;
+            vec_cstr_t        args;
             // Substitution positions in the body.
-            c_macro_subst_t *subst;
+            vec_macro_subst_t subst;
         } regular;
         struct {
             // Callback to run on invocation.
@@ -152,20 +145,16 @@ struct c_macro {
 // A single collected argument to a function-like macro.
 struct c_macro_arg {
     // Position of this argument (may be 0-length).
-    pos_t    pos;
-    // Number of tokens in this argument.
-    size_t   tokens_len;
+    pos_t       pos;
     // Tokens making up this argument.
-    token_t *tokens;
+    vec_token_t tokens;
     // Per-token: was there whitespace (or newlines) before this token in the
     // original argument source? The first token's entry is always false.
-    bool    *ws_before;
+    vec_bool_t  ws_before;
     // Lazily-computed stringized version.
-    char    *stringized;
+    char       *stringized;
     // Lazily-computed macro-expanded version.
-    size_t   expanded_len;
-    // Lazily-computed macro-expanded version.
-    token_t *expanded;
+    vec_token_t expanded;
 };
 
 // A single substitution position within a regular macro's body.
@@ -193,9 +182,7 @@ struct c_expansion {
     // Number of tokens already expanded.
     size_t           index;
     // Tokens to expand.
-    size_t           tokens_len, tokens_cap;
-    // Tokens to expand.
-    token_t         *tokens;
+    vec_token_t      tokens;
 };
 
 

@@ -6,13 +6,13 @@
 #include "c_preproc.h"
 
 #include "arith128.h"
-#include "arrays.h"
 #include "c_tokenizer.h"
 #include "compiler.h"
 #include "map.h"
 #include "set.h"
 #include "strong_malloc.h"
 #include "tokenizer.h"
+#include "vec.h"
 
 #include <assert.h>
 #include <ctype.h>
@@ -82,7 +82,7 @@ static token_t c_preproc_raw_peek(c_preproc_t *pre);
 static token_t c_preproc_raw_next(c_preproc_t *pre);
 
 static bool    c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx);
-static void    c_macro_mark_pasting(c_macro_subst_t *tokens, size_t tokens_len);
+static void    c_macro_mark_pasting(vec_macro_subst_t *tokens);
 static token_t c_macro_arg_stringize(c_macro_arg_t *arg, pos_t pos);
 static void    c_macro_arg_preexpand(c_preproc_t *pre, c_macro_arg_t *arg);
 static void    c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro);
@@ -92,10 +92,9 @@ static void    c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macr
 #pragma region builtins
 
 // Implementation of `__COUNTER__`.
-static c_expansion_t c_proc_macro_counter(c_preproc_t *pre, c_macro_arg_t const *args, size_t args_len, void *cookie) {
+static c_expansion_t c_proc_macro_counter(c_preproc_t *pre, vec_macro_arg_t const *args, void *cookie) {
     (void)cookie;
     (void)args;
-    (void)args_len;
 
     int cap = snprintf(NULL, 0, "%" PRIu64, pre->shared->counter_macro);
     if (cap < 0) {
@@ -114,20 +113,15 @@ static c_expansion_t c_proc_macro_counter(c_preproc_t *pre, c_macro_arg_t const 
         .strval     = buf,
         .strval_len = len,
     };
-    c_expansion_t expand = {
-        .tokens_len = 1,
-        .tokens_cap = 1,
-        .tokens     = strong_malloc(sizeof(token_t)),
-    };
-    *expand.tokens = tkn;
+    c_expansion_t expand = {0};
+    vec_push(&expand.tokens, tkn);
 
     return expand;
 }
 
 // Implementation of `__FILE__`.
-static c_expansion_t c_proc_macro_file(c_preproc_t *pre, c_macro_arg_t const *args, size_t args_len, void *cookie) {
+static c_expansion_t c_proc_macro_file(c_preproc_t *pre, vec_macro_arg_t const *args, void *cookie) {
     (void)args;
-    (void)args_len;
     (void)cookie;
 
     token_t peek = c_preproc_raw_peek(pre->root);
@@ -145,21 +139,15 @@ static c_expansion_t c_proc_macro_file(c_preproc_t *pre, c_macro_arg_t const *ar
         .strval     = path,
         .strval_len = strlen(path),
     };
-    c_expansion_t expand = {
-        .tokens_len = 1,
-        .tokens_cap = 1,
-        .tokens     = strong_malloc(sizeof(token_t)),
-    };
-    *expand.tokens = tkn;
+    c_expansion_t expand = {0};
+    vec_push(&expand.tokens, tkn);
 
     return expand;
 }
 
 // Implementation of `__FILE_NAME__`.
-static c_expansion_t
-    c_proc_macro_file_name(c_preproc_t *pre, c_macro_arg_t const *args, size_t args_len, void *cookie) {
+static c_expansion_t c_proc_macro_file_name(c_preproc_t *pre, vec_macro_arg_t const *args, void *cookie) {
     (void)args;
-    (void)args_len;
     (void)cookie;
 
     token_t peek = c_preproc_raw_peek(pre->root);
@@ -177,21 +165,16 @@ static c_expansion_t
         .strval     = path,
         .strval_len = strlen(path),
     };
-    c_expansion_t expand = {
-        .tokens_len = 1,
-        .tokens_cap = 1,
-        .tokens     = strong_malloc(sizeof(token_t)),
-    };
-    *expand.tokens = tkn;
+    c_expansion_t expand = {0};
+    vec_push(&expand.tokens, tkn);
 
     return expand;
 }
 
 // Implementation of `__LINE__`.
-static c_expansion_t c_proc_macro_line(c_preproc_t *pre, c_macro_arg_t const *args, size_t args_len, void *cookie) {
+static c_expansion_t c_proc_macro_line(c_preproc_t *pre, vec_macro_arg_t const *args, void *cookie) {
     (void)cookie;
     (void)args;
-    (void)args_len;
 
     token_t peek = c_preproc_raw_peek(pre->root);
 
@@ -211,12 +194,8 @@ static c_expansion_t c_proc_macro_line(c_preproc_t *pre, c_macro_arg_t const *ar
         .strval     = buf,
         .strval_len = len,
     };
-    c_expansion_t expand = {
-        .tokens_len = 1,
-        .tokens_cap = 1,
-        .tokens     = strong_malloc(sizeof(token_t)),
-    };
-    *expand.tokens = tkn;
+    c_expansion_t expand = {0};
+    vec_push(&expand.tokens, tkn);
 
     return expand;
 }
@@ -325,21 +304,19 @@ c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std, bool raw_mode, bool
     shared->c_std              = c_std;
 
     // Note: `base` has a `pos` and `file`, but we do not use either.
-    pre->base.next          = c_preproc_next;
-    pre->base.cleanup       = c_preproc_destroy;
-    pre->root               = pre;
-    pre->shared             = shared;
-    pre->owns_shared        = true;
-    pre->stack_len          = 1;
-    pre->stack_cap          = 1;
-    pre->stack              = strong_malloc(sizeof(c_incfile_t));
-    pre->stack[0].tkn_ctx   = &srctok->base;
-    pre->stack[0].ifdir     = NULL;
-    pre->stack[0].ifdir_len = 0;
-    pre->stack[0].ifdir_cap = 0;
-    pre->blank_line         = true;
-    pre->raw_mode           = raw_mode;
-    pre->keep_comments      = keep_comments;
+    pre->base.next           = c_preproc_next;
+    pre->base.cleanup        = c_preproc_destroy;
+    pre->root                = pre;
+    pre->shared              = shared;
+    pre->owns_shared         = true;
+    c_incfile_t root_incfile = {
+        .tkn_ctx = &srctok->base,
+        .ifdir   = {0},
+    };
+    vec_push(&pre->stack, root_incfile);
+    pre->blank_line    = true;
+    pre->raw_mode      = raw_mode;
+    pre->keep_comments = keep_comments;
 
     c_preproc_builtin_macros(pre);
 
@@ -366,27 +343,25 @@ c_preproc_t *c_preproc_create_nested(c_preproc_t *parent) {
 static void c_preproc_destroy(tokenizer_t *tkn) {
     c_preproc_t *pre = (c_preproc_t *)tkn;
 
-    for (size_t i = 0; i < pre->expand_len; i++) {
-        c_expansion_t *expand = &pre->expand[i];
-        for (size_t x = expand->index; x < expand->tokens_len; x++) {
-            tkn_delete(expand->tokens[x]);
+    for (size_t i = 0; i < pre->expand.len; i++) {
+        c_expansion_t *expand = &pre->expand.arr[i];
+        for (size_t x = expand->index; x < expand->tokens.len; x++) {
+            tkn_delete(expand->tokens.arr[x]);
         }
-        free(expand->tokens);
+        vec_clear(&expand->tokens);
     }
-    free(pre->expand);
+    vec_clear(&pre->expand);
 
-    while (pre->stack_len) {
+    while (pre->stack.len) {
         c_incfile_pop(pre);
     }
-    free(pre->stack);
+    vec_clear(&pre->stack);
 
     if (pre->owns_shared) {
         map_foreach(ent, &pre->shared->macros) {
             c_macro_destroy(ent->value);
         }
         map_clear(&pre->shared->macros);
-        // Note: The source files are kept alive by the associated cctx_t.
-        free(pre->shared->files);
         free(pre->shared);
     }
 }
@@ -398,7 +373,7 @@ static void c_pragma_once(c_preproc_t *pre, pos_t pos, char const *args) {
     if (*args) {
         cctx_diagnostic(pre->shared->cctx, pos, DIAG_WARN, "Extra tokens after #pragma once");
     }
-    c_incfile_t *file = &pre->stack[pre->stack_len - 1];
+    c_incfile_t *file = &pre->stack.arr[pre->stack.len - 1];
     set_add(&pre->shared->once_files, file->tkn_ctx->file);
 }
 
@@ -461,50 +436,38 @@ static void c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path, bool s
     c_tokenizer_t *tkn_ctx = c_tkn_create(file, pre->shared->c_std);
     tkn_ctx->preproc_mode  = true;
     c_incfile_t incfile    = {
-        .tkn_ctx   = &tkn_ctx->base,
-        .ifdir_cap = 0,
-        .ifdir_len = 0,
-        .ifdir     = 0,
+        .tkn_ctx = &tkn_ctx->base,
+        .ifdir   = {0},
     };
-    array_lencap_insert_strong(
-        &pre->stack,
-        sizeof(c_incfile_t),
-        &pre->stack_len,
-        &pre->stack_cap,
-        &incfile,
-        pre->stack_len
-    );
+    vec_push(&pre->stack, incfile);
 }
 
 // Pop the top-most file off of the include stack.
 static void c_incfile_pop(c_preproc_t *pre) {
-    assert(pre->stack_len >= 1);
-    c_incfile_t *incfile = &pre->stack[pre->stack_len - 1];
+    assert(pre->stack.len >= 1);
+    c_incfile_t *incfile = &pre->stack.arr[pre->stack.len - 1];
 
     c_incfile_eof(pre);
 
     tkn_ctx_delete(incfile->tkn_ctx);
-    pre->stack_len--;
+    pre->stack.len--;
 }
 
 // Do end-of-file checks for top-most file of the include stack.
 static void c_incfile_eof(c_preproc_t *pre) {
-    assert(pre->stack_len >= 1);
-    c_incfile_t *incfile = &pre->stack[pre->stack_len - 1];
+    assert(pre->stack.len >= 1);
+    c_incfile_t *incfile = &pre->stack.arr[pre->stack.len - 1];
 
-    for (size_t i = 0; i < incfile->ifdir_len; i++) {
+    for (size_t i = 0; i < incfile->ifdir.len; i++) {
         cctx_diagnostic(
             pre->shared->cctx,
-            incfile->ifdir[i].pos,
+            incfile->ifdir.arr[i].pos,
             DIAG_ERR,
             "Unterminated #%s directive",
-            incfile->ifdir[i].allow_else ? "if" : "else"
+            incfile->ifdir.arr[i].allow_else ? "if" : "else"
         );
     }
-    free(incfile->ifdir);
-    incfile->ifdir     = NULL;
-    incfile->ifdir_len = 0;
-    incfile->ifdir_cap = 0;
+    vec_clear(&incfile->ifdir);
 }
 
 #pragma endregion incfile
@@ -707,6 +670,7 @@ static token_t c_preproc_eval_has_embed(c_preproc_t *pre, pos_t pos) {
 static token_t c_preproc_eval_has_attribute(c_preproc_t *pre, pos_t pos, bool is_c_attribute) {
     (void)pre;
     (void)pos;
+    (void)is_c_attribute;
     // Don't forget to uncomment the `__has_attribute` macro definition!
     fprintf(stderr, "TODO: attribute system and __has_attribute\n");
     abort();
@@ -746,7 +710,7 @@ static bool c_preproc_eval(c_preproc_t *pre, pos_t pos) {
         ENTRY_VALUE,
         ENTRY_GARBAGE,
     };
-    struct entry {
+    typedef struct entry {
         enum entry_type type;
         pos_t           pos;
         union {
@@ -756,44 +720,32 @@ static bool c_preproc_eval(c_preproc_t *pre, pos_t pos) {
                 bool   is_signed;
             } value;
         };
-    };
+    } entry_t;
+    VEC_TYPE_DEF(vec_entry_t, entry_t)
 
-    struct entry *stack     = NULL;
-    size_t        stack_len = 0;
-    size_t        stack_cap = 0;
-    bool          has_peek;
-    struct entry  peek;
+    vec_entry_t stack = {0};
+    bool        has_peek;
+    entry_t     peek;
 
 #pragma region
     // Push a node/token to the stack.
-#define push(thing)                                                                                                    \
-    do {                                                                                                               \
-        struct entry push_temporary_value = thing;                                                                     \
-        array_lencap_insert_strong(                                                                                    \
-            &stack,                                                                                                    \
-            sizeof(struct entry),                                                                                      \
-            &stack_len,                                                                                                \
-            &stack_cap,                                                                                                \
-            &push_temporary_value,                                                                                     \
-            stack_len                                                                                                  \
-        );                                                                                                             \
-    } while (0)
+#define push(thing) vec_push(&stack, (thing))
     // Pop a node/token from the stack.
 #define pop()                                                                                                          \
     ({                                                                                                                 \
-        struct entry pop_temporary_value = stack[stack_len - 1];                                                       \
-        stack_len--;                                                                                                   \
+        entry_t pop_temporary_value = stack.arr[stack.len - 1];                                                        \
+        stack.len--;                                                                                                   \
         pop_temporary_value;                                                                                           \
     })
     // Index by depth.
-#define by_depth(depth) stack[stack_len - (depth) - 1]
+#define by_depth(depth) stack.arr[stack.len - (depth) - 1]
     // Is this a specific kind of token?
 #define is_token2(depth, subtype)                                                                                      \
-    (stack_len > (depth) && by_depth(depth).type == ENTRY_TOKEN && by_depth(depth).token == (subtype))
+    (stack.len > (depth) && by_depth(depth).type == ENTRY_TOKEN && by_depth(depth).token == (subtype))
     // Is this a token?
-#define is_token(depth) (stack_len > (depth) && by_depth(depth).type == ENTRY_TOKEN)
+#define is_token(depth) (stack.len > (depth) && by_depth(depth).type == ENTRY_TOKEN)
     // Is this a value?
-#define is_value(depth) (stack_len > (depth) && by_depth(depth).type == ENTRY_VALUE)
+#define is_value(depth) (stack.len > (depth) && by_depth(depth).type == ENTRY_VALUE)
     // Read the next token into peek.
 #define peek()                                                                                                         \
     do {                                                                                                               \
@@ -868,20 +820,23 @@ static bool c_preproc_eval(c_preproc_t *pre, pos_t pos) {
         }
     }
 
-    if (stack_len == 0) {
+    bool result;
+    if (stack.len == 0) {
         cctx_diagnostic(pre->shared->cctx, pos, DIAG_ERR, "Expected preprocessor expression");
-        return 0;
-    } else if (stack_len == 1 && stack[0].type == ENTRY_VALUE) {
-        return cmp128u(stack[0].value.value, int128(0, 0)) != 0;
+        result = false;
+    } else if (stack.len == 1 && stack.arr[0].type == ENTRY_VALUE) {
+        result = cmp128u(stack.arr[0].value.value, int128(0, 0)) != 0;
     } else {
         cctx_diagnostic(
             pre->shared->cctx,
-            pos_including(stack[0].pos, stack[stack_len - 1].pos),
+            pos_including(stack.arr[0].pos, stack.arr[stack.len - 1].pos),
             DIAG_ERR,
             "Invalid preprocessor expression"
         );
-        return 0;
+        result = false;
     }
+    vec_clear(&stack);
+    return result;
 }
 
 #pragma endregion eval
@@ -918,7 +873,7 @@ static void c_directive_pragma(c_preproc_t *pre, pos_t pos) {
 
 // Preprocessor directive: if/elif.
 static void c_directive_if(c_preproc_t *pre, pos_t pos, bool elif, bool ifdef, bool ifndef) {
-    c_incfile_t *file = &pre->stack[pre->stack_len - 1];
+    c_incfile_t *file = &pre->stack.arr[pre->stack.len - 1];
 
     bool eval;
     if (ifdef || ifndef) {
@@ -935,13 +890,13 @@ static void c_directive_if(c_preproc_t *pre, pos_t pos, bool elif, bool ifdef, b
         eval = c_preproc_eval(pre, pos);
     }
 
-    bool parent_emit = file->ifdir_len < 2 || file->ifdir[file->ifdir_len - 2].do_emit;
+    bool parent_emit = file->ifdir.len < 2 || file->ifdir.arr[file->ifdir.len - 2].do_emit;
     if (elif) {
-        if (!file->ifdir_len) {
+        if (!file->ifdir.len) {
             cctx_diagnostic(pre->shared->cctx, pos, DIAG_ERR, "#elif without matching #if");
             return;
         }
-        c_ifdir_t *ifdir = &file->ifdir[file->ifdir_len - 1];
+        c_ifdir_t *ifdir = &file->ifdir.arr[file->ifdir.len - 1];
         if (!ifdir->allow_else) {
             cctx_diagnostic(pre->shared->cctx, pos, DIAG_ERR, "#elif without matching #if");
             cctx_diagnostic(pre->shared->cctx, ifdir->pos, DIAG_INFO, "Most recent #else directive");
@@ -958,27 +913,20 @@ static void c_directive_if(c_preproc_t *pre, pos_t pos, bool elif, bool ifdef, b
             .disabled   = eval,
             .do_emit    = eval && parent_emit,
         };
-        array_lencap_insert_strong(
-            &file->ifdir,
-            sizeof(c_ifdir_t),
-            &file->ifdir_len,
-            &file->ifdir_cap,
-            &ifdir,
-            file->ifdir_len
-        );
+        vec_push(&file->ifdir, ifdir);
     }
 }
 
 // Preprocessor directive: else.
 static void c_directive_else(c_preproc_t *pre, pos_t pos) {
-    c_incfile_t *file = &pre->stack[pre->stack_len - 1];
+    c_incfile_t *file = &pre->stack.arr[pre->stack.len - 1];
 
-    if (!file->ifdir_len) {
+    if (!file->ifdir.len) {
         cctx_diagnostic(pre->shared->cctx, pos, DIAG_ERR, "#else without matching #if");
         return;
     }
-    c_ifdir_t *ifdir       = &file->ifdir[file->ifdir_len - 1];
-    bool       parent_emit = file->ifdir_len < 2 || file->ifdir[file->ifdir_len - 2].do_emit;
+    c_ifdir_t *ifdir       = &file->ifdir.arr[file->ifdir.len - 1];
+    bool       parent_emit = file->ifdir.len < 2 || file->ifdir.arr[file->ifdir.len - 2].do_emit;
 
     if (!ifdir->allow_else) {
         cctx_diagnostic(pre->shared->cctx, pos, DIAG_ERR, "Dangling #else");
@@ -994,13 +942,13 @@ static void c_directive_else(c_preproc_t *pre, pos_t pos) {
 
 // Preprocessor directive: endif.
 static void c_directive_endif(c_preproc_t *pre, pos_t pos) {
-    c_incfile_t *file = &pre->stack[pre->stack_len - 1];
+    c_incfile_t *file = &pre->stack.arr[pre->stack.len - 1];
 
-    if (!file->ifdir_len) {
+    if (!file->ifdir.len) {
         cctx_diagnostic(pre->shared->cctx, pos, DIAG_ERR, "#endif without matching #if");
         return;
     }
-    file->ifdir_len--;
+    file->ifdir.len--;
 }
 
 // Preprocessor directive: warning.
@@ -1027,8 +975,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
         return;
     }
 
-    c_macro_t *macro      = strong_calloc(1, sizeof(c_macro_t));
-    size_t     params_cap = 0;
+    c_macro_t *macro = strong_calloc(1, sizeof(c_macro_t));
 
     // A `(` immediately after the name (no intervening whitespace) makes this a
     // function-like macro; otherwise the rest of the line is the body.
@@ -1067,14 +1014,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
                     );
                 }
                 char *str = strong_strdup(tkn.strval);
-                array_lencap_insert_strong(
-                    &macro->regular.args,
-                    sizeof(char *),
-                    &macro->regular.args_len,
-                    &params_cap,
-                    &str,
-                    macro->regular.args_len
-                );
+                vec_push(&macro->regular.args, str);
                 tkn_delete(tkn);
             } else {
                 cctx_diagnostic(pre->shared->cctx, tkn.pos, DIAG_ERR, "Expected an identifier or `...`");
@@ -1102,7 +1042,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
         }
     }
 
-    if (!c_macro_parse_body(macro, pre->stack[pre->stack_len - 1].tkn_ctx)) {
+    if (!c_macro_parse_body(macro, pre->stack.arr[pre->stack.len - 1].tkn_ctx)) {
         goto error;
     }
 
@@ -1233,14 +1173,12 @@ static char *c_preproc_esc_str(char const *raw) {
 
 // Read bytes up to but excluding the next newline.
 static char *c_preproc_read_bytes(c_preproc_t *pre, pos_t *pos_out) {
-    c_incfile_t *file = &pre->stack[pre->stack_len - 1];
+    c_incfile_t *file = &pre->stack.arr[pre->stack.len - 1];
     pos_t        start_pos;
     pos_t        end_pos;
     bool         has_token = false;
 
-    size_t len = 0;
-    size_t cap = 64;
-    char  *buf = strong_malloc(cap);
+    vec_char_t buf = {0};
 
     while (1) {
         token_t peek = tkn_peek(file->tkn_ctx);
@@ -1253,27 +1191,27 @@ static char *c_preproc_read_bytes(c_preproc_t *pre, pos_t *pos_out) {
             has_token = true;
         }
         if (has_token) {
-            c_tkn_append_src(&tkn, &buf, &len, &cap);
+            c_tkn_append_src(&tkn, &buf.arr, &buf.len, &buf.cap);
             end_pos = tkn.pos;
         }
         tkn_delete(tkn);
     }
 
-    if (!len) {
-        free(buf);
+    if (!buf.len) {
+        vec_clear(&buf);
         return NULL;
     }
 
-    for (size_t i = 0; i < len; i++) {
+    for (size_t i = 0; i < buf.len; i++) {
         // Since NUL is treated as whitespace but the output needs to be a C-string,
         // silently replace NUL with something printable instead.
-        if (buf[i] == 0) {
-            buf[i] = ' ';
+        if (buf.arr[i] == 0) {
+            buf.arr[i] = ' ';
         }
     }
-    array_lencap_insert_strong(&buf, 1, &len, &cap, "", len);
+    vec_push(&buf, '\0');
     *pos_out = pos_including(start_pos, end_pos);
-    return buf;
+    return buf.arr;
 }
 
 // Read an angle-brackets string.
@@ -1286,12 +1224,10 @@ static token_t c_preproc_get_pathspec(c_preproc_t *pre) {
     pos_t start_pos = init.pos;
     tkn_delete(init);
 
-    c_incfile_t *file = &pre->stack[pre->stack_len - 1];
+    c_incfile_t *file = &pre->stack.arr[pre->stack.len - 1];
     pos_t        end_pos;
 
-    size_t len = 0;
-    size_t cap = 64;
-    char  *buf = strong_malloc(cap);
+    vec_char_t buf = {0};
 
     while (1) {
         token_t peek = tkn_peek(file->tkn_ctx);
@@ -1305,26 +1241,27 @@ static token_t c_preproc_get_pathspec(c_preproc_t *pre) {
             tkn_delete(tkn);
             break;
         }
-        c_tkn_append_src(&tkn, &buf, &len, &cap);
+        c_tkn_append_src(&tkn, &buf.arr, &buf.len, &buf.cap);
         end_pos = tkn.pos;
         tkn_delete(tkn);
     }
 
-    for (size_t i = 0; i < len; i++) {
+    for (size_t i = 0; i < buf.len; i++) {
         // Since NUL is treated as whitespace but the output needs to be a C-string,
         // silently replace NUL with something printable instead.
-        if (buf[i] == 0) {
-            buf[i] = ' ';
+        if (buf.arr[i] == 0) {
+            buf.arr[i] = ' ';
         }
     }
-    array_lencap_insert_strong(&buf, 1, &len, &cap, "", len);
+    size_t strval_len = buf.len;
+    vec_push(&buf, '\0');
 
     return (token_t){
         .pos        = pos_including(start_pos, end_pos),
         .type       = TOKENTYPE_SCONST,
         .subtype    = C_STR_ANGLEBRAC,
-        .strval     = buf,
-        .strval_len = len - 1,
+        .strval     = buf.arr,
+        .strval_len = strval_len,
     };
 }
 
@@ -1358,8 +1295,8 @@ static void c_preproc_until_eol(c_preproc_t *pre, bool warn_extra_tok) {
 // Whether the current if/else directive's code is active.
 // Always true if no if/else directive currently exists.
 static bool c_preproc_do_emit(c_preproc_t *pre) {
-    c_incfile_t *file = &pre->stack[pre->stack_len - 1];
-    return file->ifdir_len == 0 || file->ifdir[file->ifdir_len - 1].do_emit;
+    c_incfile_t *file = &pre->stack.arr[pre->stack.len - 1];
+    return file->ifdir.len == 0 || file->ifdir.arr[file->ifdir.len - 1].do_emit;
 }
 
 // Look past any whitespace tokens in the current raw stream without consuming them.
@@ -1370,23 +1307,23 @@ static token_t c_preproc_raw_peek_nonws(c_preproc_t *pre, size_t *ws_out) {
     size_t ws = 0;
 
     // Walk the macro expansion stack from top to bottom.
-    for (size_t i = pre->expand_len; i-- > 0;) {
-        c_expansion_t *expand = &pre->expand[i];
-        for (size_t j = expand->index; j < expand->tokens_len; j++) {
-            if (expand->tokens[j].type == TOKENTYPE_WHITESPACE) {
+    for (size_t i = pre->expand.len; i-- > 0;) {
+        c_expansion_t *expand = &pre->expand.arr[i];
+        for (size_t j = expand->index; j < expand->tokens.len; j++) {
+            if (expand->tokens.arr[j].type == TOKENTYPE_WHITESPACE) {
                 ws++;
             } else {
                 if (ws_out) {
                     *ws_out = ws;
                 }
-                return expand->tokens[j];
+                return expand->tokens.arr[j];
             }
         }
     }
 
     // Walk the include-file stack from top to bottom.
-    for (size_t i = pre->stack_len; i-- > 0;) {
-        tokenizer_t *tknz  = pre->stack[i].tkn_ctx;
+    for (size_t i = pre->stack.len; i-- > 0;) {
+        tokenizer_t *tknz  = pre->stack.arr[i].tkn_ctx;
         size_t       depth = 0;
         while (1) {
             token_t p = tkn_peek_n(tknz, depth);
@@ -1414,23 +1351,23 @@ static token_t c_preproc_raw_peek_nonws(c_preproc_t *pre, size_t *ws_out) {
 // Helper function for `c_preproc_get_tkn` that peeks raw tokens, first from macros, then from the srcfiles.
 static token_t c_preproc_raw_peek(c_preproc_t *pre) {
     // First check the macro stack.
-    for (size_t i = pre->expand_len - 1; i != SIZE_MAX; i--) {
-        c_expansion_t *expand = &pre->expand[i];
-        if (expand->index < expand->tokens_len) {
-            return expand->tokens[expand->index];
+    for (size_t i = pre->expand.len - 1; i != SIZE_MAX; i--) {
+        c_expansion_t *expand = &pre->expand.arr[i];
+        if (expand->index < expand->tokens.len) {
+            return expand->tokens.arr[expand->index];
         }
     }
 
     // Not to be found in macros; check include files.
-    for (size_t i = pre->stack_len - 1; i >= 1; i--) {
-        token_t peek = tkn_peek(pre->stack[i].tkn_ctx);
+    for (size_t i = pre->stack.len - 1; i >= 1; i--) {
+        token_t peek = tkn_peek(pre->stack.arr[i].tkn_ctx);
         if (peek.type != TOKENTYPE_EOF) {
             return peek;
         }
     }
 
     // Check source file.
-    return tkn_peek(pre->stack[0].tkn_ctx);
+    return tkn_peek(pre->stack.arr[0].tkn_ctx);
 }
 
 // Helper function for `c_preproc_get_tkn` that gets raw tokens, first from macros, then from the srcfiles.
@@ -1438,19 +1375,19 @@ static token_t c_preproc_raw_next(c_preproc_t *pre) {
     token_t tkn;
 
     // First check the macro stack.
-    for (size_t i = pre->expand_len - 1; i != SIZE_MAX; i--) {
-        c_expansion_t *expand = &pre->expand[i];
-        if (expand->index < expand->tokens_len) {
-            tkn = expand->tokens[expand->index++];
+    for (size_t i = pre->expand.len - 1; i != SIZE_MAX; i--) {
+        c_expansion_t *expand = &pre->expand.arr[i];
+        if (expand->index < expand->tokens.len) {
+            tkn = expand->tokens.arr[expand->index++];
             goto emit;
         }
-        free(expand->tokens);
-        pre->expand_len--;
+        vec_clear(&expand->tokens);
+        pre->expand.len--;
     }
 
     // Not to be found in macros; check include files.
-    while (pre->stack_len >= 2) {
-        tkn = tkn_next(pre->stack[pre->stack_len - 1].tkn_ctx);
+    while (pre->stack.len >= 2) {
+        tkn = tkn_next(pre->stack.arr[pre->stack.len - 1].tkn_ctx);
         if (tkn.type == TOKENTYPE_EOF) {
             tkn_delete(tkn);
         } else {
@@ -1461,7 +1398,7 @@ static token_t c_preproc_raw_next(c_preproc_t *pre) {
     }
 
     // Check source file; if it EOFs, just return it verbatim.
-    tkn = tkn_next(pre->stack[0].tkn_ctx);
+    tkn = tkn_next(pre->stack.arr[0].tkn_ctx);
 
 emit:
     if (tkn.type == TOKENTYPE_EOL) {
@@ -1538,8 +1475,8 @@ again:
         return tkn;
     }
     // Check that this macro wasn't already expanded.
-    for (size_t i = 0; i < pre->expand_len; i++) {
-        if (pre->expand[i].macro == macro) {
+    for (size_t i = 0; i < pre->expand.len; i++) {
+        if (pre->expand.arr[i].macro == macro) {
             return tkn;
         }
     }
@@ -1639,19 +1576,19 @@ void c_preproc_add_macro(c_preproc_t *pre, char const *name, c_macro_t *macro) {
 }
 
 // Mark argument substitutions adjacent to a `##` token with the `pasting` flag.
-static void c_macro_mark_pasting(c_macro_subst_t *tokens, size_t tokens_len) {
-    for (size_t i = 0; i < tokens_len; i++) {
+static void c_macro_mark_pasting(vec_macro_subst_t *tokens) {
+    for (size_t i = 0; i < tokens->len; i++) {
         if (i > 0) {
-            c_macro_subst_t const *prev = &tokens[i - 1];
+            c_macro_subst_t const *prev = &tokens->arr[i - 1];
             if (prev->token.type == TOKENTYPE_OTHER && prev->token.subtype == C_TKN_PASTE) {
-                tokens[i].pasting = true;
+                tokens->arr[i].pasting = true;
                 continue;
             }
         }
-        if (i + 1 < tokens_len) {
-            c_macro_subst_t const *next = &tokens[i + 1];
+        if (i + 1 < tokens->len) {
+            c_macro_subst_t const *next = &tokens->arr[i + 1];
             if (next->token.type == TOKENTYPE_OTHER && next->token.subtype == C_TKN_PASTE) {
-                tokens[i].pasting = true;
+                tokens->arr[i].pasting = true;
             }
         }
     }
@@ -1662,8 +1599,7 @@ static void c_macro_mark_pasting(c_macro_subst_t *tokens, size_t tokens_len) {
 // to `macro->regular.subst`. The terminating EOL is left in the stream.
 // Returns whether parsing succeeded.
 static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
-    cctx_t *cctx       = tkn_ctx->cctx;
-    size_t  tokens_cap = macro->regular.subst_len;
+    cctx_t *cctx = tkn_ctx->cctx;
 
     while (1) {
         // Skip whitespace; stop at EOL/EOF without consuming it.
@@ -1678,7 +1614,7 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
 
         token_t tkn = tkn_next(tkn_ctx);
 
-        if (macro->regular.subst_len == 0 && tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_PASTE) {
+        if (macro->regular.subst.len == 0 && tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_PASTE) {
             cctx_diagnostic(cctx, tkn.pos, DIAG_ERR, "`##` is not allowed at the start/end of macro expansion lists");
             tkn_delete(tkn);
             return false;
@@ -1704,8 +1640,8 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
                 return false;
             }
             bool found = false;
-            for (size_t i = 0; i < macro->regular.args_len; i++) {
-                if (!strcmp(next.strval, macro->regular.args[i])) {
+            for (size_t i = 0; i < macro->regular.args.len; i++) {
+                if (!strcmp(next.strval, macro->regular.args.arr[i])) {
                     found           = true;
                     subst.type      = C_SUBST_ARG;
                     subst.stringize = true;
@@ -1743,22 +1679,19 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
             // Read tokens until the matching `)`; `(` and `)` nest. Whitespace
             // does not appear in stored tokens but `ws_before[i]` records whether
             // whitespace preceded the i-th token in the original input.
-            token_t *opt_tokens     = NULL;
-            size_t   opt_tokens_len = 0;
-            size_t   opt_tokens_cap = 0;
-            bool    *opt_ws         = NULL;
-            size_t   opt_ws_cap     = 0;
-            bool     saw_ws         = false;
-            int      depth          = 0;
+            vec_token_t opt_tokens = {0};
+            vec_bool_t  opt_ws     = {0};
+            bool        saw_ws     = false;
+            int         depth      = 0;
             while (1) {
                 token_t p = tkn_peek(tkn_ctx);
                 if (p.type == TOKENTYPE_EOL || p.type == TOKENTYPE_EOF) {
                     cctx_diagnostic(cctx, opt_pos, DIAG_ERR, "Unterminated `__VA_OPT__(`");
-                    for (size_t x = 0; x < opt_tokens_len; x++) {
-                        tkn_delete(opt_tokens[x]);
+                    for (size_t x = 0; x < opt_tokens.len; x++) {
+                        tkn_delete(opt_tokens.arr[x]);
                     }
-                    free(opt_tokens);
-                    free(opt_ws);
+                    vec_clear(&opt_tokens);
+                    vec_clear(&opt_ws);
                     return false;
                 }
                 if (p.type == TOKENTYPE_WHITESPACE) {
@@ -1778,32 +1711,23 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
                 } else if (t.type == TOKENTYPE_OTHER && t.subtype == C_TKN_RPAR) {
                     depth--;
                 }
-                bool   ws     = opt_tokens_len > 0 && saw_ws;
-                size_t ws_len = opt_tokens_len;
-                saw_ws        = false;
-                array_lencap_insert_strong(&opt_ws, sizeof(bool), &ws_len, &opt_ws_cap, &ws, ws_len);
-                array_lencap_insert_strong(
-                    &opt_tokens,
-                    sizeof(token_t),
-                    &opt_tokens_len,
-                    &opt_tokens_cap,
-                    &t,
-                    opt_tokens_len
-                );
+                bool ws = opt_tokens.len > 0 && saw_ws;
+                saw_ws  = false;
+                vec_push(&opt_ws, ws);
+                vec_push(&opt_tokens, t);
             }
 
-            subst.type              = C_SUBST_VA_OPT;
-            subst.va_opt.pos        = pos_including(opt_pos, end_pos);
-            subst.va_opt.tokens     = opt_tokens;
-            subst.va_opt.tokens_len = opt_tokens_len;
-            subst.va_opt.ws_before  = opt_ws;
-            matched                 = true;
+            subst.type             = C_SUBST_VA_OPT;
+            subst.va_opt.pos       = pos_including(opt_pos, end_pos);
+            subst.va_opt.tokens    = opt_tokens;
+            subst.va_opt.ws_before = opt_ws;
+            matched                = true;
         } else if (tkn.type == TOKENTYPE_IDENT && !strcmp(tkn.strval, "__VA_ARGS__")) {
             subst.type = C_SUBST_VA_ARGS;
             matched    = true;
         } else if (tkn.type == TOKENTYPE_IDENT) {
-            for (size_t i = 0; i < macro->regular.args_len; i++) {
-                if (!strcmp(tkn.strval, macro->regular.args[i])) {
+            for (size_t i = 0; i < macro->regular.args.len; i++) {
+                if (!strcmp(tkn.strval, macro->regular.args.arr[i])) {
                     tkn_delete(tkn);
                     subst.type      = C_SUBST_ARG;
                     subst.stringize = false;
@@ -1817,18 +1741,11 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
             subst.type  = C_SUBST_TOKEN;
             subst.token = tkn;
         }
-        array_lencap_insert_strong(
-            &macro->regular.subst,
-            sizeof(c_macro_subst_t),
-            &macro->regular.subst_len,
-            &tokens_cap,
-            &subst,
-            macro->regular.subst_len
-        );
+        vec_push(&macro->regular.subst, subst);
     }
 
-    if (macro->regular.subst_len) {
-        c_macro_subst_t const *last = &macro->regular.subst[macro->regular.subst_len - 1];
+    if (macro->regular.subst.len) {
+        c_macro_subst_t const *last = &macro->regular.subst.arr[macro->regular.subst.len - 1];
         if (last->type == C_SUBST_TOKEN && last->token.type == TOKENTYPE_OTHER && last->token.subtype == C_TKN_PASTE) {
             cctx_diagnostic(
                 cctx,
@@ -1840,7 +1757,7 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
         }
     }
 
-    c_macro_mark_pasting(macro->regular.subst, macro->regular.subst_len);
+    c_macro_mark_pasting(&macro->regular.subst);
     return true;
 }
 
@@ -1850,10 +1767,9 @@ c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_o
     size_t     spec_len = strlen(spec);
     srcfile_t *src      = srcfile_create(cctx, virt_file, spec, spec_len);
 
-    c_macro_t     *macro    = strong_calloc(1, sizeof(c_macro_t));
-    char          *name     = NULL;
-    c_tokenizer_t *tkn      = NULL;
-    size_t         args_cap = 0;
+    c_macro_t     *macro = strong_calloc(1, sizeof(c_macro_t));
+    char          *name  = NULL;
+    c_tokenizer_t *tkn   = NULL;
 
     size_t i = 0;
 
@@ -1922,14 +1838,7 @@ c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_o
             char  *arg     = strong_malloc(arg_len + 1);
             memcpy(arg, spec + arg_start, arg_len);
             arg[arg_len] = '\0';
-            array_lencap_insert_strong(
-                &macro->regular.args,
-                sizeof(char *),
-                &macro->regular.args_len,
-                &args_cap,
-                &arg,
-                macro->regular.args_len
-            );
+            vec_push(&macro->regular.args, arg);
             while (i < spec_len && isspace((unsigned char)spec[i])) {
                 i++;
             }
@@ -2020,51 +1929,45 @@ c_macro_t *c_proc_macro_create(bool uses_args, c_proc_macro_cb_t callback, void 
 // Destroy a macro.
 void c_macro_destroy(c_macro_t *macro) {
     if (!macro->is_proc_macro) {
-        for (size_t i = 0; i < macro->regular.args_len; i++) {
-            free(macro->regular.args[i]);
+        for (size_t i = 0; i < macro->regular.args.len; i++) {
+            free(macro->regular.args.arr[i]);
         }
-        free(macro->regular.args);
-        for (size_t i = 0; i < macro->regular.subst_len; i++) {
-            c_macro_subst_t *subst = &macro->regular.subst[i];
+        vec_clear(&macro->regular.args);
+        for (size_t i = 0; i < macro->regular.subst.len; i++) {
+            c_macro_subst_t *subst = &macro->regular.subst.arr[i];
             if (subst->type == C_SUBST_TOKEN) {
                 tkn_delete(subst->token);
             } else if (subst->type == C_SUBST_VA_OPT) {
-                for (size_t x = 0; x < subst->va_opt.tokens_len; x++) {
-                    tkn_delete(subst->va_opt.tokens[x]);
+                for (size_t j = 0; j < subst->va_opt.tokens.len; j++) {
+                    tkn_delete(subst->va_opt.tokens.arr[j]);
                 }
-                free(subst->va_opt.tokens);
-            } else if (subst->type == C_SUBST_VA_OPT) {
-                for (size_t j = 0; j < subst->va_opt.tokens_len; j++) {
-                    tkn_delete(subst->va_opt.tokens[j]);
+                for (size_t j = 0; j < subst->va_opt.expanded.len; j++) {
+                    tkn_delete(subst->va_opt.expanded.arr[j]);
                 }
-                for (size_t j = 0; j < subst->va_opt.expanded_len; j++) {
-                    tkn_delete(subst->va_opt.expanded[j]);
-                }
-                free(subst->va_opt.tokens);
-                free(subst->va_opt.expanded);
+                vec_clear(&subst->va_opt.tokens);
+                vec_clear(&subst->va_opt.expanded);
                 free(subst->va_opt.stringized);
-                free(subst->va_opt.ws_before);
+                vec_clear(&subst->va_opt.ws_before);
             }
         }
-        free(macro->regular.subst);
+        vec_clear(&macro->regular.subst);
     }
     free(macro);
 }
 
 // Paste two preprocessing tokens together.
 static bool c_preproc_tkn_paste(c_preproc_t *pre, token_t const *lhs, token_t const *rhs, token_t *out) {
-    size_t len = 0;
-    size_t cap = 0;
-    char  *buf = NULL;
+    vec_char_t buf = {0};
 
-    c_tkn_append_src(lhs, &buf, &len, &cap);
-    c_tkn_append_src(rhs, &buf, &len, &cap);
-    array_lencap_insert_strong(&buf, 1, &len, &cap, "", len);
+    c_tkn_append_src(lhs, &buf.arr, &buf.len, &buf.cap);
+    c_tkn_append_src(rhs, &buf.arr, &buf.len, &buf.cap);
+    size_t strval_len = buf.len;
+    vec_push(&buf, '\0');
     token_t tkn = (token_t){
         .pos        = pos_including(lhs->pos, rhs->pos),
         .type       = TOKENTYPE_IDENT,
-        .strval     = buf,
-        .strval_len = len - 1,
+        .strval     = buf.arr,
+        .strval_len = strval_len,
     };
 
     // In macro expansion, *placemarker* tokens may be created temporarily.
@@ -2146,36 +2049,29 @@ static bool c_preproc_tkn_paste(c_preproc_t *pre, token_t const *lhs, token_t co
 static token_t c_macro_arg_stringize(c_macro_arg_t *arg, pos_t pos) {
     if (arg->stringized == NULL) {
         // Build the unescaped source-form.
-        size_t src_len = 0;
-        size_t src_cap = 0;
-        char  *src     = NULL;
-        for (size_t i = 0; i < arg->tokens_len; i++) {
-            if (i > 0 && arg->ws_before[i]) {
-                char sp = ' ';
-                array_lencap_insert_strong(&src, 1, &src_len, &src_cap, &sp, src_len);
+        vec_char_t src = {0};
+        for (size_t i = 0; i < arg->tokens.len; i++) {
+            if (i > 0 && arg->ws_before.arr[i]) {
+                vec_push(&src, ' ');
             }
-            c_tkn_append_src(&arg->tokens[i], &src, &src_len, &src_cap);
+            c_tkn_append_src(&arg->tokens.arr[i], &src.arr, &src.len, &src.cap);
         }
 
         // Escape `\` and `"` and NUL-terminate. Preprocessor strings have C-string
         // syntax with unprocessed escape sequences, so any literal `\` or `"` in
         // the source-form must be escaped.
-        size_t out_len = 0;
-        size_t out_cap = 0;
-        char  *out     = NULL;
-        for (size_t i = 0; i < src_len; i++) {
-            if (src[i] == '\\' || src[i] == '"') {
-                char bs = '\\';
-                array_lencap_insert_strong(&out, 1, &out_len, &out_cap, &bs, out_len);
+        vec_char_t out = {0};
+        for (size_t i = 0; i < src.len; i++) {
+            if (src.arr[i] == '\\' || src.arr[i] == '"') {
+                vec_push(&out, '\\');
             }
-            array_lencap_insert_strong(&out, 1, &out_len, &out_cap, &src[i], out_len);
+            vec_push(&out, src.arr[i]);
         }
-        char nul = '\0';
-        array_lencap_insert_strong(&out, 1, &out_len, &out_cap, &nul, out_len);
-        free(src);
+        vec_push(&out, '\0');
+        vec_clear(&src);
 
         // Cache the stringized value.
-        arg->stringized = out;
+        arg->stringized = out.arr;
     }
 
     return (token_t){
@@ -2190,33 +2086,23 @@ static token_t c_macro_arg_stringize(c_macro_arg_t *arg, pos_t pos) {
 // Pre-expand a function-like macro argument.
 // If it would expand to an empty sequence (or already is), then `expanded` is set to a single placemarker token.
 static void c_macro_arg_preexpand(c_preproc_t *pre, c_macro_arg_t *arg) {
-    if (arg->expanded_len) {
+    if (arg->expanded.len) {
         // Already computed.
         return;
     }
 
-    size_t       expanded_cap = 0;
-    c_preproc_t *recurse      = c_preproc_create_nested(pre);
-    recurse->keep_comments    = false;
-    recurse->raw_mode         = true;
-    recurse->no_directives    = true;
+    c_preproc_t *recurse   = c_preproc_create_nested(pre);
+    recurse->keep_comments = false;
+    recurse->raw_mode      = true;
+    recurse->no_directives = true;
 
     // Note: EOF pos not important, just needs to be valid.
-    tkn_array_t *arr_tkn = tkn_array_create(arg->tokens, arg->tokens_len, arg->pos);
+    tkn_array_t *arr_tkn = tkn_array_create(arg->tokens.arr, arg->tokens.len, arg->pos);
     c_incfile_t  incfile = {
-        .tkn_ctx   = &arr_tkn->base,
-        .ifdir     = NULL,
-        .ifdir_len = 0,
-        .ifdir_cap = 0,
+        .tkn_ctx = &arr_tkn->base,
+        .ifdir   = {0},
     };
-    array_lencap_insert_strong(
-        &recurse->stack,
-        sizeof(c_incfile_t),
-        &recurse->stack_len,
-        &recurse->stack_cap,
-        &incfile,
-        0
-    );
+    vec_push(&recurse->stack, incfile);
 
     while (1) {
         token_t tkn = tkn_next(&recurse->base);
@@ -2227,42 +2113,26 @@ static void c_macro_arg_preexpand(c_preproc_t *pre, c_macro_arg_t *arg) {
             // Whitespace ignored here, added later in the macro pipeline.
             tkn_delete(tkn);
         } else {
-            array_lencap_insert_strong(
-                &arg->expanded,
-                sizeof(token_t),
-                &arg->expanded_len,
-                &expanded_cap,
-                &tkn,
-                arg->expanded_len
-            );
+            vec_push(&arg->expanded, tkn);
         }
     }
 
     tkn_ctx_delete(&recurse->base);
 
     // Empty result, replace with one placemarker.
-    if (arg->expanded_len == 0) {
+    if (arg->expanded.len == 0) {
         token_t marker = {
             .pos     = arg->pos,
             .type    = TOKENTYPE_OTHER,
             .subtype = C_TKN_MARKER,
         };
-        array_lencap_insert_strong(
-            &arg->expanded,
-            sizeof(token_t),
-            &arg->expanded_len,
-            &expanded_cap,
-            &marker,
-            arg->expanded_len
-        );
+        vec_push(&arg->expanded, marker);
     }
 }
 
 // Perform macro-expansion.
 static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) {
-    size_t         args_len = 0;
-    size_t         args_cap = 0;
-    c_macro_arg_t *args     = NULL;
+    vec_macro_arg_t args = {0};
     // TODO: Add expansion info to the position.
 
     if (macro->uses_args) {
@@ -2285,24 +2155,21 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
         } else {
             // Collect tokens for each argument. Parentheses nest, and at depth > 0
             // commas are part of the argument rather than separators.
-            int      depth      = 0;
-            size_t   cur_len    = 0;
-            size_t   cur_cap    = 0;
-            token_t *cur        = NULL;
-            size_t   cur_ws_cap = 0;
-            bool    *cur_ws     = NULL;
-            bool     saw_ws     = false;
-            bool     has_pos    = false;
-            size_t   lim        = SIZE_MAX;
-            pos_t    pos; // Start position of the argument.
+            int         depth   = 0;
+            vec_token_t cur     = {0};
+            vec_bool_t  cur_ws  = {0};
+            bool        saw_ws  = false;
+            bool        has_pos = false;
+            size_t      lim     = SIZE_MAX;
+            pos_t       arg_pos; // Start position of the argument.
             if (!macro->is_proc_macro && macro->regular.is_variadic) {
-                lim = macro->regular.args_len;
+                lim = macro->regular.args.len;
             }
 
             while (1) {
                 token_t p = c_preproc_raw_peek(pre);
                 if (!has_pos) {
-                    pos     = p.pos;
+                    arg_pos = p.pos;
                     has_pos = true;
                 }
                 if (p.type == TOKENTYPE_EOF) {
@@ -2312,11 +2179,11 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
                         DIAG_ERR,
                         "Unexpected end of file in macro argument list"
                     );
-                    for (size_t i = 0; i < cur_len; i++) {
-                        tkn_delete(cur[i]);
+                    for (size_t i = 0; i < cur.len; i++) {
+                        tkn_delete(cur.arr[i]);
                     }
-                    free(cur);
-                    free(cur_ws);
+                    vec_clear(&cur);
+                    vec_clear(&cur_ws);
                     goto exit;
                 }
 
@@ -2332,26 +2199,22 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
                 // Once we have collected enough regular args, commas inside the
                 // variadic tail are kept verbatim, but `)` still ends the list.
                 if (depth == 0 && p.type == TOKENTYPE_OTHER
-                    && (p.subtype == C_TKN_RPAR || (p.subtype == C_TKN_COMMA && args_len < lim))) {
+                    && (p.subtype == C_TKN_RPAR || (p.subtype == C_TKN_COMMA && args.len < lim))) {
                     bool is_end = p.subtype == C_TKN_RPAR;
                     tkn_delete(c_preproc_raw_next(pre));
                     c_macro_arg_t arg = {
-                        .pos        = pos_between(pos, p.pos),
-                        .tokens_len = cur_len,
-                        .tokens     = cur,
-                        .ws_before  = cur_ws,
+                        .pos       = pos_between(arg_pos, p.pos),
+                        .tokens    = cur,
+                        .ws_before = cur_ws,
                     };
-                    array_lencap_insert_strong(&args, sizeof(c_macro_arg_t), &args_len, &args_cap, &arg, args_len);
+                    vec_push(&args, arg);
                     if (is_end) {
                         break;
                     }
-                    cur        = NULL;
-                    cur_len    = 0;
-                    cur_cap    = 0;
-                    cur_ws     = NULL;
-                    cur_ws_cap = 0;
-                    saw_ws     = false;
-                    has_pos    = false;
+                    cur     = (vec_token_t){0};
+                    cur_ws  = (vec_bool_t){0};
+                    saw_ws  = false;
+                    has_pos = false;
                     continue;
                 }
 
@@ -2363,19 +2226,18 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
                         depth--;
                     }
                 }
-                bool   ws     = cur_len > 0 && saw_ws;
-                size_t ws_len = cur_len;
-                saw_ws        = false;
-                array_lencap_insert_strong(&cur_ws, sizeof(bool), &ws_len, &cur_ws_cap, &ws, ws_len);
-                array_lencap_insert_strong(&cur, sizeof(token_t), &cur_len, &cur_cap, &t, cur_len);
+                bool ws = cur.len > 0 && saw_ws;
+                saw_ws  = false;
+                vec_push(&cur_ws, ws);
+                vec_push(&cur, t);
             }
 
-            if (!macro->is_proc_macro && macro->regular.is_variadic && args_len == macro->regular.args_len) {
+            if (!macro->is_proc_macro && macro->regular.is_variadic && args.len == macro->regular.args.len) {
                 // Insert empty dummy arg for `__VA_ARGS__`.
                 c_macro_arg_t dummy = {
-                    .pos = pos,
+                    .pos = arg_pos,
                 };
-                array_lencap_insert_strong(&args, sizeof(c_macro_arg_t), &args_len, &args_cap, &dummy, args_len);
+                vec_push(&args, dummy);
             }
         }
     }
@@ -2383,58 +2245,51 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
     // This is the actual expansion code.
     c_expansion_t expand = {0};
     if (macro->is_proc_macro) {
-        expand = macro->proc.callback(pre, args, args_len, macro->proc.cookie);
+        expand = macro->proc.callback(pre, &args, macro->proc.cookie);
     } else {
         if (macro->regular.is_variadic) {
-            if (args_len < macro->regular.args_len) {
+            if (args.len < macro->regular.args.len) {
                 cctx_diagnostic(
                     pre->shared->cctx,
                     pos,
                     DIAG_ERR,
                     "Macro expects at least %zu argument%s, got %zu",
-                    macro->regular.args_len,
-                    macro->regular.args_len == 1 ? "" : "s",
-                    args_len
+                    macro->regular.args.len,
+                    macro->regular.args.len == 1 ? "" : "s",
+                    args.len
                 );
                 goto exit;
             }
         } else {
-            if (args_len != macro->regular.args_len) {
+            if (args.len != macro->regular.args.len) {
                 cctx_diagnostic(
                     pre->shared->cctx,
                     pos,
                     DIAG_ERR,
                     "Macro expects exactly %zu argument%s, got %zu",
-                    macro->regular.args_len,
-                    macro->regular.args_len == 1 ? "" : "s",
-                    args_len
+                    macro->regular.args.len,
+                    macro->regular.args.len == 1 ? "" : "s",
+                    args.len
                 );
                 goto exit;
             }
         }
-        for (size_t i = 0; i < macro->regular.subst_len; i++) {
-            c_macro_subst_t *subst = &macro->regular.subst[i];
+        for (size_t i = 0; i < macro->regular.subst.len; i++) {
+            c_macro_subst_t *subst = &macro->regular.subst.arr[i];
             // Fast path for literal tokens.
             if (subst->type == C_SUBST_TOKEN) {
                 token_t tkn = tkn_clone(&subst->token);
                 tkn.pos     = pos;
-                array_lencap_insert_strong(
-                    &expand.tokens,
-                    sizeof(token_t),
-                    &expand.tokens_len,
-                    &expand.tokens_cap,
-                    &tkn,
-                    expand.tokens_len
-                );
+                vec_push(&expand.tokens, tkn);
                 continue;
             }
 
             // Get the matching argument ptr.
             c_macro_arg_t *arg;
             if (subst->type == C_SUBST_ARG) {
-                arg = &args[subst->arg_index];
+                arg = &args.arr[subst->arg_index];
             } else if (subst->type == C_SUBST_VA_ARGS) {
-                arg = &args[args_len - 1];
+                arg = &args.arr[args.len - 1];
             } else if (subst->type == C_SUBST_VA_OPT) {
                 arg = &subst->va_opt;
             } else {
@@ -2444,25 +2299,18 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
             if (subst->stringize) {
                 // Stringization: turn the argument's tokens into a single string literal.
                 token_t tkn = c_macro_arg_stringize(arg, pos);
-                array_lencap_insert_strong(
-                    &expand.tokens,
-                    sizeof(token_t),
-                    &expand.tokens_len,
-                    &expand.tokens_cap,
-                    &tkn,
-                    expand.tokens_len
-                );
+                vec_push(&expand.tokens, tkn);
             } else {
                 // This is a macro argument.
                 token_t const *tokens;
                 size_t         tokens_len;
                 if (subst->pasting) {
-                    tokens     = arg->tokens;
-                    tokens_len = arg->tokens_len;
+                    tokens     = arg->tokens.arr;
+                    tokens_len = arg->tokens.len;
                 } else {
                     c_macro_arg_preexpand(pre, arg);
-                    tokens     = arg->expanded;
-                    tokens_len = arg->expanded_len;
+                    tokens     = arg->expanded.arr;
+                    tokens_len = arg->expanded.len;
                 }
 
                 for (size_t x = 0; x < tokens_len; x++) {
@@ -2472,14 +2320,7 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
                         tkn.subtype = C_TKN_ESCPASTE;
                     }
                     tkn.pos = pos;
-                    array_lencap_insert_strong(
-                        &expand.tokens,
-                        sizeof(token_t),
-                        &expand.tokens_len,
-                        &expand.tokens_cap,
-                        &tkn,
-                        expand.tokens_len
-                    );
+                    vec_push(&expand.tokens, tkn);
                 }
             }
         }
@@ -2488,37 +2329,42 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
     expand.macro = macro;
 
     // Handle pasting.
-    for (size_t i = 1; i + 1 < expand.tokens_len;) {
-        if (expand.tokens[i].type != TOKENTYPE_OTHER || expand.tokens[i].subtype != C_TKN_PASTE) {
+    for (size_t i = 1; i + 1 < expand.tokens.len;) {
+        if (expand.tokens.arr[i].type != TOKENTYPE_OTHER || expand.tokens.arr[i].subtype != C_TKN_PASTE) {
             i++;
             continue;
         }
 
         token_t res;
-        if (!c_preproc_tkn_paste(pre, &expand.tokens[i - 1], &expand.tokens[i + 1], &res)) {
+        if (!c_preproc_tkn_paste(pre, &expand.tokens.arr[i - 1], &expand.tokens.arr[i + 1], &res)) {
             // On fail, delete just the offending `##`.
-            tkn_delete(expand.tokens[i]);
-            array_copy(expand.tokens, expand.tokens, sizeof(token_t), i, i + 1, expand.tokens_len - (i + 1));
-            expand.tokens_len--;
+            tkn_delete(expand.tokens.arr[i]);
+            memmove(&expand.tokens.arr[i], &expand.tokens.arr[i + 1], (expand.tokens.len - (i + 1)) * sizeof(token_t));
+            expand.tokens.len--;
             i++;
             continue;
         }
-        tkn_delete(expand.tokens[i - 1]);
-        tkn_delete(expand.tokens[i]);
-        tkn_delete(expand.tokens[i + 1]);
-        expand.tokens[i - 1] = res;
-        array_copy(expand.tokens, expand.tokens, sizeof(token_t), i, i + 2, expand.tokens_len - (i + 2));
-        expand.tokens_len -= 2;
+        tkn_delete(expand.tokens.arr[i - 1]);
+        tkn_delete(expand.tokens.arr[i]);
+        tkn_delete(expand.tokens.arr[i + 1]);
+        expand.tokens.arr[i - 1] = res;
+        memmove(&expand.tokens.arr[i], &expand.tokens.arr[i + 2], (expand.tokens.len - (i + 2)) * sizeof(token_t));
+        expand.tokens.len -= 2;
 
-        // Don't increment `i`; if another `##` occurs, it will now be at `expand.tokens[i]`.
+        // Don't increment `i`; if another `##` occurs, it will now be at `expand.tokens.arr[i]`.
     }
 
     // Remove placemarker tokens.
     if (macro->uses_args) {
-        for (size_t i = 0; i < expand.tokens_len;) {
-            if (expand.tokens[i].type == TOKENTYPE_OTHER && expand.tokens[i].subtype == C_TKN_MARKER) {
-                tkn_delete(expand.tokens[i]);
-                expand.tokens_len--;
+        for (size_t i = 0; i < expand.tokens.len;) {
+            if (expand.tokens.arr[i].type == TOKENTYPE_OTHER && expand.tokens.arr[i].subtype == C_TKN_MARKER) {
+                tkn_delete(expand.tokens.arr[i]);
+                memmove(
+                    &expand.tokens.arr[i],
+                    &expand.tokens.arr[i + 1],
+                    (expand.tokens.len - (i + 1)) * sizeof(token_t)
+                );
+                expand.tokens.len--;
             } else {
                 i++;
             }
@@ -2526,11 +2372,12 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
     }
 
     // Insert whitespace between tokens.
-    if (expand.tokens_len >= 2) {
-        size_t   extra = expand.tokens_len - 1;
-        token_t *out   = strong_calloc(expand.tokens_len + extra, sizeof(token_t));
-        for (size_t i = 0; i < expand.tokens_len; i++) {
-            out[i * 2] = expand.tokens[i];
+    if (expand.tokens.len >= 2) {
+        size_t   extra   = expand.tokens.len - 1;
+        size_t   new_len = expand.tokens.len + extra;
+        token_t *out     = strong_calloc(new_len, sizeof(token_t));
+        for (size_t i = 0; i < expand.tokens.len; i++) {
+            out[i * 2] = expand.tokens.arr[i];
         }
         for (size_t i = 0; i < extra; i++) {
             out[i * 2 + 1] = (token_t){
@@ -2540,35 +2387,29 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
                 .strval_len = 1,
             };
         }
-        free(expand.tokens);
-        expand.tokens_len += extra;
-        expand.tokens      = out;
+        free(expand.tokens.arr);
+        expand.tokens.arr = out;
+        expand.tokens.len = new_len;
+        expand.tokens.cap = new_len;
     }
 
     // If it succeeded, the expanded tokens are put on the stack.
-    array_lencap_insert_strong(
-        &pre->expand,
-        sizeof(c_expansion_t),
-        &pre->expand_len,
-        &pre->expand_cap,
-        &expand,
-        pre->expand_len
-    );
+    vec_push(&pre->expand, expand);
 
 exit:
-    for (size_t i = 0; i < args_len; i++) {
-        for (size_t j = 0; j < args[i].tokens_len; j++) {
-            tkn_delete(args[i].tokens[j]);
+    for (size_t i = 0; i < args.len; i++) {
+        for (size_t j = 0; j < args.arr[i].tokens.len; j++) {
+            tkn_delete(args.arr[i].tokens.arr[j]);
         }
-        for (size_t j = 0; j < args[i].expanded_len; j++) {
-            tkn_delete(args[i].expanded[j]);
+        for (size_t j = 0; j < args.arr[i].expanded.len; j++) {
+            tkn_delete(args.arr[i].expanded.arr[j]);
         }
-        free(args[i].tokens);
-        free(args[i].expanded);
-        free(args[i].stringized);
-        free(args[i].ws_before);
+        vec_clear(&args.arr[i].tokens);
+        vec_clear(&args.arr[i].expanded);
+        free(args.arr[i].stringized);
+        vec_clear(&args.arr[i].ws_before);
     }
-    free(args);
+    vec_clear(&args);
 }
 
 #pragma endregion macros

@@ -154,5 +154,6 @@ VEC_TYPE_DEF(vec_int32_t, int32_t)
 VEC_TYPE_DEF(vec_int64_t, int64_t)
 VEC_TYPE_DEF(vec_size_t, size_t)
 
+VEC_TYPE_DEF(vec_bool_t, _Bool)
 VEC_TYPE_DEF(vec_ptr_t, void *)
 VEC_TYPE_DEF(vec_cstr_t, char *)

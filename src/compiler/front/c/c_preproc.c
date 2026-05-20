@@ -72,6 +72,8 @@ static void    c_macro_arg_preexpand(c_preproc_t *pre, c_macro_arg_t *arg);
 static void    c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro);
 
 
+
+// Implementation of `__COUNTER__`.
 static c_expansion_t c_proc_macro_counter(c_preproc_t *pre, c_macro_arg_t const *args, size_t args_len, void *cookie) {
     (void)cookie;
     (void)args;
@@ -104,8 +106,9 @@ static c_expansion_t c_proc_macro_counter(c_preproc_t *pre, c_macro_arg_t const 
     return expand;
 }
 
-// Create an empty preprocessor.
-// `cc` must be valid for at least as long as the resulting preprocessor.
+// Create a preprocessor for a certain file.
+// See `c_preproc_t` for details about `raw_mode` and `keep_comments`.
+// Applying either flag after creation of the preprocessor will create incorrect output.
 c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std, bool raw_mode, bool keep_comments) {
     c_preproc_t *pre = strong_calloc(1, sizeof(c_preproc_t));
 

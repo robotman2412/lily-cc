@@ -6,7 +6,8 @@
 #include "testcase.h"
 
 #include "char_repr.h"
-#include "strong_malloc.h"
+#include "lilycc_malloc.h"
+#include "vec.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -14,7 +15,7 @@
 
 
 // Map of all registered test cases.
-map_t testcases = STR_MAP_EMPTY;
+vec_testcase_t testcases;
 
 
 static char *heap_sprintf(char const *fmt, ...) {
@@ -22,7 +23,7 @@ static char *heap_sprintf(char const *fmt, ...) {
     va_start(va, fmt);
     size_t len = vsnprintf(NULL, 0, fmt, va);
     va_end(va);
-    char *mem = strong_malloc(len + 1);
+    char *mem = lilycc_malloc(len + 1);
     va_start(va, fmt);
     vsnprintf(mem, len + 1, fmt, va);
     va_end(va);
@@ -46,26 +47,26 @@ char *char_testcase_failed(char const *loc, int value, char const *real) {
 char *str_testcase_failed(char const *loc, char const *value, size_t value_len, char const *real) {
     testcase_failed();
     size_t len = format_cstr_repr(NULL, 0, value, value_len);
-    char  *mem = strong_malloc(len + 1);
+    char  *mem = lilycc_malloc(len + 1);
     format_cstr_repr(mem, len + 1, value, value_len);
-    char *mem2 = strong_malloc(strlen(loc) + 4 + len + 12 + strlen(real) + 1);
+    char *mem2 = lilycc_malloc(strlen(loc) + 4 + len + 12 + strlen(real) + 1);
     *mem2      = 0;
     strcat(mem2, loc);
     strcat(mem2, " = \"");
     strcat(mem2, mem);
     strcat(mem2, "\"; expected ");
     strcat(mem2, real);
-    free(mem);
+    lilycc_free(mem);
     return mem2;
 }
 
 // Register a new test case.
 void register_test_case(char *(*function)(), char const *id) {
-    testcase_t *ent = malloc(sizeof(testcase_t));
-    ent->function   = function;
-    ent->id         = id;
-    if (!map_set(&testcases, id, ent)) {
-        fprintf(stderr, "Out of memory\n");
-        abort();
-    }
+    vec_push(
+        &testcases,
+        ((testcase_t){
+            .function = function,
+            .id       = id,
+        })
+    );
 }

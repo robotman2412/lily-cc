@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "map.h"
+#include "vec.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -95,8 +95,10 @@ typedef struct {
     char const *id;
 } testcase_t;
 
+VEC_TYPE_DEF(vec_testcase_t, testcase_t)
+
 // Map of all registered test cases.
-extern map_t testcases;
+extern vec_testcase_t testcases;
 
 // Register a new test case.
 void register_test_case(char *(*function)(), char const *id);

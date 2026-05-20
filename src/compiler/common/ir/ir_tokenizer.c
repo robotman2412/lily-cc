@@ -17,7 +17,7 @@ char const *const ir_keywords[] = {
 
 #include "ir_tokenizer.h"
 #include "ir_types.h"
-#include "strong_malloc.h"
+#include "lilycc_malloc.h"
 
 #include <arrays.h>
 #include <inttypes.h>
@@ -28,7 +28,7 @@ char const *const ir_keywords[] = {
 
 // Create an IR text tokenizer.
 tokenizer_t *ir_tkn_create(srcfile_t *srcfile) {
-    tokenizer_t *tkn_ctx = strong_calloc(sizeof(tokenizer_t), 1);
+    tokenizer_t *tkn_ctx = lilycc_calloc(sizeof(tokenizer_t), 1);
     tkn_ctx->cctx        = srcfile->ctx;
     tkn_ctx->pos.srcfile = srcfile;
     tkn_ctx->file        = srcfile;
@@ -237,7 +237,7 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
 static token_t ir_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first, bool as_keyw) {
     size_t cap = 32;
     size_t len = 1;
-    char  *ptr = strong_malloc(cap);
+    char  *ptr = lilycc_malloc(cap);
     ptr[0]     = first;
 
     pos_t pos0 = ctx->pos;
@@ -259,7 +259,7 @@ static token_t ir_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first, bool 
     if (as_keyw) {
         ir_keyw_t keyw = ir_keyw_get(ptr);
         if (keyw < IR_N_KEYWS) {
-            free(ptr);
+            lilycc_free(ptr);
             // Return keyword token with main spelling.
             return (token_t){
                 .pos        = pos_between(start_pos, pos0),
@@ -340,7 +340,7 @@ static int ir_str_octal(tokenizer_t *ctx, pos_t start_pos, int first, int max_w)
 static token_t ir_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
     size_t cap = 32;
     size_t len = 0;
-    char  *ptr = strong_malloc(cap);
+    char  *ptr = lilycc_malloc(cap);
 
     while (1) {
         pos_t pos0 = ctx->pos;
@@ -406,7 +406,7 @@ static token_t ir_tkn_str(tokenizer_t *ctx, pos_t start_pos, bool is_char) {
             val <<= 8;
             val  |= ptr[i];
         }
-        free(ptr);
+        lilycc_free(ptr);
         return (token_t){
             .pos        = pos_between(start_pos, ctx->pos),
             .type       = TOKENTYPE_CCONST,

@@ -6,9 +6,9 @@
 #include "set.h"
 
 #include "hash.h"
+#include "lilycc_malloc.h"
 #include "list.h"
 
-#include <stdlib.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,8 +19,8 @@
 // Vtable for string sets.
 set_vtable_t const str_set_vtable = {
     .val_cmp  = (int (*)(void const *, void const *))strcmp,
-    .val_del  = free,
-    .val_dup  = (void *(*)(void const *))strdup,
+    .val_del  = lilycc_free,
+    .val_dup  = (void *(*)(void const *))lilycc_strdup,
     .val_hash = (uint32_t (*)(void const *))hash_cstr,
 };
 
@@ -45,10 +45,7 @@ bool set_resize(set_t *set, size_t new_buckets_len) {
     }
 
     // Try to allocate memory for the new buckets.
-    dlist_t *new_buckets = calloc(new_buckets_len, sizeof(dlist_t));
-    if (!new_buckets) {
-        return false;
-    }
+    dlist_t *new_buckets = lilycc_calloc(new_buckets_len, sizeof(dlist_t));
 
     // Sort entries into the new correct buckets.
     for (size_t i = 0; i < set->buckets_len; i++) {
@@ -59,7 +56,7 @@ bool set_resize(set_t *set, size_t new_buckets_len) {
     }
 
     // Update the set's pointers.
-    free(set->buckets);
+    lilycc_free(set->buckets);
     set->buckets     = new_buckets;
     set->buckets_len = new_buckets_len;
     return true;
@@ -68,7 +65,7 @@ bool set_resize(set_t *set, size_t new_buckets_len) {
 // Try to resize the set according to the current occupancy (but don't fail if OOM).
 void set_auto_resize(set_t *set) {
     if (set->len == 0) {
-        free(set->buckets);
+        lilycc_free(set->buckets);
         set->buckets     = NULL;
         set->buckets_len = 0;
         return;
@@ -91,11 +88,11 @@ void set_clear(set_t *set) {
         while (node) {
             set_ent_t *ent = (set_ent_t *)node;
             set->vtable->val_del(ent->value);
-            free(ent);
+            lilycc_free(ent);
             node = dlist_pop_front(&set->buckets[i]);
         }
     }
-    free(set->buckets);
+    lilycc_free(set->buckets);
     set->buckets     = NULL;
     set->buckets_len = 0;
     set->len         = 0;
@@ -152,13 +149,10 @@ bool set_add(set_t *set, void const *value) {
     }
 
     // Allocate a new item.
-    set_ent_t *ent = malloc(sizeof(set_ent_t));
-    if (!ent) {
-        return false;
-    }
-    ent->node  = DLIST_NODE_EMPTY;
-    ent->value = set->vtable->val_dup(value);
-    ent->hash  = hash;
+    set_ent_t *ent = lilycc_malloc(sizeof(set_ent_t));
+    ent->node      = DLIST_NODE_EMPTY;
+    ent->value     = set->vtable->val_dup(value);
+    ent->hash      = hash;
 
     // Add the new item to the bucket.
     dlist_append(&set->buckets[bucket], &ent->node);
@@ -201,15 +195,17 @@ size_t set_addall(set_t *set, set_t const *other) {
                 }
 
                 // Allocate a new item.
-                set_ent_t *new_ent = malloc(sizeof(set_ent_t));
-                if (new_ent) {
-                    new_ent->node  = DLIST_NODE_EMPTY;
-                    new_ent->value = set->vtable->val_dup(other_ent->value);
-                    new_ent->hash  = other_ent->hash;
-                    dlist_append(&tmp, &new_ent->node);
-                    added++;
-                    set->len++;
+                set_ent_t *new_ent = lilycc_malloc(sizeof(set_ent_t));
+                new_ent->node      = DLIST_NODE_EMPTY;
+                new_ent->value     = set->vtable->val_dup(other_ent->value);
+                if (!new_ent->value && other_ent->value) {
+                    fprintf(stderr, "Out of memory\n");
+                    abort();
                 }
+                new_ent->hash = other_ent->hash;
+                dlist_append(&tmp, &new_ent->node);
+                added++;
+                set->len++;
             skip:;
             }
         }
@@ -248,7 +244,7 @@ size_t set_removeall(set_t *set, set_t const *other) {
                     if (this_ent->hash == other_ent->hash && !set->vtable->val_cmp(this_ent->value, other_ent->value)) {
                         dlist_remove(&set->buckets[x], &this_ent->node);
                         set->vtable->val_del(this_ent->value);
-                        free(this_ent);
+                        lilycc_free(this_ent);
                         removed++;
                         // If equal,
                         goto cont;
@@ -286,7 +282,7 @@ size_t set_intersect(set_t *set, set_t const *other) {
             if (!keep) {
                 dlist_remove(&set->buckets[i], &ent->node);
                 set->vtable->val_del(ent->value);
-                free(ent);
+                lilycc_free(ent);
                 removed++;
             }
             ent = next;
@@ -316,7 +312,7 @@ bool set_remove(set_t *set, void const *value) {
             // There is an existing value; remove it.
             dlist_remove(&set->buckets[bucket], node);
             set->vtable->val_del(ent->value);
-            free(ent);
+            lilycc_free(ent);
             set->len--;
             set_auto_resize(set);
             return true;

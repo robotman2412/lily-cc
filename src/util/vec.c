@@ -4,7 +4,7 @@
 
 #include "vec.h"
 
-#include "strong_malloc.h"
+#include "lilycc_malloc.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,7 +35,7 @@ void rawvec_reserve(rawvec_t *vec, size_t elem_size, size_t n_elem) {
         fprintf(stderr, "Vector size overflow\n");
         abort();
     }
-    vec->buffer = strong_realloc(vec->buffer, bytes);
+    vec->buffer = lilycc_realloc(vec->buffer, bytes);
     vec->cap    = cap;
 }
 
@@ -54,7 +54,7 @@ void rawvec_reserve_exact(rawvec_t *vec, size_t elem_size, size_t n_elem) {
         fprintf(stderr, "Vector size overflow\n");
         abort();
     }
-    vec->buffer = strong_realloc(vec->buffer, bytes);
+    vec->buffer = lilycc_realloc(vec->buffer, bytes);
     vec->cap    = n_elem;
 }
 
@@ -98,7 +98,7 @@ void rawvec_remove_n(rawvec_t *vec, size_t elem_size, size_t index, size_t count
         );
     }
     if (vec->len == 0) {
-        free(vec->buffer);
+        lilycc_free(vec->buffer);
         vec->buffer = NULL;
         vec->cap    = 0;
     }

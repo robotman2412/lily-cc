@@ -9,7 +9,7 @@
 #include "c_std.h"
 #include "c_types.h"
 #include "compiler.h"
-#include "strong_malloc.h"
+#include "lilycc_malloc.h"
 #include "tokenizer.h"
 #include "utf8.h"
 
@@ -56,7 +56,7 @@ static long c_keyw_since[] = {
 
 // Create a new C tokenizer.
 c_tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std) {
-    c_tokenizer_t *tkn_ctx    = strong_calloc(sizeof(c_tokenizer_t), 1);
+    c_tokenizer_t *tkn_ctx    = lilycc_calloc(sizeof(c_tokenizer_t), 1);
     tkn_ctx->base.cctx        = srcfile->ctx;
     tkn_ctx->base.pos.srcfile = srcfile;
     tkn_ctx->base.file        = srcfile;
@@ -109,7 +109,7 @@ bool c_is_sym_char(int c) {
 static token_t c_tkn_pre_number(tokenizer_t *ctx) {
     size_t len = 0;
     size_t cap = 8;
-    char  *buf = strong_malloc(cap);
+    char  *buf = lilycc_malloc(cap);
 
     pos_t pos0 = ctx->pos;
     int   c    = c_srcfile_getc(ctx->file, &ctx->pos);
@@ -391,7 +391,7 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
     c_tokenizer_t *c_ctx = (c_tokenizer_t *)ctx;
     size_t         cap   = 32;
     size_t         len   = 1;
-    char          *ptr   = strong_malloc(cap);
+    char          *ptr   = lilycc_malloc(cap);
     ptr[0]               = first;
 
     pos_t pos0 = ctx->pos;
@@ -406,7 +406,7 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
         if (len == cap - 1) {
             // Even longer name, allocate more memory.
             cap *= 2;
-            ptr  = strong_realloc(ptr, cap);
+            ptr  = lilycc_realloc(ptr, cap);
         }
         ptr[len++] = (char)c;
         pos0       = pos1;
@@ -423,7 +423,7 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
         keyw = C_KEYW_##alt_spelling;                                                                                  \
     }
 #include "c_keywords.inc"
-        free(ptr);
+        lilycc_free(ptr);
         // Return keyword token with main spelling.
         return (token_t){
             .pos        = pos_between(start_pos, pos0),
@@ -451,7 +451,7 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
 static token_t c_tkn_pre_str(tokenizer_t *ctx, pos_t start_pos, c_strtype_t subtype) {
     size_t cap     = 32;
     size_t len     = 0;
-    char  *buf     = strong_malloc(cap);
+    char  *buf     = lilycc_malloc(cap);
     pos_t  end_pos = start_pos;
     char   start;
     char   end;
@@ -555,7 +555,7 @@ token_t c_tkn_conv_str(cctx_t *cctx, int c_std, token_t const *pre_tkn) {
     (void)c_std;
     size_t cap     = 32;
     size_t len     = 0;
-    char  *ptr     = strong_malloc(cap);
+    char  *ptr     = lilycc_malloc(cap);
     bool   is_char = pre_tkn->subtype == C_STR_RAW_SQUOT;
 
     tknoff_t off = {0};
@@ -635,7 +635,7 @@ token_t c_tkn_conv_str(cctx_t *cctx, int c_std, token_t const *pre_tkn) {
         } else if (len > 1) {
             cctx_diagnostic(cctx, pre_tkn->pos, DIAG_WARN, "Multi-character character constant");
         }
-        free(ptr);
+        lilycc_free(ptr);
         return (token_t){
             .pos        = pre_tkn->pos,
             .type       = TOKENTYPE_CCONST,
@@ -666,7 +666,7 @@ static token_t c_tkn_whitespace(tokenizer_t *ctx, pos_t start_pos, c_whitespace_
 
     size_t len = 0;
     size_t cap = 32;
-    char  *buf = strong_malloc(cap);
+    char  *buf = lilycc_malloc(cap);
 
     pos_t pos;
     while (1) {
@@ -1024,7 +1024,7 @@ retry:
     }
 
     // At this point, it's garbage.
-    char   *c_str     = malloc(5);
+    char   *c_str     = lilycc_malloc(5);
     uint8_t c_str_len = utf8_encode(c_str, 4, c);
     c_str[c_str_len]  = 0;
     return (token_t){

@@ -229,7 +229,7 @@ void ast_append_params(token_t *ast, size_t n_param, token_t *params);
 // Set an AST node's strval.
 static inline token_t ast_with_strval(token_t ast, char *strval) {
     if (ast.strval) {
-        free(ast.strval);
+        lilycc_free(ast.strval);
     }
     ast.strval = strval;
     return ast;

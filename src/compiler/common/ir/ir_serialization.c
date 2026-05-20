@@ -14,10 +14,10 @@
 #include "ir_parser.h"
 #include "ir_tokenizer.h"
 #include "ir_types.h"
+#include "lilycc_malloc.h"
 #include "list.h"
 #include "map.h"
 #include "set.h"
-#include "strong_malloc.h"
 #include "tokenizer.h"
 #include "unreachable.h"
 
@@ -350,7 +350,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
 
                 // Find return vars.
                 size_t       returns_len = stmt->params[0].params_len;
-                ir_retval_t *returns     = strong_calloc(returns_len, sizeof(ir_retval_t));
+                ir_retval_t *returns     = lilycc_calloc(returns_len, sizeof(ir_retval_t));
                 for (size_t i = 0; i < returns_len; i++) {
                     // TODO: Structs and registers must be supported here.
                     token_t const *tkn  = &stmt->params[0].params[i];
@@ -361,7 +361,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
 
                 // Find operands.
                 size_t        operands_len = stmt->params[2].params_len;
-                ir_operand_t *operands     = strong_calloc(operands_len, sizeof(ir_operand_t));
+                ir_operand_t *operands     = lilycc_calloc(operands_len, sizeof(ir_operand_t));
                 for (size_t i = 0; i < operands_len; i++) {
                     if (stmt->params[1].subtype == IR_KEYW_comb) {
                         fprintf(stderr, "TODO: Deserialize IR combinator\n");
@@ -523,8 +523,8 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
 
                 // Assert instruction preconditions.
                 if (!operands_ok) {
-                    free(operands);
-                    free(returns);
+                    lilycc_free(operands);
+                    lilycc_free(returns);
                     break;
                 }
                 switch (stmt->params[1].subtype) {
@@ -796,8 +796,8 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     }
                 }
 
-                free(operands);
-                free(returns);
+                lilycc_free(operands);
+                lilycc_free(returns);
             } break;
         }
     }

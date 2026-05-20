@@ -7,9 +7,10 @@
 
 #include "arrays.h"
 #include "color.h"
-#include "strong_malloc.h"
+#include "lilycc_malloc.h"
 #include "utf8.h"
 
+#include <assert.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -53,18 +54,18 @@ pos_t pos_including(pos_t start, pos_t end) {
 
 // Create new compiler context.
 cctx_t *cctx_create() {
-    return calloc(1, sizeof(cctx_t));
+    return lilycc_calloc(1, sizeof(cctx_t));
 }
 
 // Close a source file.
 static void srcfile_close(srcfile_t *file) {
     if (file->is_ram_file) {
-        free(file->content);
+        lilycc_free(file->content);
     } else {
         fclose(file->fd);
     }
-    free(file->path);
-    free(file);
+    lilycc_free(file->path);
+    lilycc_free(file);
 }
 
 // Delete compiler context (and therefor all compiler resources).
@@ -72,15 +73,15 @@ void cctx_delete(cctx_t *ctx) {
     for (size_t i = 0; i < ctx->srcs_len; i++) {
         srcfile_close(ctx->srcs[i]);
     }
-    free(ctx->srcs);
+    lilycc_free(ctx->srcs);
 
     while (ctx->diagnostics.len) {
         diagnostic_t *diag = (diagnostic_t *)dlist_pop_front(&ctx->diagnostics);
-        free(diag->msg);
-        free(diag);
+        lilycc_free(diag->msg);
+        lilycc_free(diag);
     }
 
-    free(ctx);
+    lilycc_free(ctx);
 }
 
 // Create a formatted diagnostic message.
@@ -94,7 +95,7 @@ diagnostic_t *cctx_diagnostic(cctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const
 
     // Format the message.
     size_t cap = len + 1;
-    char  *buf = calloc(cap, 1);
+    char  *buf = lilycc_calloc(cap, 1);
     if (!buf)
         return NULL;
     va_start(va, fmt);
@@ -102,9 +103,9 @@ diagnostic_t *cctx_diagnostic(cctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const
     va_end(va);
 
     // Allocate a diagnostic and add it to the list.
-    diagnostic_t *diag = malloc(sizeof(diagnostic_t));
+    diagnostic_t *diag = lilycc_malloc(sizeof(diagnostic_t));
     if (!diag) {
-        free(buf);
+        lilycc_free(buf);
         return NULL;
     }
     diag->node = DLIST_NODE_EMPTY;
@@ -257,11 +258,11 @@ srcfile_t *srcfile_open(cctx_t *ctx, char const *path) {
     }
 #endif
 
-    srcfile_t *file   = strong_calloc(1, sizeof(srcfile_t));
+    srcfile_t *file   = lilycc_calloc(1, sizeof(srcfile_t));
     file->ctx         = ctx;
     file->is_ram_file = false;
     file->fd          = fd;
-    file->path        = strong_strdup(path);
+    file->path        = lilycc_strdup(path);
     char *sep         = strrchr(file->path, '/');
     if (sep) {
         file->name = sep + 1;
@@ -281,12 +282,12 @@ srcfile_t *srcfile_popen(cctx_t *ctx, char const *path, char const *const *searc
     }
     size_t path_len = strlen(path);
     for (size_t i = 0; i < search_len; i++) {
-        char *pathbuf = strong_malloc(path_len + strlen(search[i]) + 2);
+        char *pathbuf = lilycc_malloc(path_len + strlen(search[i]) + 2);
         strcpy(pathbuf, search[i]);
         strcat(pathbuf, "/");
         strcpy(pathbuf, path);
         srcfile_t *res = srcfile_open(ctx, pathbuf);
-        free(pathbuf);
+        lilycc_free(pathbuf);
         if (res) {
             return res;
         }
@@ -296,39 +297,20 @@ srcfile_t *srcfile_popen(cctx_t *ctx, char const *path, char const *const *searc
 
 // Create a source file from binary data.
 srcfile_t *srcfile_create(cctx_t *ctx, char const *virt_path, void const *data, size_t len) {
-    if (len > __INT_MAX__)
-        return NULL;
-    srcfile_t *file = calloc(1, sizeof(srcfile_t));
-    if (!file)
-        goto err0;
+    assert(len < __INT_MAX__);
+    srcfile_t *file   = lilycc_calloc(1, sizeof(srcfile_t));
     file->ctx         = ctx;
     file->is_ram_file = true;
-
-    file->path = strdup(virt_path);
-    if (!file->path)
-        goto err1;
-
+    file->path        = lilycc_strdup(virt_path);
     file->is_ram_file = true;
-    file->content     = strong_malloc(len);
+    file->content     = lilycc_malloc(len);
     file->content_len = len;
     file->ctx         = ctx;
-    if (!file->content)
-        goto err2;
     memcpy(file->content, data, len);
 
-    if (!array_lencap_insert(&ctx->srcs, sizeof(void *), &ctx->srcs_len, &ctx->srcs_cap, &file, ctx->srcs_len))
-        goto err3;
+    array_lencap_insert_strong(&ctx->srcs, sizeof(void *), &ctx->srcs_len, &ctx->srcs_cap, &file, ctx->srcs_len);
 
     return file;
-
-err3:
-    free(file->content);
-err2:
-    free(file->path);
-err1:
-    free(file);
-err0:
-    return NULL;
 }
 
 // Read a raw byte from a source file.
@@ -483,7 +465,7 @@ token_t ast_empty(int subtype, pos_t pos) {
 
 // Create an AST token with a fixed number of param tokens.
 token_t ast_from_va(int subtype, size_t n_param, ...) {
-    token_t *params = strong_malloc(sizeof(token_t) * n_param);
+    token_t *params = lilycc_malloc(sizeof(token_t) * n_param);
     va_list  va;
     va_start(va, n_param);
     for (size_t i = 0; i < n_param; i++) {

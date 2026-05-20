@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include <string.h>
 
+void lilycc_free(void *);
+
 
 
 // Raw vector struct, not intended for direct use.
@@ -124,7 +126,7 @@ void rawvec_remove_n(rawvec_t *vec, size_t elem_size, size_t index, size_t count
     ({                                                                                                                 \
         __auto_type vec__clear = (vec);                                                                                \
         ASSERT_IS_VEC(vec);                                                                                            \
-        free(vec__clear->arr);                                                                                         \
+        lilycc_free(vec__clear->arr);                                                                                  \
         vec__clear->arr = NULL;                                                                                        \
         vec__clear->len = 0;                                                                                           \
         vec__clear->cap = 0;                                                                                           \

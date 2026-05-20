@@ -3,6 +3,7 @@
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
+#include "lilycc_malloc.h"
 #include "testcase.h"
 
 #include <stdbool.h>
@@ -38,7 +39,17 @@ static bool fork_testcase(testcase_t *testcase) {
         perror(" \033[31mFork failed\033[0m");
         return false;
     } else if (pid == 0) {
-        exit(!run_testcase_impl(testcase));
+#ifndef NDEBUG
+        size_t pre = lilycc_total_alloc;
+#endif
+        bool res = run_testcase_impl(testcase);
+#ifndef NDEBUG
+        size_t post = lilycc_total_alloc;
+        if (post > pre) {
+            printf("\033[33mTest %s leaked %zu bytes of memory\033[0m\n", testcase->id, post - pre);
+        }
+#endif
+        exit(!res);
     } else {
         while (1) {
             int stat = 0;
@@ -57,6 +68,36 @@ static bool run_testcase(testcase_t *testcase) {
     return do_fork ? fork_testcase(testcase) : run_testcase_impl(testcase);
 }
 
+static bool matches(char const *pattern, char const *str) {
+    if (!strcmp(pattern, str)) {
+        return true;
+    }
+    while (1) {
+        if (*pattern == '*') {
+            while (*pattern == '*') {
+                pattern++;
+            }
+            if (!*pattern) {
+                return true;
+            }
+            for (; *str; str++) {
+                if (matches(pattern, str)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (!*pattern || !*str) {
+            return !*pattern && !*str;
+        }
+        if (*pattern != *str) {
+            return false;
+        }
+        pattern++;
+        str++;
+    }
+}
+
 int main(int argc, char **argv) {
     char *val = getenv("LILY_TEST_FORK");
     if (val) {
@@ -65,26 +106,43 @@ int main(int argc, char **argv) {
         do_fork = fork != 0;
     }
 
+#ifndef NDEBUG
+    size_t pre = lilycc_total_alloc;
+#endif
+
     size_t total   = 0;
     size_t success = 0;
     if (argc < 2) {
-        map_ent_t const *ent = map_next(&testcases, NULL);
-        while (ent) {
-            total++;
-            success += run_testcase(ent->value);
-            ent      = map_next(&testcases, ent);
+        total = testcases.len;
+        for (size_t i = 0; i < testcases.len; i++) {
+            success += run_testcase(&testcases.arr[i]);
         }
     } else {
-        for (int i = 1; i < argc; i++) {
-            testcase_t *testcase = map_get(&testcases, argv[i]);
-            if (!testcase) {
-                printf("No such testcase %s\n", argv[i]);
-                continue;
+        bool *found = calloc(1, argc);
+        for (size_t i = 0; i < testcases.len; i++) {
+            testcase_t *testcase = &testcases.arr[i];
+            for (int x = 1; x < argc; x++) {
+                if (matches(argv[x], testcase->id)) {
+                    success += run_testcase(testcase);
+                    total++;
+                    found[x] = true;
+                }
             }
-            success += run_testcase(testcase);
-            total++;
         }
+        for (int i = 1; i < argc; i++) {
+            if (!found[i]) {
+                printf("No test cases match %s\n", argv[i]);
+            }
+        }
+        free(found);
     }
+#ifndef NDEBUG
+    size_t post = lilycc_total_alloc;
+    if (!do_fork && post > pre) {
+        printf("\033[33mLeaked %zu bytes of memory\n", post - pre);
+    }
+#endif
+
     if (total == 0) {
         printf("No test cases to run\n");
         return 0;

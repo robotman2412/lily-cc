@@ -8,7 +8,7 @@
 #include "arrays.h"
 #include "c_tokenizer.h"
 #include "compiler.h"
-#include "strong_malloc.h"
+#include "lilycc_malloc.h"
 #include "tokenizer.h"
 
 
@@ -387,7 +387,7 @@ token_t c_parse_comp_init(c_parser_t *ctx) {
 token_t c_parse_exprs(c_parser_t *ctx) {
     size_t   exprs_len = 1;
     size_t   exprs_cap = 1;
-    token_t *exprs     = strong_malloc(exprs_cap * sizeof(token_t));
+    token_t *exprs     = lilycc_malloc(exprs_cap * sizeof(token_t));
     *exprs             = c_parse_expr(ctx, false);
     bool is_garbage    = exprs->type == TOKENTYPE_AST && exprs->subtype == C_AST_GARBAGE;
 
@@ -559,7 +559,7 @@ token_t c_parse_expr(c_parser_t *ctx, bool allow_compinit) {
     } else {
         // Valid expression.
         token_t tmp = *stack; // NOLINT.
-        free(stack);
+        lilycc_free(stack);
         return tmp;
     }
 }
@@ -666,7 +666,7 @@ static token_t c_parse_ddecl(c_parser_t *ctx, bool allows_name, bool is_typedef)
             peek              = tkn_peek(ctx->tkn_ctx);
             size_t   args_len = 1;
             size_t   args_cap = 2;
-            token_t *args     = strong_malloc(args_cap * sizeof(token_t));
+            token_t *args     = lilycc_malloc(args_cap * sizeof(token_t));
             *args             = inner;
 
             if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RPAR) {
@@ -738,7 +738,7 @@ static token_t c_parse_decl(c_parser_t *ctx, bool allows_name, bool is_typedef) 
 static token_t c_parse_type_qual_list(c_parser_t *ctx) {
     size_t   args_len = 0;
     size_t   args_cap = 2;
-    token_t *args     = strong_malloc(args_cap * sizeof(token_t));
+    token_t *args     = lilycc_malloc(args_cap * sizeof(token_t));
 
     token_t peek = tkn_peek(ctx->tkn_ctx);
     while (is_type_qualifier(peek)) {
@@ -806,7 +806,7 @@ token_t c_parse_spec_qual_list(c_parser_t *ctx, bool *is_typedef_out) {
 token_t c_parse_decls(c_parser_t *ctx, bool allow_func_body) {
     size_t   args_len = 1;
     size_t   args_cap = 2;
-    token_t *args     = strong_malloc(args_cap * sizeof(token_t));
+    token_t *args     = lilycc_malloc(args_cap * sizeof(token_t));
     bool     is_typedef;
     *args = c_parse_spec_qual_list(ctx, &is_typedef);
 
@@ -872,7 +872,7 @@ token_t c_parse_decls(c_parser_t *ctx, bool allow_func_body) {
 token_t c_parse_struct_spec(c_parser_t *ctx) {
     size_t   args_len = 1;
     size_t   args_cap = 2;
-    token_t *args     = strong_malloc(sizeof(token_t) * args_cap);
+    token_t *args     = lilycc_malloc(sizeof(token_t) * args_cap);
     *args             = tkn_next(ctx->tkn_ctx);
     token_t peek      = tkn_peek(ctx->tkn_ctx);
     bool    named     = false;
@@ -917,7 +917,7 @@ token_t c_parse_struct_spec(c_parser_t *ctx) {
 token_t c_parse_enum_spec(c_parser_t *ctx) {
     size_t   args_len = 1;
     size_t   args_cap = 2;
-    token_t *args     = strong_malloc(sizeof(token_t) * args_cap);
+    token_t *args     = lilycc_malloc(sizeof(token_t) * args_cap);
     *args             = tkn_next(ctx->tkn_ctx);
     token_t peek      = tkn_peek(ctx->tkn_ctx);
     bool    named     = false;

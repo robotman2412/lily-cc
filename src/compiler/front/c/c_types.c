@@ -13,9 +13,9 @@
 #include "compiler.h"
 #include "ir_interpreter.h"
 #include "ir_types.h"
+#include "lilycc_malloc.h"
 #include "map.h"
 #include "refcount.h"
-#include "strong_malloc.h"
 #include "unreachable.h"
 
 #include <assert.h>
@@ -33,11 +33,11 @@ static void c_type_free(c_type_t *type) {
         rc_delete(type->func.return_type);
         for (size_t i = 0; i < type->func.args_len; i++) {
             rc_delete(type->func.args[i]);
-            free(type->func.arg_names[i]);
+            lilycc_free(type->func.arg_names[i]);
         }
-        free(type->func.args);
-        free(type->func.arg_names);
-        free(type->func.arg_name_tkns);
+        lilycc_free(type->func.args);
+        lilycc_free(type->func.arg_names);
+        lilycc_free(type->func.arg_name_tkns);
     } else if (type->primitive == C_COMP_ARRAY) { // NOLINT
         // TODO: An array size could be here.
         rc_delete(type->inner);
@@ -46,25 +46,25 @@ static void c_type_free(c_type_t *type) {
     } else if (type->primitive == C_COMP_ENUM || type->primitive == C_COMP_STRUCT || type->primitive == C_COMP_UNION) {
         rc_delete(type->comp);
     }
-    free(type);
+    lilycc_free(type);
 }
 
 // Delete a compound type.
 static void c_comp_free(c_comp_t *comp) {
     if (comp->type == C_COMP_TYPE_ENUM) {
         for (size_t i = 0; i < comp->variants.len; i++) {
-            free(comp->variants.arr[i].name);
+            lilycc_free(comp->variants.arr[i].name);
         }
-        free(comp->variants.arr);
+        lilycc_free(comp->variants.arr);
     } else {
         for (size_t i = 0; i < comp->fields.len; i++) {
-            free(comp->fields.arr[i].name);
+            lilycc_free(comp->fields.arr[i].name);
             rc_delete(comp->fields.arr[i].type_rc);
         }
-        free(comp->fields.arr);
+        lilycc_free(comp->fields.arr);
     }
-    free(comp->name);
-    free(comp);
+    lilycc_free(comp->name);
+    lilycc_free(comp);
 }
 
 
@@ -90,7 +90,7 @@ static void
             cctx_diagnostic(ctx->cctx, name->pos, DIAG_ERR, "Redefinition of %s", name->strval);
             continue;
         } else {
-            c_var_t *var      = strong_calloc(1, sizeof(c_var_t));
+            c_var_t *var      = lilycc_calloc(1, sizeof(c_var_t));
             var->storage      = C_VAR_STORAGE_ENUM_VARIANT;
             var->type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]);
             var->enum_variant = cur;
@@ -98,7 +98,7 @@ static void
             map_set(&scope->locals_by_decl, name, var);
 
             c_enumvar_t enumvar;
-            enumvar.name    = strong_strdup(name->strval);
+            enumvar.name    = lilycc_strdup(name->strval);
             enumvar.ordinal = cur;
             array_lencap_insert_strong(
                 &comp->variants.arr,
@@ -182,7 +182,7 @@ static void
                     }
                     c_field_t field;
                     field.type_rc  = field_type;
-                    field.name     = strong_strdup(name_tkn->strval);
+                    field.name     = lilycc_strdup(name_tkn->strval);
                     field.name_pos = name_tkn->pos;
                     field.offset   = offset;
                     array_lencap_insert_strong(
@@ -255,9 +255,9 @@ static rc_t c_compile_comp_spec(c_compiler_t *ctx, token_t const *struct_spec, c
         comp_rc = c_scope_lookup_comp(scope, name->strval);
     }
     if (!comp_rc) {
-        comp       = strong_calloc(1, sizeof(c_comp_t));
+        comp       = lilycc_calloc(1, sizeof(c_comp_t));
         comp_rc    = rc_new_strong(comp, (void (*)(void *))c_comp_free);
-        comp->name = name ? strong_strdup(name->strval) : NULL;
+        comp->name = name ? lilycc_strdup(name->strval) : NULL;
         comp->type = comp_type;
         if (name) {
             map_set(&scope->comp_types, name->strval, rc_share(comp_rc));
@@ -314,7 +314,7 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
     bool           has_signed   = false;
     bool           has_int128   = false;
 
-    rc_t      type_rc = rc_new_strong(strong_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
+    rc_t      type_rc = rc_new_strong(lilycc_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
     c_type_t *type    = type_rc->data;
 
     // Turn the list into a more manageable format.
@@ -492,15 +492,15 @@ rc_t c_compile_decl(
             return cur;
 
         } else if (decl->type == TOKENTYPE_AST && decl->subtype == C_AST_TYPE_FUNC) {
-            rc_t      func       = rc_new_strong(strong_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
+            rc_t      func       = rc_new_strong(lilycc_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
             c_type_t *func_type  = func->data;
             func_type->primitive = C_COMP_FUNCTION;
             func_type->func.return_type = cur;
             func_type->func.args_len    = decl->params_len - 1;
             if (decl->params_len > 1) {
-                func_type->func.args          = strong_calloc((decl->params_len - 1), sizeof(rc_t));
-                func_type->func.arg_names     = strong_calloc((decl->params_len - 1), sizeof(void *));
-                func_type->func.arg_name_tkns = strong_calloc((decl->params_len - 1), sizeof(void *));
+                func_type->func.args          = lilycc_calloc((decl->params_len - 1), sizeof(rc_t));
+                func_type->func.arg_names     = lilycc_calloc((decl->params_len - 1), sizeof(void *));
+                func_type->func.arg_name_tkns = lilycc_calloc((decl->params_len - 1), sizeof(void *));
             }
 
             for (size_t i = 0; i < decl->params_len - 1; i++) {
@@ -511,7 +511,7 @@ rc_t c_compile_decl(
                     token_t const *name_tmp;
                     rc_t           list              = c_compile_spec_qual_list(ctx, &param->params[0], scope);
                     func_type->func.args[i]          = c_compile_decl(ctx, &param->params[1], scope, list, &name_tmp);
-                    func_type->func.arg_names[i]     = strong_strdup(name_tmp->strval); // NOLINT.
+                    func_type->func.arg_names[i]     = lilycc_strdup(name_tmp->strval); // NOLINT.
                     func_type->func.arg_name_tkns[i] = name_tmp;
                 }
             }
@@ -520,7 +520,7 @@ rc_t c_compile_decl(
             cur  = func;
 
         } else if (decl->type == TOKENTYPE_AST && decl->subtype == C_AST_TYPE_ARRAY) {
-            rc_t      next       = rc_new_strong(strong_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
+            rc_t      next       = rc_new_strong(lilycc_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
             c_type_t *next_type  = next->data;
             next_type->primitive = C_COMP_ARRAY;
             next_type->inner     = cur;
@@ -598,7 +598,7 @@ rc_t c_compile_decl(
             cur  = next;
 
         } else if (decl->type == TOKENTYPE_AST && decl->subtype == C_AST_TYPE_PTR_TO) {
-            rc_t      next       = rc_new_strong(strong_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
+            rc_t      next       = rc_new_strong(lilycc_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
             c_type_t *next_type  = next->data;
             next_type->primitive = C_COMP_POINTER;
             next_type->inner     = cur;
@@ -642,7 +642,7 @@ rc_t c_compile_decl(
 // Create a type that is a pointer to an existing type.
 rc_t c_type_to_pointer(c_compiler_t *ctx, rc_t inner) {
     (void)ctx;
-    c_type_t *data  = strong_calloc(1, sizeof(c_type_t));
+    c_type_t *data  = lilycc_calloc(1, sizeof(c_type_t));
     data->primitive = C_COMP_POINTER;
     data->inner     = inner;
     return rc_new_strong(data, (void (*)(void *))c_type_free);

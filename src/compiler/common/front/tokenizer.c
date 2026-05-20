@@ -7,7 +7,7 @@
 
 #include "arrays.h"
 #include "char_repr.h"
-#include "strong_malloc.h"
+#include "lilycc_malloc.h"
 #include "utf8.h"
 
 #include <inttypes.h>
@@ -22,11 +22,11 @@ void tkn_ctx_delete(tokenizer_t *tkn_ctx) {
     for (size_t i = 0; i < tkn_ctx->tkn_buffer_len; i++) {
         tkn_delete(tkn_ctx->tkn_buffer[i]);
     }
-    free(tkn_ctx->tkn_buffer);
+    lilycc_free(tkn_ctx->tkn_buffer);
     if (tkn_ctx->cleanup) {
         tkn_ctx->cleanup(tkn_ctx);
     }
-    free(tkn_ctx);
+    lilycc_free(tkn_ctx);
 }
 
 
@@ -91,7 +91,7 @@ static token_t tkn_array_next(tokenizer_t *tkn_ctx) {
 
 // Create an array-backed tokenizer.
 tkn_array_t *tkn_array_create(token_t const *tokens, size_t tokens_len, pos_t eof_pos) {
-    tkn_array_t *ctx = strong_calloc(1, sizeof(tkn_array_t));
+    tkn_array_t *ctx = lilycc_calloc(1, sizeof(tkn_array_t));
     ctx->base.next   = tkn_array_next;
     ctx->base.pos    = eof_pos;
     ctx->tokens      = tokens;
@@ -123,13 +123,13 @@ int tkn_getc(token_t const *tkn, tknoff_t *off) {
 // Delete a token's dynamic memory (`strval` and `params`).
 void tkn_delete(token_t token) {
     if (token.strval) {
-        free(token.strval);
+        lilycc_free(token.strval);
     }
     for (size_t i = 0; i < token.params_len; i++) {
         tkn_delete(token.params[i]);
     }
     if (token.params) {
-        free(token.params);
+        lilycc_free(token.params);
     }
 }
 
@@ -146,13 +146,13 @@ token_t tkn_clone(token_t const *token) {
     };
 
     if (token->strval_len) {
-        out.strval = strong_malloc(token->strval_len + 1);
+        out.strval = lilycc_malloc(token->strval_len + 1);
         memcpy(out.strval, token->strval, token->strval_len);
         out.strval[token->strval_len] = 0;
     }
 
     if (token->params_len) {
-        out.params = strong_calloc(token->params_len, sizeof(token_t));
+        out.params = lilycc_calloc(token->params_len, sizeof(token_t));
         for (size_t i = 0; i < token->params_len; i++) {
             out.params[i] = tkn_clone(&token->params[i]);
         }
@@ -166,7 +166,7 @@ void tkn_arr_delete(size_t tokens_len, token_t *tokens) {
     for (size_t i = 0; i < tokens_len; i++) {
         tkn_delete(tokens[i]);
     }
-    free(tokens);
+    lilycc_free(tokens);
 }
 
 
@@ -270,10 +270,10 @@ void tkn_debug_testcase_r(
                 printf("token_t %s_%zu = %s.params[%zu];\n", access, i, access, i);
                 char const fmt[] = "%s_%zu";
                 size_t     len   = snprintf(NULL, 0, fmt, access, i);
-                char      *mem   = strong_malloc(len + 1);
+                char      *mem   = lilycc_malloc(len + 1);
                 snprintf(mem, len + 1, fmt, access, i);
                 tkn_debug_testcase_r(token.params[i], keyw, ast, tkn, mem, indent + 1);
-                free(mem);
+                lilycc_free(mem);
             }
             pindent(indent);
             printf("}\n");

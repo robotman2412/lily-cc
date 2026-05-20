@@ -16,9 +16,9 @@
 #include "ir.h"
 #include "ir/ir_interpreter.h"
 #include "ir_types.h"
+#include "lilycc_malloc.h"
 #include "map.h"
 #include "refcount.h"
-#include "strong_malloc.h"
 #include "unreachable.h"
 
 #include <assert.h>
@@ -39,7 +39,7 @@ static void c_compiler_t_fake_cleanup(void *_) {
 
 // Create a new C compiler context.
 c_compiler_t *c_compiler_create(cctx_t *cctx, c_options_t options) {
-    c_compiler_t *cc                = strong_calloc(1, sizeof(c_compiler_t));
+    c_compiler_t *cc                = lilycc_calloc(1, sizeof(c_compiler_t));
     cc->cctx                        = cctx;
     cc->options                     = options;
     cc->global_scope.locals         = STR_MAP_EMPTY;
@@ -60,7 +60,7 @@ c_compiler_t *c_compiler_create(cctx_t *cctx, c_options_t options) {
 // Destroy a C compiler context.
 void c_compiler_destroy(c_compiler_t *cc) {
     c_scope_destroy(cc->global_scope);
-    free(cc);
+    lilycc_free(cc);
 }
 
 
@@ -83,7 +83,7 @@ void c_scope_destroy(c_scope_t scope) {
     while (ent) {
         c_var_t *local = ent->value;
         rc_delete(local->type);
-        free(local);
+        lilycc_free(local);
         ent = map_next(&scope.locals, ent);
     }
     map_clear(&scope.locals);
@@ -227,7 +227,7 @@ c_var_t *c_var_create(
         return NULL;
     }
 
-    c_var_t *var = calloc(1, sizeof(c_var_t));
+    c_var_t *var = lilycc_calloc(1, sizeof(c_var_t));
     var->type    = type_rc;
     if (func) {
         // Can create a valid local variable.
@@ -627,7 +627,7 @@ c_compile_expr_t c_compile_comp_init(
             zeroed = (c_value_t){
                 .value_type  = C_RVALUE_BINARY,
                 .c_type      = type_rc,
-                .rvalue.blob = strong_calloc(1, size),
+                .rvalue.blob = lilycc_calloc(1, size),
             };
         }
 
@@ -640,7 +640,7 @@ c_compile_expr_t c_compile_comp_init(
     }
 
     c_init_cursor_t cursor = {
-        .stack        = strong_calloc(1, sizeof(size_t)),
+        .stack        = lilycc_calloc(1, sizeof(size_t)),
         .stack_len    = 1,
         .stack_cap    = 1,
         .stores       = NULL,
@@ -780,7 +780,7 @@ c_compile_expr_t c_compile_comp_init(
     }
 
     // Emit warnings about reinitializations of fields.
-    uint32_t *bytes_init = calloc((size + 3) / 4, sizeof(uint32_t));
+    uint32_t *bytes_init = lilycc_calloc((size + 3) / 4, sizeof(uint32_t));
     for (size_t i = 0; i < cursor.stores_len; i++) {
         c_comp_store_t const *store = &cursor.stores[i];
         uint64_t              write_size, write_align;
@@ -799,13 +799,13 @@ c_compile_expr_t c_compile_comp_init(
             cctx_diagnostic(ctx->cctx, store->pos, DIAG_WARN, "Initializer overwrites previous value");
         }
     }
-    free(bytes_init);
+    lilycc_free(bytes_init);
 
     // Collect the writes.
     c_value_t value;
     value.c_type = type_rc;
     if (is_const) {
-        uint8_t *blob = calloc(size, sizeof(uint8_t));
+        uint8_t *blob = lilycc_calloc(size, sizeof(uint8_t));
         for (size_t i = 0; i < cursor.stores_len; i++) {
             c_comp_store_t const *store = &cursor.stores[i];
             if (store->value.value_type == C_RVALUE_OPERAND) {
@@ -854,8 +854,8 @@ out:
     // Final cleanup.
     rc_delete(cursor.type_rc);
     rc_delete(cursor.field_type_rc);
-    free(cursor.stack);
-    free(cursor.stores);
+    lilycc_free(cursor.stack);
+    lilycc_free(cursor.stores);
 
     if (error) {
         return (c_compile_expr_t){.code = code, .res = {0}};
@@ -1207,7 +1207,7 @@ static inline c_compile_expr_t c_compile_expr_call(
     c_value_t func = res.res;
 
     token_t const *params_ast = &expr->params[1];
-    c_value_t     *params     = strong_calloc(params_ast->params_len, sizeof(c_value_t));
+    c_value_t     *params     = lilycc_calloc(params_ast->params_len, sizeof(c_value_t));
 
     // Compile and collect the argument expressions.
     for (size_t i = 0; i < params_ast->params_len; i++) {
@@ -1225,7 +1225,7 @@ static inline c_compile_expr_t c_compile_expr_call(
         c_type_t const *func_type = func.c_type->data;
 
         // Collect arguments into form IR can use.
-        ir_operand_t *operands = strong_calloc(params_ast->params_len, sizeof(ir_operand_t));
+        ir_operand_t *operands = lilycc_calloc(params_ast->params_len, sizeof(ir_operand_t));
         for (size_t i = 0; i < params_ast->params_len; i++) {
             c_type_t const *value_type = params[i].c_type->data;
             if (value_type->primitive == C_COMP_STRUCT || value_type->primitive == C_COMP_UNION) {
@@ -1303,13 +1303,13 @@ static inline c_compile_expr_t c_compile_expr_call(
             ir_add_call(IR_APPEND(code), call_memref, has_ir_ret, ir_ret, params_ast->params_len, operands);
         }
 
-        free(operands);
+        lilycc_free(operands);
     }
 
     for (size_t i = 0; i < params_ast->params_len; i++) {
         c_value_destroy(params[i]);
     }
-    free(params);
+    lilycc_free(params);
     c_value_destroy(func);
 
     return (c_compile_expr_t){.code = code, .res = retval};
@@ -1366,7 +1366,7 @@ c_compile_expr_t
             case C_VAR_STORAGE_GLOBAL:
                 res.value_type = C_LVALUE_MEM;
                 res.lvalue.memref
-                    = IR_MEMREF(c_type_to_ir_type(ctx, c_var->type->data), IR_BADDR_SYM(strong_strdup(c_var->sym)));
+                    = IR_MEMREF(c_type_to_ir_type(ctx, c_var->type->data), IR_BADDR_SYM(lilycc_strdup(c_var->sym)));
                 break;
             case C_VAR_STORAGE_ENUM_VARIANT: UNREACHABLE();
         }
@@ -2559,7 +2559,7 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
     ir_add_return0(IR_APPEND(code));
 
     // Add function into global scope.
-    c_var_t *var = calloc(1, sizeof(c_var_t));
+    c_var_t *var = lilycc_calloc(1, sizeof(c_var_t));
     var->storage = C_VAR_STORAGE_GLOBAL;
     var->type    = func_type_rc;
     map_set(&ctx->global_scope.locals, name->strval, var);

@@ -9,8 +9,8 @@
 #include "insn_proto.h"
 #include "ir_interpreter.h"
 #include "ir_types.h"
+#include "lilycc_malloc.h"
 #include "set.h"
-#include "strong_malloc.h"
 #include "unreachable.h"
 
 #include <assert.h>
@@ -54,26 +54,26 @@ static cand_tree_t *isel_copy_subtree(match_tree_t const *proto_tree, insn_sub_t
         return NULL;
     }
 
-    cand_tree_t *node = strong_calloc(1, sizeof(cand_tree_t));
+    cand_tree_t *node = lilycc_calloc(1, sizeof(cand_tree_t));
     node->type        = proto_tree->type;
 
     if (proto_tree->type == EXPR_TREE_ICONST) {
         node->iconst   = proto_tree->iconst;
         node->subs_len = 1;
-        node->subs     = strong_calloc(1, sizeof(void *));
+        node->subs     = lilycc_calloc(1, sizeof(void *));
         node->subs[0]  = proto;
 
     } else if (proto_tree->type == EXPR_TREE_OPERAND) {
         // Nothing to do.
         node->subs_len = 1;
-        node->subs     = strong_calloc(1, sizeof(void *));
+        node->subs     = lilycc_calloc(1, sizeof(void *));
         node->subs[0]  = proto;
 
     } else if (proto_tree->type == EXPR_TREE_IR_INSN) {
         // Deep copy.
         node->insn.type         = proto_tree->insn.type;
         node->insn.children_len = proto_tree->insn.children_len;
-        node->insn.children     = strong_calloc(node->insn.children_len, sizeof(void *));
+        node->insn.children     = lilycc_calloc(node->insn.children_len, sizeof(void *));
         if (node->insn.type == IR_INSN_EXPR1) {
             node->insn.op1 = proto_tree->insn.op1;
         } else if (node->insn.type == IR_INSN_EXPR2) {
@@ -92,7 +92,7 @@ static cand_tree_t *isel_copy_subtree(match_tree_t const *proto_tree, insn_sub_t
 
 // Inserts a prototype into the tree's list of options.
 static void isel_insert_option(cand_tree_t *tree, insn_sub_t const *proto) {
-    tree->subs                   = strong_realloc(tree->subs, (tree->subs_len + 1) * sizeof(void *));
+    tree->subs                   = lilycc_realloc(tree->subs, (tree->subs_len + 1) * sizeof(void *));
     tree->subs[tree->subs_len++] = proto;
 }
 
@@ -150,15 +150,15 @@ cand_tree_t *cand_tree_generate(size_t subs_len, insn_sub_t const *const *subs) 
 // Delete an instruction selection tree.
 void cand_tree_delete(cand_tree_t *tree) {
     while (tree) {
-        free(tree->subs);
+        lilycc_free(tree->subs);
         if (tree->type == EXPR_TREE_IR_INSN) {
             for (size_t i = 0; i < tree->insn.children_len; i++) {
                 cand_tree_delete(tree->insn.children[i]);
             }
-            free(tree->insn.children);
+            lilycc_free(tree->insn.children);
         }
         cand_tree_t *next = tree->next;
-        free(tree);
+        lilycc_free(tree);
         tree = next;
     }
 }
@@ -429,19 +429,19 @@ ir_insn_t *
     bool                *best_reg     = NULL;
 
     set_foreach(insn_sub_t, proto, &candidates) {
-        ir_operand_t const **operand_tmp = strong_calloc(operands_cap, sizeof(void *));
-        bool                *reg_tmp     = strong_calloc(operands_cap, sizeof(bool));
+        ir_operand_t const **operand_tmp = lilycc_calloc(operands_cap, sizeof(void *));
+        bool                *reg_tmp     = lilycc_calloc(operands_cap, sizeof(bool));
         size_t proto_size = tree_isel_match_proto(profile, proto, ir_insn, ir_insn->code, operand_tmp, reg_tmp);
         if (proto_size > max_size) {
             max_size = proto_size;
             best_fit = proto;
-            free(best_operand);
-            free(best_reg);
+            lilycc_free(best_operand);
+            lilycc_free(best_reg);
             best_operand = operand_tmp;
             best_reg     = reg_tmp;
         } else {
-            free(operand_tmp);
-            free(reg_tmp);
+            lilycc_free(operand_tmp);
+            lilycc_free(reg_tmp);
         }
     }
 
@@ -457,7 +457,7 @@ ir_insn_t *
     //         res.operands[i] = *best_operand[i];
     //     }
     //     res.operand_regs = best_reg;
-    //     free(best_operand);
+    //     lilycc_free(best_operand);
     // }
 
     // set_clear(&candidates);

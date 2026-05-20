@@ -5,6 +5,9 @@
 
 #include "map.h"
 
+#include "lilycc_malloc.h"
+
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -13,8 +16,8 @@
 // Vtable for string maps.
 map_vtable_t const str_map_vtable = {
     .key_cmp  = (int (*)(void const *, void const *))strcmp,
-    .key_del  = free,
-    .key_dup  = (void *(*)(void const *))strdup,
+    .key_del  = lilycc_free,
+    .key_dup  = (void *(*)(void const *))lilycc_strdup,
     .key_hash = (uint32_t (*)(void const *))hash_cstr,
 };
 
@@ -39,10 +42,7 @@ bool map_resize(map_t *map, size_t new_buckets_len) {
     }
 
     // Try to allocate memory for the new buckets.
-    dlist_t *new_buckets = calloc(new_buckets_len, sizeof(dlist_t));
-    if (!new_buckets) {
-        return false;
-    }
+    dlist_t *new_buckets = lilycc_calloc(new_buckets_len, sizeof(dlist_t));
 
     // Sort entries into the new correct buckets.
     for (size_t i = 0; i < map->buckets_len; i++) {
@@ -53,7 +53,7 @@ bool map_resize(map_t *map, size_t new_buckets_len) {
     }
 
     // Update the map's pointers.
-    free(map->buckets);
+    lilycc_free(map->buckets);
     map->buckets     = new_buckets;
     map->buckets_len = new_buckets_len;
     return true;
@@ -62,7 +62,7 @@ bool map_resize(map_t *map, size_t new_buckets_len) {
 // Try to resize the map according to the current occupancy (but don't fail if OOM).
 void map_auto_resize(map_t *map) {
     if (map->len == 0) {
-        free(map->buckets);
+        lilycc_free(map->buckets);
         map->buckets     = NULL;
         map->buckets_len = 0;
         return;
@@ -87,11 +87,11 @@ void map_clear(map_t *map) {
         while (node) {
             map_ent_t *ent = (map_ent_t *)node;
             map->vtable->key_del(ent->key);
-            free(ent);
+            lilycc_free(ent);
             node = dlist_pop_front(&map->buckets[i]);
         }
     }
-    free(map->buckets);
+    lilycc_free(map->buckets);
     map->buckets     = NULL;
     map->buckets_len = 0;
     map->len         = 0;
@@ -148,7 +148,7 @@ bool map_set(map_t *map, void const *key, void const *value) {
                 // Remove existing value.
                 dlist_remove(&map->buckets[bucket], node);
                 map->vtable->key_del(ent->key);
-                free(ent);
+                lilycc_free(ent);
                 map->len--;
                 map_auto_resize(map);
             }
@@ -164,15 +164,12 @@ bool map_set(map_t *map, void const *key, void const *value) {
     }
 
     // Allocate a new item.
-    map_ent_t *ent = malloc(sizeof(map_ent_t));
-    if (!ent) {
-        return false;
-    }
-    ent->node = DLIST_NODE_EMPTY;
-    ent->key  = map->vtable->key_dup(key);
-    if (!ent->key) {
-        free(ent);
-        return false;
+    map_ent_t *ent = lilycc_malloc(sizeof(map_ent_t));
+    ent->node      = DLIST_NODE_EMPTY;
+    ent->key       = map->vtable->key_dup(key);
+    if (key && !ent->key) {
+        fprintf(stderr, "Out of memory\n");
+        abort();
     }
     ent->value = (void *)value;
     ent->hash  = hash;

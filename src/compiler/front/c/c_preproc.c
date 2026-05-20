@@ -8,9 +8,9 @@
 #include "arith128.h"
 #include "c_tokenizer.h"
 #include "compiler.h"
+#include "lilycc_malloc.h"
 #include "map.h"
 #include "set.h"
-#include "strong_malloc.h"
 #include "tokenizer.h"
 #include "vec.h"
 
@@ -102,7 +102,7 @@ static c_expansion_t c_proc_macro_counter(c_preproc_t *pre, vec_macro_arg_t cons
         abort();
     }
     cap       += 1;
-    char *buf  = malloc(cap);
+    char *buf  = lilycc_malloc(cap);
     int   len  = snprintf(buf, cap, "%" PRIu64, pre->shared->counter_macro);
     pre->shared->counter_macro++;
 
@@ -129,7 +129,7 @@ static c_expansion_t c_proc_macro_file(c_preproc_t *pre, vec_macro_arg_t const *
     if (peek.pos.srcfile) {
         path = c_preproc_esc_str(peek.pos.srcfile->path);
     } else {
-        path = strong_strdup("<unknown>");
+        path = lilycc_strdup("<unknown>");
     }
 
     token_t tkn = {
@@ -155,7 +155,7 @@ static c_expansion_t c_proc_macro_file_name(c_preproc_t *pre, vec_macro_arg_t co
     if (peek.pos.srcfile) {
         path = c_preproc_esc_str(peek.pos.srcfile->name);
     } else {
-        path = strong_strdup("<unknown>");
+        path = lilycc_strdup("<unknown>");
     }
 
     token_t tkn = {
@@ -184,7 +184,7 @@ static c_expansion_t c_proc_macro_line(c_preproc_t *pre, vec_macro_arg_t const *
         abort();
     }
     cap       += 1;
-    char *buf  = malloc(cap);
+    char *buf  = lilycc_malloc(cap);
     int   len  = snprintf(buf, cap, "%d", peek.pos.line);
 
     token_t tkn = {
@@ -207,7 +207,7 @@ __attribute__((format(printf, 2, 3))) static void c_preproc_fmt_builtin_macro(c_
     int cap = vsnprintf(NULL, 0, fmt, vl);
     va_end(vl);
 
-    char *spec = malloc(cap + 1);
+    char *spec = lilycc_malloc(cap + 1);
     va_start(vl, fmt);
     vsnprintf(spec, cap + 1, fmt, vl);
     va_end(vl);
@@ -216,8 +216,8 @@ __attribute__((format(printf, 2, 3))) static void c_preproc_fmt_builtin_macro(c_
     c_macro_t *macro  = c_macro_create("<built-in>", spec, &name);
     macro->is_builtin = true;
     c_preproc_add_macro(pre, name, macro);
-    free(name);
-    free(spec);
+    lilycc_free(name);
+    lilycc_free(spec);
 }
 
 // Create all (standard and extension) pre-defined macros for a given C frontend.
@@ -287,17 +287,17 @@ static void c_preproc_builtin_macros(c_preproc_t *pre) {
 // See `c_preproc_t` for details about `raw_mode` and `keep_comments`.
 // Applying either flag after creation of the preprocessor will create incorrect output.
 c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std, bool raw_mode, bool keep_comments) {
-    c_preproc_t *pre = strong_calloc(1, sizeof(c_preproc_t));
+    c_preproc_t *pre = lilycc_calloc(1, sizeof(c_preproc_t));
 
     c_tokenizer_t *srctok = c_tkn_create(srcfile, c_std);
     if (!srctok) {
-        free(pre);
+        lilycc_free(pre);
         return NULL;
     }
     srctok->preproc_mode  = true;
     srctok->keep_comments = keep_comments;
 
-    c_preproc_shared_t *shared = strong_calloc(1, sizeof(c_preproc_shared_t));
+    c_preproc_shared_t *shared = lilycc_calloc(1, sizeof(c_preproc_shared_t));
     shared->cctx               = srcfile->ctx;
     shared->macros             = STR_MAP_EMPTY;
     shared->once_files         = PTR_SET_EMPTY;
@@ -325,7 +325,7 @@ c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std, bool raw_mode, bool
 
 // Create a nested preprocessor that shares macro/file/pragma state with `parent`.
 c_preproc_t *c_preproc_create_nested(c_preproc_t *parent) {
-    c_preproc_t *pre = strong_calloc(1, sizeof(c_preproc_t));
+    c_preproc_t *pre = lilycc_calloc(1, sizeof(c_preproc_t));
 
     pre->base.next     = c_preproc_next;
     pre->base.cleanup  = c_preproc_destroy;
@@ -362,7 +362,7 @@ static void c_preproc_destroy(tokenizer_t *tkn) {
             c_macro_destroy(ent->value);
         }
         map_clear(&pre->shared->macros);
-        free(pre->shared);
+        lilycc_free(pre->shared);
     }
 }
 
@@ -872,7 +872,7 @@ static void c_directive_pragma(c_preproc_t *pre, pos_t pos) {
         return;
     }
     c_preproc_pragma(pre, span, buf);
-    free(buf);
+    lilycc_free(buf);
 }
 
 // Preprocessor directive: if/elif.
@@ -964,7 +964,7 @@ static void c_directive_warning(c_preproc_t *pre, pos_t pos, bool is_error) {
         return;
     }
     cctx_diagnostic(pre->shared->cctx, span, is_error ? DIAG_ERR : DIAG_WARN, "%s", buf);
-    free(buf);
+    lilycc_free(buf);
 }
 
 // Preprocessor directive: define.
@@ -981,7 +981,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
         return;
     }
 
-    c_macro_t *macro = strong_calloc(1, sizeof(c_macro_t));
+    c_macro_t *macro = lilycc_calloc(1, sizeof(c_macro_t));
 
     // A `(` immediately after the name (no intervening whitespace) makes this a
     // function-like macro; otherwise the rest of the line is the body.
@@ -1019,7 +1019,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
                         tkn.strval
                     );
                 }
-                char *str = strong_strdup(tkn.strval);
+                char *str = lilycc_strdup(tkn.strval);
                 vec_push(&macro->regular.args, str);
                 tkn_delete(tkn);
             } else {
@@ -1170,7 +1170,7 @@ static char *c_preproc_esc_str(char const *raw) {
             n_esc++;
         }
     }
-    char  *res = malloc(strlen(raw) + n_esc + 1);
+    char  *res = lilycc_malloc(strlen(raw) + n_esc + 1);
     size_t o   = 0;
     for (size_t i = 0; raw[i]; i++) {
         if (raw[i] == '\\' || raw[i] == '\"') {
@@ -1777,7 +1777,7 @@ c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_o
     size_t     spec_len = strlen(spec);
     srcfile_t *src      = srcfile_create(cctx, virt_file, spec, spec_len);
 
-    c_macro_t     *macro = strong_calloc(1, sizeof(c_macro_t));
+    c_macro_t     *macro = lilycc_calloc(1, sizeof(c_macro_t));
     char          *name  = NULL;
     c_tokenizer_t *tkn   = NULL;
 
@@ -1798,7 +1798,7 @@ c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_o
         i++;
     }
     size_t name_len = i - name_start;
-    name            = strong_malloc(name_len + 1);
+    name            = lilycc_malloc(name_len + 1);
     memcpy(name, spec + name_start, name_len);
     name[name_len] = '\0';
 
@@ -1845,7 +1845,7 @@ c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_o
                 i++;
             }
             size_t arg_len = i - arg_start;
-            char  *arg     = strong_malloc(arg_len + 1);
+            char  *arg     = lilycc_malloc(arg_len + 1);
             memcpy(arg, spec + arg_start, arg_len);
             arg[arg_len] = '\0';
             vec_push(&macro->regular.args, arg);
@@ -1907,7 +1907,7 @@ c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_o
     if (name_out) {
         *name_out = name;
     } else {
-        free(name);
+        lilycc_free(name);
     }
     return macro;
 
@@ -1917,7 +1917,7 @@ error:
             print_diagnostic(d, stdout);
         }
     }
-    free(name);
+    lilycc_free(name);
     if (tkn) {
         tkn_ctx_delete(&tkn->base);
     }
@@ -1928,7 +1928,7 @@ error:
 
 // Create a procedural macro.
 c_macro_t *c_proc_macro_create(bool uses_args, c_proc_macro_cb_t callback, void *cookie) {
-    c_macro_t *macro     = strong_malloc(sizeof(c_macro_t));
+    c_macro_t *macro     = lilycc_malloc(sizeof(c_macro_t));
     macro->is_proc_macro = true;
     macro->uses_args     = uses_args;
     macro->proc.callback = callback;
@@ -1940,7 +1940,7 @@ c_macro_t *c_proc_macro_create(bool uses_args, c_proc_macro_cb_t callback, void 
 void c_macro_destroy(c_macro_t *macro) {
     if (!macro->is_proc_macro) {
         for (size_t i = 0; i < macro->regular.args.len; i++) {
-            free(macro->regular.args.arr[i]);
+            lilycc_free(macro->regular.args.arr[i]);
         }
         vec_clear(&macro->regular.args);
         for (size_t i = 0; i < macro->regular.subst.len; i++) {
@@ -1956,13 +1956,13 @@ void c_macro_destroy(c_macro_t *macro) {
                 }
                 vec_clear(&subst->va_opt.tokens);
                 vec_clear(&subst->va_opt.expanded);
-                free(subst->va_opt.stringized);
+                lilycc_free(subst->va_opt.stringized);
                 vec_clear(&subst->va_opt.ws_before);
             }
         }
         vec_clear(&macro->regular.subst);
     }
-    free(macro);
+    lilycc_free(macro);
 }
 
 // Paste two preprocessing tokens together.
@@ -1999,7 +1999,7 @@ static bool c_preproc_tkn_paste(c_preproc_t *pre, token_t const *lhs, token_t co
         if (!strcmp(tkn.strval, c_token_name[i])) {
             tkn.type    = TOKENTYPE_OTHER;
             tkn.subtype = i;
-            free(tkn.strval);
+            lilycc_free(tkn.strval);
             tkn.strval     = NULL;
             tkn.strval_len = 0;
             *out           = tkn;
@@ -2088,7 +2088,7 @@ static token_t c_macro_arg_stringize(c_macro_arg_t *arg, pos_t pos) {
         .pos        = pos,
         .type       = TOKENTYPE_SCONST,
         .subtype    = C_STR_RAW_DQUOT,
-        .strval     = strong_strdup(arg->stringized),
+        .strval     = lilycc_strdup(arg->stringized),
         .strval_len = strlen(arg->stringized),
     };
 }
@@ -2385,7 +2385,7 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
     if (expand.tokens.len >= 2) {
         size_t   extra   = expand.tokens.len - 1;
         size_t   new_len = expand.tokens.len + extra;
-        token_t *out     = strong_calloc(new_len, sizeof(token_t));
+        token_t *out     = lilycc_calloc(new_len, sizeof(token_t));
         for (size_t i = 0; i < expand.tokens.len; i++) {
             out[i * 2] = expand.tokens.arr[i];
         }
@@ -2393,11 +2393,11 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
             out[i * 2 + 1] = (token_t){
                 .pos        = pos,
                 .type       = TOKENTYPE_WHITESPACE,
-                .strval     = strong_strdup(" "),
+                .strval     = lilycc_strdup(" "),
                 .strval_len = 1,
             };
         }
-        free(expand.tokens.arr);
+        lilycc_free(expand.tokens.arr);
         expand.tokens.arr = out;
         expand.tokens.len = new_len;
         expand.tokens.cap = new_len;
@@ -2416,7 +2416,7 @@ exit:
         }
         vec_clear(&args.arr[i].tokens);
         vec_clear(&args.arr[i].expanded);
-        free(args.arr[i].stringized);
+        lilycc_free(args.arr[i].stringized);
         vec_clear(&args.arr[i].ws_before);
     }
     vec_clear(&args);

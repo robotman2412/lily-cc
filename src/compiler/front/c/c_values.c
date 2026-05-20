@@ -10,8 +10,8 @@
 #include "compiler.h"
 #include "ir.h"
 #include "ir_types.h"
+#include "lilycc_malloc.h"
 #include "refcount.h"
-#include "strong_malloc.h"
 #include "unreachable.h"
 
 #include <assert.h>
@@ -29,13 +29,13 @@ void c_value_destroy(c_value_t value) {
         case C_VALUE_ERROR: break;
         case C_LVALUE_MEM:
             if (value.lvalue.memref.base_type == IR_MEMBASE_SYM) {
-                free(value.lvalue.memref.base_sym);
+                lilycc_free(value.lvalue.memref.base_sym);
             }
             break;
         case C_LVALUE_VAR:
         case C_RVALUE_OPERAND:
         case C_RVALUE_STACK: break;
-        case C_RVALUE_BINARY: free(value.rvalue.blob); break;
+        case C_RVALUE_BINARY: lilycc_free(value.rvalue.blob); break;
     }
     rc_delete(value.c_type);
 }
@@ -285,7 +285,7 @@ c_value_t c_value_access_field(c_compiler_t *ctx, c_value_t const *value, token_
             if (!c_type_get_size(ctx, field->type_rc->data, &size, &align)) {
                 UNREACHABLE();
             }
-            uint8_t *blob = strong_malloc(size);
+            uint8_t *blob = lilycc_malloc(size);
             memcpy(blob, value->rvalue.blob + field_offset, size);
 
             c_type_t const *field_type = field->type_rc->data;
@@ -293,7 +293,7 @@ c_value_t c_value_access_field(c_compiler_t *ctx, c_value_t const *value, token_
                 // Primitives must be converted into IR constants.
                 ir_const_t value
                     = ir_const_from_blob(c_type_to_ir_type(ctx, field_type), blob, ctx->options.big_endian);
-                free(blob);
+                lilycc_free(blob);
                 return (c_value_t){
                     .value_type     = C_RVALUE_OPERAND,
                     .c_type         = rc_share(field->type_rc),
@@ -324,7 +324,7 @@ c_value_t c_value_clone(c_compiler_t *ctx, c_value_t const *value) {
         case C_RVALUE_BINARY: {
             uint64_t size, align;
             c_type_get_size(ctx, value->c_type->data, &size, &align);
-            uint8_t *blob = strong_malloc(size);
+            uint8_t *blob = lilycc_malloc(size);
             memcpy(blob, value->rvalue.blob, size);
             return (c_value_t){
                 .value_type  = C_RVALUE_BINARY,

@@ -9,7 +9,7 @@
 #include "compiler.h"
 #include "ir_tokenizer.h"
 #include "ir_types.h"
-#include "strong_malloc.h"
+#include "lilycc_malloc.h"
 #include "tokenizer.h"
 
 #include <stdlib.h>
@@ -349,7 +349,7 @@ static bool ir_is_list_end_token(token_t tkn) {
 static token_t ir_parse_list(tokenizer_t *from, token_t (*item_parser)(tokenizer_t *)) {
     size_t   arr_len = 1;
     size_t   arr_cap = 2;
-    token_t *arr     = strong_calloc(arr_cap, sizeof(token_t));
+    token_t *arr     = lilycc_calloc(arr_cap, sizeof(token_t));
     arr[0]           = item_parser(from);
     bool garbage     = arr[0].type == TOKENTYPE_AST && arr[0].subtype == IR_AST_GARBAGE;
 
@@ -453,7 +453,7 @@ token_t ir_parse_func(tokenizer_t *from) {
 
     size_t   arr_len = 0;
     size_t   arr_cap = 16;
-    token_t *arr     = strong_calloc(arr_cap, sizeof(token_t));
+    token_t *arr     = lilycc_calloc(arr_cap, sizeof(token_t));
     bool     garbage = false;
 
     while (1) {

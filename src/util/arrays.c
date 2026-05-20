@@ -134,11 +134,8 @@ void array_sort(void *array, size_t ent_size, size_t ent_count, array_sort_comp_
         }
     } else {
         // 3 or more entries: sorting needed.
-        void *mem = malloc(ent_size * ent_count);
-        if (!mem) {
-            abort();
-        }
+        void *mem = lilycc_malloc(ent_size * ent_count);
         array_sort_impl(array, mem, ent_size, ent_count, comparator);
-        free(mem);
+        lilycc_free(mem);
     }
 }

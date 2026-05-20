@@ -9,10 +9,10 @@
 #include "insn_proto.h"
 #include "ir/ir_optimizer.h"
 #include "ir_types.h"
+#include "lilycc_malloc.h"
 #include "list.h"
 #include "map.h"
 #include "set.h"
-#include "strong_malloc.h"
 #include "unreachable.h"
 
 #include <assert.h>
@@ -54,7 +54,7 @@ void ir_mark_used(ir_operand_t operand, ir_insn_t *insn) {
 // Function argument types are IR_PRIM_s32 by default.
 ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_len) {
     ir_func_t *func = ir_func_create_empty(name);
-    func->args      = strong_calloc(args_len, sizeof(ir_arg_t));
+    func->args      = lilycc_calloc(args_len, sizeof(ir_arg_t));
     func->args_len  = args_len;
     for (size_t i = 0; i < args_len; i++) {
         func->args[i].arg_type     = IR_ARG_TYPE_IGNORED;
@@ -67,8 +67,8 @@ ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_
 
 // Create an IR function without operands nor code.
 ir_func_t *ir_func_create_empty(char const *name) {
-    ir_func_t *func     = strong_calloc(1, sizeof(ir_func_t));
-    func->name          = strong_strdup(name);
+    ir_func_t *func     = lilycc_calloc(1, sizeof(ir_func_t));
+    func->name          = lilycc_strdup(name);
     func->code_by_name  = STR_MAP_EMPTY;
     func->var_by_name   = STR_MAP_EMPTY;
     func->frame_by_name = STR_MAP_EMPTY;
@@ -94,13 +94,13 @@ void ir_func_delete(ir_func_t *func) {
         // TODO: This should be its own function.
         ir_frame_t *frame = (ir_frame_t *)dlist_pop_front(&func->frames_list);
         map_remove(&func->frame_by_name, frame->name);
-        free(frame->name);
-        free(frame);
+        lilycc_free(frame->name);
+        lilycc_free(frame);
     }
 
-    free(func->args);
-    free(func->name);
-    free(func);
+    lilycc_free(func->args);
+    lilycc_free(func->name);
+    lilycc_free(func);
 }
 
 
@@ -234,12 +234,12 @@ static void compute_dominance(ir_func_t *func, size_t nodes_len, dom_node_t *nod
 
 // Insert a combinator function for `var` into the beginning of `code`.
 static void create_combinator(ir_code_t *code, ir_var_t *dest) {
-    ir_insn_t *expr       = calloc(1, sizeof(ir_insn_t));
+    ir_insn_t *expr       = lilycc_calloc(1, sizeof(ir_insn_t));
     expr->type            = IR_INSN_COMBINATOR;
     expr->code            = code;
     expr->combinators_len = code->pred.len;
-    expr->combinators     = strong_calloc(1, code->pred.len * sizeof(ir_combinator_t));
-    expr->returns         = strong_malloc(sizeof(ir_retval_t));
+    expr->combinators     = lilycc_calloc(1, code->pred.len * sizeof(ir_combinator_t));
+    expr->returns         = lilycc_malloc(sizeof(ir_retval_t));
     expr->returns[0]      = IR_RETVAL_VAR(dest);
     expr->returns_len     = 1;
     size_t i              = 0;
@@ -395,7 +395,7 @@ void ir_func_to_ssa(ir_func_t *func) {
     opt_dead_code(func);
 
     size_t      nodes_len = func->code_list.len;
-    dom_node_t *nodes     = calloc(nodes_len, sizeof(dom_node_t));
+    dom_node_t *nodes     = lilycc_calloc(nodes_len, sizeof(dom_node_t));
 
     compute_dominance(func, nodes_len, nodes);
 
@@ -421,7 +421,7 @@ void ir_func_to_ssa(ir_func_t *func) {
         set_clear(&nodes[i].bucket);
         set_clear(&nodes[i].frontier);
     }
-    free(nodes);
+    lilycc_free(nodes);
     func->enforce_ssa = true;
 }
 
@@ -466,13 +466,13 @@ ir_frame_t *ir_frame_create(ir_func_t *func, uint64_t size, uint64_t align, char
         fprintf(stderr, "BUG: Stack frame size is not an integer multiple of alignment\n");
         abort();
     }
-    ir_frame_t *frame = calloc(1, sizeof(ir_frame_t));
+    ir_frame_t *frame = lilycc_calloc(1, sizeof(ir_frame_t));
     if (name) {
-        frame->name = strong_strdup(name);
+        frame->name = lilycc_strdup(name);
     } else {
         char const *fmt = "frame%zu";
         size_t      len = snprintf(NULL, 0, fmt, func->frames_list.len);
-        frame->name     = calloc(1, len + 1);
+        frame->name     = lilycc_calloc(1, len + 1);
         snprintf(frame->name, len + 1, fmt, func->frames_list.len);
     }
     frame->func  = func;
@@ -491,13 +491,13 @@ ir_frame_t *ir_frame_create(ir_func_t *func, uint64_t size, uint64_t align, char
 // If `name` is `NULL`, its name will be `var%zu` where `%zu` is a number.
 ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
     assert(type < IR_N_PRIM);
-    ir_var_t *var = calloc(1, sizeof(ir_var_t));
+    ir_var_t *var = lilycc_calloc(1, sizeof(ir_var_t));
     if (name) {
-        var->name = strong_strdup(name);
+        var->name = lilycc_strdup(name);
     } else {
         char const *fmt = "var%zu";
         size_t      len = snprintf(NULL, 0, fmt, func->vars_list.len);
-        var->name       = calloc(1, len + 1);
+        var->name       = lilycc_calloc(1, len + 1);
         snprintf(var->name, len + 1, fmt, func->vars_list.len);
     }
     name_free_assert(func, var->name);
@@ -532,8 +532,8 @@ void ir_var_delete(ir_var_t *var) {
     // Delete the variable itself.
     map_remove(&var->func->var_by_name, var->name);
     dlist_remove(&var->func->vars_list, &var->node);
-    free(var->name);
-    free(var);
+    lilycc_free(var->name);
+    lilycc_free(var);
 }
 
 // Replace all references to a variable with a constant.
@@ -551,8 +551,10 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
                 = insn->type == IR_INSN_COMBINATOR ? &insn->combinators[i].bind : &insn->operands[i];
             if (operand->type == IR_OPERAND_TYPE_VAR && operand->var == var) {
                 ir_insn_set_operand(insn, i, value);
-            } else if (operand->type == IR_OPERAND_TYPE_MEM && operand->mem.base_type == IR_MEMBASE_VAR
-                       && operand->mem.base_var == var) {
+            } else if (
+                operand->type == IR_OPERAND_TYPE_MEM && operand->mem.base_type == IR_MEMBASE_VAR
+                && operand->mem.base_var == var
+            ) {
                 ir_prim_t data_type = operand->mem.data_type;
                 switch (value.type) {
                     case IR_OPERAND_TYPE_CONST:
@@ -595,17 +597,17 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
 // Create a new IR code block.
 // If `name` is `NULL`, its name will be `code%zu` where `%zu` is a number.
 ir_code_t *ir_code_create(ir_func_t *func, char const *name) {
-    ir_code_t *code = strong_calloc(1, sizeof(ir_code_t));
+    ir_code_t *code = lilycc_calloc(1, sizeof(ir_code_t));
     code->func      = func;
     code->pred      = PTR_SET_EMPTY;
     code->succ      = PTR_SET_EMPTY;
     code->node      = DLIST_NODE_EMPTY;
     if (name) {
-        code->name = strong_strdup(name);
+        code->name = lilycc_strdup(name);
     } else {
         char const *fmt = "code%zu";
         size_t      len = snprintf(NULL, 0, fmt, func->code_list.len);
-        code->name      = calloc(1, len + 1);
+        code->name      = lilycc_calloc(1, len + 1);
         snprintf(code->name, len + 1, fmt, func->code_list.len);
     }
     name_free_assert(func, code->name);
@@ -668,8 +670,8 @@ void ir_code_delete(ir_code_t *code) {
     dlist_remove(&code->func->code_list, &code->node);
     set_clear(&code->pred);
     set_clear(&code->succ);
-    free(code->name);
-    free(code);
+    lilycc_free(code->name);
+    lilycc_free(code);
 }
 
 // Delete an instruction from the code.
@@ -715,27 +717,27 @@ void ir_insn_delete(ir_insn_t *insn) {
             ir_unmark_used(insn->combinators[i].bind, insn);
             if (insn->combinators[i].bind.type == IR_OPERAND_TYPE_MEM
                 && insn->combinators[i].bind.mem.base_type == IR_MEMBASE_SYM) {
-                free(insn->combinators[i].bind.mem.base_sym);
+                lilycc_free(insn->combinators[i].bind.mem.base_sym);
             }
         }
-        free(insn->combinators);
+        lilycc_free(insn->combinators);
     } else {
         for (size_t i = 0; i < insn->operands_len; i++) {
             ir_unmark_used(insn->operands[i], insn);
             if (insn->operands[i].type == IR_OPERAND_TYPE_MEM && insn->operands[i].mem.base_type == IR_MEMBASE_SYM) {
-                free(insn->operands[i].mem.base_sym);
+                lilycc_free(insn->operands[i].mem.base_sym);
             }
         }
-        free(insn->operands);
+        lilycc_free(insn->operands);
     }
     for (size_t i = 0; i < insn->returns_len; i++) {
         if (insn->returns[i].type == IR_RETVAL_TYPE_VAR) {
             set_remove(&insn->returns[i].dest_var->assigned_at, insn);
         }
     }
-    free(insn->returns);
+    lilycc_free(insn->returns);
     dlist_remove(&insn->code->insns, &insn->node);
-    free(insn);
+    lilycc_free(insn);
 }
 
 // Set an IR instruction's operand by index.
@@ -745,13 +747,13 @@ void ir_insn_set_operand(ir_insn_t *insn, size_t index, ir_operand_t operand) {
     // Clean up old operand.
     ir_operand_t old = insn->type == IR_INSN_COMBINATOR ? insn->combinators[index].bind : insn->operands[index];
     if (old.type == IR_OPERAND_TYPE_MEM && old.mem.base_type == IR_MEMBASE_SYM) {
-        free(old.mem.base_sym);
+        lilycc_free(old.mem.base_sym);
     }
     FOR_OPERAND_VARS(old, var, set_remove(&var->used_at, insn););
 
     // Install new operand.
     if (operand.type == IR_OPERAND_TYPE_MEM && operand.mem.base_type == IR_MEMBASE_SYM) {
-        operand.mem.base_sym = strong_strdup(operand.mem.base_sym);
+        operand.mem.base_sym = lilycc_strdup(operand.mem.base_sym);
     }
     FOR_OPERAND_VARS(operand, var, set_add(&var->used_at, insn););
     if (insn->type == IR_INSN_COMBINATOR) {
@@ -848,10 +850,10 @@ static void ir_emplace_insn(ir_insnloc_t loc, ir_insn_t *insn) {
 
 // Helper function to allocate an `ir_insn_t`.
 static ir_insn_t *alloc_ir_insn(size_t operands_len, size_t returns_len) {
-    ir_insn_t *insn    = strong_calloc(1, sizeof(ir_insn_t));
-    insn->operands     = strong_calloc(operands_len, sizeof(ir_operand_t));
+    ir_insn_t *insn    = lilycc_calloc(1, sizeof(ir_insn_t));
+    insn->operands     = lilycc_calloc(operands_len, sizeof(ir_operand_t));
     insn->operands_len = operands_len;
-    insn->returns      = strong_calloc(returns_len, sizeof(ir_retval_t));
+    insn->returns      = lilycc_calloc(returns_len, sizeof(ir_retval_t));
     insn->returns_len  = returns_len;
     return insn;
 }
@@ -860,12 +862,12 @@ static ir_insn_t *alloc_ir_insn(size_t operands_len, size_t returns_len) {
 static ir_insn_t *ir_create_insn(
     ir_insnloc_t loc, ir_insn_type_t type, bool has_dest, ir_retval_t dest, size_t operands_len, ir_operand_t *operands
 ) {
-    ir_insn_t *insn    = strong_calloc(1, sizeof(ir_insn_t));
+    ir_insn_t *insn    = lilycc_calloc(1, sizeof(ir_insn_t));
     insn->type         = type;
     insn->operands     = operands;
     insn->operands_len = operands_len;
     if (has_dest) {
-        insn->returns     = strong_malloc(sizeof(ir_retval_t));
+        insn->returns     = lilycc_malloc(sizeof(ir_retval_t));
         insn->returns_len = 1;
         if (dest.type == IR_RETVAL_TYPE_VAR) {
             if (ir_insnloc_code(loc)->func->enforce_ssa
@@ -880,7 +882,7 @@ static ir_insn_t *ir_create_insn(
     for (size_t i = 0; i < operands_len; i++) {
         ir_mark_used(insn->operands[i], insn);
         if (insn->operands[i].type == IR_OPERAND_TYPE_MEM && insn->operands[i].mem.base_type == IR_MEMBASE_SYM) {
-            insn->operands[i].mem.base_sym = strong_strdup(insn->operands[i].mem.base_sym);
+            insn->operands[i].mem.base_sym = lilycc_strdup(insn->operands[i].mem.base_sym);
         }
     }
     ir_emplace_insn(loc, insn);
@@ -891,7 +893,7 @@ static ir_insn_t *ir_create_insn(
 static ir_insn_t *ir_create_insn_va(
     ir_insnloc_t loc, ir_insn_type_t type, bool has_dest, ir_retval_t dest, size_t operands_len, ...
 ) {
-    ir_operand_t *operands = strong_calloc(operands_len, sizeof(ir_operand_t));
+    ir_operand_t *operands = lilycc_calloc(operands_len, sizeof(ir_operand_t));
     va_list       l;
     va_start(l, operands_len);
     for (size_t i = 0; i < operands_len; i++) {
@@ -1180,7 +1182,7 @@ ir_insn_t *ir_gen_memcpy(
 ir_insn_t *ir_add_call(
     ir_insnloc_t loc, ir_memref_t to, bool has_dest, ir_retval_t dest, size_t operands_len, ir_operand_t const *operands
 ) {
-    ir_operand_t *operands_copy = strong_calloc(1 + operands_len, sizeof(ir_operand_t));
+    ir_operand_t *operands_copy = lilycc_calloc(1 + operands_len, sizeof(ir_operand_t));
     operands_copy[0]            = IR_OPERAND_MEM(to);
     memcpy(operands_copy + 1, operands, operands_len * sizeof(ir_operand_t));
 
@@ -1234,7 +1236,7 @@ ir_insn_t *ir_add_return1(ir_insnloc_t loc, ir_operand_t value) {
 
 // Add a return.
 ir_insn_t *ir_add_return(ir_insnloc_t loc, size_t operands_len, ir_operand_t const *operands) {
-    ir_operand_t *operands_copy = strong_calloc(operands_len, sizeof(ir_operand_t));
+    ir_operand_t *operands_copy = lilycc_calloc(operands_len, sizeof(ir_operand_t));
     memcpy(operands_copy, operands, operands_len * sizeof(ir_operand_t));
     return ir_create_insn(loc, IR_INSN_RETURN, false, (ir_retval_t){}, operands_len, operands_copy);
 }
@@ -1248,7 +1250,7 @@ ir_insn_t *ir_add_mach_insn(
     size_t              operands_len,
     ir_operand_t const *operands
 ) {
-    ir_operand_t *operands_copy = strong_calloc(operands_len, sizeof(ir_operand_t));
+    ir_operand_t *operands_copy = lilycc_calloc(operands_len, sizeof(ir_operand_t));
     memcpy(operands_copy, operands, operands_len * sizeof(ir_operand_t));
     ir_insn_t *insn = ir_create_insn(loc, IR_INSN_MACHINE, has_dest, dest, operands_len, operands_copy);
     insn->prototype = proto;

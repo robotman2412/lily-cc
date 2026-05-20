@@ -6,10 +6,10 @@
 #include "rv_backend.h"
 
 #include "backend.h"
+#include "lilycc_malloc.h"
 #include "rv_abi.h"
 #include "rv_isel.h"
 #include "rv_misc.h"
-#include "strong_malloc.h"
 
 // Get the default backend.
 backend_t const *backend_default() {
@@ -20,7 +20,7 @@ backend_t const *backend_default() {
 
 // Create a copy of the default profile for this type of backend.
 backend_profile_t *rv_create_profile() {
-    rv_profile_t *profile           = strong_calloc(1, sizeof(rv_profile_t));
+    rv_profile_t *profile           = lilycc_calloc(1, sizeof(rv_profile_t));
     profile->ext_enabled[RV_BASE]   = true;
     profile->ext_enabled[RV_32ONLY] = true;
     profile->abi                    = RV_ABI_ILP32;
@@ -32,8 +32,8 @@ backend_profile_t *rv_create_profile() {
 // Delete a profile for this backend.
 void rv_delete_profile(backend_profile_t *profile0) {
     rv_profile_t *profile = (void *)profile0;
-    free(profile->base.gpr_classes);
-    free(profile);
+    lilycc_free(profile->base.gpr_classes);
+    lilycc_free(profile);
 }
 
 // Prepare backend for codegen stage.
@@ -49,7 +49,7 @@ void rv_init_codegen(backend_profile_t *profile0) {
     profile->base.has_f32           = profile->ext_enabled[RV_EXT_F];
     profile->base.has_f64           = profile->ext_enabled[RV_EXT_D];
     profile->base.gpr_count         = profile->ext_enabled[RV_EXT_F] ? 64 : 32;
-    profile->base.gpr_classes       = strong_calloc(profile->base.gpr_count, sizeof(regclass_t));
+    profile->base.gpr_classes       = lilycc_calloc(profile->base.gpr_count, sizeof(regclass_t));
 
     profile->base.gpr_classes[0].val = 0;
     for (int i = 1; i < 32; i++) {

@@ -13,7 +13,7 @@ add_library(util STATIC
     map.c
     refcount.c
     set.c
-    strong_malloc.c
+    lilycc_malloc.c
     unreachable.c
     utf8.c
     vec.c

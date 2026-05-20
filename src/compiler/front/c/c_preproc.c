@@ -43,29 +43,35 @@ typedef enum {
     LINE_NOWS_RAW,
 } next_mode_t;
 
-static void    c_preproc_destroy(tokenizer_t *tkn);
-static void    c_preproc_builtin_macros(c_preproc_t *preproc);
-static void    c_preproc_pragma(c_preproc_t *pre, pos_t pos, char const *pragma);
-static void    c_pragma_once(c_preproc_t *pre, pos_t pos, char const *args);
-static void    c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path, bool sysinc);
-static void    c_incfile_pop(c_preproc_t *pre);
-static void    c_incfile_eof(c_preproc_t *pre);
+static void c_preproc_destroy(tokenizer_t *tkn);
+static void c_preproc_builtin_macros(c_preproc_t *preproc);
+
+static void c_pragma_once(c_preproc_t *pre, pos_t pos, char const *args);
+static void c_preproc_pragma(c_preproc_t *pre, pos_t pos, char const *pragma);
+
+static srcfile_t *c_incfile_find(c_preproc_t *pre, pos_t pos, char const *path, bool sysinc);
+static void       c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path, bool sysinc);
+static void       c_incfile_pop(c_preproc_t *pre);
+static void       c_incfile_eof(c_preproc_t *pre);
+
 static int     c_preproc_op_precedence(c_tokentype_t type);
 static bool    c_preproc_is_prefix_op(c_tokentype_t type);
 static i128_t  c_preproc_eval_prefix(c_tokentype_t oper, i128_t value);
 static i128_t  c_preproc_eval_infix(bool is_signed, i128_t lhs, c_tokentype_t oper, i128_t rhs);
 static token_t c_preproc_eval_get_helper(c_preproc_t *pre);
 static bool    c_preproc_eval(c_preproc_t *pre, pos_t pos);
-static void    c_directive_include(c_preproc_t *pre, pos_t pos);
-static void    c_directive_pragma(c_preproc_t *pre, pos_t pos);
-static void    c_directive_if(c_preproc_t *pre, pos_t pos, bool elif, bool ifdef, bool ifndef);
-static void    c_directive_else(c_preproc_t *pre, pos_t pos);
-static void    c_directive_endif(c_preproc_t *pre, pos_t pos);
-static void    c_directive_warning(c_preproc_t *pre, pos_t pos, bool is_error);
-static void    c_directive_define(c_preproc_t *pre, pos_t pos);
-static void    c_directive_undef(c_preproc_t *pre, pos_t pos);
+
+static void c_directive_include(c_preproc_t *pre, pos_t pos);
+static void c_directive_pragma(c_preproc_t *pre, pos_t pos);
+static void c_directive_if(c_preproc_t *pre, pos_t pos, bool elif, bool ifdef, bool ifndef);
+static void c_directive_else(c_preproc_t *pre, pos_t pos);
+static void c_directive_endif(c_preproc_t *pre, pos_t pos);
+static void c_directive_warning(c_preproc_t *pre, pos_t pos, bool is_error);
+static void c_directive_define(c_preproc_t *pre, pos_t pos);
+static void c_directive_undef(c_preproc_t *pre, pos_t pos);
+
 static char   *c_preproc_read_bytes(c_preproc_t *pre, pos_t *pos_out);
-static token_t c_preproc_read_pathspec(c_preproc_t *pre);
+static token_t c_preproc_get_pathspec(c_preproc_t *pre);
 static void    c_preproc_until_eol(c_preproc_t *pre, bool warn_extra_tok);
 static bool    c_preproc_do_emit(c_preproc_t *pre);
 static token_t c_preproc_get_tkn(c_preproc_t *pre, next_mode_t mode);
@@ -74,6 +80,7 @@ static bool    c_preproc_tkn_paste(c_preproc_t *pre, token_t const *lhs, token_t
 static char   *c_preproc_esc_str(char const *raw);
 static token_t c_preproc_raw_peek(c_preproc_t *pre);
 static token_t c_preproc_raw_next(c_preproc_t *pre);
+
 static bool    c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx);
 static void    c_macro_mark_pasting(c_macro_subst_t *tokens, size_t tokens_len);
 static token_t c_macro_arg_stringize(c_macro_arg_t *arg, pos_t pos);
@@ -272,7 +279,7 @@ static void c_preproc_builtin_macros(c_preproc_t *pre) {
     c_preproc_fmt_builtin_macro(pre, "__STDC_VERSION__=%dL", pre->shared->c_std);
 
     // __has_attribute
-    c_preproc_fmt_builtin_macro(pre, "__has_attribute=__has_attribute");
+    // c_preproc_fmt_builtin_macro(pre, "__has_attribute=__has_attribute");
 
     // __COUNTER__
     c_macro_t *counter_macro  = c_proc_macro_create(false, c_proc_macro_counter, NULL);
@@ -425,12 +432,23 @@ static void c_preproc_pragma(c_preproc_t *pre, pos_t pos, char const *pragma) {
 
 #pragma region incfile
 
-// Search for an include file and push it into the include stack.
-static void c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path, bool sysinc) {
+// Search for an include file, emit a diagnostic if it is not found.
+static srcfile_t *c_incfile_find(c_preproc_t *pre, pos_t pos, char const *path, bool sysinc) {
+    (void)sysinc;
+
     // TODO: Replace with _popen when include search paths are implemented.
     srcfile_t *file = srcfile_open(pre->shared->cctx, path);
     if (!file) {
         cctx_diagnostic(pre->shared->cctx, pos, DIAG_ERR, "Cannot open include file: %s", path);
+    }
+
+    return file;
+}
+
+// Search for an include file and push it into the include stack.
+static void c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path, bool sysinc) {
+    srcfile_t *file = c_incfile_find(pre, pos, path, sysinc);
+    if (!file) {
         return;
     }
 
@@ -652,16 +670,45 @@ static token_t c_preproc_eval_defined(c_preproc_t *pre, pos_t pos) {
 
 // Evaluates `__has_include` for `c_preproc_eval_get_helper`.
 static token_t c_preproc_eval_has_include(c_preproc_t *pre, pos_t pos) {
-    abort();
+    token_t lpar = c_preproc_get_tkn(pre, LINE_NOWS_EXPAND);
+    bool    eval = false;
+    if (lpar.type != TOKENTYPE_OTHER || lpar.subtype != C_TKN_LPAR) {
+        cctx_diagnostic(pre->shared->cctx, lpar.pos, DIAG_ERR, "Expected (");
+        goto exit;
+    }
+    token_t name = c_preproc_get_pathspec(pre);
+    if (name.type != TOKENTYPE_SCONST || name.subtype == C_STR_RAW_SQUOT) {
+        cctx_diagnostic(pre->shared->cctx, name.pos, DIAG_ERR, "Expected a path");
+        goto exit;
+    }
+    eval         = c_incfile_find(pre, name.pos, name.strval, name.subtype == C_STR_ANGLEBRAC);
+    token_t rpar = c_preproc_get_tkn(pre, LINE_NOWS_EXPAND);
+    if (rpar.type != TOKENTYPE_OTHER || rpar.subtype != C_TKN_RPAR) {
+        cctx_diagnostic(pre->shared->cctx, lpar.pos, DIAG_ERR, "Expected (");
+    }
+
+exit:
+    return (token_t){
+        .pos  = pos,
+        .type = TOKENTYPE_ICONST,
+        .ival = eval,
+    };
 }
 
 // Evaluates `__has_embed` for `c_preproc_eval_get_helper`.
 static token_t c_preproc_eval_has_embed(c_preproc_t *pre, pos_t pos) {
+    (void)pre;
+    (void)pos;
+    fprintf(stderr, "TODO: #embed and __has_embed\n");
     abort();
 }
 
 // Evaluates `__has_attribute` and `__has_c_attribute` for `c_preproc_eval_get_helper`.
 static token_t c_preproc_eval_has_attribute(c_preproc_t *pre, pos_t pos, bool is_c_attribute) {
+    (void)pre;
+    (void)pos;
+    // Don't forget to uncomment the `__has_attribute` macro definition!
+    fprintf(stderr, "TODO: attribute system and __has_attribute\n");
     abort();
 }
 
@@ -844,8 +891,8 @@ static bool c_preproc_eval(c_preproc_t *pre, pos_t pos) {
 // Preprocessor directive: include.
 static void c_directive_include(c_preproc_t *pre, pos_t pos) {
     (void)pos;
-    token_t tkn = c_preproc_read_pathspec(pre);
-    if (tkn.type != TOKENTYPE_SCONST) {
+    token_t tkn = c_preproc_get_pathspec(pre);
+    if (tkn.type != TOKENTYPE_SCONST || tkn.subtype == C_STR_RAW_SQUOT) {
         cctx_diagnostic(pre->shared->cctx, tkn.pos, DIAG_ERR, "Expected a path");
         tkn_delete(tkn);
         return;
@@ -1230,7 +1277,7 @@ static char *c_preproc_read_bytes(c_preproc_t *pre, pos_t *pos_out) {
 }
 
 // Read an angle-brackets string.
-static token_t c_preproc_read_pathspec(c_preproc_t *pre) {
+static token_t c_preproc_get_pathspec(c_preproc_t *pre) {
     token_t init = c_preproc_get_tkn(pre, LINE_NOWS_EXPAND);
     if (init.type != TOKENTYPE_OTHER || init.subtype != C_TKN_LT) {
         return init;

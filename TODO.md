@@ -44,7 +44,12 @@
 - `#pragma` ✓
 - `_Pragma` operator ✓
 - `#error` and `#warning` ✓
-- `#(el)?if(n?def)?`, `#else` and `#endif` ✓
+- `#if` family directives
+    - Directives ✓
+    - `defined` ✓
+    - `__has_include` ✓
+    - `__has_embed`
+    - `__has_attribute` and `__has_c_attribute`
 - `#line`
 - Macro expansion ✓
     - `__VA_ARGS__` and `__VA_OPT__(x)` ✓

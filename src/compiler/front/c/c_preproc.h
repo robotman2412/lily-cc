@@ -216,6 +216,8 @@ token_t      c_preproc_next(tokenizer_t *tkn_ctx);
 token_t      c_preproc_tkn_to_c_tkn(c_preproc_t *pre, token_t tkn);
 // Add a command-line or predefined macro.
 void         c_preproc_add_macro(c_preproc_t *pre, char const *name, c_macro_t *macro);
+// Add an include/embed search path.
+void         c_preproc_add_path(c_preproc_t *pre, char const *path, bool is_sysinc);
 
 // Create a regular macro by parsing it from a string.
 // On success, `*name_out` is set to a heap-allocated copy of the parsed macro

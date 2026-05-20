@@ -47,7 +47,7 @@ static void    c_preproc_destroy(tokenizer_t *tkn);
 static void    c_preproc_builtin_macros(c_preproc_t *preproc);
 static void    c_preproc_pragma(c_preproc_t *pre, pos_t pos, char const *pragma);
 static void    c_pragma_once(c_preproc_t *pre, pos_t pos, char const *args);
-static void    c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path);
+static void    c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path, bool sysinc);
 static void    c_incfile_pop(c_preproc_t *pre);
 static void    c_incfile_eof(c_preproc_t *pre);
 static int     c_preproc_op_precedence(c_tokentype_t type);
@@ -65,6 +65,7 @@ static void    c_directive_warning(c_preproc_t *pre, pos_t pos, bool is_error);
 static void    c_directive_define(c_preproc_t *pre, pos_t pos);
 static void    c_directive_undef(c_preproc_t *pre, pos_t pos);
 static char   *c_preproc_read_bytes(c_preproc_t *pre, pos_t *pos_out);
+static token_t c_preproc_read_pathspec(c_preproc_t *pre);
 static void    c_preproc_until_eol(c_preproc_t *pre, bool warn_extra_tok);
 static bool    c_preproc_do_emit(c_preproc_t *pre);
 static token_t c_preproc_get_tkn(c_preproc_t *pre, next_mode_t mode);
@@ -270,6 +271,9 @@ static void c_preproc_builtin_macros(c_preproc_t *pre) {
     // __STDC_VERSION__
     c_preproc_fmt_builtin_macro(pre, "__STDC_VERSION__=%dL", pre->shared->c_std);
 
+    // __has_attribute
+    c_preproc_fmt_builtin_macro(pre, "__has_attribute=__has_attribute");
+
     // __COUNTER__
     c_macro_t *counter_macro  = c_proc_macro_create(false, c_proc_macro_counter, NULL);
     counter_macro->is_builtin = true;
@@ -419,10 +423,10 @@ static void c_preproc_pragma(c_preproc_t *pre, pos_t pos, char const *pragma) {
 
 #pragma endregion pragmas
 
-#pragma region directives
+#pragma region incfile
 
 // Search for an include file and push it into the include stack.
-static void c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path) {
+static void c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path, bool sysinc) {
     // TODO: Replace with _popen when include search paths are implemented.
     srcfile_t *file = srcfile_open(pre->shared->cctx, path);
     if (!file) {
@@ -484,6 +488,10 @@ static void c_incfile_eof(c_preproc_t *pre) {
     incfile->ifdir_len = 0;
     incfile->ifdir_cap = 0;
 }
+
+#pragma endregion incfile
+
+#pragma region eval
 
 // Get operator precedence.
 // Returns -1 if not an operator token.
@@ -615,26 +623,8 @@ static i128_t c_preproc_eval_infix(bool is_signed, i128_t lhs, c_tokentype_t ope
     }
 }
 
-// Helper for `c_preproc_eval` that parses and evaluates `defined ...` and `defined (...)` and converts constants.
-static token_t c_preproc_eval_get_helper(c_preproc_t *pre) {
-    token_t oper = c_preproc_get_tkn(pre, LINE_NOWS_EXPAND);
-    if (oper.type == TOKENTYPE_SCONST) {
-        token_t res = c_tkn_conv_str(pre->shared->cctx, pre->shared->c_std, &oper);
-        tkn_delete(oper);
-        return res;
-    } else if (oper.type == TOKENTYPE_IDENT && strcmp(oper.strval, "defined") != 0) {
-        if (oper.subtype == C_PPNUMBER) {
-            token_t res = c_tkn_conv_number(pre->shared->cctx, pre->shared->c_std, &oper);
-            tkn_delete(oper);
-            return res;
-        } else {
-            return oper;
-        }
-    } else if (oper.type != TOKENTYPE_IDENT) {
-        return oper;
-    }
-    pos_t pos = oper.pos;
-
+// Evaluates `defined` for `c_preproc_eval_get_helper`.
+static token_t c_preproc_eval_defined(c_preproc_t *pre, pos_t pos) {
     bool    eval = false;
     token_t lpar = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
     if (lpar.type == TOKENTYPE_IDENT && lpar.subtype == C_IDENT) {
@@ -658,6 +648,48 @@ static token_t c_preproc_eval_get_helper(c_preproc_t *pre) {
         .type = TOKENTYPE_ICONST,
         .ival = eval,
     };
+}
+
+// Evaluates `__has_include` for `c_preproc_eval_get_helper`.
+static token_t c_preproc_eval_has_include(c_preproc_t *pre, pos_t pos) {
+    abort();
+}
+
+// Evaluates `__has_embed` for `c_preproc_eval_get_helper`.
+static token_t c_preproc_eval_has_embed(c_preproc_t *pre, pos_t pos) {
+    abort();
+}
+
+// Evaluates `__has_attribute` and `__has_c_attribute` for `c_preproc_eval_get_helper`.
+static token_t c_preproc_eval_has_attribute(c_preproc_t *pre, pos_t pos, bool is_c_attribute) {
+    abort();
+}
+
+// Helper for `c_preproc_eval` that parses and evaluates `defined`, `__has_embed` and `__has_include`,
+// and converts PP numbers to C iconst.
+static token_t c_preproc_eval_get_helper(c_preproc_t *pre) {
+    token_t oper = c_preproc_get_tkn(pre, LINE_NOWS_EXPAND);
+    if (oper.type == TOKENTYPE_IDENT && !strcmp(oper.strval, "defined")) {
+        return c_preproc_eval_defined(pre, oper.pos);
+    } else if (oper.type == TOKENTYPE_IDENT && !strcmp(oper.strval, "__has_include")) {
+        return c_preproc_eval_has_include(pre, oper.pos);
+    } else if (oper.type == TOKENTYPE_IDENT && !strcmp(oper.strval, "__has_embed")) {
+        return c_preproc_eval_has_embed(pre, oper.pos);
+    } else if (oper.type == TOKENTYPE_IDENT && !strcmp(oper.strval, "__has_attribute")) {
+        return c_preproc_eval_has_attribute(pre, oper.pos, false);
+    } else if (oper.type == TOKENTYPE_IDENT && !strcmp(oper.strval, "__has_c_attribute")) {
+        return c_preproc_eval_has_attribute(pre, oper.pos, true);
+    } else if (oper.type == TOKENTYPE_IDENT) {
+        if (oper.subtype == C_PPNUMBER) {
+            token_t res = c_tkn_conv_number(pre->shared->cctx, pre->shared->c_std, &oper);
+            tkn_delete(oper);
+            return res;
+        } else {
+            return oper;
+        }
+    } else {
+        return c_preproc_tkn_to_c_tkn(pre, oper);
+    }
 }
 
 // Evaluate the condition for an `#if` or `#elif` directive.
@@ -805,26 +837,24 @@ static bool c_preproc_eval(c_preproc_t *pre, pos_t pos) {
     }
 }
 
+#pragma endregion eval
+
+#pragma region directives
+
 // Preprocessor directive: include.
 static void c_directive_include(c_preproc_t *pre, pos_t pos) {
     (void)pos;
-    c_incfile_t *file = &pre->stack[pre->stack_len - 1];
-    assert(file->tkn_ctx->next == &c_tkn_next);
-    c_tokenizer_t *c_tkn = (c_tokenizer_t *)file->tkn_ctx;
-    c_tkn->str_anglebrac = true;
-    token_t token        = c_preproc_get_tkn(pre, LINE_NOWS_EXPAND);
-    c_tkn->str_anglebrac = false;
-    if (token.type != TOKENTYPE_SCONST) {
-        cctx_diagnostic(pre->shared->cctx, token.pos, DIAG_ERR, "Expected a path");
-        tkn_delete(token);
+    token_t tkn = c_preproc_read_pathspec(pre);
+    if (tkn.type != TOKENTYPE_SCONST) {
+        cctx_diagnostic(pre->shared->cctx, tkn.pos, DIAG_ERR, "Expected a path");
+        tkn_delete(tkn);
         return;
     }
     // This needs to happen *before* the include file is pushed.
     c_preproc_until_eol(pre, true);
 
-    // TODO: Is there a difference between `<>` and `""` style strings for `#include`?
-    c_incfile_push(pre, token.pos, token.strval);
-    tkn_delete(token);
+    c_incfile_push(pre, tkn.pos, tkn.strval, tkn.subtype == C_STR_ANGLEBRAC);
+    tkn_delete(tkn);
 }
 
 // Preprocessor directive: pragma.
@@ -1173,6 +1203,7 @@ static char *c_preproc_read_bytes(c_preproc_t *pre, pos_t *pos_out) {
         token_t tkn = tkn_next(file->tkn_ctx);
         if (tkn.type != TOKENTYPE_WHITESPACE && !has_token) {
             start_pos = tkn.pos;
+            has_token = true;
         }
         if (has_token) {
             c_tkn_append_src(&tkn, &buf, &len, &cap);
@@ -1198,18 +1229,71 @@ static char *c_preproc_read_bytes(c_preproc_t *pre, pos_t *pos_out) {
     return buf;
 }
 
-// Consume tokens up to and including the next newline.
+// Read an angle-brackets string.
+static token_t c_preproc_read_pathspec(c_preproc_t *pre) {
+    token_t init = c_preproc_get_tkn(pre, LINE_NOWS_EXPAND);
+    if (init.type != TOKENTYPE_OTHER || init.subtype != C_TKN_LT) {
+        return init;
+    }
+    // Consume the `<`.
+    pos_t start_pos = init.pos;
+    tkn_delete(init);
+
+    c_incfile_t *file = &pre->stack[pre->stack_len - 1];
+    pos_t        end_pos;
+
+    size_t len = 0;
+    size_t cap = 64;
+    char  *buf = strong_malloc(cap);
+
+    while (1) {
+        token_t peek = tkn_peek(file->tkn_ctx);
+        end_pos      = peek.pos;
+        if (peek.type == TOKENTYPE_EOL || peek.type == TOKENTYPE_EOF) {
+            cctx_diagnostic(pre->shared->cctx, peek.pos, DIAG_ERR, "Expected > before end-of-line");
+            break;
+        }
+        token_t tkn = tkn_next(file->tkn_ctx);
+        if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_GT) {
+            tkn_delete(tkn);
+            break;
+        }
+        c_tkn_append_src(&tkn, &buf, &len, &cap);
+        end_pos = tkn.pos;
+        tkn_delete(tkn);
+    }
+
+    for (size_t i = 0; i < len; i++) {
+        // Since NUL is treated as whitespace but the output needs to be a C-string,
+        // silently replace NUL with something printable instead.
+        if (buf[i] == 0) {
+            buf[i] = ' ';
+        }
+    }
+    array_lencap_insert_strong(&buf, 1, &len, &cap, "", len);
+
+    return (token_t){
+        .pos        = pos_including(start_pos, end_pos),
+        .type       = TOKENTYPE_SCONST,
+        .subtype    = C_STR_ANGLEBRAC,
+        .strval     = buf,
+        .strval_len = len - 1,
+    };
+}
+
+// Consume tokens up to but excluding the next newline.
 // If `warn_extra_tok` is `true`, emit a warning if any non-whitespace tokens exist.
 static void c_preproc_until_eol(c_preproc_t *pre, bool warn_extra_tok) {
     bool  has_extra = false;
     pos_t extra;
 
     while (1) {
-        token_t tkn = c_preproc_get_tkn(pre, NEXT_RAW);
-        if (tkn.type == TOKENTYPE_EOL || tkn.type == TOKENTYPE_EOF) {
-            tkn_delete(tkn);
+        token_t peek = c_preproc_raw_peek(pre);
+        if (peek.type == TOKENTYPE_EOL || peek.type == TOKENTYPE_EOF) {
             break;
-        } else if (tkn.type != TOKENTYPE_WHITESPACE) {
+        }
+        token_t tkn = c_preproc_raw_next(pre);
+        if (tkn.type != TOKENTYPE_WHITESPACE) {
             if (has_extra) {
                 extra = pos_including(extra, tkn.pos);
             } else {

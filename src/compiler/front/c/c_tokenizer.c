@@ -453,24 +453,12 @@ static token_t c_tkn_pre_str(tokenizer_t *ctx, pos_t start_pos, c_strtype_t subt
     size_t len     = 0;
     char  *buf     = strong_malloc(cap);
     pos_t  end_pos = start_pos;
-    bool   do_esc;
     char   start;
     char   end;
     switch (subtype) {
         default: abort();
-        case C_STR_RAW_DQUOT:
-            start = end = '\"';
-            do_esc      = true;
-            break;
-        case C_STR_RAW_SQUOT:
-            start = end = '\'';
-            do_esc      = true;
-            break;
-        case C_STR_ANGLEBRAC:
-            start  = '<';
-            end    = '>';
-            do_esc = false;
-            break;
+        case C_STR_RAW_DQUOT: start = end = '\"'; break;
+        case C_STR_RAW_SQUOT: start = end = '\''; break;
     }
 
     // Skip start char.
@@ -487,7 +475,7 @@ static token_t c_tkn_pre_str(tokenizer_t *ctx, pos_t start_pos, c_strtype_t subt
         } else if (c == end && !esc) {
             break;
         } else {
-            esc = c == '\\' && do_esc && !esc;
+            esc = c == '\\' && !esc;
             if (c >= 0x80) {
                 uint8_t utf8_len = utf8_encode(NULL, 0, c);
                 array_lencap_resize_strong(&buf, 1, &len, &cap, len + utf8_len);
@@ -821,8 +809,6 @@ retry:
         token_t res = c_tkn_conv_str(ctx->cctx, c_ctx->c_std, &tkn);
         tkn_delete(tkn);
         return res;
-    } else if (c == '<' && c_ctx->str_anglebrac) {
-        return c_tkn_pre_str(ctx, pos0, C_STR_ANGLEBRAC);
     }
 
     // Numeric constants.

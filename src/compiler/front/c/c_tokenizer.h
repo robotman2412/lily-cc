@@ -33,6 +33,7 @@ typedef enum {
     // A raw single quotes string.
     C_STR_RAW_SQUOT,
     // An angle-brackets raw string.
+    // Synthetic subtype parsed by the preprocessor.
     C_STR_ANGLEBRAC,
 } c_strtype_t;
 
@@ -66,8 +67,6 @@ struct c_tokenizer {
     int         c_std;
     // Preprocessor tokenizer mode; keywords are left as idents and whitespace is included.
     bool        preproc_mode;
-    // Enable the angle-bracket `<>` strings used by `#include`.
-    bool        str_anglebrac;
     // Keep comments instead of replacing them with a single space each.
     bool        keep_comments;
 };

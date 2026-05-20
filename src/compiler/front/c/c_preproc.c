@@ -67,6 +67,10 @@ static bool    c_preproc_do_emit(c_preproc_t *pre);
 static token_t c_preproc_get_tkn(c_preproc_t *pre, next_mode_t mode);
 static void    c_preproc_directive(c_preproc_t *pre);
 static bool    c_preproc_tkn_paste(c_preproc_t *pre, token_t const *lhs, token_t const *rhs, token_t *out);
+static token_t c_preproc_raw_peek(c_preproc_t *pre);
+static token_t c_preproc_raw_next(c_preproc_t *pre);
+static bool    c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx);
+static void    c_macro_mark_pasting(c_macro_subst_t *tokens, size_t tokens_len);
 static token_t c_macro_arg_stringize(c_macro_arg_t *arg, pos_t pos);
 static void    c_macro_arg_preexpand(c_preproc_t *pre, c_macro_arg_t *arg);
 static void    c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro);
@@ -750,25 +754,6 @@ static void c_directive_warning(c_preproc_t *pre, pos_t pos, bool is_error) {
     free(buf);
 }
 
-// Mark argument substitutions adjacent to a `##` token with the `pasting` flag.
-static void c_macro_mark_pasting(c_macro_subst_t *tokens, size_t tokens_len) {
-    for (size_t i = 0; i < tokens_len; i++) {
-        if (i > 0) {
-            c_macro_subst_t const *prev = &tokens[i - 1];
-            if (prev->token.type == TOKENTYPE_OTHER && prev->token.subtype == C_TKN_PASTE) {
-                tokens[i].pasting = true;
-                continue;
-            }
-        }
-        if (i + 1 < tokens_len) {
-            c_macro_subst_t const *next = &tokens[i + 1];
-            if (next->token.type == TOKENTYPE_OTHER && next->token.subtype == C_TKN_PASTE) {
-                tokens[i].pasting = true;
-            }
-        }
-    }
-}
-
 // Preprocessor directive: define.
 static void c_directive_define(c_preproc_t *pre, pos_t pos) {
     (void)pos;
@@ -781,29 +766,21 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
         return;
     }
 
-    c_macro_subst_t *tokens     = NULL;
-    size_t           tokens_len = 0;
-    size_t           tokens_cap = 0;
-    char           **params     = NULL;
-    size_t           params_len = 0;
-    size_t           params_cap = 0;
-    bool             variadic   = false;
-    bool             uses_args  = false;
+    c_macro_t *macro     = strong_calloc(1, sizeof(c_macro_t));
+    size_t     params_cap = 0;
 
-    token_t tkn = c_preproc_get_tkn(pre, LINE_RAW);
-    if (tkn.type == TOKENTYPE_WHITESPACE) {
-        // Simple macro.
-        tkn_delete(tkn);
-        tkn = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
-    } else if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_LPAR) {
-        // Collect parameter list.
-        uses_args        = true;
-        pos_t list_start = tkn.pos;
-        tkn_delete(tkn);
+    // A `(` immediately after the name (no intervening whitespace) makes this a
+    // function-like macro; otherwise the rest of the line is the body.
+    token_t peek = c_preproc_raw_peek(pre);
+    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LPAR) {
+        macro->uses_args   = true;
+        token_t lpar       = c_preproc_raw_next(pre);
+        pos_t   list_start = lpar.pos;
+        tkn_delete(lpar);
         bool need_arg   = false;
         bool must_close = false;
         while (1) {
-            tkn = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
+            token_t tkn = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
             if (tkn.type == TOKENTYPE_EOL) {
                 // Abrupt end of line.
                 cctx_diagnostic(pre->shared->cctx, list_start, DIAG_ERR, "Missing `(` to match this `)`");
@@ -815,8 +792,8 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
                 break;
             } else if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_VARARG) {
                 // Elipsis (`...`).
-                variadic   = true;
-                must_close = true;
+                macro->regular.is_variadic = true;
+                must_close                 = true;
                 tkn_delete(tkn);
             } else if (tkn.type == TOKENTYPE_IDENT) {
                 if (!strcmp(tkn.strval, "__VA_ARGS__") || !strcmp(tkn.strval, "__VA_OPT__")) {
@@ -829,7 +806,14 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
                     );
                 }
                 char *str = strong_strdup(tkn.strval);
-                array_lencap_insert_strong(&params, sizeof(char *), &params_len, &params_cap, &str, params_len);
+                array_lencap_insert_strong(
+                    &macro->regular.args,
+                    sizeof(char *),
+                    &macro->regular.args_len,
+                    &params_cap,
+                    &str,
+                    macro->regular.args_len
+                );
                 tkn_delete(tkn);
             } else {
                 cctx_diagnostic(pre->shared->cctx, tkn.pos, DIAG_ERR, "Expected an identifier or `...`");
@@ -855,102 +839,11 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
                 tkn_delete(tkn);
             }
         }
-        tkn = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
     }
 
-    // Collect all tokens after parameter list.
-    while (1) {
-        if (tokens_len == 0 && tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_PASTE) {
-            cctx_diagnostic(
-                pre->shared->cctx,
-                tkn.pos,
-                DIAG_ERR,
-                "`##` is not allowed at the start/end of macro expansion lists"
-            );
-            goto error;
-        }
-        if (tkn.type == TOKENTYPE_EOL) {
-            tkn_delete(tkn);
-            break;
-        }
-        if (!variadic && tkn.type == TOKENTYPE_IDENT
-            && (!strcmp(tkn.strval, "__VA_ARGS__") || !strcmp(tkn.strval, "__VA_OPT__"))) {
-            cctx_diagnostic(pre->shared->cctx, tkn.pos, DIAG_WARN, "%s in non-variadic macro", tkn.strval);
-        }
-        c_macro_subst_t subst   = {0};
-        bool            matched = false;
-        if (uses_args && tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_HASH) {
-            pos_t   hash_pos = tkn.pos;
-            token_t next     = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
-            if (next.type != TOKENTYPE_IDENT) {
-                cctx_diagnostic(
-                    pre->shared->cctx,
-                    hash_pos,
-                    DIAG_ERR,
-                    "`#` must be followed by a macro parameter name"
-                );
-                tkn_delete(tkn);
-                tkn_delete(next);
-                goto error;
-            }
-            bool found = false;
-            for (size_t i = 0; i < params_len; i++) {
-                if (!strcmp(next.strval, params[i])) {
-                    found           = true;
-                    subst.type      = C_SUBST_ARG;
-                    subst.stringize = true;
-                    subst.arg_index = i;
-                    break;
-                }
-            }
-            if (!found) {
-                cctx_diagnostic(
-                    pre->shared->cctx,
-                    hash_pos,
-                    DIAG_ERR,
-                    "`#` must be followed by a macro parameter name"
-                );
-                tkn_delete(tkn);
-                tkn_delete(next);
-                goto error;
-            }
-            tkn_delete(tkn);
-            tkn_delete(next);
-            matched = true;
-        } else if (tkn.type == TOKENTYPE_IDENT) {
-            for (size_t i = 0; i < params_len; i++) {
-                if (!strcmp(tkn.strval, params[i])) {
-                    tkn_delete(tkn);
-                    subst.type      = C_SUBST_ARG;
-                    subst.stringize = false;
-                    subst.arg_index = i;
-                    matched         = true;
-                    break;
-                }
-            }
-        }
-        if (!matched) {
-            subst.type  = C_SUBST_TOKEN;
-            subst.token = tkn;
-        }
-        array_lencap_insert_strong(&tokens, sizeof(c_macro_subst_t), &tokens_len, &tokens_cap, &subst, tokens_len);
-        tkn = c_preproc_get_tkn(pre, LINE_NOWS_RAW);
+    if (!c_macro_parse_body(macro, pre->stack[pre->stack_len - 1].tkn_ctx)) {
+        goto error;
     }
-
-    if (tokens_len) {
-        c_macro_subst_t const *last = &tokens[tokens_len - 1];
-        if (last->type == C_SUBST_TOKEN && last->token.type == TOKENTYPE_OTHER && last->token.subtype == C_TKN_PASTE) {
-            cctx_diagnostic(
-                pre->shared->cctx,
-                last->token.pos,
-                DIAG_ERR,
-                "`##` is not allowed at the start/end of macro expansion lists"
-            );
-            goto error;
-        }
-    }
-
-    c_macro_mark_pasting(tokens, tokens_len);
 
     c_macro_t *existing = map_get(&pre->shared->macros, name.strval);
     if (existing) {
@@ -964,22 +857,11 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
         );
         c_macro_destroy(existing);
     }
-
-    c_macro_t *macro           = strong_calloc(1, sizeof(c_macro_t));
-    macro->is_proc_macro       = false;
-    macro->is_builtin          = false;
-    macro->uses_args           = uses_args;
-    macro->regular.is_variadic = variadic;
-    macro->regular.subst       = tokens;
-    macro->regular.subst_len   = tokens_len;
-    macro->regular.args        = params;
-    macro->regular.args_len    = params_len;
     map_set(&pre->shared->macros, name.strval, macro);
     return;
 
 error:
-    free(tokens);
-    free(params);
+    c_macro_destroy(macro);
     token_t del = c_preproc_get_tkn(pre, LINE_RAW);
     while (del.type != TOKENTYPE_EOL) {
         tkn_delete(del);
@@ -1421,17 +1303,148 @@ void c_preproc_predef_macro(c_preproc_t *pre, char const *name, c_macro_t *macro
     map_set(&pre->shared->macros, name, macro);
 }
 
+// Mark argument substitutions adjacent to a `##` token with the `pasting` flag.
+static void c_macro_mark_pasting(c_macro_subst_t *tokens, size_t tokens_len) {
+    for (size_t i = 0; i < tokens_len; i++) {
+        if (i > 0) {
+            c_macro_subst_t const *prev = &tokens[i - 1];
+            if (prev->token.type == TOKENTYPE_OTHER && prev->token.subtype == C_TKN_PASTE) {
+                tokens[i].pasting = true;
+                continue;
+            }
+        }
+        if (i + 1 < tokens_len) {
+            c_macro_subst_t const *next = &tokens[i + 1];
+            if (next->token.type == TOKENTYPE_OTHER && next->token.subtype == C_TKN_PASTE) {
+                tokens[i].pasting = true;
+            }
+        }
+    }
+}
+
+// Common macro body parsing code for `c_macro_create` and `c_directive_define`.
+// Reads body tokens (skipping whitespace) until EOL/EOF and appends substitutions
+// to `macro->regular.subst`. The terminating EOL is left in the stream.
+// Returns whether parsing succeeded.
+static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
+    cctx_t *cctx       = tkn_ctx->cctx;
+    size_t  tokens_cap = macro->regular.subst_len;
+
+    while (1) {
+        // Skip whitespace; stop at EOL/EOF without consuming it.
+        token_t peek = tkn_peek(tkn_ctx);
+        while (peek.type == TOKENTYPE_WHITESPACE) {
+            tkn_delete(tkn_next(tkn_ctx));
+            peek = tkn_peek(tkn_ctx);
+        }
+        if (peek.type == TOKENTYPE_EOL || peek.type == TOKENTYPE_EOF) {
+            break;
+        }
+
+        token_t tkn = tkn_next(tkn_ctx);
+
+        if (macro->regular.subst_len == 0 && tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_PASTE) {
+            cctx_diagnostic(
+                cctx,
+                tkn.pos,
+                DIAG_ERR,
+                "`##` is not allowed at the start/end of macro expansion lists"
+            );
+            tkn_delete(tkn);
+            return false;
+        }
+        if (!macro->regular.is_variadic && tkn.type == TOKENTYPE_IDENT
+            && (!strcmp(tkn.strval, "__VA_ARGS__") || !strcmp(tkn.strval, "__VA_OPT__"))) {
+            cctx_diagnostic(cctx, tkn.pos, DIAG_WARN, "%s in non-variadic macro", tkn.strval);
+        }
+
+        c_macro_subst_t subst   = {0};
+        bool            matched = false;
+        if (macro->uses_args && tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_HASH) {
+            pos_t   hash_pos = tkn.pos;
+            token_t next     = tkn_next(tkn_ctx);
+            while (next.type == TOKENTYPE_WHITESPACE) {
+                tkn_delete(next);
+                next = tkn_next(tkn_ctx);
+            }
+            if (next.type != TOKENTYPE_IDENT) {
+                cctx_diagnostic(cctx, hash_pos, DIAG_ERR, "`#` must be followed by a macro parameter name");
+                tkn_delete(tkn);
+                tkn_delete(next);
+                return false;
+            }
+            bool found = false;
+            for (size_t i = 0; i < macro->regular.args_len; i++) {
+                if (!strcmp(next.strval, macro->regular.args[i])) {
+                    found           = true;
+                    subst.type      = C_SUBST_ARG;
+                    subst.stringize = true;
+                    subst.arg_index = i;
+                    break;
+                }
+            }
+            if (!found) {
+                cctx_diagnostic(cctx, hash_pos, DIAG_ERR, "`#` must be followed by a macro parameter name");
+                tkn_delete(tkn);
+                tkn_delete(next);
+                return false;
+            }
+            tkn_delete(tkn);
+            tkn_delete(next);
+            matched = true;
+        } else if (tkn.type == TOKENTYPE_IDENT) {
+            for (size_t i = 0; i < macro->regular.args_len; i++) {
+                if (!strcmp(tkn.strval, macro->regular.args[i])) {
+                    tkn_delete(tkn);
+                    subst.type      = C_SUBST_ARG;
+                    subst.stringize = false;
+                    subst.arg_index = i;
+                    matched         = true;
+                    break;
+                }
+            }
+        }
+        if (!matched) {
+            subst.type  = C_SUBST_TOKEN;
+            subst.token = tkn;
+        }
+        array_lencap_insert_strong(
+            &macro->regular.subst,
+            sizeof(c_macro_subst_t),
+            &macro->regular.subst_len,
+            &tokens_cap,
+            &subst,
+            macro->regular.subst_len
+        );
+    }
+
+    if (macro->regular.subst_len) {
+        c_macro_subst_t const *last = &macro->regular.subst[macro->regular.subst_len - 1];
+        if (last->type == C_SUBST_TOKEN && last->token.type == TOKENTYPE_OTHER && last->token.subtype == C_TKN_PASTE) {
+            cctx_diagnostic(
+                cctx,
+                last->token.pos,
+                DIAG_ERR,
+                "`##` is not allowed at the start/end of macro expansion lists"
+            );
+            return false;
+        }
+    }
+
+    c_macro_mark_pasting(macro->regular.subst, macro->regular.subst_len);
+    return true;
+}
+
 // Create a regular macro.
 c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_out) {
     cctx_t    *cctx     = cctx_create();
     size_t     spec_len = strlen(spec);
     srcfile_t *src      = srcfile_create(cctx, virt_file, spec, spec_len);
 
-    c_macro_t     *macro      = strong_calloc(1, sizeof(c_macro_t));
-    char          *name       = NULL;
-    c_tokenizer_t *tkn        = NULL;
-    size_t         args_cap   = 0;
-    size_t         tokens_cap = 0;
+    c_macro_t     *macro    = strong_calloc(1, sizeof(c_macro_t));
+    char          *name     = NULL;
+    c_tokenizer_t *tkn      = NULL;
+    size_t         args_cap = 0;
 
     size_t i = 0;
 
@@ -1547,77 +1560,10 @@ c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_o
         tkn->preproc_mode = true;
         tkn->base.pos.off = (off_t)i;
         tkn->base.pos.col = (int)i;
-        while (1) {
-            token_t t = tkn_next(&tkn->base);
-            if (t.type == TOKENTYPE_WHITESPACE) {
-                tkn_delete(t);
-                continue;
-            }
-            if (t.type == TOKENTYPE_EOF) {
-                tkn_delete(t);
-                break;
-            }
-            c_macro_subst_t subst   = {0};
-            bool            matched = false;
-            if (macro->uses_args && t.type == TOKENTYPE_OTHER && t.subtype == C_TKN_HASH) {
-                token_t next = tkn_next(&tkn->base);
-                while (next.type == TOKENTYPE_WHITESPACE) {
-                    tkn_delete(next);
-                    next = tkn_next(&tkn->base);
-                }
-                if (next.type != TOKENTYPE_IDENT) {
-                    printf("%s: `#` must be followed by a macro parameter name\n", virt_file);
-                    tkn_delete(t);
-                    tkn_delete(next);
-                    goto error;
-                }
-                bool found = false;
-                for (size_t j = 0; j < macro->regular.args_len; j++) {
-                    if (!strcmp(next.strval, macro->regular.args[j])) {
-                        found           = true;
-                        subst.type      = C_SUBST_ARG;
-                        subst.stringize = true;
-                        subst.arg_index = j;
-                        break;
-                    }
-                }
-                if (!found) {
-                    printf("%s: `#` must be followed by a macro parameter name\n", virt_file);
-                    tkn_delete(t);
-                    tkn_delete(next);
-                    goto error;
-                }
-                tkn_delete(t);
-                tkn_delete(next);
-                matched = true;
-            } else if (t.type == TOKENTYPE_IDENT) {
-                for (size_t i = 0; i < macro->regular.args_len; i++) {
-                    if (!strcmp(t.strval, macro->regular.args[i])) {
-                        tkn_delete(t);
-                        subst.type      = C_SUBST_ARG;
-                        subst.stringize = false;
-                        subst.arg_index = i;
-                        matched         = true;
-                        break;
-                    }
-                }
-            }
-            if (!matched) {
-                subst.type  = C_SUBST_TOKEN;
-                subst.token = t;
-            }
-            array_lencap_insert_strong(
-                &macro->regular.subst,
-                sizeof(c_macro_subst_t),
-                &macro->regular.subst_len,
-                &tokens_cap,
-                &subst,
-                macro->regular.subst_len
-            );
+        if (!c_macro_parse_body(macro, &tkn->base)) {
+            goto error;
         }
     }
-
-    c_macro_mark_pasting(macro->regular.subst, macro->regular.subst_len);
 
     if (cctx->diagnostics.len) {
         dlist_foreach_node(diagnostic_t, d, &cctx->diagnostics) {

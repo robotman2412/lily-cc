@@ -206,18 +206,17 @@ void itoa128(i128_t n, int decimals, char buf[static 40]) {
 
     // Convert to ASCII decimal.
     for (int i = 0; i < 7; i++) {
-        buf[6 - i] = (dd_buf_hi >> i * 4 & 0x0f) + '0';
+        buf[6 - i] = (char)((dd_buf_hi >> i * 4 & 0x0f) + '0');
     }
     for (int i = 0; i < 32; i++) {
-        buf[38 - i] = (lo64(shr128u(dd_buf_lo, i * 4)) & 0x0f) + '0';
+        buf[38 - i] = (char)((lo64(shr128u(dd_buf_lo, i * 4)) & 0x0f) + '0');
     }
+    buf[39] = 0;
 
     // Remove unused decimal places.
     int leading_zeroes = 0;
-    for (; leading_zeroes < 39 && buf[leading_zeroes] == '0'; leading_zeroes++);
-    int const max_leading_zeroes = 39 - decimals;
-    if (leading_zeroes > max_leading_zeroes) {
-        int remove = leading_zeroes - max_leading_zeroes;
-        memmove(buf, buf + remove, 40 - remove);
+    for (; leading_zeroes < 39 - decimals && buf[leading_zeroes] == '0'; leading_zeroes++);
+    if (leading_zeroes > 0) {
+        memmove(buf, buf + leading_zeroes, 40 - leading_zeroes);
     }
 }

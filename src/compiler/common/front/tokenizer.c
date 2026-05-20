@@ -5,8 +5,10 @@
 
 #include "tokenizer.h"
 
+#include "arrays.h"
 #include "char_repr.h"
 #include "strong_malloc.h"
+#include "utf8.h"
 
 #include <inttypes.h>
 #include <stdlib.h>
@@ -17,9 +19,10 @@
 // Delete a tokenizer context.
 // Deletes the token in the buffer but not any tokens consumed.
 void tkn_ctx_delete(tokenizer_t *tkn_ctx) {
-    for (int i = 0; i < tkn_ctx->tkn_buffer_len; i++) {
+    for (size_t i = 0; i < tkn_ctx->tkn_buffer_len; i++) {
         tkn_delete(tkn_ctx->tkn_buffer[i]);
     }
+    free(tkn_ctx->tkn_buffer);
     if (tkn_ctx->cleanup) {
         tkn_ctx->cleanup(tkn_ctx);
     }
@@ -32,7 +35,7 @@ token_t tkn_next(tokenizer_t *tkn_ctx) {
     if (tkn_ctx->tkn_buffer_len) {
         tkn_ctx->tkn_buffer_len--;
         token_t tmp = tkn_ctx->tkn_buffer[0];
-        memcpy(tkn_ctx->tkn_buffer, tkn_ctx->tkn_buffer + 1, tkn_ctx->tkn_buffer_len * sizeof(token_t));
+        memmove(tkn_ctx->tkn_buffer, tkn_ctx->tkn_buffer + 1, tkn_ctx->tkn_buffer_len * sizeof(token_t));
         return tmp;
     } else {
         return tkn_ctx->next(tkn_ctx);
@@ -45,30 +48,75 @@ token_t tkn_peek(tokenizer_t *tkn_ctx) {
 }
 
 // Peek at (do not consume) next token from the tokenizer.
-// Depth 0 is one ahead, depth 1 is two ahead, etc.
-token_t tkn_peek_n(tokenizer_t *tkn_ctx, int depth) {
-    if (depth > TKN_PEEK_MAX) {
-        fprintf(stderr, "BUG: tkn_peek_n() with depth too high\n");
-        abort();
-    }
+// Depth 0 is one ahead, depth 1 is two ahead, etc. The buffer grows as needed.
+token_t tkn_peek_n(tokenizer_t *tkn_ctx, size_t depth) {
     while (tkn_ctx->tkn_buffer_len <= depth) {
         token_t tmp = tkn_ctx->next(tkn_ctx);
         if (tmp.type == TOKENTYPE_EOF) {
             return tmp;
         }
-        tkn_ctx->tkn_buffer[tkn_ctx->tkn_buffer_len++] = tmp;
+        array_lencap_insert_strong(
+            &tkn_ctx->tkn_buffer,
+            sizeof(token_t),
+            &tkn_ctx->tkn_buffer_len,
+            &tkn_ctx->tkn_buffer_cap,
+            &tmp,
+            tkn_ctx->tkn_buffer_len
+        );
     }
     return tkn_ctx->tkn_buffer[depth];
 }
 
-// Opposite of tkn_next; stuff up to one token back into the buffer.
-// Will abort if there is already a token there.
+// Opposite of tkn_next; stuff a token back to the front of the buffer.
 void tkn_unget(tokenizer_t *tkn_ctx, token_t token) {
-    if (tkn_ctx->tkn_buffer_len > TKN_PEEK_MAX) {
-        fprintf(stderr, "BUG: tkn_unget() with buffer already full\n");
-        abort();
+    array_lencap_insert_strong(
+        &tkn_ctx->tkn_buffer,
+        sizeof(token_t),
+        &tkn_ctx->tkn_buffer_len,
+        &tkn_ctx->tkn_buffer_cap,
+        &token,
+        0
+    );
+}
+
+
+// Next-token callback for `tkn_array_t`.
+static token_t tkn_array_next(tokenizer_t *tkn_ctx) {
+    tkn_array_t *ctx = (tkn_array_t *)tkn_ctx;
+    if (ctx->index >= ctx->tokens_len) {
+        return (token_t){.pos = ctx->eof_pos, .type = TOKENTYPE_EOF};
     }
-    tkn_ctx->tkn_buffer[tkn_ctx->tkn_buffer_len++] = token;
+    return tkn_clone(&ctx->tokens[ctx->index++]);
+}
+
+// Create an array-backed tokenizer.
+tkn_array_t *tkn_array_create(token_t const *tokens, size_t tokens_len, pos_t eof_pos) {
+    tkn_array_t *ctx = strong_calloc(1, sizeof(tkn_array_t));
+    ctx->base.next   = tkn_array_next;
+    ctx->base.pos    = eof_pos;
+    ctx->tokens      = tokens;
+    ctx->tokens_len  = tokens_len;
+    ctx->eof_pos     = eof_pos;
+    return ctx;
+}
+
+
+// Read a character from a token's `strval` and update offset.
+// Returns -1 on end of token.
+int tkn_getc(token_t const *tkn, tknoff_t *off) {
+    size_t off1 = off->offset;
+    int    c    = utf8_decode(tkn->strval, tkn->strval_len, &off1);
+    if (c == -1) {
+        return -1;
+    }
+    if (c == '\n') {
+        off->col_offset = -tkn->pos.col;
+        off->line_offset++;
+    } else {
+        off->col_offset++;
+    }
+    off->offset = off1;
+    return c;
 }
 
 
@@ -83,6 +131,34 @@ void tkn_delete(token_t token) {
     if (token.params) {
         free(token.params);
     }
+}
+
+// Perform a deep copy of a token.
+token_t tkn_clone(token_t const *token) {
+    token_t out = {
+        .pos        = token->pos,
+        .type       = token->type,
+        .subtype    = token->subtype,
+        .ival       = token->ival,
+        .ivalh      = token->ivalh,
+        .strval_len = token->strval_len,
+        .params_len = token->params_len,
+    };
+
+    if (token->strval_len) {
+        out.strval = strong_malloc(token->strval_len + 1);
+        memcpy(out.strval, token->strval, token->strval_len);
+        out.strval[token->strval_len] = 0;
+    }
+
+    if (token->params_len) {
+        out.params = strong_calloc(token->params_len, sizeof(token_t));
+        for (size_t i = 0; i < token->params_len; i++) {
+            out.params[i] = tkn_clone(&token->params[i]);
+        }
+    }
+
+    return out;
 }
 
 // Delete an array of tokens and each token within.

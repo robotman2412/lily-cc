@@ -16,7 +16,7 @@ static void compile_explain_type(char const *value) {
         return;
     }
 
-    tokenizer_t  *tctx = c_tkn_create(src, C_STD_def);
+    tokenizer_t  *tctx = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
     c_compiler_t *cc   = c_compiler_create(
         cctx,

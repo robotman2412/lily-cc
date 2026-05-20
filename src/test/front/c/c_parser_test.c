@@ -14,7 +14,7 @@ static char *test_c_expr_basic() {
     char const   source[] = "1 + 2 * 3 - 4 % 5 / 6";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_expr_basic>", source, sizeof(source) - 1);
-    tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
+    tokenizer_t *tctx     = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
     token_t expr = c_parse_expr(&pctx, false);
@@ -114,7 +114,7 @@ static char *test_c_expr_call() {
     char const   source[] = "foobar() + (1) - beer(2, 3)";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_expr_call>", source, sizeof(source) - 1);
-    tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
+    tokenizer_t *tctx     = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
     token_t expr = c_parse_expr(&pctx, false);
@@ -142,7 +142,7 @@ static char *test_c_expr_deref() {
     char const   source[] = "*foo.bar->baz[1](2)";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_expr_deref>", source, sizeof(source) - 1);
-    tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
+    tokenizer_t *tctx     = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
     token_t expr = c_parse_expr(&pctx, false);
@@ -169,7 +169,7 @@ static char *test_c_expr_cast() {
     char const   source[] = "(ident0 *(*const volatile)[2]) (ident1)";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_expr_cast>", source, sizeof(source) - 1);
-    tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
+    tokenizer_t *tctx     = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
     set_add(&pctx.type_names, "ident0");
@@ -199,7 +199,7 @@ static char *test_c_type_funcptr() {
     char const   source[] = "ident0 (*)(ident1)";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_type_funcptr>", source, sizeof(source) - 1);
-    tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
+    tokenizer_t *tctx     = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
     set_add(&pctx.type_names, "ident0");
@@ -237,7 +237,7 @@ static char *test_c_type_struct() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<c_type_struct>", source, sizeof(source) - 1);
-    tokenizer_t *tctx = c_tkn_create(src, C_STD_def);
+    tokenizer_t *tctx = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t   pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
     token_t token = c_parse_decls(&pctx, false);
@@ -274,7 +274,7 @@ static char *test_c_type_enum() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<c_type_enum>", source, sizeof(source) - 1);
-    tokenizer_t *tctx = c_tkn_create(src, C_STD_def);
+    tokenizer_t *tctx = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t   pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
     token_t token = c_parse_decls(&pctx, false);
@@ -304,7 +304,7 @@ static char *test_c_stmt_decl() {
     char const   source[] = "typename ident, *ident2[];";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_stmt_decl>", source, sizeof(source) - 1);
-    tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
+    tokenizer_t *tctx     = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
     set_add(&pctx.type_names, "typename");
@@ -348,7 +348,7 @@ static char *test_c_stmt_ctrl() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<c_stmt_ctrl>", source, sizeof(source) - 1);
-    tokenizer_t *tctx = c_tkn_create(src, C_STD_def);
+    tokenizer_t *tctx = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t   pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
     set_add(&pctx.type_names, "typename");
@@ -384,7 +384,7 @@ static char *test_c_function() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<c_function>", source, sizeof(source) - 1);
-    tokenizer_t *tctx = c_tkn_create(src, C_STD_def);
+    tokenizer_t *tctx = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t   pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
     set_add(&pctx.type_names, "typename");
@@ -426,7 +426,7 @@ static char *test_c_compliteral() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<c_compiteral>", source, sizeof(source) - 1);
-    tokenizer_t *tctx = c_tkn_create(src, C_STD_def);
+    tokenizer_t *tctx = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t   pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
     token_t complit = c_parse_expr(&pctx, false);

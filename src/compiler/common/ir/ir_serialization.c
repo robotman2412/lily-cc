@@ -134,10 +134,10 @@ void ir_insn_serialize(ir_insn_t const *insn, backend_profile_t const *profile_o
         if (i) {
             fputs(", ", to);
         }
-        if (insn->returns[i].is_struct) {
-            fprintf(to, "struct %%%s", insn->returns[i].dest_struct->name);
-        } else {
-            fprintf(to, "%%%s", insn->returns[i].dest_var->name);
+        switch (insn->returns[i].type) {
+            case IR_RETVAL_TYPE_VAR: fprintf(to, "%%%s", insn->returns[i].dest_var->name); break;
+            case IR_RETVAL_TYPE_REG: fprintf(to, "$%s", profile_opt->gpr_names[insn->returns[i].dest_regno]); break;
+            case IR_RETVAL_TYPE_STRUCT: fprintf(to, "struct %%%s", insn->returns[i].dest_struct->name); break;
         }
     }
 
@@ -159,6 +159,7 @@ void ir_insn_serialize(ir_insn_t const *insn, backend_profile_t const *profile_o
         case IR_INSN_MEMCPY: fputs("memcpy", to); break;
         case IR_INSN_MEMSET: fputs("memset", to); break;
         case IR_INSN_MACHINE: fprintf(to, "mach %s", insn->prototype->name); break;
+        case IR_INSN_CLOBBER: fputs("clobber", to); break;
     }
 
     if (insn->type == IR_INSN_COMBINATOR) {
@@ -313,7 +314,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
             case IR_AST_CODE: {
                 cur_code = map_get(&func->code_by_name, stmt->params[0].strval);
             } break;
-            case IR_AST_STRUCTARG: {
+            case IR_AST_STRUCT: {
                 ir_arg_t arg = {
                     .arg_type     = IR_ARG_TYPE_STRUCT,
                     .struct_frame = get_by_name(frame, stmt->params[0]),
@@ -348,11 +349,14 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                 bool operands_ok = true;
 
                 // Find return vars.
-                size_t     returns_len = stmt->params[0].params_len;
-                ir_var_t **returns     = strong_calloc(returns_len, sizeof(ir_var_t *));
+                size_t       returns_len = stmt->params[0].params_len;
+                ir_retval_t *returns     = strong_calloc(returns_len, sizeof(ir_retval_t));
                 for (size_t i = 0; i < returns_len; i++) {
-                    returns[i]  = get_by_name(var, stmt->params[0].params[i]);
-                    insn_ok    &= returns[i] != NULL;
+                    // TODO: Structs and registers must be supported here.
+                    token_t const *tkn  = &stmt->params[0].params[i];
+                    ir_var_t      *var  = get_by_name(var, *tkn);
+                    returns[i]          = IR_RETVAL_VAR(var);
+                    insn_ok            &= returns[i].dest_var != NULL;
                 }
 
                 // Find operands.
@@ -441,7 +445,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                 // Assert SSA preconditions.
                 if (func->enforce_ssa) {
                     for (size_t i = 0; i < stmt->params[0].params_len; i++) {
-                        if (returns[i] && returns[i]->assigned_at.len) {
+                        if (returns[i].type == IR_RETVAL_TYPE_VAR && returns[i].dest_var->assigned_at.len) {
                             cctx_diagnostic(
                                 from->cctx,
                                 stmt->params[0].params[i].pos,
@@ -479,6 +483,12 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     case IR_KEYW_memset:
                         if (operands_len != 3) {
                             cctx_diagnostic(from->cctx, stmt->params[1].pos, DIAG_ERR, "Instruction takes 3 operands");
+                            insn_ok = false;
+                        }
+                        break;
+                    case IR_KEYW_clobber:
+                        if (operands_len) {
+                            cctx_diagnostic(from->cctx, stmt->params[1].pos, DIAG_ERR, "Instruction takes no operands");
                             insn_ok = false;
                         }
                         break;
@@ -630,7 +640,9 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     case IR_KEYW_seqz:
                     case IR_KEYW_snez:
                         // Return type must be bool.
-                        if (returns[0] && returns[0]->prim_type != IR_PRIM_bool) {
+                        if (returns[0].type == IR_RETVAL_TYPE_STRUCT
+                            || (returns[0].type == IR_RETVAL_TYPE_VAR
+                                && returns[0].dest_var->prim_type != IR_PRIM_bool)) {
                             cctx_diagnostic(
                                 from->cctx,
                                 stmt->params[0].pos,
@@ -670,7 +682,9 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     operand_match:
                         // Operand must equal return type.
                         for (size_t i = 0; i < operands_len; i++) {
-                            if (returns[0] && ir_operand_prim(operands[i]) != returns[0]->prim_type) {
+                            if (returns[0].type == IR_RETVAL_TYPE_STRUCT
+                                || (returns[0].type == IR_RETVAL_TYPE_VAR
+                                    && ir_operand_prim(operands[i]) != returns[0].dest_var->prim_type)) {
                                 cctx_diagnostic(
                                     from->cctx,
                                     stmt->params[2].params[i].pos,
@@ -682,7 +696,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                                     stmt->params[0].params[0].pos,
                                     DIAG_HINT,
                                     "Return type is %s",
-                                    ir_prim_names[returns[0]->prim_type]
+                                    ir_prim_names[returns[0].dest_var->prim_type]
                                 );
                                 insn_ok = false;
                             }
@@ -777,6 +791,8 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                         case IR_KEYW_memset:
                             ir_add_memset(IR_APPEND(cur_code), operands[0].mem, operands[1], operands[2]);
                             break;
+
+                        case IR_KEYW_clobber: ir_add_clobber(IR_APPEND(cur_code), returns_len, returns); break;
                     }
                 }
 

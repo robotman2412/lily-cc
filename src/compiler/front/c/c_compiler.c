@@ -547,7 +547,7 @@ static c_compile_expr_t c_compile_scalar_init(
         cast_operand = IR_OPERAND_CONST(ir_cast(dest_prim, res.res.rvalue.operand.iconst));
     } else {
         ir_var_t *tmp = ir_var_create(code->func, dest_prim, NULL);
-        ir_add_expr1(IR_APPEND(code), tmp, IR_OP1_mov, c_value_read(ctx, code, &res.res));
+        ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(tmp), IR_OP1_mov, c_value_read(ctx, code, &res.res));
         cast_operand = IR_OPERAND_VAR(tmp);
     }
     c_value_destroy(res.res);
@@ -924,7 +924,7 @@ static c_value_t c_array_decay(c_compiler_t *ctx, ir_code_t *code, c_value_t val
 
     c_value_destroy(value);
     ir_var_t *tmp = ir_var_create(code->func, ptr_prim, NULL);
-    ir_add_lea(IR_APPEND(code), tmp, memref);
+    ir_add_lea(IR_APPEND(code), IR_RETVAL_VAR(tmp), memref);
     return (c_value_t){
         .value_type     = C_RVALUE_OPERAND,
         .c_type         = ptr_rc,
@@ -970,19 +970,19 @@ static inline c_compile_expr_t
         return (c_compile_expr_t){
             .code = code,
             .res  = {
-                 .value_type     = C_RVALUE_OPERAND,
-                 .c_type         = rc_share(&ctx->prim_rcs[c_prim]),
-                 .rvalue.operand = IR_OPERAND_CONST(tmp),
+                .value_type     = C_RVALUE_OPERAND,
+                .c_type         = rc_share(&ctx->prim_rcs[c_prim]),
+                .rvalue.operand = IR_OPERAND_CONST(tmp),
             },
         };
     }
 
     // Add math instruction.
     ir_var_t *tmpvar = ir_var_create(code->func, is_cmp ? IR_PRIM_bool : ir_prim, NULL);
-    ir_add_expr2(IR_APPEND(code), tmpvar, ir_op2, ir_lhs, ir_rhs);
+    ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(tmpvar), ir_op2, ir_lhs, ir_rhs);
     if (is_cmp) {
         ir_var_t *tmpvar2 = ir_var_create(code->func, c_prim_to_ir_type(ctx, C_PRIM_SINT), NULL);
-        ir_add_expr1(IR_APPEND(code), tmpvar2, IR_OP1_mov, IR_OPERAND_VAR(tmpvar));
+        ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(tmpvar2), IR_OP1_mov, IR_OPERAND_VAR(tmpvar));
         tmpvar = tmpvar2;
         c_prim = C_PRIM_SINT;
     }
@@ -1087,10 +1087,10 @@ static inline c_compile_expr_t
             rhs_ir = IR_OPERAND_CONST(ir_cast(large_prim, rhs_ir.iconst));
         } else {
             ir_var_t *lhs_tmp = ir_var_create(code->func, large_prim, NULL);
-            ir_add_expr1(IR_APPEND(code), lhs_tmp, IR_OP1_mov, lhs_ir);
+            ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(lhs_tmp), IR_OP1_mov, lhs_ir);
             lhs_ir            = IR_OPERAND_VAR(lhs_tmp);
             ir_var_t *rhs_tmp = ir_var_create(code->func, large_prim, NULL);
-            ir_add_expr1(IR_APPEND(code), rhs_tmp, IR_OP1_mov, rhs_ir);
+            ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(rhs_tmp), IR_OP1_mov, rhs_ir);
             rhs_ir = IR_OPERAND_VAR(rhs_tmp);
         }
     }
@@ -1108,11 +1108,17 @@ static inline c_compile_expr_t
             ));
         } else {
             ir_var_t *sub = ir_var_create(code->func, uptr_prim, NULL);
-            ir_add_expr2(IR_APPEND(code), sub, IR_OP2_sub, lhs_ir, rhs_ir);
+            ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(sub), IR_OP2_sub, lhs_ir, rhs_ir);
             ir_var_t *cast = ir_var_create(code->func, sptr_prim, NULL);
-            ir_add_expr1(IR_APPEND(code), cast, IR_OP1_mov, IR_OPERAND_VAR(sub));
+            ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(cast), IR_OP1_mov, IR_OPERAND_VAR(sub));
             ir_var_t *div = ir_var_create(code->func, uptr_prim, NULL);
-            ir_add_expr2(IR_APPEND(code), div, IR_OP2_div, IR_OPERAND_VAR(cast), IR_OPERAND_CONST(ssize_iconst));
+            ir_add_expr2(
+                IR_APPEND(code),
+                IR_RETVAL_VAR(div),
+                IR_OP2_div,
+                IR_OPERAND_VAR(cast),
+                IR_OPERAND_CONST(ssize_iconst)
+            );
             value = IR_OPERAND_VAR(div);
         }
 
@@ -1125,9 +1131,9 @@ static inline c_compile_expr_t
             );
         } else {
             ir_var_t *mul = ir_var_create(code->func, uptr_prim, NULL);
-            ir_add_expr2(IR_APPEND(code), mul, IR_OP2_mul, rhs_ir, IR_OPERAND_CONST(usize_iconst));
+            ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(mul), IR_OP2_mul, rhs_ir, IR_OPERAND_CONST(usize_iconst));
             ir_var_t *sub = ir_var_create(code->func, uptr_prim, NULL);
-            ir_add_expr2(IR_APPEND(code), sub, IR_OP2_sub, lhs_ir, IR_OPERAND_VAR(mul));
+            ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(sub), IR_OP2_sub, lhs_ir, IR_OPERAND_VAR(mul));
             value = IR_OPERAND_VAR(sub);
         }
 
@@ -1141,9 +1147,9 @@ static inline c_compile_expr_t
                 );
             } else {
                 ir_var_t *mul = ir_var_create(code->func, uptr_prim, NULL);
-                ir_add_expr2(IR_APPEND(code), mul, IR_OP2_mul, rhs_ir, IR_OPERAND_CONST(usize_iconst));
+                ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(mul), IR_OP2_mul, rhs_ir, IR_OPERAND_CONST(usize_iconst));
                 ir_var_t *add = ir_var_create(code->func, uptr_prim, NULL);
-                ir_add_expr2(IR_APPEND(code), add, IR_OP2_add, lhs_ir, IR_OPERAND_VAR(mul));
+                ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(add), IR_OP2_add, lhs_ir, IR_OPERAND_VAR(mul));
                 value = IR_OPERAND_VAR(add);
             }
         } else {
@@ -1154,9 +1160,9 @@ static inline c_compile_expr_t
                 );
             } else {
                 ir_var_t *mul = ir_var_create(code->func, uptr_prim, NULL);
-                ir_add_expr2(IR_APPEND(code), mul, IR_OP2_mul, lhs_ir, IR_OPERAND_CONST(usize_iconst));
+                ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(mul), IR_OP2_mul, lhs_ir, IR_OPERAND_CONST(usize_iconst));
                 ir_var_t *add = ir_var_create(code->func, uptr_prim, NULL);
-                ir_add_expr2(IR_APPEND(code), add, IR_OP2_add, rhs_ir, IR_OPERAND_VAR(mul));
+                ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(add), IR_OP2_add, rhs_ir, IR_OPERAND_VAR(mul));
                 value = IR_OPERAND_VAR(add);
             }
         }
@@ -1168,7 +1174,7 @@ static inline c_compile_expr_t
             value = IR_OPERAND_CONST(ir_calc2(op2, lhs_ir.iconst, rhs_ir.iconst));
         } else {
             ir_var_t *cmp = ir_var_create(code->func, IR_PRIM_bool, NULL);
-            ir_add_expr2(IR_APPEND(code), cmp, op2, lhs_ir, rhs_ir);
+            ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(cmp), op2, lhs_ir, rhs_ir);
             value = IR_OPERAND_VAR(cmp);
         }
     }
@@ -1245,8 +1251,9 @@ static inline c_compile_expr_t c_compile_expr_call(
             signature   = func_type;
             call_memref = func.lvalue.memref;
 
-        } else if (func_type->primitive == C_COMP_POINTER
-                   && ((c_type_t *)func_type->inner->data)->primitive == C_COMP_FUNCTION) {
+        } else if (
+            func_type->primitive == C_COMP_POINTER && ((c_type_t *)func_type->inner->data)->primitive == C_COMP_FUNCTION
+        ) {
             // Call by function pointer.
             signature        = func_type->inner->data;
             ir_operand_t ptr = c_value_read(ctx, code, &func);
@@ -1267,38 +1274,33 @@ static inline c_compile_expr_t c_compile_expr_call(
             // Set up return value.
             c_type_t const *returns = signature->func.return_type->data;
             retval.c_type           = rc_share(signature->func.return_type);
-            size_t       n_ir_ret;
-            ir_retval_t *ir_ret;
+            size_t      has_ir_ret;
+            ir_retval_t ir_ret = {0};
             if (returns->primitive == C_PRIM_VOID) {
-                n_ir_ret = 0;
-                ir_ret   = NULL;
+                has_ir_ret = false;
             } else if (returns->primitive == C_COMP_STRUCT || returns->primitive == C_COMP_UNION) {
-                n_ir_ret = 1;
-                ir_ret   = malloc(sizeof(ir_retval_t));
+                has_ir_ret = true;
 
                 uint64_t size, align;
                 if (!c_type_get_size(ctx, returns, &size, &align)) {
                     UNREACHABLE();
                 }
 
-                ir_ret->is_struct   = true;
-                ir_ret->dest_struct = ir_frame_create(code->func, size, align, NULL);
+                ir_ret.type         = IR_RETVAL_TYPE_STRUCT;
+                ir_ret.dest_struct  = ir_frame_create(code->func, size, align, NULL);
                 retval.value_type   = C_RVALUE_STACK;
-                retval.rvalue.frame = ir_ret->dest_struct;
+                retval.rvalue.frame = ir_ret.dest_struct;
             } else {
-                n_ir_ret = 1;
-                ir_ret   = malloc(sizeof(ir_retval_t));
+                has_ir_ret = true;
 
-                ir_ret->is_struct     = false;
-                ir_ret->dest_var      = ir_var_create(code->func, c_type_to_ir_type(ctx, returns), NULL);
+                ir_ret.type           = IR_RETVAL_TYPE_VAR;
+                ir_ret.dest_var       = ir_var_create(code->func, c_type_to_ir_type(ctx, returns), NULL);
                 retval.value_type     = C_RVALUE_OPERAND;
-                retval.rvalue.operand = IR_OPERAND_VAR(ir_ret->dest_var);
+                retval.rvalue.operand = IR_OPERAND_VAR(ir_ret.dest_var);
             }
 
             // Emit function call.
-            ir_add_call(IR_APPEND(code), call_memref, n_ir_ret, ir_ret, params_ast->params_len, operands);
-
-            free(ir_ret);
+            ir_add_call(IR_APPEND(code), call_memref, has_ir_ret, ir_ret, params_ast->params_len, operands);
         }
 
         free(operands);
@@ -1336,9 +1338,9 @@ c_compile_expr_t
             return (c_compile_expr_t){
                 .code = code,
                 .res  = {
-                     .value_type     = C_RVALUE_OPERAND,
-                     .c_type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
-                     .rvalue.operand = IR_OPERAND_CONST(iconst),
+                    .value_type     = C_RVALUE_OPERAND,
+                    .c_type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
+                    .rvalue.operand = IR_OPERAND_CONST(iconst),
                 },
             };
         }
@@ -1377,14 +1379,14 @@ c_compile_expr_t
         return (c_compile_expr_t){
             .code = code,
             .res  = {
-                 .value_type     = C_RVALUE_OPERAND,
-                 .c_type         = rc_share(&ctx->prim_rcs[expr->subtype]),
-                 .rvalue.operand = {
-                     .type   = IR_OPERAND_TYPE_CONST,
-                     .iconst = {
-                         .prim_type = c_prim_to_ir_type(ctx, expr->subtype),
-                         .constl    = expr->ival,
-                         .consth    = expr->ivalh,
+                .value_type     = C_RVALUE_OPERAND,
+                .c_type         = rc_share(&ctx->prim_rcs[expr->subtype]),
+                .rvalue.operand = {
+                    .type   = IR_OPERAND_TYPE_CONST,
+                    .iconst = {
+                        .prim_type = c_prim_to_ir_type(ctx, expr->subtype),
+                        .constl    = expr->ival,
+                        .consth    = expr->ivalh,
                     },
                 },
             },
@@ -1486,9 +1488,9 @@ c_compile_expr_t
             return (c_compile_expr_t){
                 .code = code,
                 .res  = {
-                     .value_type     = C_RVALUE_OPERAND,
-                     .c_type         = cast_rc,
-                     .rvalue.operand = IR_OPERAND_UNDEF(IR_PRIM_u8),
+                    .value_type     = C_RVALUE_OPERAND,
+                    .c_type         = cast_rc,
+                    .rvalue.operand = IR_OPERAND_UNDEF(IR_PRIM_u8),
                 },
             };
         }
@@ -1498,9 +1500,9 @@ c_compile_expr_t
             // Can be evaluated at compile time.
             ir_const_t new_const = ir_cast(c_type_to_ir_type(ctx, new_type), res.res.rvalue.operand.iconst);
             c_value_t  rvalue    = {
-                    .value_type     = C_RVALUE_OPERAND,
-                    .c_type         = cast_rc,
-                    .rvalue.operand = IR_OPERAND_CONST(new_const),
+                .value_type     = C_RVALUE_OPERAND,
+                .c_type         = cast_rc,
+                .rvalue.operand = IR_OPERAND_CONST(new_const),
             };
             c_value_destroy(res.res);
             return (c_compile_expr_t){
@@ -1511,7 +1513,7 @@ c_compile_expr_t
 
         // Otherwise emit a mov instruction.
         ir_var_t *tmpvar = ir_var_create(code->func, c_type_to_ir_type(ctx, new_type), NULL);
-        ir_add_expr1(IR_APPEND(code), tmpvar, IR_OP1_mov, c_value_read(ctx, code, &res.res));
+        ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(tmpvar), IR_OP1_mov, c_value_read(ctx, code, &res.res));
         c_value_t rvalue = {
             .value_type     = C_RVALUE_OPERAND,
             .c_type         = cast_rc,
@@ -1732,8 +1734,10 @@ c_compile_expr_t
             .res  = c_value_access_field(ctx, &res.res, &expr->params[2]),
         };
 
-    } else if (expr->subtype == C_AST_EXPR_INFIX
-               && (expr->params[0].subtype == C_TKN_LOR || expr->params[0].subtype == C_TKN_LAND)) {
+    } else if (
+        expr->subtype == C_AST_EXPR_INFIX
+        && (expr->params[0].subtype == C_TKN_LOR || expr->params[0].subtype == C_TKN_LAND)
+    ) {
         // Logical ANR/OR expression.
         c_compile_expr_t res;
         bool const       is_land = expr->params[0].subtype == C_TKN_LAND;
@@ -1793,12 +1797,12 @@ c_compile_expr_t
             return (c_compile_expr_t){
                 .code = code,
                 .res  = (c_value_t){
-                     .value_type     = C_RVALUE_OPERAND,
-                     .c_type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
-                     .rvalue.operand = IR_OPERAND_CONST(((ir_const_t){
-                         .prim_type = c_prim_to_ir_type(ctx, C_PRIM_SINT),
-                         .consth    = 0,
-                         .constl    = res,
+                    .value_type     = C_RVALUE_OPERAND,
+                    .c_type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
+                    .rvalue.operand = IR_OPERAND_CONST(((ir_const_t){
+                        .prim_type = c_prim_to_ir_type(ctx, C_PRIM_SINT),
+                        .consth    = 0,
+                        .constl    = res,
                     })),
                 },
             };
@@ -1812,27 +1816,32 @@ c_compile_expr_t
 
         ir_add_expr1(
             IR_APPEND(branch_code),
-            condvar,
+            IR_RETVAL_VAR(condvar),
             is_land ? IR_OP1_seqz : IR_OP1_snez,
             c_value_read(ctx, branch_code, &lhs)
         );
         ir_add_branch(IR_APPEND(branch_code), IR_OPERAND_VAR(condvar), break_code);
         ir_add_jump(IR_APPEND(branch_code), cont_code);
 
-        ir_add_expr1(IR_APPEND(break_code), resvar, IR_OP1_mov, IR_OPERAND_CONST(IR_CONST_BOOL(!is_land)));
+        ir_add_expr1(
+            IR_APPEND(break_code),
+            IR_RETVAL_VAR(resvar),
+            IR_OP1_mov,
+            IR_OPERAND_CONST(IR_CONST_BOOL(!is_land))
+        );
         ir_add_jump(IR_APPEND(break_code), exit_code);
 
-        ir_add_expr1(IR_APPEND(cont_code), resvar, IR_OP1_snez, c_value_read(ctx, cont_code, &rhs));
+        ir_add_expr1(IR_APPEND(cont_code), IR_RETVAL_VAR(resvar), IR_OP1_snez, c_value_read(ctx, cont_code, &rhs));
         ir_add_jump(IR_APPEND(cont_code), exit_code);
 
-        ir_add_expr1(IR_APPEND(exit_code), resvar2, IR_OP1_mov, IR_OPERAND_VAR(resvar));
+        ir_add_expr1(IR_APPEND(exit_code), IR_RETVAL_VAR(resvar2), IR_OP1_mov, IR_OPERAND_VAR(resvar));
 
         return (c_compile_expr_t){
             .code = exit_code,
             .res  = (c_value_t){
-                 .value_type     = C_RVALUE_OPERAND,
-                 .c_type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
-                 .rvalue.operand = IR_OPERAND_VAR(resvar2),
+                .value_type     = C_RVALUE_OPERAND,
+                .c_type         = rc_share(&ctx->prim_rcs[C_PRIM_SINT]),
+                .rvalue.operand = IR_OPERAND_VAR(resvar2),
             },
         };
 
@@ -1993,7 +2002,7 @@ c_compile_expr_t
             ir_var_t *tmpvar = ir_var_create(code->func, c_type_to_ir_type(ctx, res_type), NULL);
             ir_add_expr2(
                 IR_APPEND(code),
-                tmpvar,
+                IR_RETVAL_VAR(tmpvar),
                 is_inc ? IR_OP2_add : IR_OP2_sub,
                 c_value_read(ctx, code, &res.res),
                 (ir_operand_t){
@@ -2042,7 +2051,7 @@ c_compile_expr_t
 
             // Get address into an rvalue.
             ir_var_t *ir_ptr = ir_var_create(code->func, c_prim_to_ir_type(ctx, ctx->options.size_type), NULL);
-            ir_add_lea(IR_APPEND(code), ir_ptr, c_value_memref(ctx, code, &res.res));
+            ir_add_lea(IR_APPEND(code), IR_RETVAL_VAR(ir_ptr), c_value_memref(ctx, code, &res.res));
             c_value_t rvalue = {
                 .value_type     = C_RVALUE_OPERAND,
                 .c_type         = ptr_rc,
@@ -2128,9 +2137,9 @@ c_compile_expr_t
                 return (c_compile_expr_t){
                     .code = code,
                     .res  = {
-                         .value_type = C_RVALUE_OPERAND,
-                         .c_type     = type,
-                         .rvalue.operand
+                        .value_type = C_RVALUE_OPERAND,
+                        .c_type     = type,
+                        .rvalue.operand
                         = IR_OPERAND_CONST(ir_calc1(c_op1_to_ir_op1(expr->params[0].subtype), ir_value.iconst)),
                     },
                 };
@@ -2143,7 +2152,7 @@ c_compile_expr_t
                 ir_prim = c_type_to_ir_type(ctx, res.res.c_type->data);
             }
             ir_var_t *tmpvar = ir_var_create(code->func, ir_prim, NULL);
-            ir_add_expr1(IR_APPEND(code), tmpvar, c_op1_to_ir_op1(expr->params[0].subtype), ir_value);
+            ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(tmpvar), c_op1_to_ir_op1(expr->params[0].subtype), ir_value);
 
             // Return temporary value.
             c_value_t rvalue = {
@@ -2192,7 +2201,7 @@ c_compile_expr_t
         ir_prim_t    ir_prim    = c_type_to_ir_type(ctx, res.res.c_type->data);
         ir_operand_t read_value = c_value_read(ctx, code, &res.res);
         ir_var_t    *oldvar     = ir_var_create(code->func, ir_prim, NULL);
-        ir_add_expr1(IR_APPEND(code), oldvar, IR_OP1_mov, read_value);
+        ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(oldvar), IR_OP1_mov, read_value);
 
         // Determine increment, which is 1 for non-pointer types.
         uint64_t increment = 1, dummy;
@@ -2210,7 +2219,7 @@ c_compile_expr_t
         ir_var_t *tmpvar = ir_var_create(code->func, c_type_to_ir_type(ctx, res_type), NULL);
         ir_add_expr2(
             IR_APPEND(code),
-            tmpvar,
+            IR_RETVAL_VAR(tmpvar),
             is_inc ? IR_OP2_add : IR_OP2_sub,
             c_value_read(ctx, code, &res.res),
             (ir_operand_t){
@@ -2444,11 +2453,25 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
         rc_delete(func_type_rc);
         return NULL;
     }
-    c_type_t *func_type = func_type_rc->data;
+    c_type_t const *func_type = func_type_rc->data;
 
     // Create function and scope.
     ir_func_t *func  = ir_func_create(name->strval, NULL, func_type->func.args_len);
     c_scope_t  scope = c_scope_create(&ctx->global_scope);
+
+    // Set return type.
+    c_type_t const *rettype = func_type->func.return_type->data;
+    if (rettype->primitive == C_PRIM_VOID) {
+        func->rettype.type = IR_FUNCRET_NONE;
+    } else if (rettype->primitive == C_COMP_STRUCT || rettype->primitive == C_COMP_UNION) {
+        func->rettype.type = IR_FUNCRET_STRUCT;
+        if (!c_type_get_size(ctx, rettype, &func->rettype.struct_type.size, &func->rettype.struct_type.align)) {
+            UNREACHABLE();
+        }
+    } else {
+        func->rettype.type      = IR_FUNCRET_PRIM;
+        func->rettype.prim_type = c_type_to_ir_type(ctx, rettype);
+    }
 
     // Bring parameters into scope.
     for (size_t i = 0; i < func_type->func.args_len; i++) {
@@ -2497,6 +2520,8 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
                 case C_PRIM_ULONG:
                 case C_PRIM_SLLONG:
                 case C_PRIM_ULLONG:
+                case C_PRIM_S128:
+                case C_PRIM_U128:
                 case C_PRIM_FLOAT:
                 case C_PRIM_DOUBLE:
                 case C_PRIM_LDOUBLE:

@@ -37,6 +37,8 @@ typedef enum {
     IR_IDENT_LOCAL,
     // An identifier without prefix or suffix.
     IR_IDENT_BARE,
+    // A register identifier.
+    IR_IDENT_REG,
 } ir_identtype_t;
 
 // List of keywords.

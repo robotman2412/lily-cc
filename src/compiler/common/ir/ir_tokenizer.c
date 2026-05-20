@@ -507,6 +507,11 @@ retry:
         token_t ident = ir_tkn_ident(ctx, pos0, (char)c, false);
         ident.subtype = IR_IDENT_LOCAL;
         return ident;
+    } else if (c == '$') {
+        c             = srcfile_getc(ctx->file, &pos1);
+        token_t ident = ir_tkn_ident(ctx, pos0, (char)c, false);
+        ident.subtype = IR_IDENT_REG;
+        return ident;
     } else if (c == '<') {
         c             = srcfile_getc(ctx->file, &pos1);
         token_t ident = ir_tkn_ident(ctx, pos0, (char)c, false);

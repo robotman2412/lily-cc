@@ -9,6 +9,7 @@
 #include "ir.h"
 #include "ir/ir_serialization.h"
 #include "ir_interpreter.h"
+#include "ir_optimizer.h"
 #include "ir_types.h"
 #include "list.h"
 #include "set.h"
@@ -65,6 +66,46 @@ static void cg_isel(backend_profile_t *profile, ir_code_t *code) {
     code->func->enforce_ssa = true;
 }
 
+// Expand the ABI definitions of calls and returns.
+static void cg_xabi(backend_profile_t *profile, ir_code_t *code) {
+    assert(code->func->enforce_ssa);
+    code->func->enforce_ssa = false;
+    ir_insn_t *cur          = container_of(code->insns.tail, ir_insn_t, node);
+    while (cur) {
+        if (cur->type == IR_INSN_RETURN || cur->type == IR_INSN_CALL) {
+            ir_insn_t *res;
+            if (cur->type == IR_INSN_RETURN) {
+                res = profile->backend->xabi_return(profile, cur);
+            } else {
+                res = profile->backend->xabi_call(profile, cur);
+            }
+            if (!res) {
+                fprintf(stderr, "BUG: Backend cannot implement the ABI for `");
+                ir_insn_serialize(cur, profile, stderr);
+                fprintf(stderr, "`\n");
+                set_t vars = PTR_SET_EMPTY;
+                for (size_t i = 0; i < cur->returns_len; i++) {
+                    set_add(&vars, cur->returns[i].dest_var);
+                }
+                for (size_t i = 0; i < cur->operands_len; i++) {
+                    if (cur->operands[i].type == IR_OPERAND_TYPE_VAR) {
+                        set_add(&vars, cur->operands[i].var);
+                    }
+                }
+                set_foreach(ir_var_t, var, &vars) {
+                    fprintf(stderr, "Note: %%%s is %s\n", var->name, ir_prim_names[var->prim_type]);
+                }
+                set_clear(&vars);
+                fflush(stderr);
+                abort();
+            }
+            cur = res;
+        }
+        cur = container_of(cur->node.previous, ir_insn_t, node);
+    }
+    code->func->enforce_ssa = true;
+}
+
 // Replace arithmetic that is not supported with function calls.
 static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
     assert(insn->type == IR_INSN_EXPR2);
@@ -77,38 +118,73 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
     if (insn->op2 == IR_OP2_add && softfloat) {
         char buf[32];
         snprintf(buf, sizeof(buf) - 1, "__lily_add_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
-        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 2, insn->operands);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            2,
+            insn->operands
+        );
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_sub && softfloat) {
         char buf[32];
         snprintf(buf, sizeof(buf) - 1, "__lily_sub_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
-        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 2, insn->operands);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            2,
+            insn->operands
+        );
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_mul && (softfloat || !profile->has_mul)) {
         char buf[32];
         snprintf(buf, sizeof(buf) - 1, "__lily_mul_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
-        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 2, insn->operands);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            2,
+            insn->operands
+        );
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_div && (softfloat || !profile->has_div)) {
         char buf[32];
         snprintf(buf, sizeof(buf) - 1, "__lily_div_%s", ir_prim_names[prim]);
-        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 2, insn->operands);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            2,
+            insn->operands
+        );
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_rem && (softfloat || !profile->has_rem)) {
         char buf[32];
         snprintf(buf, sizeof(buf) - 1, "__lily_rem_%s", ir_prim_names[prim]);
-        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 2, insn->operands);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            2,
+            insn->operands
+        );
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_shr && insn->operands[1].type != IR_OPERAND_TYPE_CONST && !profile->has_var_shift) {
         char buf[32];
         snprintf(buf, sizeof(buf) - 1, "__lily_shr_%s", ir_prim_names[prim]);
         ir_var_t *tmp = ir_var_create(insn->code->func, IR_PRIM_u8, NULL); // __lily_shr_* uses u8 as shift amount
-        ir_add_expr1(IR_AFTER_INSN(insn), tmp, IR_OP1_mov, insn->operands[1]);
+        ir_add_expr1(IR_AFTER_INSN(insn), IR_RETVAL_VAR(tmp), IR_OP1_mov, insn->operands[1]);
         ir_add_call(
             IR_AFTER_INSN(insn),
             IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
-            1,
-            insn->returns,
+            true,
+            insn->returns[0],
             2,
             (ir_operand_t const[]){insn->operands[0], IR_OPERAND_VAR(tmp)}
         );
@@ -117,12 +193,12 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
         char buf[32];
         snprintf(buf, sizeof(buf) - 1, "__lily_shl_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
         ir_var_t *tmp = ir_var_create(insn->code->func, IR_PRIM_u8, NULL); // __lily_shl_u* uses u8 as shift amount
-        ir_add_expr1(IR_AFTER_INSN(insn), tmp, IR_OP1_mov, insn->operands[1]);
+        ir_add_expr1(IR_AFTER_INSN(insn), IR_RETVAL_VAR(tmp), IR_OP1_mov, insn->operands[1]);
         ir_add_call(
             IR_AFTER_INSN(insn),
             IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
-            1,
-            insn->returns,
+            true,
+            insn->returns[0],
             2,
             (ir_operand_t const[]){insn->operands[0], IR_OPERAND_VAR(tmp)}
         );
@@ -159,12 +235,26 @@ static void cg_functionize_expr1(backend_profile_t *profile, ir_insn_t *insn) {
             // Float to int.
             snprintf(buf, sizeof(buf) - 1, "__lily_ftoi_%s_%s", ir_prim_names[prim], ir_prim_names[ret_prim]);
         }
-        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 1, insn->operands);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            1,
+            insn->operands
+        );
         ir_insn_delete(insn);
     } else if (insn->op1 == IR_OP1_neg && softfloat) {
         char buf[32];
         snprintf(buf, sizeof(buf) - 1, "__lily_neg_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
-        ir_add_call(IR_AFTER_INSN(insn), IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)), 1, insn->returns, 1, insn->operands);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            1,
+            insn->operands
+        );
         ir_insn_delete(insn);
     }
     // TODO: Float comparisons.
@@ -234,7 +324,20 @@ static void cg_normalize_op_order(ir_insn_t *insn) {
 // functions, and unnecessary jumps are removed. When finished, the code blocks and instructions therein will be in
 // order as written to the eventual executable file.
 void codegen(backend_profile_t *profile, ir_func_t *func) {
+    ir_func_to_ssa(func);
+
+    // Expand the ABI definition.
     assert(func->enforce_ssa);
+    func->enforce_ssa = false;
+    profile->backend->xabi_entry(profile, func);
+    func->enforce_ssa = true;
+    dlist_foreach_node(ir_code_t, code, &func->code_list) {
+        cg_xabi(profile, code);
+    }
+
+    // Perform optimizations.
+    // TODO: Make this configurable.
+    ir_optimize(func);
 
     // Remove jumps that go the the next code block linearly.
     cg_remove_jumps(func);
@@ -245,6 +348,8 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
             cg_functionize_exprs(profile, insn);
         }
     }
+
+    // TODO: Convert operations into ones which fit in the CPU's registers.
 
     // Normalize operand order of instructions, if possible.
     dlist_foreach_node(ir_code_t, code, &func->code_list) {

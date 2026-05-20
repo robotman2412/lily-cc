@@ -21,7 +21,7 @@
 
 #define TEST_OK          NULL
 #define TEST_FAIL        ((void *)-1)
-#define TEST_FAIL_MSG(x) (x)
+#define TEST_FAIL_MSG(x) ("\xff" x)
 
 #define STR_OF(x)        STR_OF_HELPER(x)
 #define STR_OF_HELPER(x) #x

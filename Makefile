@@ -8,6 +8,7 @@ all:
 	cmake -B build src
 	cmake --build build --target lilycc
 	cmake --build build --target lily-explainer
+	cmake --build build --target lily-cpp
 	cmake --build build --target lily-test
 
 .PHONY: build
@@ -15,6 +16,7 @@ build:
 	cmake -B build src
 	cmake --build build --target lilycc
 	cmake --build build --target lily-explainer
+	cmake --build build --target lily-cpp
 
 .PHONY: clang-tidy
 clang-tidy:
@@ -35,7 +37,7 @@ valgrind-test: build-test
 
 .PHONY: gdb-test
 gdb-test: build-test
-	LILY_TEST_FORK=0 gdb ./build/test/lily-test
+	LILY_TEST_FORK=0 gdb ./build/test/lily-test -ex 'b testcase_failed' -ex 'r $(TEST)'
 
 .PHONY: clean
 clean:

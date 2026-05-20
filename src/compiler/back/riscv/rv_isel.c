@@ -8,40 +8,174 @@
 #include "ir.h"
 #include "ir_interpreter.h"
 #include "ir_types.h"
+#include "list.h"
 #include "rv_backend.h"
 #include "rv_instructions.h"
 #include "rv_misc.h"
-#include "set.h"
+#include "unreachable.h"
 
+#include <assert.h>
 #include <stdio.h>
 
 
 
-// Register-register mov.
-static ir_insn_t *rv_isel_rr_mov(ir_insn_t *insn) {
-    ir_operand_t const operand = insn->operands[0];
-    ir_insn_t         *new_node;
-    if (ir_operand_prim(operand) == IR_PRIM_f32 || ir_operand_prim(operand) == IR_PRIM_f64) {
-        fprintf(stderr, "TODO: Emit register copy for FP\n");
-        return NULL;
+// Primitive type corresponding to a certain register class.
+static inline __attribute__((pure)) ir_prim_t rv_regclass_prim(rv_profile_t const *profile, size_t regno) {
+    if (regno < 32) {
+        return profile->ext_enabled[RV_64] ? IR_PRIM_u64 : IR_PRIM_u32;
+    } else if (regno < 64 && profile->ext_enabled[RV_EXT_D]) {
+        return IR_PRIM_f64;
+    } else if (regno < 64 && profile->ext_enabled[RV_EXT_D]) {
+        return IR_PRIM_f32;
     } else {
-        new_node = ir_add_mach_insn(
-            IR_BEFORE_INSN(insn),
-            insn->returns[0].dest_var,
-            &rv_insn_addi,
+        UNREACHABLE();
+    }
+}
+
+// `ir_operand_prim` extended to also understand the registers' types.
+static inline __attribute__((pure)) ir_prim_t rv_operand_prim(rv_profile_t const *profile, ir_operand_t operand) {
+    if (operand.type == IR_OPERAND_TYPE_REG) {
+        return rv_regclass_prim(profile, operand.regno);
+    } else {
+        return ir_operand_prim(operand);
+    }
+}
+
+// `ir_retval_t` equivalent to `rv_operand_prim`.
+static inline __attribute__((pure)) ir_prim_t rv_retval_prim(rv_profile_t const *profile, ir_retval_t retval) {
+    switch (retval.type) {
+        case IR_RETVAL_TYPE_VAR: return retval.dest_var->prim_type;
+        case IR_RETVAL_TYPE_REG: return rv_regclass_prim(profile, retval.dest_regno);
+        case IR_RETVAL_TYPE_STRUCT: UNREACHABLE();
+    }
+    UNREACHABLE();
+}
+
+// Emit a register-register copy.
+static ir_insn_t *rv_emit_rr_copy(rv_profile_t const *profile, ir_insnloc_t loc, ir_retval_t dest, ir_operand_t src) {
+    if (ir_prim_is_float(rv_retval_prim(profile, dest)) || ir_prim_is_float(rv_operand_prim(profile, src))) {
+        fprintf(stderr, "TODO: rv_emit_rr_copy with float types\n");
+        abort();
+    }
+
+    return ir_add_mach_insn(
+        loc,
+        true,
+        dest,
+        &rv_insn_addi,
+        2,
+        (ir_operand_t const[]){
+            src,
+            IR_OPERAND_CONST(IR_CONST_S16(0)),
+        }
+    );
+}
+
+// Emit an integer casting operation.
+static ir_insn_t *rv_emit_int_cast(
+    rv_profile_t const *profile, ir_insnloc_t loc, ir_retval_t dest, ir_prim_t dest_prim, ir_operand_t src
+) {
+    if (src.type == IR_OPERAND_TYPE_REG || dest_prim < ir_operand_prim(src)) {
+        return rv_emit_rr_copy(profile, loc, dest, src);
+    }
+    ir_prim_t src_prim = ir_operand_prim(src);
+    uint8_t   ptr_bits = profile->ext_enabled[RV_64] ? 64 : 32;
+
+    if (dest_prim == IR_PRIM_bool) {
+        // slt dest, x0, src
+        return ir_add_mach_insn(loc, true, dest, &rv_insn_sltu, 2, (ir_operand_t const[]){IR_OPERAND_REG(0), src});
+    } else if (ir_prim_is_signed(src_prim)
+               || (ir_prim_is_signed(dest_prim) && ir_prim_as_signed(src_prim) == dest_prim)) {
+        // Sign-extend.
+        uint8_t   shamt = ptr_bits - ir_prim_sizes[dest_prim] * 8;
+        ir_var_t *tmp   = ir_var_create(ir_insnloc_code(loc)->func, dest_prim, NULL);
+        // slli tmp, src, shamt
+        loc             = IR_AFTER_INSN(ir_add_mach_insn(
+            loc,
+            true,
+            IR_RETVAL_VAR(tmp),
+            &rv_insn_slli,
             2,
-            (ir_operand_t const[]){
-                insn->operands[0],
-                IR_OPERAND_CONST(IR_CONST_S16(0)),
-            }
+            (ir_operand_t const[]){src, IR_OPERAND_CONST(IR_CONST_S16(shamt))}
+        ));
+        // srai dest, tmp, shamt
+        return ir_add_mach_insn(
+            loc,
+            true,
+            dest,
+            &rv_insn_srai,
+            2,
+            (ir_operand_t const[]){src, IR_OPERAND_CONST(IR_CONST_S16(shamt))}
+        );
+    } else if (dest_prim == IR_PRIM_u8) {
+        // Zero-extend (one byte).
+        // andi dest, src, 255
+        return ir_add_mach_insn(
+            loc,
+            true,
+            dest,
+            &rv_insn_srai,
+            2,
+            (ir_operand_t const[]){src, IR_OPERAND_CONST(IR_CONST_S16(255))}
+        );
+    } else {
+        // Zero-extend.
+        uint8_t   shamt = ptr_bits - ir_prim_sizes[dest_prim] * 8;
+        ir_var_t *tmp   = ir_var_create(ir_insnloc_code(loc)->func, dest_prim, NULL);
+        // slli tmp, src, shamt
+        loc             = IR_AFTER_INSN(ir_add_mach_insn(
+            loc,
+            true,
+            IR_RETVAL_VAR(tmp),
+            &rv_insn_slli,
+            2,
+            (ir_operand_t const[]){src, IR_OPERAND_CONST(IR_CONST_S16(shamt))}
+        ));
+        // srli dest, tmp, shamt
+        return ir_add_mach_insn(
+            loc,
+            true,
+            dest,
+            &rv_insn_srli,
+            2,
+            (ir_operand_t const[]){src, IR_OPERAND_CONST(IR_CONST_S16(shamt))}
         );
     }
+}
+
+
+// Register-register bitcast.
+static ir_insn_t *rv_isel_rr_bitcast(rv_profile_t const *profile, ir_insn_t *insn) {
+    (void)profile;
+    ir_insn_t *new_node = rv_emit_rr_copy(profile, IR_BEFORE_INSN(insn), insn->returns[0], insn->operands[0]);
+    ir_insn_delete(insn);
+    return new_node;
+}
+
+// Register-register mov.
+static ir_insn_t *rv_isel_rr_mov(rv_profile_t const *profile, ir_insn_t *insn) {
+    ir_operand_t operand = insn->operands[0];
+    ir_insn_t   *new_node;
+    if (ir_prim_is_float(rv_operand_prim(profile, operand))) {
+        fprintf(stderr, "TODO: rv_isel_rr_mov with float types\n");
+        return NULL;
+    } else {
+        new_node = rv_emit_int_cast(
+            profile,
+            IR_BEFORE_INSN(insn),
+            insn->returns[0],
+            insn->returns[0].dest_var->prim_type,
+            operand
+        );
+    }
+
     ir_insn_delete(insn);
     return new_node;
 }
 
 // Constant mov.
-static ir_insn_t *rv_isel_const_mov(ir_insn_t *insn) {
+static ir_insn_t *rv_isel_const_mov(rv_profile_t const *profile, ir_insn_t *insn) {
+    (void)profile;
     ir_func_t *const func   = insn->code->func;
     ir_const_t const iconst = ir_trim_const(insn->operands[0].iconst);
 
@@ -69,7 +203,8 @@ static ir_insn_t *rv_isel_const_mov(ir_insn_t *insn) {
         ir_var_t *tmp = ir_var_create(func, IR_PRIM_s32, NULL);
         ir_add_mach_insn(
             IR_BEFORE_INSN(insn),
-            tmp,
+            true,
+            IR_RETVAL_VAR(tmp),
             &rv_insn_lui,
             1,
             (ir_operand_t const[]){
@@ -78,7 +213,8 @@ static ir_insn_t *rv_isel_const_mov(ir_insn_t *insn) {
         );
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(insn),
-            insn->returns[0].dest_var,
+            true,
+            insn->returns[0],
             &rv_insn_addi,
             2,
             (ir_operand_t const[]){
@@ -91,7 +227,8 @@ static ir_insn_t *rv_isel_const_mov(ir_insn_t *insn) {
         // Use just `lui`.
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(insn),
-            insn->returns[0].dest_var,
+            true,
+            insn->returns[0],
             &rv_insn_lui,
             1,
             (ir_operand_t const[]){
@@ -103,7 +240,8 @@ static ir_insn_t *rv_isel_const_mov(ir_insn_t *insn) {
         // Use just `addi`.
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(insn),
-            insn->returns[0].dest_var,
+            true,
+            insn->returns[0],
             &rv_insn_addi,
             2,
             (ir_operand_t const[]){
@@ -118,15 +256,25 @@ static ir_insn_t *rv_isel_const_mov(ir_insn_t *insn) {
     return new_node;
 }
 
+// Constant bitcast.
+static ir_insn_t *rv_isel_const_bitcast(rv_profile_t const *profile, ir_insn_t *insn) {
+    insn->operands[0].iconst = ir_cast(rv_retval_prim(profile, insn->returns[0]), insn->operands[0].iconst);
+    return rv_isel_const_mov(profile, insn);
+}
+
+
 // Jump instruction.
-static inline ir_insn_t *rv_isel_jump(ir_insn_t *insn) {
-    insn->type      = IR_INSN_MACHINE;
-    insn->prototype = &rv_insn_jal;
-    return insn;
+static inline ir_insn_t *rv_isel_jump(rv_profile_t const *profile, ir_insn_t *insn) {
+    (void)profile;
+    ir_insn_t *new_node
+        = ir_add_mach_insn(IR_BEFORE_INSN(insn), true, IR_RETVAL_REG(0), &rv_insn_jal, 1, insn->operands);
+    ir_insn_delete(insn);
+    return new_node;
 }
 
 // Compare-branch instruction patterns.
-static inline ir_insn_t *rv_isel_cmp_branch(ir_insn_t *ir_insn) {
+static inline ir_insn_t *rv_isel_cmp_branch(rv_profile_t const *profile, ir_insn_t *ir_insn) {
+    (void)profile;
     // Check that the branch is given a variable...
     if (ir_insn->operands[1].type != IR_OPERAND_TYPE_VAR) {
         return NULL;
@@ -153,7 +301,8 @@ static inline ir_insn_t *rv_isel_cmp_branch(ir_insn_t *ir_insn) {
         }
         ir_insn_t *new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            NULL,
+            false,
+            (ir_retval_t){},
             proto,
             3,
             (ir_operand_t const[]){
@@ -203,7 +352,8 @@ static inline ir_insn_t *rv_isel_cmp_branch(ir_insn_t *ir_insn) {
         }
         ir_insn_t *new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            NULL,
+            false,
+            (ir_retval_t){},
             proto,
             3,
             (ir_operand_t const[]){pred_insn->operands[swap], pred_insn->operands[!swap], ir_insn->operands[0]}
@@ -221,8 +371,8 @@ static inline ir_insn_t *rv_isel_cmp_branch(ir_insn_t *ir_insn) {
 }
 
 // Branch instruction patterns.
-static inline ir_insn_t *rv_isel_branch(ir_insn_t *ir_insn) {
-    ir_insn_t *new_node = rv_isel_cmp_branch(ir_insn);
+static inline ir_insn_t *rv_isel_branch(rv_profile_t const *profile, ir_insn_t *ir_insn) {
+    ir_insn_t *new_node = rv_isel_cmp_branch(profile, ir_insn);
     if (new_node) {
         return new_node;
     }
@@ -230,18 +380,22 @@ static inline ir_insn_t *rv_isel_branch(ir_insn_t *ir_insn) {
     // bne rs1, x0, dest
     new_node = ir_add_mach_insn(
         IR_BEFORE_INSN(ir_insn),
-        NULL,
+        false,
+        (ir_retval_t){},
         &rv_insn_bne,
         3,
         (ir_operand_t const[]){ir_insn->operands[1], IR_OPERAND_REG(0), ir_insn->operands[0]}
     );
 
     ir_insn_delete(ir_insn);
+    assert(new_node->node.next != &ir_insn->node);
+    assert(!dlist_contains(&new_node->code->insns, &ir_insn->node));
+
     return new_node;
 }
 
 // Binary expressions.
-static inline ir_insn_t *rv_isel_expr2_ri(rv_profile_t *profile, ir_insn_t *ir_insn) {
+static inline ir_insn_t *rv_isel_expr2_ri(rv_profile_t const *profile, ir_insn_t *ir_insn) {
     (void)profile;
 
     if (ir_insn->operands[1].type != IR_OPERAND_TYPE_CONST) {
@@ -282,7 +436,7 @@ static inline ir_insn_t *rv_isel_expr2_ri(rv_profile_t *profile, ir_insn_t *ir_i
 }
 
 // Binary expressions.
-static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t *profile, ir_insn_t *ir_insn) {
+static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t const *profile, ir_insn_t *ir_insn) {
     (void)profile;
     if (ir_insn->returns[0].dest_var->prim_type == IR_PRIM_f32
         || ir_insn->returns[0].dest_var->prim_type == IR_PRIM_f64) {
@@ -302,7 +456,8 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t *profile, ir_insn_t *ir_i
         // b < a
         ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            tmp,
+            true,
+            IR_RETVAL_VAR(tmp),
             &rv_insn_slt,
             2,
             (ir_operand_t const[]){ir_insn->operands[1], ir_insn->operands[0]}
@@ -310,7 +465,8 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t *profile, ir_insn_t *ir_i
         // (b < a) ^ 1
         ir_insn_t *new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            ir_insn->returns[0].dest_var,
+            true,
+            ir_insn->returns[0],
             &rv_insn_xori,
             2,
             (ir_operand_t const[]){IR_OPERAND_VAR(tmp), IR_OPERAND_CONST(IR_CONST_U16(1))}
@@ -323,13 +479,14 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t *profile, ir_insn_t *ir_i
         // a != b written as 0u < (a ^ b)
         ir_var_t *tmp = ir_var_create(ir_insn->code->func, ir_operand_prim(ir_insn->operands[0]), NULL);
         // a ^ b
-        ir_add_mach_insn(IR_BEFORE_INSN(ir_insn), tmp, &rv_insn_xor, 2, ir_insn->operands);
+        ir_add_mach_insn(IR_BEFORE_INSN(ir_insn), true, IR_RETVAL_VAR(tmp), &rv_insn_xor, 2, ir_insn->operands);
         ir_insn_t *new_node;
         if (ir_insn->op2 == IR_OP2_seq) {
             // (a ^ b) < 1u
             new_node = ir_add_mach_insn(
                 IR_BEFORE_INSN(ir_insn),
-                ir_insn->returns[0].dest_var,
+                true,
+                ir_insn->returns[0],
                 &rv_insn_sltiu,
                 2,
                 (ir_operand_t const[]){IR_OPERAND_VAR(tmp), IR_OPERAND_CONST(IR_CONST_U16(1))}
@@ -338,7 +495,8 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t *profile, ir_insn_t *ir_i
             // 0u < (a ^ b)
             new_node = ir_add_mach_insn(
                 IR_BEFORE_INSN(ir_insn),
-                ir_insn->returns[0].dest_var,
+                true,
+                ir_insn->returns[0],
                 &rv_insn_sltu,
                 2,
                 (ir_operand_t const[]){IR_OPERAND_CONST(IR_CONST_U16(1)), IR_OPERAND_VAR(tmp)}
@@ -389,9 +547,9 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t *profile, ir_insn_t *ir_i
 }
 
 // Unary expressions.
-static inline ir_insn_t *rv_isel_expr1(rv_profile_t *profile, ir_insn_t *ir_insn) {
+static inline ir_insn_t *rv_isel_expr1(rv_profile_t const *profile, ir_insn_t *ir_insn) {
     (void)profile;
-    ir_var_t    *dest = ir_insn->returns[0].dest_var;
+    ir_retval_t  dest = ir_insn->returns[0];
     ir_operand_t src  = ir_insn->operands[0];
     ir_insn_t   *new_node;
 
@@ -399,6 +557,7 @@ static inline ir_insn_t *rv_isel_expr1(rv_profile_t *profile, ir_insn_t *ir_insn
         case IR_OP1_seqz: // sltiu rd, rs1, 1
             new_node = ir_add_mach_insn(
                 IR_BEFORE_INSN(ir_insn),
+                true,
                 dest,
                 &rv_insn_sltiu,
                 2,
@@ -408,6 +567,7 @@ static inline ir_insn_t *rv_isel_expr1(rv_profile_t *profile, ir_insn_t *ir_insn
         case IR_OP1_snez: // sltu rd, x0, rs2
             new_node = ir_add_mach_insn(
                 IR_BEFORE_INSN(ir_insn),
+                true,
                 dest,
                 &rv_insn_sltu,
                 2,
@@ -417,6 +577,7 @@ static inline ir_insn_t *rv_isel_expr1(rv_profile_t *profile, ir_insn_t *ir_insn
         case IR_OP1_neg: // sub rd, x0, rs2
             new_node = ir_add_mach_insn(
                 IR_BEFORE_INSN(ir_insn),
+                true,
                 dest,
                 &rv_insn_sub,
                 2,
@@ -426,6 +587,7 @@ static inline ir_insn_t *rv_isel_expr1(rv_profile_t *profile, ir_insn_t *ir_insn
         case IR_OP1_bneg: // xori rd, rs1, -1
             new_node = ir_add_mach_insn(
                 IR_BEFORE_INSN(ir_insn),
+                true,
                 dest,
                 &rv_insn_xori,
                 2,
@@ -440,7 +602,7 @@ static inline ir_insn_t *rv_isel_expr1(rv_profile_t *profile, ir_insn_t *ir_insn
 }
 
 // Helper function for `rv_isel_mem_abs` that determines whether lui + addi can reach the target address.
-static inline bool rv_memoff_fits_lui(rv_profile_t *profile, uint64_t address) {
+static inline bool rv_memoff_fits_lui(rv_profile_t const *profile, uint64_t address) {
     if (profile->ext_enabled[RV_32ONLY]) {
         return true;
     }
@@ -448,7 +610,8 @@ static inline bool rv_memoff_fits_lui(rv_profile_t *profile, uint64_t address) {
 }
 
 // Memory instructions with absolute address.
-static inline ir_insn_t *rv_isel_mem_abs(rv_profile_t *profile, ir_insn_t *ir_insn, insn_proto_t const *lo12_proto) {
+static inline ir_insn_t *
+    rv_isel_mem_abs(rv_profile_t const *profile, ir_insn_t *ir_insn, insn_proto_t const *lo12_proto) {
     ir_memref_t  memref = ir_insn->operands[0].mem;
     ir_operand_t ptr;
     uint16_t     offset;
@@ -468,7 +631,8 @@ static inline ir_insn_t *rv_isel_mem_abs(rv_profile_t *profile, ir_insn_t *ir_in
         ir_var_t *tmp      = ir_var_create(ir_insn->code->func, ptr_prim, NULL);
         ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            tmp,
+            true,
+            IR_RETVAL_VAR(tmp),
             &rv_insn_lui,
             1,
             (ir_operand_t const[]){IR_OPERAND_CONST(IR_CONST_S32(lui))}
@@ -485,7 +649,8 @@ static inline ir_insn_t *rv_isel_mem_abs(rv_profile_t *profile, ir_insn_t *ir_in
     if (ir_insn->type == IR_INSN_STORE) {
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            NULL,
+            false,
+            (ir_retval_t){},
             lo12_proto,
             2,
             (ir_operand_t const[]){
@@ -497,7 +662,8 @@ static inline ir_insn_t *rv_isel_mem_abs(rv_profile_t *profile, ir_insn_t *ir_in
     } else {
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            ir_insn->returns[0].dest_var,
+            true,
+            ir_insn->returns[0],
             lo12_proto,
             1,
             (ir_operand_t const[]){
@@ -512,7 +678,8 @@ static inline ir_insn_t *rv_isel_mem_abs(rv_profile_t *profile, ir_insn_t *ir_in
 }
 
 // Memory instructions with pointer and offset.
-static inline ir_insn_t *rv_isel_mem_var(rv_profile_t *profile, ir_insn_t *ir_insn, insn_proto_t const *lo12_proto) {
+static inline ir_insn_t *
+    rv_isel_mem_var(rv_profile_t const *profile, ir_insn_t *ir_insn, insn_proto_t const *lo12_proto) {
     (void)profile;
     ir_memref_t memref = ir_insn->operands[0].mem;
     // TODO: Optimize add/sub with constant into the offset for memref?
@@ -532,7 +699,8 @@ static inline ir_insn_t *rv_isel_mem_var(rv_profile_t *profile, ir_insn_t *ir_in
         iconst.constl    = memref.offset;
         ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            ptr,
+            true,
+            IR_RETVAL_VAR(ptr),
             &rv_insn_add,
             2,
             (ir_operand_t const[]){
@@ -548,7 +716,8 @@ static inline ir_insn_t *rv_isel_mem_var(rv_profile_t *profile, ir_insn_t *ir_in
     if (ir_insn->type == IR_INSN_STORE) {
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            NULL,
+            false,
+            (ir_retval_t){},
             lo12_proto,
             2,
             (ir_operand_t const[]){
@@ -559,7 +728,8 @@ static inline ir_insn_t *rv_isel_mem_var(rv_profile_t *profile, ir_insn_t *ir_in
     } else {
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            ir_insn->returns[0].dest_var,
+            true,
+            ir_insn->returns[0],
             lo12_proto,
             1,
             (ir_operand_t const[]){
@@ -573,7 +743,7 @@ static inline ir_insn_t *rv_isel_mem_var(rv_profile_t *profile, ir_insn_t *ir_in
 }
 
 // Memory instructions.
-static inline ir_insn_t *rv_isel_mem(rv_profile_t *profile, ir_insn_t *ir_insn) {
+static inline ir_insn_t *rv_isel_mem(rv_profile_t const *profile, ir_insn_t *ir_insn) {
     insn_proto_t const *lo12_proto;
     if (ir_insn->type == IR_INSN_LOAD) {
         switch (ir_insn->operands[0].mem.data_type) {
@@ -622,7 +792,8 @@ static inline ir_insn_t *rv_isel_mem(rv_profile_t *profile, ir_insn_t *ir_insn) 
     if (ir_insn->type == IR_INSN_STORE) {
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            NULL,
+            false,
+            (ir_retval_t){},
             lo12_proto,
             2,
             (ir_operand_t const[]){ir_insn->operands[1], ir_insn->operands[0]}
@@ -630,7 +801,8 @@ static inline ir_insn_t *rv_isel_mem(rv_profile_t *profile, ir_insn_t *ir_insn) 
     } else {
         new_node = ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
-            ir_insn->returns[0].dest_var,
+            true,
+            ir_insn->returns[0],
             lo12_proto,
             1,
             (ir_operand_t const[]){ir_insn->operands[0]}
@@ -643,22 +815,32 @@ static inline ir_insn_t *rv_isel_mem(rv_profile_t *profile, ir_insn_t *ir_insn) 
 
 // Perform instruction selection for expressions, memory access and branches.
 ir_insn_t *rv_isel(backend_profile_t *base_profile, ir_insn_t *ir_insn) {
-    rv_profile_t *profile = (void *)base_profile;
+    rv_profile_t const *profile = (void *)base_profile;
 
-    if (ir_insn->type == IR_INSN_EXPR1 && ir_insn->op1 == IR_OP1_mov) {
+    if (ir_insn->type == IR_INSN_EXPR1 && (ir_insn->op1 == IR_OP1_mov || ir_insn->op1 == IR_OP1_bitcast)) {
         if (ir_insn->operands[0].type == IR_OPERAND_TYPE_CONST) {
-            // Constant mov.
-            return rv_isel_const_mov(ir_insn);
+            if (ir_insn->op1 == IR_OP1_bitcast) {
+                // Constant bit-cast.
+                return rv_isel_const_bitcast(profile, ir_insn);
+            } else {
+                // Constant mov.
+                return rv_isel_const_mov(profile, ir_insn);
+            }
         } else {
-            // Register-register mov.
-            return rv_isel_rr_mov(ir_insn);
+            if (ir_insn->op1 == IR_OP1_bitcast) {
+                // Register-register bitcast.
+                return rv_isel_rr_bitcast(profile, ir_insn);
+            } else {
+                // Register-register mov.
+                return rv_isel_rr_mov(profile, ir_insn);
+            }
         }
     } else if (ir_insn->type == IR_INSN_JUMP) {
         // Jump instruction.
-        return rv_isel_jump(ir_insn);
+        return rv_isel_jump(profile, ir_insn);
     } else if (ir_insn->type == IR_INSN_BRANCH) {
         // Branch instruction patterns.
-        return rv_isel_branch(ir_insn);
+        return rv_isel_branch(profile, ir_insn);
     } else if (ir_insn->type == IR_INSN_EXPR2) {
         // Binary expressions.
         return rv_isel_expr2_ri(profile, ir_insn) ?: rv_isel_expr2_rr(profile, ir_insn);

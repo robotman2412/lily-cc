@@ -1,7 +1,7 @@
 
 // SPDX-FileCopyrightText: 2025 Julian Scheffers <julian@scheffers.net>
 // SPDX-FileType: SOURCE
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: 0BSD
 
 // Integer arithmetic routines that may be implicitly called by Lily-CC if the machine instruction is not available.
 

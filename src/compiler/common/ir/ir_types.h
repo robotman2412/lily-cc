@@ -22,8 +22,17 @@ typedef enum __attribute__((packed)) {
     IR_N_PRIM,
 } ir_prim_t;
 
+// Wehter a primitive is of float type.
+__attribute__((const)) static inline bool ir_prim_is_float(ir_prim_t prim) {
+    switch (prim) {
+        case IR_PRIM_f32:
+        case IR_PRIM_f64: return true;
+        default: return false;
+    }
+}
+
 // Whether a primitive is of integer type.
-static inline bool ir_prim_is_integer(ir_prim_t prim) {
+__attribute__((const)) static inline bool ir_prim_is_integer(ir_prim_t prim) {
     switch (prim) {
         case IR_PRIM_s8:
         case IR_PRIM_s16:
@@ -40,7 +49,7 @@ static inline bool ir_prim_is_integer(ir_prim_t prim) {
 }
 
 // Whether a primitive is signed.
-static inline bool ir_prim_is_signed(ir_prim_t prim) {
+__attribute__((const)) static inline bool ir_prim_is_signed(ir_prim_t prim) {
     switch (prim) {
         case IR_PRIM_s8:
         case IR_PRIM_s16:
@@ -52,7 +61,7 @@ static inline bool ir_prim_is_signed(ir_prim_t prim) {
 }
 
 // Get unsigned counterpart of primitive.
-static inline ir_prim_t ir_prim_as_unsigned(ir_prim_t prim) {
+__attribute__((const)) static inline ir_prim_t ir_prim_as_unsigned(ir_prim_t prim) {
     switch (prim) {
         case IR_PRIM_s8: return IR_PRIM_u8;
         case IR_PRIM_s16: return IR_PRIM_u16;
@@ -64,7 +73,7 @@ static inline ir_prim_t ir_prim_as_unsigned(ir_prim_t prim) {
 }
 
 // Get unsigned counterpart of primitive.
-static inline ir_prim_t ir_prim_as_signed(ir_prim_t prim) {
+__attribute__((const)) static inline ir_prim_t ir_prim_as_signed(ir_prim_t prim) {
     switch (prim) {
         case IR_PRIM_u8: return IR_PRIM_s8;
         case IR_PRIM_u16: return IR_PRIM_s16;
@@ -128,6 +137,8 @@ typedef enum __attribute__((packed)) {
     IR_INSN_MEMSET,
     // Machine instructions; target architecture-dependent.
     IR_INSN_MACHINE,
+    // Clobber intrinsic; all destinations of this will have an undefined, useless value from now on.
+    IR_INSN_CLOBBER,
 } ir_insn_type_t;
 
 // Type of IR operand.
@@ -172,6 +183,25 @@ typedef enum __attribute__((packed)) {
     IR_ARG_TYPE_IGNORED,
 } ir_arg_type_t;
 
+// Types of IR return value.
+typedef enum __attribute__((packed)) {
+    // Return value stored in IR variable.
+    IR_RETVAL_TYPE_VAR,
+    // Return value stored in a register.
+    IR_RETVAL_TYPE_REG,
+    // Return value (from function call) stored in struct.
+    IR_RETVAL_TYPE_STRUCT,
+} ir_retval_type_t;
+
+typedef enum __attribute__((packed)) {
+    // Function returns nothing (or "void").
+    IR_FUNCRET_NONE,
+    // Function returns a primitive type.
+    IR_FUNCRET_PRIM,
+    // Function returns a struct type.
+    IR_FUNCRET_STRUCT,
+} ir_funcret_type_t;
+
 // IR stack frame.
 typedef struct ir_frame      ir_frame_t;
 // IR function argument.
@@ -192,6 +222,8 @@ typedef struct ir_retval     ir_retval_t;
 typedef struct ir_insn       ir_insn_t;
 // IR code block.
 typedef struct ir_code       ir_code_t;
+// IR function return type.
+typedef struct ir_funcret    ir_funcret_t;
 // IR function.
 typedef struct ir_func       ir_func_t;
 
@@ -355,7 +387,7 @@ static inline ir_prim_t ir_operand_prim(ir_operand_t oper) {
         case IR_OPERAND_TYPE_VAR: return oper.var->prim_type;
         case IR_OPERAND_TYPE_MEM:
         case IR_OPERAND_TYPE_STRUCT: return oper.mem.data_type;
-        case IR_OPERAND_TYPE_REG: UNREACHABLE();
+        case IR_OPERAND_TYPE_REG: return IR_N_PRIM;
     }
     UNREACHABLE();
 }
@@ -383,15 +415,17 @@ struct ir_combinator {
 
 // IR instruction return value.
 struct ir_retval {
-    bool is_struct;
+    ir_retval_type_t type;
     union {
         ir_var_t   *dest_var;
         ir_frame_t *dest_struct;
+        size_t      dest_regno;
     };
 };
 
-#define IR_RETVAL_VAR(dest_var_)       ((ir_retval_t){.is_struct = false, .dest_var = (dest_var_)})
-#define IR_RETVAL_STRUCT(dest_struct_) ((ir_retval_t){.is_struct = true, .dest_struct = (dest_struct_)})
+#define IR_RETVAL_VAR(dest_var_)       ((ir_retval_t){.type = IR_RETVAL_TYPE_VAR, .dest_var = (dest_var_)})
+#define IR_RETVAL_REG(dest_regno_)     ((ir_retval_t){.type = IR_RETVAL_TYPE_REG, .dest_regno = (dest_regno_)})
+#define IR_RETVAL_STRUCT(dest_struct_) ((ir_retval_t){.type = IR_RETVAL_TYPE_STRUCT, .dest_struct = (dest_struct_)})
 
 // IR instruction.
 struct ir_insn {
@@ -453,30 +487,51 @@ struct ir_code {
     size_t       dfs_index;
 };
 
+// IR function return type.
+struct ir_funcret {
+    ir_funcret_type_t type;
+    union {
+        ir_prim_t prim_type;
+        struct {
+            uint64_t size, align;
+        } struct_type;
+    };
+};
+
 // IR function.
 struct ir_func {
     // Function name.
-    char      *name;
+    char        *name;
+    // Type of the function's return value.
+    ir_funcret_t rettype;
     // Number of arguments.
-    size_t     args_len;
+    size_t       args_len;
+    // Implicit out parameter pointer.
+    ir_var_t    *retval_ptr;
+    // The stack frame for arguments passed to this function on the stack.
+    // For variadic functions, may in reality be larger than what IR says.
+    ir_frame_t  *this_stackargs;
+    // The stack frame for arguments passed to callees on the stack.
+    // This may be larger than needed for some of the calls because it is re-used.
+    ir_frame_t  *callee_stackargs;
     // Function arguments.
-    ir_arg_t  *args;
+    ir_arg_t    *args;
     // Function entrypoint.
-    ir_code_t *entry;
+    ir_code_t   *entry;
     // Unordered list of code blocks.
-    dlist_t    code_list;
+    dlist_t      code_list;
     // Unordered list of variables.
-    dlist_t    vars_list;
+    dlist_t      vars_list;
     // Unordered list of stack frames.
-    dlist_t    frames_list;
+    dlist_t      frames_list;
     // Map from name to code blocks.
-    map_t      code_by_name;
+    map_t        code_by_name;
     // Map from name to variables.
-    map_t      var_by_name;
+    map_t        var_by_name;
     // Map from name to frames.
-    map_t      frame_by_name;
+    map_t        frame_by_name;
     // Enforce the SSA form.
-    bool       enforce_ssa;
+    bool         enforce_ssa;
 };
 
 // Byte size per primitive type.

@@ -16,5 +16,6 @@ add_library(util STATIC
     strong_malloc.c
     unreachable.c
     utf8.c
+    vec.c
 )
 target_include_directories(util PUBLIC .)

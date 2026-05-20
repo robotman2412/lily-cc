@@ -23,7 +23,7 @@ static char *test_c_compile_type() {
     char const   source[] = "void (*foobarb)();";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_compile_type>", source, sizeof(source) - 1);
-    tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
+    tokenizer_t *tctx     = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
     c_compiler_t *cc = c_compiler_create(
@@ -97,7 +97,7 @@ static char *test_c_compile_expr() {
     char const   source[] = "1 + 2 * 3";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_compile_expr>", source, sizeof(source) - 1);
-    tokenizer_t *tctx     = c_tkn_create(src, C_STD_def);
+    tokenizer_t *tctx     = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
     c_compiler_t *cc = c_compiler_create(
@@ -173,7 +173,7 @@ static char *test_c_compile_func() {
     // clang-format on
     cctx_t       *cctx = cctx_create();
     srcfile_t    *src  = srcfile_create(cctx, "<c_compile_func>", source, sizeof(source) - 1);
-    tokenizer_t  *tctx = c_tkn_create(src, C_STD_def);
+    tokenizer_t  *tctx = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
     c_compiler_t *cc   = c_compiler_create(
         cctx,
@@ -254,7 +254,7 @@ static char *test_c_compile_enum() {
     // clang-format on
     cctx_t       *cctx = cctx_create();
     srcfile_t    *src  = srcfile_create(cctx, "<test_c_compile_enum>", source, sizeof(source) - 1);
-    tokenizer_t  *tctx = c_tkn_create(src, C_STD_def);
+    tokenizer_t  *tctx = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
     c_compiler_t *cc   = c_compiler_create(
         cctx,
@@ -352,7 +352,7 @@ static char *test_c_compile_struct() {
     // clang-format on
     cctx_t       *cctx = cctx_create();
     srcfile_t    *src  = srcfile_create(cctx, "<test_c_compile_enum>", source, sizeof(source) - 1);
-    tokenizer_t  *tctx = c_tkn_create(src, C_STD_def);
+    tokenizer_t  *tctx = &c_tkn_create(src, C_STD_def)->base;
     c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
     c_compiler_t *cc   = c_compiler_create(
         cctx,

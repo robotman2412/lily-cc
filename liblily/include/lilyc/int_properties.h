@@ -1,7 +1,7 @@
 
 // SPDX-FileCopyrightText: 2025 Julian Scheffers <julian@scheffers.net>
 // SPDX-FileType: SOURCE
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: 0BSD
 
 // Placeholder definitions of integer properties for the Lily C Compiler.
 
@@ -68,12 +68,12 @@ typedef signed long   __lily_intptr;
 
 #define __LILY_U8_MIN__ 0
 #define __LILY_U8_MAX__ 255
-#define __LILY_S8_MIN__ -128
+#define __LILY_S8_MIN__ (-127 - 1)
 #define __LILY_S8_MAX__ 127
 
 #define __LILY_U16_MIN__ 0
 #define __LILY_U16_MAX__ 65535
-#define __LILY_S16_MIN__ -32768
+#define __LILY_S16_MIN__ (-32767 - 1)
 #define __LILY_S16_MAX__ 32767
 
 #define __LILY_U32_MIN__ 0u
@@ -86,7 +86,12 @@ typedef signed long   __lily_intptr;
 #define __LILY_S64_MIN__ (-9223372036854775807ll - 1)
 #define __LILY_S64_MAX__ 9223372036854775807ll
 
-#ifdef __SIZEOF_INT128__
+#ifdef __LILYC__ // Lily-CC extension: use 128-bit literals
+#define __LILY_U128_MIN__ 0u
+#define __LILY_U128_MAX__ 340282366920938463463374607431768211455u_x128
+#define __LILY_S128_MIN__ (-170141183460469231731687303715884105727_x128 - 1)
+#define __LILY_S128_MAX__ 170141183460469231731687303715884105727_x128
+#elif defined __SIZEOF_INT128__
 #define __LILY_U128_MIN__ 0u
 #define __LILY_U128_MAX__ ((__lily_u128) - 1)
 #define __LILY_S128_MIN__ ((__lily_s128)1 << 127)

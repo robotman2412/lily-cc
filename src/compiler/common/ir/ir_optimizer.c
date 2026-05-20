@@ -82,19 +82,31 @@ static bool strength_reduce_expr(ir_insn_t *expr) {
             ir_var_t *tmp4 = ir_var_create(expr->code->func, prim, NULL);
 
             ir_const_t shamt1 = {.prim_type = prim, .constl = ir_prim_sizes[prim] * 8 - 1};
-            ir_add_expr2(IR_BEFORE_INSN(expr), tmp1, IR_OP2_shr, lhs, IR_OPERAND_CONST(shamt1));
+            ir_add_expr2(IR_BEFORE_INSN(expr), IR_RETVAL_VAR(tmp1), IR_OP2_shr, lhs, IR_OPERAND_CONST(shamt1));
 
             ir_const_t shamt2 = {.prim_type = prim, .constl = ir_prim_sizes[prim] * 8 - bits};
-            ir_add_expr2(IR_BEFORE_INSN(expr), tmp2, IR_OP2_shr, IR_OPERAND_VAR(tmp1), IR_OPERAND_CONST(shamt2));
+            ir_add_expr2(
+                IR_BEFORE_INSN(expr),
+                IR_RETVAL_VAR(tmp2),
+                IR_OP2_shr,
+                IR_OPERAND_VAR(tmp1),
+                IR_OPERAND_CONST(shamt2)
+            );
 
-            ir_add_expr2(IR_BEFORE_INSN(expr), tmp3, IR_OP2_add, lhs, IR_OPERAND_VAR(tmp2));
+            ir_add_expr2(IR_BEFORE_INSN(expr), IR_RETVAL_VAR(tmp3), IR_OP2_add, lhs, IR_OPERAND_VAR(tmp2));
 
             ir_var_t *dest = expr->returns[0].dest_var;
             set_remove(&dest->assigned_at, expr);
             expr->returns[0].dest_var = tmp4;
             set_add(&tmp4->assigned_at, expr);
 
-            ir_add_expr2(IR_AFTER_INSN(expr), dest, IR_OP2_sub, IR_OPERAND_VAR(tmp4), IR_OPERAND_VAR(tmp2));
+            ir_add_expr2(
+                IR_AFTER_INSN(expr),
+                IR_RETVAL_VAR(dest),
+                IR_OP2_sub,
+                IR_OPERAND_VAR(tmp4),
+                IR_OPERAND_VAR(tmp2)
+            );
         }
         rhs.iconst.const128 = mask;
         oper                = IR_OP2_band;
@@ -239,6 +251,15 @@ bool opt_dead_code(ir_func_t *func) {
 
 // Try to constant-propagate a single expression.
 static bool const_prop_expr(ir_insn_t *expr) {
+    if (expr->returns[0].type != IR_RETVAL_TYPE_VAR) {
+        return false;
+    }
+    for (size_t i = 0; i < expr->operands_len; i++) {
+        if (expr->operands[i].type != IR_OPERAND_TYPE_CONST && expr->operands[i].type != IR_OPERAND_TYPE_VAR) {
+            return false;
+        }
+    }
+
     if (expr->type == IR_INSN_COMBINATOR) {
         // Flatten phi-nodes with only a single predecessor or all identical bindings.
         for (size_t i = 1; i < expr->combinators_len; i++) {

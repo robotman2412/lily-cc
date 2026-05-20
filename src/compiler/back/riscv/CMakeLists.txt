@@ -6,6 +6,7 @@
 cmake_minimum_required(VERSION 3.16.0)
 
 add_library(riscv-backend STATIC
+    rv_abi.c
     rv_backend.c
     rv_instructions.c
     rv_isel.c

@@ -7,27 +7,35 @@
 
 #include "arrays.h"
 #include "color.h"
+#include "strong_malloc.h"
 #include "utf8.h"
 
 #include <stdarg.h>
+#include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+#ifdef SRCFILE_CHECK_INO
+#include <sys/stat.h>
+#endif
 
 
 
 #ifndef NDEBUG
 // Enum names of `tokentype_t` values.
 char const *const tokentype_names[] = {
-    "TOKENTYPE_KEYWORD",
-    "TOKENTYPE_IDENT",
-    "TOKENTYPE_ICONST",
-    "TOKENTYPE_CCONST",
-    "TOKENTYPE_SCONST",
-    "TOKENTYPE_OTHER",
-    "TOKENTYPE_GARBAGE",
-    "TOKENTYPE_EOL",
-    "TOKENTYPE_EOF",
-    "TOKENTYPE_AST",
+    [TOKENTYPE_KEYWORD]    = "TOKENTYPE_KEYWORD",
+    [TOKENTYPE_IDENT]      = "TOKENTYPE_IDENT",
+    [TOKENTYPE_ICONST]     = "TOKENTYPE_ICONST",
+    [TOKENTYPE_CCONST]     = "TOKENTYPE_CCONST",
+    [TOKENTYPE_SCONST]     = "TOKENTYPE_SCONST",
+    [TOKENTYPE_OTHER]      = "TOKENTYPE_OTHER",
+    [TOKENTYPE_GARBAGE]    = "TOKENTYPE_GARBAGE",
+    [TOKENTYPE_WHITESPACE] = "TOKENTYPE_WHITESPACE",
+    [TOKENTYPE_EOL]        = "TOKENTYPE_EOL",
+    [TOKENTYPE_EOF]        = "TOKENTYPE_EOF",
+    [TOKENTYPE_AST]        = "TOKENTYPE_AST",
 };
 #endif
 
@@ -107,8 +115,6 @@ diagnostic_t *cctx_diagnostic(cctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const
     return diag;
 }
 
-// Helper function that determines what
-
 // Print a diagnostic.
 void print_diagnostic(diagnostic_t const *diag, FILE *to) {
     char const *const color[] = {
@@ -156,22 +162,29 @@ void print_diagnostic(diagnostic_t const *diag, FILE *to) {
     off_t line_start = off;
     bool  draw       = false;
     fprintf(to, "%5d | ", line);
-    for (int x = 0; x < max_chars; x++) {
+    bool eof = false;
+    for (int x = 0; x < max_chars && !eof; x++) {
         // The bit that prints the line.
         if (off == diag->pos.off + diag->pos.len) {
             color_fputs(ANSI_DEFAULT, to);
         } else if (off == diag->pos.off) {
             color_fputs(color[diag->lvl], to);
         }
-        int c = srcfile_getc_raw(pos.srcfile, &off);
-        if (c < 0) {
-            break;
+        int c;
+        if (x == max_chars - 1) {
+            c = '\n';
+        } else {
+            c = srcfile_getc_raw(pos.srcfile, &off);
+            if (c < 0) {
+                eof = true;
+                c   = '\n';
+            }
         }
         char buf[4];
         fwrite(buf, 1, utf8_encode(buf, 4, c), to);
 
         // The bit that prints the arrow.
-        if (c == '\n' || x >= max_chars) {
+        if (c == '\n') {
             if (draw) {
                 color_fputs(ANSI_DEFAULT, to);
             }
@@ -214,32 +227,70 @@ void print_diagnostic(diagnostic_t const *diag, FILE *to) {
 
 // Open or get a source file from compiler context.
 srcfile_t *srcfile_open(cctx_t *ctx, char const *path) {
-    srcfile_t *file = calloc(1, sizeof(srcfile_t));
-    if (!file)
-        goto err0;
+    // Check for existing source files.
+    for (size_t i = 0; i < ctx->srcs_len; i++) {
+        // Could try `realpath` on POSIX systems,
+        // decided against since a chdir during compilation shouldn't be happening anyway.
+        if (!strcmp(path, ctx->srcs[i]->path)) {
+            return ctx->srcs[i];
+        }
+    }
+
+    FILE *fd = fopen(path, "rb");
+    if (!fd) {
+        return NULL;
+    }
+
+#ifdef SRCFILE_CHECK_INO
+    // We do bother to check for identical inodes, as this is how #pragma once would work in C.
+    struct stat statbuf;
+    if (fstat(fileno(fd), &statbuf)) {
+        perror("fstat");
+        fclose(fd);
+        return NULL;
+    }
+    for (size_t i = 0; i < ctx->srcs_len; i++) {
+        if (ctx->srcs[i]->dev == statbuf.st_dev && ctx->srcs[i]->ino == statbuf.st_ino) {
+            fclose(fd);
+            return ctx->srcs[i];
+        }
+    }
+#endif
+
+    srcfile_t *file   = strong_calloc(1, sizeof(srcfile_t));
     file->ctx         = ctx;
     file->is_ram_file = false;
+    file->fd          = fd;
+    file->path        = strong_strdup(path);
+    char *sep         = strrchr(file->path, '/');
+    if (sep) {
+        file->name = sep + 1;
+    } else {
+        file->name = file->path;
+    }
 
-    file->path = strdup(path);
-    if (!file->path)
-        goto err1;
-
-    file->fd = fopen(path, "rb");
-    if (!file->fd)
-        goto err2;
-
-    if (!array_lencap_insert(&ctx->srcs, sizeof(void *), &ctx->srcs_len, &ctx->srcs_cap, &file, ctx->srcs_len))
-        goto err3;
+    array_lencap_insert_strong(&ctx->srcs, sizeof(void *), &ctx->srcs_len, &ctx->srcs_cap, &file, ctx->srcs_len);
 
     return file;
+}
 
-err3:
-    fclose(file->fd);
-err2:
-    free(file->path);
-err1:
-    free(file);
-err0:
+// Open or get a source file from compiler context, searching in the given paths.
+srcfile_t *srcfile_popen(cctx_t *ctx, char const *path, char const *const *search, size_t search_len) {
+    if (path[0] == '/') {
+        return srcfile_open(ctx, path);
+    }
+    size_t path_len = strlen(path);
+    for (size_t i = 0; i < search_len; i++) {
+        char *pathbuf = strong_malloc(path_len + strlen(search[i]) + 2);
+        strcpy(pathbuf, search[i]);
+        strcat(pathbuf, "/");
+        strcpy(pathbuf, path);
+        srcfile_t *res = srcfile_open(ctx, pathbuf);
+        free(pathbuf);
+        if (res) {
+            return res;
+        }
+    }
     return NULL;
 }
 
@@ -282,7 +333,7 @@ err0:
 
 // Read a raw byte from a source file.
 // Returns -1 on EOF.
-static int srcfile_read_raw_byte(srcfile_t *file, off_t off) {
+int srcfile_readb(srcfile_t *file, off_t off) {
     if (file->is_ram_file) {
         if (off >= (off_t)file->content_len) {
             return -1;
@@ -305,7 +356,7 @@ static int srcfile_read_raw_byte(srcfile_t *file, off_t off) {
 int srcfile_getc_raw(srcfile_t *file, off_t *off) {
     // Read first UTF-8 byte.
     int val  = 0;
-    int head = srcfile_read_raw_byte(file, *off);
+    int head = srcfile_readb(file, *off);
     if (head < 0) {
         return -1;
     }
@@ -332,7 +383,7 @@ int srcfile_getc_raw(srcfile_t *file, off_t *off) {
 
     // Try to read this amount of remaining bytes.
     for (; size; --size) {
-        int data = srcfile_read_raw_byte(file, *off);
+        int data = srcfile_readb(file, *off);
         if (data < 0 || (data & 0xc0) != 0x80) {
             val = 0xfffd;
             break;

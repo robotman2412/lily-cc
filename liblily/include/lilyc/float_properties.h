@@ -1,7 +1,7 @@
 
 // SPDX-FileCopyrightText: 2025 Julian Scheffers <julian@scheffers.net>
 // SPDX-FileType: SOURCE
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: 0BSD
 
 // Placeholder definitions of floating-point properties for the Lily C Compiler.
 

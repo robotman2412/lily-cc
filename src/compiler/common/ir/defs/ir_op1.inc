@@ -10,6 +10,8 @@
 
 // Move / cast value.
 IR_OP1_DEF(mov)
+// Bit-cast value.
+IR_OP1_DEF(bitcast)
 
 // Set if equal to zero.
 IR_OP1_DEF(seqz)

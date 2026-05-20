@@ -155,7 +155,7 @@ static int oper_precedence(token_t token, bool is_prefix) {
     if (token.type != TOKENTYPE_OTHER) {
         return -1;
     }
-    // TODO: sizeof, alignof, compount literal.
+    // TODO: sizeof, alignof, compound literal.
     switch (token.subtype) {
         case C_TKN_LPAR:
         case C_TKN_LBRAC:
@@ -247,7 +247,8 @@ static bool is_type_specifier(token_t token) {
         case C_KEYW_int:
         case C_KEYW_signed:
         case C_KEYW_unsigned:
-        case C_KEYW__Bool: return true;
+        case C_KEYW__Bool:
+        case C_KEYW___int128: return true;
         default: return false;
     }
 }
@@ -496,8 +497,10 @@ token_t c_parse_expr(c_parser_t *ctx, bool allow_compinit) {
             tkn_next(ctx->tkn_ctx);
             push(tkn_with_pos(res, pos_including(lpar.pos, rpar.pos)));
 
-        } else if (stack_len >= 1 && is_type_node(ctx, stack[stack_len - 1]) && peek.type == TOKENTYPE_OTHER
-                   && peek.subtype == C_TKN_LCURL) { // Recursively parse compound literals.
+        } else if (
+            stack_len >= 1 && is_type_node(ctx, stack[stack_len - 1]) && peek.type == TOKENTYPE_OTHER
+            && peek.subtype == C_TKN_LCURL
+        ) { // Recursively parse compound literals.
             token_t init     = c_parse_comp_init(ctx);
             token_t typename = pop();
             push(ast_from_va(C_AST_COMPLITERAL, 2, typename, init));
@@ -517,16 +520,18 @@ token_t c_parse_expr(c_parser_t *ctx, bool allow_compinit) {
             token_t val = pop();
             push(ast_from_va(C_AST_EXPR_SUFFIX, 2, op, val));
 
-        } else if (!is_operand(2) && is_operand(0) && stack_len >= 2 && is_prefix_oper_tkn(stack[stack_len - 2])
-                   && oper_precedence(stack[stack_len - 2], true) >= oper_precedence(peek, false)) { // Reduce prefix.
+        } else if (
+            !is_operand(2) && is_operand(0) && stack_len >= 2 && is_prefix_oper_tkn(stack[stack_len - 2])
+            && oper_precedence(stack[stack_len - 2], true) >= oper_precedence(peek, false)
+        ) { // Reduce prefix.
             token_t val = pop();
             token_t op  = pop();
             push(ast_from_va(C_AST_EXPR_PREFIX, 2, op, val));
 
-        } else if (is_operand(2) && is_operand(0) && oper_precedence(stack[stack_len - 2], false) >= 0
-                   && (!can_push
-                       || oper_precedence(stack[stack_len - 2], false)
-                              >= oper_precedence(peek, false))) { // Reduce infix.
+        } else if (
+            is_operand(2) && is_operand(0) && oper_precedence(stack[stack_len - 2], false) >= 0
+            && (!can_push || oper_precedence(stack[stack_len - 2], false) >= oper_precedence(peek, false))
+        ) { // Reduce infix.
             token_t rhs = pop();
             token_t op  = pop();
             token_t lhs = pop();
@@ -716,7 +721,7 @@ static token_t c_parse_decl(c_parser_t *ctx, bool allows_name, bool is_typedef) 
     token_t list = c_parse_type_qual_list(ctx);
     peek         = tkn_peek(ctx->tkn_ctx);
     bool empty   = peek.type != TOKENTYPE_OTHER
-                 || (peek.subtype != C_TKN_MUL && peek.subtype != C_TKN_LPAR && peek.subtype != C_TKN_LBRAC);
+                   || (peek.subtype != C_TKN_MUL && peek.subtype != C_TKN_LPAR && peek.subtype != C_TKN_LBRAC);
     if (allows_name && peek.type == TOKENTYPE_IDENT) {
         // Non-abstract decls can have idents here too.
         empty = false;
@@ -1223,8 +1228,10 @@ static void c_eat_delim(tokenizer_t *tkn_ctx, bool include_comma) {
                 tkn_next(tkn_ctx);
             }
             return;
-        } else if (peek.type == TOKENTYPE_OTHER
-                   && (peek.subtype == C_TKN_SEMIC || (include_comma && peek.subtype == C_TKN_COMMA))) {
+        } else if (
+            peek.type == TOKENTYPE_OTHER
+            && (peek.subtype == C_TKN_SEMIC || (include_comma && peek.subtype == C_TKN_COMMA))
+        ) {
             tkn_next(tkn_ctx);
             return;
         } else {
@@ -1238,11 +1245,11 @@ static void c_eat_delim(tokenizer_t *tkn_ctx, bool include_comma) {
 #ifndef NDEBUG
 // Print a token.
 void c_tkn_debug_print(token_t token) {
-    tkn_debug_print(token, c_keyw_name, c_asttype_name, c_tokentype_name);
+    tkn_debug_print(token, c_keyw_name, c_asttype_name, c_token_id);
 }
 
 // Build a test case that asserts an exact value for a token.
 void c_tkn_debug_testcase(token_t token) {
-    tkn_debug_testcase(token, c_keyw_name, c_asttype_name, c_tokentype_name);
+    tkn_debug_testcase(token, c_keyw_name, c_asttype_name, c_token_id);
 }
 #endif

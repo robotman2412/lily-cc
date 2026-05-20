@@ -6,12 +6,20 @@
 #pragma once
 
 #include "list.h"
+#include "vec.h"
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef _POSIX_C_SOURCE
+#define SRCFILE_CHECK_INO
+#endif
+
+#ifdef SRCFILE_CHECK_INO
+#include <sys/types.h>
+#endif
 
 
 // Diagnostic message severity level.
@@ -38,6 +46,8 @@ typedef enum {
     TOKENTYPE_OTHER,
     // Garbage (illegal characters).
     TOKENTYPE_GARBAGE,
+    // Whitespace (strval contains value).
+    TOKENTYPE_WHITESPACE,
     // End of line (for languages where that is important).
     TOKENTYPE_EOL,
     // End of file.
@@ -69,21 +79,31 @@ typedef struct token      token_t;
 // Source file.
 struct srcfile {
     // Associated frontend context.
-    cctx_t  *ctx;
+    cctx_t *ctx;
     // File path.
-    char    *path;
+    char   *path;
+#ifdef SRCFILE_CHECK_REALPATH
+    // Real file path (after symlinks).
+    char *realpath;
+#endif
     // File name; view of name in file path.
-    char    *name;
+    char const *name;
     // Is this stored in RAM (as opposed to on disk)?
-    bool     is_ram_file;
+    bool        is_ram_file;
     // Current offset of file descriptor (for file on disk).
-    off_t    fd_off;
+    off_t       fd_off;
     // File descriptor (for files on disk).
-    FILE    *fd;
+    FILE       *fd;
     // File content size (for files in RAM).
-    size_t   content_len;
+    size_t      content_len;
     // File content pointer (for files in RAM).
-    uint8_t *content;
+    uint8_t    *content;
+#ifdef SRCFILE_CHECK_INO
+    // Inode number (used for deduplication).
+    ino_t ino;
+    // Device number (used for deduplication).
+    dev_t dev;
+#endif
 };
 
 // Position in a source file.
@@ -154,6 +174,8 @@ struct token {
     token_t    *params;
 };
 
+VEC_TYPE_DEF(vec_token_t, token_t)
+
 
 
 // Get position from start to end (exclusive).
@@ -174,8 +196,13 @@ void print_diagnostic(diagnostic_t const *diag, FILE *to);
 
 // Open or get a source file from compiler context.
 srcfile_t *srcfile_open(cctx_t *ctx, char const *path);
+// Open or get a source file from compiler context, searching in the given paths.
+srcfile_t *srcfile_popen(cctx_t *ctx, char const *path, char const *const *search, size_t search_len);
 // Create a source file from binary data.
 srcfile_t *srcfile_create(cctx_t *ctx, char const *virt_path, void const *data, size_t len);
+// Read a single raw byte from a source file at `off`.
+// Returns the byte (0..255) or -1 on EOF. Does not do UTF-8 decoding.
+int        srcfile_readb(srcfile_t *file, off_t off);
 // Read a character from a source file and update offset.
 int        srcfile_getc_raw(srcfile_t *file, off_t *offset);
 // Read a character from a source file and update position.

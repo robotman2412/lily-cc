@@ -23,6 +23,37 @@ typedef enum {
     C_N_TKNS,
 } c_tokentype_t;
 
+// C string subtype.
+// Only relevant to the preprocessor.
+typedef enum {
+    // A normal string token as the C frontend wants it.
+    C_STR_NORMAL,
+    // A raw double quotes string.
+    C_STR_RAW_DQUOT,
+    // A raw single quotes string.
+    C_STR_RAW_SQUOT,
+    // An angle-brackets raw string.
+    // Synthetic subtype parsed by the preprocessor.
+    C_STR_ANGLEBRAC,
+} c_strtype_t;
+
+// C whitespace subtype.
+typedef enum {
+    // Plain old unprintable / whitespace characters.
+    C_WHITESPACE,
+    // Line comment.
+    C_LINE_COMMENT,
+    // Block comment.
+    C_BLOCK_COMMENT,
+} c_whitespace_t;
+
+// C identifier subtype.
+// Only relevant to the preprocessor.
+typedef enum {
+    C_IDENT,
+    C_PPNUMBER,
+} c_identtype_t;
+
 
 // C tokenizer handle.
 typedef struct c_tokenizer c_tokenizer_t;
@@ -34,36 +65,48 @@ struct c_tokenizer {
     tokenizer_t base;
     // Current C standard.
     int         c_std;
-    // Preprocessor tokenizer mode; keywords are left as idents.
+    // Preprocessor tokenizer mode; keywords are left as idents and whitespace is included.
     bool        preproc_mode;
+    // Keep comments instead of replacing them with a single space each.
+    bool        keep_comments;
 };
 
 
 
-#ifndef NDEBUG
 // Enum names of `c_keyw_t` values.
 extern char const *const c_keyw_name[];
 // Enum names of `c_tokentype_t` values.
-extern char const *const c_tokentype_name[];
-#endif
-
+extern char const *const c_token_id[];
 // List of keywords.
 extern char const *const c_keywords[];
 // List of tokens.
-extern char const *const c_tokens[];
+extern char const *const c_token_name[];
 
 
 // Create a new C tokenizer.
-tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std);
+c_tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std);
 // Test whether a character is legal as the first in a C identifier.
-bool         c_is_first_sym_char(int c);
+bool           c_is_first_sym_char(int c);
 // Test whether a character is legal in a C identifier.
-bool         c_is_sym_char(int c);
+bool           c_is_sym_char(int c);
+
+// Convert preprocessing number token to C number token.
+token_t c_tkn_conv_number(cctx_t *cctx, int c_std, token_t const *pre_tkn);
+// Tokenize string or character constant.
+token_t c_tkn_conv_str(cctx_t *cctx, int c_std, token_t const *pre_tkn);
+
+// Wrapper around `srcfile_getc` that handles `\` for newline escapes.
+int      c_srcfile_getc(srcfile_t *srcfile, pos_t *pos);
 // Get next token from C tokenizer.
-token_t      c_tkn_next(tokenizer_t *ctx);
+token_t  c_tkn_next(tokenizer_t *ctx);
 // Try to find the matching C keyword.
 // Returns -1 if not a keyword in the current C standard.
-c_keyw_t     c_keyw_get(tokenizer_t const *ctx, char const *name);
+c_keyw_t c_keyw_get(int c_std, char const *name);
+// Print the source representation of a token.
+void     c_tkn_print_src(token_t const *pre_tkn, FILE *to);
+// Append the source representation of a token to a heap-allocated string.
+// WARNING: Does not NUL-terminate!
+void     c_tkn_append_src(token_t const *pre_tkn, char **buf_ptr, size_t *len_ptr, size_t *cap_ptr);
 
 
 // Test if a token is a certain keyword.

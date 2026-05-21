@@ -362,6 +362,7 @@ bool c_value_is_assignable(c_compiler_t *ctx, c_value_t const *value, pos_t diag
         case C_PRIM_FLOAT:
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE: return true;
+        case C_N_PRIM: fprintf(stderr, "BUG: c_valud_is_assignable with invalid type primitive\n"); abort();
         case C_PRIM_VOID: cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Cannot assign to void"); return false;
         case C_COMP_STRUCT:
         case C_COMP_UNION:

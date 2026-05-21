@@ -56,6 +56,9 @@ typedef enum {
     // `void`
     C_PRIM_VOID,
 
+    // Number of type primitives.
+    C_N_PRIM,
+
     // Type is a struct.
     C_COMP_STRUCT,
     // Type is an union.
@@ -68,10 +71,10 @@ typedef enum {
     C_COMP_ARRAY,
     // Type is a function.
     C_COMP_FUNCTION,
-
-    // Number of type primitives.
-    C_N_PRIM = C_COMP_STRUCT,
 } c_prim_t;
+
+// Primitive types' names.
+extern char const *c_prim_name[];
 
 // Whether a primitive is an integer type.
 static inline bool c_prim_is_int(c_prim_t prim) {
@@ -90,6 +93,7 @@ static inline bool c_prim_is_int(c_prim_t prim) {
         case C_PRIM_SLLONG:
         case C_PRIM_S128:
         case C_PRIM_U128: return true;
+        case C_N_PRIM:
         case C_PRIM_FLOAT:
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE:
@@ -124,6 +128,7 @@ static inline bool c_prim_is_scalar(c_prim_t prim) {
         case C_PRIM_FLOAT:
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE: return true;
+        case C_N_PRIM:
         case C_PRIM_VOID:
         case C_COMP_STRUCT:
         case C_COMP_UNION:

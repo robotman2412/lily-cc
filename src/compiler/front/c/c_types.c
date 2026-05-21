@@ -27,6 +27,40 @@
 
 
 
+// Primitive types' names.
+char const *c_prim_name[] = {
+    [C_PRIM_BOOL]   = "C_PRIM_BOOL",
+    [C_PRIM_CHAR]   = "C_PRIM_CHAR",
+    [C_PRIM_SCHAR]  = "C_PRIM_SCHAR",
+    [C_PRIM_UCHAR]  = "C_PRIM_UCHAR",
+    [C_PRIM_SSHORT] = "C_PRIM_SSHORT",
+    [C_PRIM_USHORT] = "C_PRIM_USHORT",
+    [C_PRIM_SINT]   = "C_PRIM_SINT",
+    [C_PRIM_UINT]   = "C_PRIM_UINT",
+    [C_PRIM_SLONG]  = "C_PRIM_SLONG",
+    [C_PRIM_ULONG]  = "C_PRIM_ULONG",
+    [C_PRIM_SLLONG] = "C_PRIM_SLLONG",
+    [C_PRIM_ULLONG] = "C_PRIM_ULLONG",
+    [C_PRIM_S128]   = "C_PRIM_S128",
+    [C_PRIM_U128]   = "C_PRIM_U128",
+
+    [C_PRIM_FLOAT]   = "C_PRIM_FLOAT",
+    [C_PRIM_DOUBLE]  = "C_PRIM_DOUBLE",
+    [C_PRIM_LDOUBLE] = "C_PRIM_LDOUBLE",
+
+    [C_PRIM_VOID] = "C_PRIM_VOID",
+
+    [C_N_PRIM] = "C_N_PRIM",
+
+    [C_COMP_STRUCT]   = "C_COMP_STRUCT",
+    [C_COMP_UNION]    = "C_COMP_UNION",
+    [C_COMP_ENUM]     = "C_COMP_ENUM",
+    [C_COMP_POINTER]  = "C_COMP_POINTER",
+    [C_COMP_ARRAY]    = "C_COMP_ARRAY",
+    [C_COMP_FUNCTION] = "C_COMP_FUNCTION",
+};
+
+
 // Clean up a `c_type_t`.
 static void c_type_free(c_type_t *type) {
     if (type->primitive == C_COMP_FUNCTION) {
@@ -690,6 +724,7 @@ bool c_type_is_scalar(c_type_t const *type) {
         case C_PRIM_LDOUBLE:
         case C_COMP_ENUM:
         case C_COMP_POINTER: return true;
+        case C_N_PRIM:
         case C_PRIM_VOID:
         case C_COMP_STRUCT:
         case C_COMP_UNION:
@@ -731,6 +766,7 @@ bool c_type_is_pointer(c_type_t const *type) {
         case C_PRIM_FLOAT:
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE:
+        case C_N_PRIM:
         case C_PRIM_VOID:
         case C_COMP_STRUCT:
         case C_COMP_UNION:
@@ -781,6 +817,7 @@ bool c_type_is_identical(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b
         case C_COMP_ENUM:
         case C_COMP_POINTER: return true;
         case C_COMP_ARRAY: return c_type_is_compatible(ctx, a->inner->data, b->inner->data);
+        case C_N_PRIM:
         case C_COMP_FUNCTION: return false;
     }
     UNREACHABLE();
@@ -819,6 +856,7 @@ bool c_type_is_compatible(c_compiler_t *ctx, c_type_t const *a, c_type_t const *
         case C_COMP_ENUM:
         case C_COMP_POINTER: return true;
         case C_COMP_ARRAY: return c_type_is_compatible(ctx, a->inner->data, b->inner->data);
+        case C_N_PRIM:
         case C_COMP_FUNCTION: return false;
     }
     UNREACHABLE();
@@ -973,6 +1011,7 @@ bool c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out
         case C_PRIM_FLOAT: *align_out = *size_out = 4; return true;
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE: *align_out = *size_out = 8; return true;
+        case C_N_PRIM:
         case C_PRIM_VOID: return false;
         case C_COMP_STRUCT:
         case C_COMP_ENUM:
@@ -1061,6 +1100,7 @@ ir_prim_t c_prim_to_ir_type(c_compiler_t *ctx, c_prim_t prim) {
         case C_PRIM_FLOAT: return IR_PRIM_f32;
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE: return IR_PRIM_f64;
+        case C_N_PRIM:
         case C_PRIM_VOID:
         case C_COMP_STRUCT:
         case C_COMP_UNION:

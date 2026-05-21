@@ -2530,6 +2530,7 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
                     func->args[i].arg_type     = IR_ARG_TYPE_IGNORED;
                     func->args[i].ignored_prim = c_prim_to_ir_type(ctx, arg_type->primitive);
                     break;
+                case C_N_PRIM:
                 case C_PRIM_VOID: UNREACHABLE();
                 case C_COMP_STRUCT:
                 case C_COMP_UNION: {

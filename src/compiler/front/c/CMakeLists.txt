@@ -6,6 +6,7 @@
 cmake_minimum_required(VERSION 3.16.0)
 
 add_library(c-frontend STATIC
+    c_ast.c
     c_compiler.c
     c_parser.c
     c_prepass.c

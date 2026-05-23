@@ -9,6 +9,7 @@ add_library(c-frontend STATIC
     c_ast.c
     c_compiler.c
     c_parser.c
+    c_parser2.c
     c_prepass.c
     c_preproc.c
     c_tokenizer.c

@@ -73,7 +73,7 @@ struct tknoff {
 void tkn_ctx_delete(tokenizer_t *tkn_ctx);
 
 // Consume next token from the tokenizer.
-token_t tkn_next(tokenizer_t *tkn_ctx);
+token_t tkn_next(tokenizer_t *tkn_ctx) __attribute__((warn_unused_result));
 // Peek at (do not consume) next token from the tokenizer.
 token_t tkn_peek(tokenizer_t *tkn_ctx);
 // Peek at (do not consume) next token from the tokenizer.

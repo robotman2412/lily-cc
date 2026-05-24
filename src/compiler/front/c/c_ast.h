@@ -96,5 +96,5 @@ typedef char *c_ast_cstr_t;
     /* Debug-print the given AST node. */                                                                              \
     void c_ast_##name##_print(c_ast_##name##_t const *ast, FILE *to, int indent);                                      \
     /* Destroy an AST node. */                                                                                         \
-    void c_ast_##name##_destroy(c_ast_##name##_t *ast);
+    void c_ast_##name##_delete(c_ast_##name##_t *ast);
 #include "c_ast.inc"

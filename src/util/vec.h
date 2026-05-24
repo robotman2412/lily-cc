@@ -69,9 +69,9 @@ void rawvec_remove_n(rawvec_t *vec, size_t elem_size, size_t index, size_t count
 // Helper macros for direct calls to a corresponding `rawvec` function.
 #define rawvec_call(func, vec, ...)                                                                                    \
     ({                                                                                                                 \
-        __auto_type vec__rawvec_vall = (vec);                                                                          \
+        __auto_type vec__rawvec_call = (vec);                                                                          \
         ASSERT_IS_VEC(vec);                                                                                            \
-        func((rawvec_t *)(vec__rawvec_vall), VEC_ELEM_SIZE(vec) __VA_OPT__(, ) __VA_ARGS__);                           \
+        func((rawvec_t *)(vec__rawvec_call), VEC_ELEM_SIZE(vec) __VA_OPT__(, ) __VA_ARGS__);                           \
     })
 
 // Reserve space for at least N additional elements.

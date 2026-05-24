@@ -11,7 +11,7 @@
 
 // Print a character or the C escape sequence for it.
 void print_char_repr(unsigned int value, FILE *fd);
-// Print a string with quotes and C escape sequences.
+// Print a string with quotes escaped and C escape sequences.
 void print_cstr_repr(char const *str, size_t len, FILE *fd);
 
 // Format a character or the C escape sequence for it.

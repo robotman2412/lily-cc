@@ -37,7 +37,7 @@ valgrind-test: build-test
 
 .PHONY: gdb-test
 gdb-test: build-test
-	LILY_TEST_FORK=0 gdb ./build/test/lily-test -ex 'b testcase_failed' -ex 'r $(TEST)'
+	LILY_TEST_FORK=0 gdb ./build/test/lily-test -ex 'b testcase_failed'
 
 .PHONY: clean
 clean:

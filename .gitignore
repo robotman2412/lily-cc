@@ -5,3 +5,4 @@ a.out
 a.lines
 __pycache__
 .cache
+*.log

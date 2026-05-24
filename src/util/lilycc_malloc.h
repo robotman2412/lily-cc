@@ -6,14 +6,15 @@
 #pragma once
 
 #include <stdatomic.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 
 
-#ifndef NDEBUG
 // Total size allocated through Lily-CC's allocator.
 extern atomic_size_t lilycc_total_alloc;
-#endif
+// Allocation debug printing output.
+extern FILE         *lilycc_alloc_debugfd;
 
 // Lily-CC malloc; abort if out of memory.
 void *lilycc_malloc(size_t size) __attribute__((malloc, warn_unused_result));

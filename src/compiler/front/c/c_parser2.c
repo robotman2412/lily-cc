@@ -12,6 +12,7 @@
 #include "tokenizer.h"
 #include "vec.h"
 
+#include <assert.h>
 #include <stddef.h>
 #include <stdlib.h>
 
@@ -41,7 +42,7 @@ VEC_TYPE_DEF(vec_lr_entry_t, lr_entry_t)
 
 // Destroy an LR parser stack entry.
 // Does not free the memory of `entry` itself.
-static void lr_entry_destroy(lr_entry_t entry);
+static void lr_entry_delete(lr_entry_t entry);
 
 // Parse a direct (abstract) declaration.
 static c_ast_decl_t           *c_parse2_ddecl(c_parser_t *ctx, bool allows_name, bool is_typedef);
@@ -98,22 +99,6 @@ static bool is_first_expr_tkn(c_parser_t *ctx, token_t tkn) {
                 case C_TKN_DEC: return true;
                 default: return false;
             }
-    }
-}
-
-// Is this a valid token or AST node for an operand?
-static bool is_operand_node(lr_entry_t const *entry) {
-    switch (entry->tag) {
-        case LR_ENTRY_TOKEN:
-            switch (entry->token.type) {
-                case TOKENTYPE_CCONST:
-                case TOKENTYPE_ICONST:
-                case TOKENTYPE_SCONST:
-                case TOKENTYPE_IDENT: return true;
-                default: return false;
-            }
-        case LR_ENTRY_EXPR: return true;
-        case LR_ENTRY_TYPE: return false;
     }
 }
 
@@ -257,11 +242,11 @@ static bool is_spec_qual_list_tkn(c_parser_t *ctx, token_t token) {
 
 // Destroy an LR parser stack entry.
 // Does not free the memory of `entry` itself.
-static void lr_entry_destroy(lr_entry_t entry) {
+static void lr_entry_delete(lr_entry_t entry) {
     switch (entry.tag) {
         case LR_ENTRY_TOKEN: tkn_delete(entry.token); break;
-        case LR_ENTRY_EXPR: c_ast_expr_destroy(entry.expr); break;
-        case LR_ENTRY_TYPE: c_ast_type_name_destroy(entry.type); break;
+        case LR_ENTRY_EXPR: c_ast_expr_delete(entry.expr); break;
+        case LR_ENTRY_TYPE: c_ast_type_name_delete(entry.type); break;
     }
 }
 
@@ -284,7 +269,7 @@ static c_ast_init_t *c_parse2_comp_init_field_r(c_parser_t *ctx) {
         if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RBRAC) {
             cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ]");
             pos_t pos = pos_including(lbrac_pos, index->pos);
-            c_ast_expr_destroy(index);
+            c_ast_expr_delete(index);
             return c_ast_init_create_garbage(c_ast_garbage_create(pos));
         }
         token_t rbrac     = tkn_next(ctx->tkn_ctx);
@@ -293,7 +278,7 @@ static c_ast_init_t *c_parse2_comp_init_field_r(c_parser_t *ctx) {
         c_ast_init_t *inner = c_parse2_comp_init_field_r(ctx);
         if (inner->tag == C_AST_TAG_INIT_GARBAGE) {
             pos_t pos = inner->pos;
-            c_ast_init_destroy(inner);
+            c_ast_init_delete(inner);
             return c_ast_init_create_garbage(c_ast_garbage_create(pos));
         }
         return c_ast_init_create_indexed(c_ast_init_indexed_create(pos_including(lbrac_pos, rbrac_pos), index, inner));
@@ -307,12 +292,12 @@ static c_ast_init_t *c_parse2_comp_init_field_r(c_parser_t *ctx) {
             return c_ast_init_create_garbage(c_ast_garbage_create(dot_pos));
         }
         token_t        ident     = tkn_next(ctx->tkn_ctx);
-        c_ast_ident_t *ident_ast = c_ast_ident_create(ident.pos, ident.strval);
+        c_ast_ident_t *ident_ast = c_ast_ident_create(ident.pos, lilycc_strdup(ident.strval));
         tkn_delete(ident);
         c_ast_init_t *inner = c_parse2_comp_init_field_r(ctx);
         if (inner->tag == C_AST_TAG_INIT_GARBAGE) {
             pos_t pos = inner->pos;
-            c_ast_init_destroy(inner);
+            c_ast_init_delete(inner);
             return c_ast_init_create_garbage(c_ast_garbage_create(pos));
         }
         return c_ast_init_create_named(c_ast_init_named_create(dot_pos, ident_ast, inner));
@@ -432,11 +417,36 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
         stack.len--;                                                                                                   \
         pop_temporary_value;                                                                                           \
     })
-    // Is this a specific type of token?
-#define is_tkn(depth, subtype_)                                                                                        \
+    // Pop a token off the stack.
+#define pop_token()                                                                                                    \
+    ({                                                                                                                 \
+        lr_entry_t pop_temporary_value_2 = pop();                                                                      \
+        assert(pop_temporary_value_2.tag == LR_ENTRY_TOKEN);                                                           \
+        pop_temporary_value_2.token;                                                                                   \
+    })
+    // Pop an expr off the stack.
+#define pop_expr()                                                                                                     \
+    ({                                                                                                                 \
+        lr_entry_t pop_temporary_value_2 = pop();                                                                      \
+        assert(pop_temporary_value_2.tag == LR_ENTRY_EXPR);                                                            \
+        pop_temporary_value_2.expr;                                                                                    \
+    })
+    // Pop a type name off the stack.
+#define pop_type()                                                                                                     \
+    ({                                                                                                                 \
+        lr_entry_t pop_temporary_value_2 = pop();                                                                      \
+        assert(pop_temporary_value_2.tag == LR_ENTRY_TYPE);                                                            \
+        pop_temporary_value_2.type;                                                                                    \
+    })
+    // Is this a specific type of OTHER token?
+#define is_punct(depth, subtype_)                                                                                      \
     (stack.len > (depth) && stack.arr[stack.len - (depth) - 1].tag == LR_ENTRY_TOKEN                                   \
      && stack.arr[stack.len - (depth) - 1].token.type == TOKENTYPE_OTHER                                               \
      && stack.arr[stack.len - (depth) - 1].token.subtype == (subtype_))
+    // Is this a certain kind of token?
+#define is_token(depth, type_)                                                                                         \
+    (stack.len > (depth) && stack.arr[stack.len - (depth) - 1].tag == LR_ENTRY_TOKEN                                   \
+     && stack.arr[stack.len - (depth) - 1].token.type == (type_))
     // Is this an expression node?
 #define is_expr(depth)    (stack.len > (depth) && stack.arr[stack.len - (depth) - 1].tag == LR_ENTRY_EXPR)
     // Is this a type node?
@@ -448,7 +458,7 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
         peek          = tkn_peek(ctx->tkn_ctx);
         bool can_push = is_pushable_expr_tkn(peek);
 
-        if (is_tkn(0, C_TKN_LBRAC)) { // Recursively parse indexing.
+        if (is_punct(0, C_TKN_LBRAC)) { // Recursively parse indexing.
             c_ast_expr_t *rhs = c_parse2_expr(ctx);
             if (rhs->tag == C_AST_TAG_EXPR_GARBAGE) {
                 push_expr(rhs);
@@ -467,19 +477,19 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
             }
             pos_t rbrac_pos = peek2.pos;
             tkn_delete(tkn_next(ctx->tkn_ctx));
-            lr_entry_destroy(pop());
-            c_ast_expr_t *lhs = pop().expr;
+            lr_entry_delete(pop());
+            c_ast_expr_t *lhs = pop_expr();
             push_expr(c_ast_expr_create_index(c_ast_expr_index_create(pos_including(lhs->pos, rbrac_pos), lhs, rhs)));
 
-        } else if (is_tkn(0, C_TKN_LPAR)) { // Recursively parse exprs.
-            token_t lpar = pop().token;
+        } else if (is_punct(0, C_TKN_LPAR)) { // Recursively parse exprs.
+            token_t lpar = pop_token();
             void   *res;
             bool    is_type = false;
-            if (is_operand(0) && peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_RPAR) {
+            if (is_expr(0) && peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_RPAR) {
                 // Function call may have zero params.
                 pos_t pos = peek.pos;
                 pos.len   = 0;
-                res       = c_ast_expr_create_exprs(c_ast_expr_list_create(pos, (vec_c_ast_expr_t){0}));
+                res       = c_ast_expr_list_create(pos, (vec_c_ast_expr_t){0});
             } else {
                 // If not a function call, then it must have something in the parentheses.
                 res = c_parse2_exprs_or_type(ctx, &is_type);
@@ -510,45 +520,45 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
             && peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LCURL
         ) { // Recursively parse compound literals.
             c_ast_init_list_t *init     = c_parse2_comp_init(ctx);
-            c_ast_type_name_t *typename = pop().type;
+            c_ast_type_name_t *typename = pop_type();
             push_expr(c_ast_expr_create_compliteral(
                 c_ast_expr_compliteral_create(pos_including(init->pos, typename->pos), typename, init)
             ));
 
         } else if (
-            is_operand(1) && is_expr(0) //
+            is_expr(1) && is_expr(0) //
             && stack.arr[stack.len - 1].expr->tag == C_AST_TAG_EXPRS
         ) { // Reduce call.
-            c_ast_expr_t      *wrapped_params = pop().expr;
-            c_ast_expr_t      *func           = pop().expr;
+            c_ast_expr_t      *wrapped_params = pop_expr();
+            c_ast_expr_t      *func           = pop_expr();
             pos_t              pos            = pos_including(func->pos, wrapped_params->pos);
             c_ast_expr_list_t *params         = wrapped_params->expr_exprs;
             lilycc_free(wrapped_params);
             push_expr(c_ast_expr_create_call(c_ast_expr_call_create(pos, func, params)));
 
-        } else if (is_operand(0) && is_type(1)) { // Reduce cast.
-            c_ast_expr_t *val           = pop().expr;
-            c_ast_type_name_t *typename = pop().type;
+        } else if (is_expr(0) && is_type(1)) { // Reduce cast.
+            c_ast_expr_t *val           = pop_expr();
+            c_ast_type_name_t *typename = pop_type();
             push_expr(
                 c_ast_expr_create_cast(c_ast_expr_cast_create(pos_including(val->pos, typename->pos), typename, val))
             );
 
-        } else if (is_operand(1) && (is_tkn(0, C_TKN_INC) || is_tkn(0, C_TKN_DEC))) { // Reduce suffix.
-            token_t       op       = pop().token;
+        } else if (is_expr(1) && (is_punct(0, C_TKN_INC) || is_punct(0, C_TKN_DEC))) { // Reduce suffix.
+            token_t       op       = pop_token();
             c_tokentype_t oper     = op.subtype;
             pos_t         oper_pos = op.pos;
             tkn_delete(op);
-            c_ast_expr_t *val = pop().expr;
+            c_ast_expr_t *val = pop_expr();
             push_expr(c_ast_expr_create_suffix(
                 c_ast_expr_suffix_create(pos_including(oper_pos, val->pos), oper, oper_pos, val)
             ));
 
         } else if (
-            !is_operand(2) && is_operand(0) && stack.len >= 2 && is_prefix_oper_tkn(stack.arr[stack.len - 2].token)
+            !is_expr(2) && is_expr(0) && stack.len >= 2 && is_prefix_oper_tkn(stack.arr[stack.len - 2].token)
             && oper_precedence(stack.arr[stack.len - 2].token, true) >= oper_precedence(peek, false)
         ) { // Reduce prefix.
-            c_ast_expr_t *val      = pop().expr;
-            token_t       op       = pop().token;
+            c_ast_expr_t *val      = pop_expr();
+            token_t       op       = pop_token();
             c_tokentype_t oper     = op.subtype;
             pos_t         oper_pos = op.pos;
             tkn_delete(op);
@@ -557,18 +567,45 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
             ));
 
         } else if (
-            is_operand(2) && is_operand(0) && oper_precedence(stack.arr[stack.len - 2].token, false) >= 0
+            is_expr(2) && is_expr(0) && oper_precedence(stack.arr[stack.len - 2].token, false) >= 0
             && (!can_push || oper_precedence(stack.arr[stack.len - 2].token, false) >= oper_precedence(peek, false))
         ) { // Reduce infix.
-            c_ast_expr_t *rhs      = pop().expr;
-            token_t       op       = pop().token;
-            c_ast_expr_t *lhs      = pop().expr;
+            c_ast_expr_t *rhs      = pop_expr();
+            token_t       op       = pop_token();
+            c_ast_expr_t *lhs      = pop_expr();
             c_tokentype_t oper     = op.subtype;
             pos_t         oper_pos = op.pos;
             tkn_delete(op);
             push_expr(c_ast_expr_create_infix(
                 c_ast_expr_infix_create(pos_including(lhs->pos, rhs->pos), lhs, oper, oper_pos, rhs)
             ));
+
+        } else if (is_token(0, TOKENTYPE_ICONST) || is_token(0, TOKENTYPE_CCONST)) { // Reduce iconst / cconst.
+            token_t  tkn  = pop_token();
+            pos_t    pos  = tkn.pos;
+            c_prim_t prim = tkn.type == TOKENTYPE_CCONST ? C_PRIM_CHAR : tkn.subtype;
+            i128_t   val  = int128(tkn.ivalh, tkn.ival);
+            tkn_delete(tkn);
+            push_expr(c_ast_expr_create_iconst(c_ast_expr_iconst_create(pos, prim, val)));
+
+        } else if (is_token(0, TOKENTYPE_SCONST)) { // Reduce sconst.
+            token_t    tkn = pop_token();
+            pos_t      pos = tkn.pos;
+            vec_char_t val = {0};
+            // The `strval`, being a C-string too is always NUL-terminated.
+            // We simply copy in its NUL terminator too here.
+            vec_reserve_exact(&val, tkn.strval_len + 1);
+            val.len = tkn.strval_len + 1;
+            memcpy(val.arr, tkn.strval, val.len);
+            tkn_delete(tkn);
+            push_expr(c_ast_expr_create_sconst(c_ast_expr_sconst_create(pos, val)));
+
+        } else if (is_token(0, TOKENTYPE_IDENT)) { // Reduce ident.
+            token_t tkn = pop_token();
+            pos_t   pos = tkn.pos;
+            char   *val = lilycc_strdup(tkn.strval);
+            tkn_delete(tkn);
+            push_expr(c_ast_expr_create_ident(c_ast_ident_create(pos, val)));
 
         } else if (can_push) { // Push next token.
             token_t next = tkn_next(ctx->tkn_ctx);
@@ -629,7 +666,7 @@ err:;
     }
 
     for (size_t i = 0; i < stack.len; i++) {
-        lr_entry_destroy(stack.arr[i]);
+        lr_entry_delete(stack.arr[i]);
     }
     vec_clear(&stack);
 
@@ -686,7 +723,7 @@ static c_ast_decl_t *c_parse2_ddecl(c_parser_t *ctx, bool allows_name, bool is_t
     } else if (peek.type == TOKENTYPE_IDENT && allows_name) {
         // Identifier.
         token_t tkn = tkn_next(ctx->tkn_ctx);
-        inner       = c_ast_decl_create_ident(c_ast_ident_create(tkn.pos, tkn.strval));
+        inner       = c_ast_decl_create_ident(c_ast_ident_create(tkn.pos, lilycc_strdup(tkn.strval)));
         if (is_typedef) {
             if (ctx->func_body) {
                 set_add(&ctx->local_type_names, tkn.strval);
@@ -778,7 +815,9 @@ static c_ast_decl_t *c_parse2_ddecl(c_parser_t *ctx, bool allows_name, bool is_t
                 pos = pos_between(pos, peek.pos);
                 cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected )");
             }
-            inner = c_ast_decl_create_func(c_ast_decl_func_create(pos, c_ast_arg_def_list_create(pos, params), false));
+            inner = c_ast_decl_create_func(
+                c_ast_decl_func_create(pos, inner, c_ast_arg_def_list_create(pos, params), false)
+            );
         }
 
         peek = tkn_peek(ctx->tkn_ctx);
@@ -828,13 +867,14 @@ static c_ast_spec_qual_list_t *c_parse2_type_qual_list(c_parser_t *ctx) {
         token_t tkn = tkn_next(ctx->tkn_ctx);
         vec_push(&args, c_ast_spec_qual_create_keyw(tkn.pos, tkn.subtype));
         tkn_delete(tkn);
+        peek = tkn_peek(ctx->tkn_ctx);
     }
 
     return c_ast_spec_qual_list_create(pos, args);
 }
 
 // Parse one or more C expressions separated by commas or a type.
-// The return type is either `c_ast_type_name_t *` or `c_ast_exprs_t *`.
+// The return type is either `c_ast_type_name_t *` or `c_ast_expr_list_t *`.
 static void *c_parse2_exprs_or_type(c_parser_t *ctx, bool *is_type_out) {
     token_t tkn  = tkn_peek(ctx->tkn_ctx);
     *is_type_out = is_spec_qual_list_tkn(ctx, tkn);
@@ -848,7 +888,7 @@ static void *c_parse2_exprs_or_type(c_parser_t *ctx, bool *is_type_out) {
 // Parse a compound initializer or expression.
 static c_ast_initval_t *c_parse2_compinit_or_expr(c_parser_t *ctx) {
     token_t peek = tkn_peek(ctx->tkn_ctx);
-    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LBRAC) {
+    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LCURL) {
         return c_ast_initval_create_compound(c_parse2_comp_init(ctx));
     } else {
         return c_ast_initval_create_expr(c_parse2_expr(ctx));
@@ -957,7 +997,7 @@ c_ast_def_t *c_parse2_def(c_parser_t *ctx, bool allow_func_body) {
 
         c_ast_decl_t *decl = decls.arr[0]->decl;
         decls.arr[0]->decl = NULL;
-        c_ast_init_decl_destroy(decls.arr[0]);
+        c_ast_init_decl_delete(decls.arr[0]);
         vec_clear(&decls);
         return c_ast_def_create_func(
             c_ast_def_func_create(pos_including(spec_qual->pos, decls_pos), spec_qual, decl, body)
@@ -981,7 +1021,7 @@ exit:
 
 garbage:
     for (size_t i = 0; i < decls.len; i++) {
-        c_ast_init_decl_destroy(decls.arr[i]);
+        c_ast_init_decl_delete(decls.arr[i]);
     }
     vec_clear(&decls);
     return c_ast_def_create_garbage(c_ast_garbage_create(pos_including(spec_qual->pos, decls_pos)));
@@ -1001,7 +1041,7 @@ c_ast_struct_spec_t *c_parse2_struct_spec(c_parser_t *ctx) {
 
     if (peek.type == TOKENTYPE_IDENT) {
         token_t tkn = tkn_next(ctx->tkn_ctx);
-        name        = c_ast_ident_create(tkn.pos, tkn.strval);
+        name        = c_ast_ident_create(tkn.pos, lilycc_strdup(tkn.strval));
         tkn_delete(tkn);
         pos  = pos_including(pos, name->pos);
         peek = tkn_peek(ctx->tkn_ctx);
@@ -1058,7 +1098,7 @@ c_ast_enum_spec_t *c_parse2_enum_spec(c_parser_t *ctx) {
 
     if (peek.type == TOKENTYPE_IDENT) {
         token_t tkn = tkn_next(ctx->tkn_ctx);
-        name        = c_ast_ident_create(tkn.pos, tkn.strval);
+        name        = c_ast_ident_create(tkn.pos, lilycc_strdup(tkn.strval));
         tkn_delete(tkn);
         pos  = pos_including(pos, name->pos);
         peek = tkn_peek(ctx->tkn_ctx);
@@ -1090,7 +1130,7 @@ c_ast_enum_spec_t *c_parse2_enum_spec(c_parser_t *ctx) {
             break;
         } else {
             token_t        ident     = tkn_next(ctx->tkn_ctx);
-            c_ast_ident_t *ident_ast = c_ast_ident_create(ident.pos, ident.strval);
+            c_ast_ident_t *ident_ast = c_ast_ident_create(ident.pos, lilycc_strdup(ident.strval));
             tkn_delete(ident);
             peek = tkn_peek(ctx->tkn_ctx);
 
@@ -1162,7 +1202,7 @@ static c_ast_stmt_t *c_parse2_while(c_parser_t *ctx) {
     if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RPAR) {
         cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected )");
         pos_t pos = pos_including(keyw_pos, cond->pos);
-        c_ast_expr_list_destroy(cond);
+        c_ast_expr_list_delete(cond);
         return c_ast_stmt_create_garbage(c_ast_garbage_create(pos));
     }
     tkn_delete(tkn_next(ctx->tkn_ctx));
@@ -1203,7 +1243,7 @@ static c_ast_stmt_t *c_parse2_for(c_parser_t *ctx) {
         if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_SEMIC) {
             cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ;");
             pos_t pos = pos_including(keyw_pos, init->pos);
-            c_ast_stmt_destroy(init);
+            c_ast_stmt_delete(init);
             return c_ast_stmt_create_garbage(c_ast_garbage_create(pos));
         }
         tkn_delete(tkn_next(ctx->tkn_ctx));
@@ -1224,9 +1264,9 @@ static c_ast_stmt_t *c_parse2_for(c_parser_t *ctx) {
             cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ;");
             pos_t pos = pos_including(keyw_pos, cond->pos);
             if (init) {
-                c_ast_stmt_destroy(init);
+                c_ast_stmt_delete(init);
             }
-            c_ast_expr_list_destroy(cond);
+            c_ast_expr_list_delete(cond);
             return c_ast_stmt_create_garbage(c_ast_garbage_create(pos));
         }
         tkn_delete(tkn_next(ctx->tkn_ctx));
@@ -1247,13 +1287,13 @@ static c_ast_stmt_t *c_parse2_for(c_parser_t *ctx) {
         cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected )");
         pos_t pos = pos_between(keyw_pos, peek.pos);
         if (init) {
-            c_ast_stmt_destroy(init);
+            c_ast_stmt_delete(init);
         }
         if (cond) {
-            c_ast_expr_list_destroy(cond);
+            c_ast_expr_list_delete(cond);
         }
         if (inc) {
-            c_ast_expr_list_destroy(inc);
+            c_ast_expr_list_delete(inc);
         }
         return c_ast_stmt_create_garbage(c_ast_garbage_create(pos));
     }
@@ -1282,7 +1322,7 @@ static c_ast_stmt_t *c_parse2_if(c_parser_t *ctx) {
     if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RPAR) {
         cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected )");
         pos_t pos = pos_including(keyw_pos, cond->pos);
-        c_ast_expr_list_destroy(cond);
+        c_ast_expr_list_delete(cond);
         return c_ast_stmt_create_garbage(c_ast_garbage_create(pos));
     }
     tkn_delete(tkn_next(ctx->tkn_ctx));

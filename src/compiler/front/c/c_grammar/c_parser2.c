@@ -580,7 +580,7 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
                 c_ast_expr_infix_create(pos_including(lhs->pos, rhs->pos), lhs, oper, oper_pos, rhs)
             ));
 
-        } else if (is_token(0, TOKENTYPE_ICONST) || is_token(0, TOKENTYPE_CCONST)) { // Reduce iconst / cconst.
+        } else if (is_token(0, TOKENTYPE_ICONST) || is_token(0, TOKENTYPE_CCONST)) { // Reduce iconst / cconst to expr.
             token_t  tkn  = pop_token();
             pos_t    pos  = tkn.pos;
             c_prim_t prim = tkn.type == TOKENTYPE_CCONST ? C_PRIM_CHAR : tkn.subtype;
@@ -588,7 +588,31 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
             tkn_delete(tkn);
             push_expr(c_ast_expr_create_iconst(c_ast_expr_iconst_create(pos, prim, val)));
 
-        } else if (is_token(0, TOKENTYPE_SCONST)) { // Reduce sconst.
+        } else if (is_token(0, TOKENTYPE_IDENT)) { // Reduce ident to expr.
+            token_t tkn = pop_token();
+            pos_t   pos = tkn.pos;
+            char   *val = lilycc_strdup(tkn.strval);
+            tkn_delete(tkn);
+            push_expr(c_ast_expr_create_ident(c_ast_ident_create(pos, val)));
+
+        } else if (is_token(1, TOKENTYPE_SCONST) && is_token(0, TOKENTYPE_SCONST)) { // Reduce sconst pasting.
+            token_t rhs    = pop_token();
+            token_t lhs    = pop_token();
+            char   *strval = lilycc_malloc(lhs.strval_len + rhs.strval_len + 1);
+            memcpy(strval, lhs.strval, lhs.strval_len);
+            memcpy(strval + lhs.strval_len, rhs.strval, rhs.strval_len);
+            strval[lhs.strval_len + rhs.strval_len] = 0;
+            token_t combined                        = {
+                .pos        = pos_including(lhs.pos, rhs.pos),
+                .type       = TOKENTYPE_SCONST,
+                .strval     = strval,
+                .strval_len = lhs.strval_len + rhs.strval_len,
+            };
+            tkn_delete(lhs);
+            tkn_delete(rhs);
+            push_token(combined);
+
+        } else if (is_token(0, TOKENTYPE_SCONST) && peek.type != TOKENTYPE_SCONST) { // Reduce sconst to expr.
             token_t    tkn = pop_token();
             pos_t      pos = tkn.pos;
             vec_char_t val = {0};
@@ -599,13 +623,6 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
             memcpy(val.arr, tkn.strval, val.len);
             tkn_delete(tkn);
             push_expr(c_ast_expr_create_sconst(c_ast_expr_sconst_create(pos, val)));
-
-        } else if (is_token(0, TOKENTYPE_IDENT)) { // Reduce ident.
-            token_t tkn = pop_token();
-            pos_t   pos = tkn.pos;
-            char   *val = lilycc_strdup(tkn.strval);
-            tkn_delete(tkn);
-            push_expr(c_ast_expr_create_ident(c_ast_ident_create(pos, val)));
 
         } else if (can_push) { // Push next token.
             token_t next = tkn_next(ctx->tkn_ctx);
@@ -993,9 +1010,9 @@ c_ast_def_t *c_parse2_def(c_parser_t *ctx, bool allow_func_body) {
 
 
     // Decls are actually allowed to be empty.
-    peek              = tkn_peek(ctx->tkn_ctx);
-    pos_t   decls_pos = peek.pos;
-    decls_pos.len     = 0;
+    peek            = tkn_peek(ctx->tkn_ctx);
+    pos_t decls_pos = peek.pos;
+    decls_pos.len   = 0;
     if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_SEMIC) {
         tkn_delete(tkn_next(ctx->tkn_ctx));
         goto exit;

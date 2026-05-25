@@ -377,11 +377,23 @@ C_AST_STRUCT_DEF(def_func, \
 )
 C_AST_META_STRUCT_DEF(def_func)
 
+#define C_AST_STRUCT_DEF_def_static_assert(C_AST_STRUCT_DEF, C_AST_STRUCT_FIELD, C_AST_STRUCT_CHILD) \
+/* `_Static_assert(cond);` or `_Static_assert(cond, "msg");`. AST-only; */ \
+/* fully evaluated and dropped before the C IR stage. */ \
+C_AST_STRUCT_DEF(def_static_assert, \
+    /* Condition (must be a constant expression). */ \
+    C_AST_STRUCT_CHILD(def_static_assert, expr, cond) \
+    /* Optional diagnostic message (C23 makes the message optional). */ \
+    C_AST_STRUCT_CHILD(def_static_assert, expr, message) \
+)
+C_AST_META_STRUCT_DEF(def_static_assert)
+
 // One declaration; tagged union of the variants above.
 C_AST_UNION_DEF(def,
-    C_AST_UNION_CHILD(def, defs,     defs,    DEFS)
-    C_AST_UNION_CHILD(def, def_func, func,    DEF_FUNC)
-    C_AST_UNION_CHILD(def, garbage,  garbage, DEF_GARBAGE)
+    C_AST_UNION_CHILD(def, defs,              defs,          DEFS)
+    C_AST_UNION_CHILD(def, def_func,          func,          DEF_FUNC)
+    C_AST_UNION_CHILD(def, def_static_assert, static_assert, DEF_STATIC_ASSERT)
+    C_AST_UNION_CHILD(def, garbage,           garbage,       DEF_GARBAGE)
 )
 
 // List of declarations.

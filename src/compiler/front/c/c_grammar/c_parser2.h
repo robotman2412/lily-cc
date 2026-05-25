@@ -45,3 +45,5 @@ c_ast_enum_spec_t      *c_parse2_enum_spec(c_parser_t *ctx);
 c_ast_stmt_t           *c_parse2_stmt(c_parser_t *ctx);
 // Parse multiple statments.
 c_ast_stmt_list_t      *c_parse2_stmts(c_parser_t *ctx);
+// Parse a whole translation unit (all global declarations until EOF).
+c_ast_def_list_t       *c_parse2_trans_unit(c_parser_t *ctx);

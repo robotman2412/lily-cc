@@ -936,15 +936,64 @@ c_ast_spec_qual_list_t *c_parse2_spec_qual_list(c_parser_t *ctx, bool *is_typede
     return c_ast_spec_qual_list_create(pos, args);
 }
 
+// Parse a `_Static_assert(cond);` or `_Static_assert(cond, message);` declaration.
+// Caller has confirmed the next token is C_KEYW__Static_assert.
+static c_ast_def_t *c_parse2_static_assert(c_parser_t *ctx) {
+    token_t keyw = tkn_next(ctx->tkn_ctx);
+    pos_t   pos  = keyw.pos;
+    tkn_delete(keyw);
+
+    token_t peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_LPAR) {
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected (");
+        c_eat_delim(ctx->tkn_ctx, false);
+        return c_ast_def_create_garbage(c_ast_garbage_create(pos));
+    }
+    tkn_delete(tkn_next(ctx->tkn_ctx));
+
+    c_ast_expr_t *cond    = c_parse2_expr(ctx);
+    c_ast_expr_t *message = NULL;
+
+    peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_COMMA) {
+        tkn_delete(tkn_next(ctx->tkn_ctx));
+        message = c_parse2_expr(ctx);
+        peek    = tkn_peek(ctx->tkn_ctx);
+    }
+
+    if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RPAR) {
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected )");
+    } else {
+        pos = pos_including(pos, peek.pos);
+        tkn_delete(tkn_next(ctx->tkn_ctx));
+    }
+
+    peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_SEMIC) {
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ;");
+        c_eat_delim(ctx->tkn_ctx, false);
+    } else {
+        pos = pos_including(pos, peek.pos);
+        tkn_delete(tkn_next(ctx->tkn_ctx));
+    }
+
+    return c_ast_def_create_static_assert(c_ast_def_static_assert_create(pos, cond, message));
+}
+
 // Parse a variable/function declarations/definition.
 c_ast_def_t *c_parse2_def(c_parser_t *ctx, bool allow_func_body) {
+    token_t peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type == TOKENTYPE_KEYWORD && peek.subtype == C_KEYW__Static_assert) {
+        return c_parse2_static_assert(ctx);
+    }
+
     vec_c_ast_init_decl_t   decls = {0};
     bool                    is_typedef;
     c_ast_spec_qual_list_t *spec_qual = c_parse2_spec_qual_list(ctx, &is_typedef);
 
 
     // Decls are actually allowed to be empty.
-    token_t peek      = tkn_peek(ctx->tkn_ctx);
+    peek              = tkn_peek(ctx->tkn_ctx);
     pos_t   decls_pos = peek.pos;
     decls_pos.len     = 0;
     if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_SEMIC) {
@@ -1025,6 +1074,23 @@ garbage:
     }
     vec_clear(&decls);
     return c_ast_def_create_garbage(c_ast_garbage_create(pos_including(spec_qual->pos, decls_pos)));
+}
+
+// Parse a whole translation unit (all global declarations until EOF).
+c_ast_def_list_t *c_parse2_trans_unit(c_parser_t *ctx) {
+    vec_c_ast_def_t items = {0};
+    token_t         peek  = tkn_peek(ctx->tkn_ctx);
+    pos_t           pos   = peek.pos;
+    pos.len               = 0;
+
+    while (peek.type != TOKENTYPE_EOF) {
+        c_ast_def_t *unit = c_parse2_def(ctx, true);
+        pos               = pos_including(pos, unit->pos);
+        vec_push(&items, unit);
+        peek = tkn_peek(ctx->tkn_ctx);
+    }
+
+    return c_ast_def_list_create(pos, items);
 }
 
 // Parse a struct or union specifier/definition.

@@ -8,6 +8,7 @@
 #include "c_types.h"
 #include "compiler.h"
 #include "ir_types.h"
+#include "map.h"
 #include "vec.h"
 
 
@@ -53,6 +54,8 @@ typedef enum {
     CIR_EXPR_INC,
     CIR_EXPR_ADDROF,
     CIR_EXPR_DEREF,
+    CIR_EXPR_EXPRS,
+    CIR_EXPR_ASSIGN,
 } cir_expr_tag_t;
 
 // Tag for `cir_stmt_t`.
@@ -72,6 +75,34 @@ typedef enum {
     CIR_UNIT_FUNC,
 } cir_unit_tag_t;
 
+// Kind of a `cir_scope_t`.
+typedef enum {
+    // Translation-unit scope. Has no parent.
+    CIR_SCOPE_GLOBAL,
+    // Function scope. The only scope kind that owns the label namespace.
+    CIR_SCOPE_FUNC,
+    // Block scope (`{ ... }`).
+    CIR_SCOPE_STMTS,
+    // `for` loop initializer scope.
+    CIR_SCOPE_FOR,
+} cir_scope_kind_t;
+
+// Tag for `cir_scope_val_t`.
+typedef enum {
+    // Variable declaration.
+    CIR_SCOPE_VAL_DECL,
+    // Function declaration or definition.
+    CIR_SCOPE_VAL_FUNC,
+    // Enum constant.
+    CIR_SCOPE_VAL_ENUM_CONST,
+} cir_scope_val_tag_t;
+
+
+// A C scope including the regular, tag and optionally label namespaces.
+typedef struct cir_scope     cir_scope_t;
+// One entry in a scope's value namespace; tagged union of decl, func or enum constant.
+typedef struct cir_scope_val cir_scope_val_t;
+
 // A value looked up by identifier.
 typedef struct cir_ident      cir_ident_t;
 // A constant value of primitive type.
@@ -85,23 +116,29 @@ typedef struct cir_comp_value cir_comp_value_t;
 // A C value; tagged union of structs above.
 typedef struct cir_value      cir_value_t;
 
+// Common fields of all expression subtypes.
+typedef struct cir_expr_common cir_expr_common_t;
 // Function call operator.
-typedef struct cir_call    cir_call_t;
+typedef struct cir_call        cir_call_t;
 // A casting expression.
-typedef struct cir_cast    cir_cast_t;
+typedef struct cir_cast        cir_cast_t;
 // A ternary expression that takes a truth value and conditionally evaluates either branch.
-typedef struct cir_ternary cir_ternary_t;
+typedef struct cir_ternary     cir_ternary_t;
 // A two-operand calculation that returns one value.
 // The return type depends on operand types and operator.
-typedef struct cir_calc    cir_calc_t;
+typedef struct cir_calc        cir_calc_t;
 // A pre/post increment/decrement operation.
-typedef struct cir_inc     cir_inc_t;
+typedef struct cir_inc         cir_inc_t;
 // Address-of operator, may be emitted implicitly.
-typedef struct cir_addrof  cir_addrof_t;
+typedef struct cir_addrof      cir_addrof_t;
 // Pointer dereference operator.
-typedef struct cir_deref   cir_deref_t;
+typedef struct cir_deref       cir_deref_t;
+// A comma-separated expression list; evaluates each in order and yields the last value.
+typedef struct cir_exprs       cir_exprs_t;
+// An assignment of an rvalue to an lvalue.
+typedef struct cir_assign      cir_assign_t;
 // Any type of expression; tagged union of structs above as well as `cir_value_t`.
-typedef struct cir_expr    cir_expr_t;
+typedef struct cir_expr        cir_expr_t;
 
 // A compound statement (a sequence of statements wrapped in `{}`).
 typedef struct cir_stmts     cir_stmts_t;
@@ -133,6 +170,20 @@ VEC_TYPE_DEF(vec_cir_comp_store_t, cir_comp_store_t);
 VEC_TYPE_DEF(vec_cir_expr_t, cir_expr_t *);
 VEC_TYPE_DEF(vec_cir_stmt_t, cir_stmt_t *);
 VEC_TYPE_DEF(vec_cir_unit_t, cir_unit_t *);
+
+
+
+// Common fields of all expression subtypes.
+struct cir_expr_common {
+    // Source location this was compiled from.
+    pos_t pos;
+    // Resolved type; refcount ptr of `c_type_t`.
+    rc_t  type_rc;
+    // Is an lvalue.
+    bool  is_lvalue;
+    // Allows address-of operator.
+    bool  allow_addrof;
+};
 
 
 
@@ -184,10 +235,10 @@ struct cir_comp_value {
 
 // A C value; tagged union of value variants above.
 struct cir_value {
-    // Source location this was compiled from.
-    pos_t           pos;
+    // Common expression fields.
+    cir_expr_common_t common;
     // Active union variant.
-    cir_value_tag_t tag;
+    cir_value_tag_t   tag;
     union {
         cir_ident_t      *ident;
         cir_const_t      *iconst;
@@ -199,83 +250,102 @@ struct cir_value {
 
 // Function call operator.
 struct cir_call {
-    // Source location this was compiled from.
-    pos_t          pos;
+    // Common expression fields.
+    cir_expr_common_t common;
     // Function expression.
-    cir_expr_t    *func;
+    cir_expr_t       *func;
     // Function parameters.
-    vec_cir_expr_t args;
+    vec_cir_expr_t    args;
 };
 
 // A casting expression.
 struct cir_cast {
-    // Source location this was compiled from.
-    pos_t       pos;
+    // Common expression fields.
+    cir_expr_common_t common;
     // Cast target type; refcount ptr of `c_type_t`.
-    rc_t        type_rc;
+    rc_t              type_rc;
     // Expression to be cast.
-    cir_expr_t *value;
+    cir_expr_t       *value;
 };
 
 // A ternary expression that takes a truth value and conditionally evaluates either branch.
 struct cir_ternary {
-    // Source location this was compiled from.
-    pos_t       pos;
+    // Common expression fields.
+    cir_expr_common_t common;
     // Condition expression.
-    cir_expr_t *cond;
+    cir_expr_t       *cond;
     // Expression if true.
-    cir_expr_t *if_expr;
+    cir_expr_t       *if_expr;
     // Expression if false.
-    cir_expr_t *else_expr;
+    cir_expr_t       *else_expr;
 };
 
 // A two-operand calculation that returns one value.
 // The return type depends on operand types and operator.
 struct cir_calc {
-    // Source location this was compiled from.
-    pos_t         pos;
+    // Common expression fields.
+    cir_expr_common_t common;
     // Calculation operator.
-    cir_calc_op_t op;
+    cir_calc_op_t     op;
     // Left-hand side operand.
-    cir_expr_t   *lhs;
+    cir_expr_t       *lhs;
     // Right-hand side operand.
-    cir_expr_t   *rhs;
+    cir_expr_t       *rhs;
 };
 
 // A pre/post increment/decrement operation.
 struct cir_inc {
-    // Source location this was compiled from.
-    pos_t       pos;
+    // Common expression fields.
+    cir_expr_common_t common;
     // Value to increment/decrement.
-    cir_expr_t *expr;
+    cir_expr_t       *expr;
     // Is pre-increment/pre-decrement.
-    bool        is_pre;
-    // Is decrement/pre-decrement.
-    bool        is_dec;
+    bool              is_pre;
+    // Numeric value to add.
+    int64_t           increment;
 };
 
 // Address-of operator, may be emitted implicitly.
 struct cir_addrof {
-    // Source location this was compiled from.
-    pos_t       pos;
+    // Common expression fields.
+    cir_expr_common_t common;
     // Value to take the address of.
-    cir_expr_t *expr;
+    cir_expr_t       *expr;
 };
 
 // Pointer dereference operator.
 struct cir_deref {
-    // Source location this was compiled from.
-    pos_t       pos;
+    // Common expression fields.
+    cir_expr_common_t common;
     // Pointer to dereference.
-    cir_expr_t *expr;
+    cir_expr_t       *expr;
+};
+
+// A comma-separated expression list; evaluates each in order and yields the last value.
+// Must contain at least one expression.
+struct cir_exprs {
+    // Common expression fields.
+    cir_expr_common_t common;
+    // Sub-expressions in evaluation order.
+    vec_cir_expr_t    exprs;
+};
+
+// An assignment of an rvalue to an lvalue.
+struct cir_assign {
+    // Common expression fields.
+    cir_expr_common_t common;
+    // Destination lvalue.
+    cir_expr_t       *lhs;
+    // Value to assign.
+    cir_expr_t       *rhs;
 };
 
 // Any type of expression; tagged union of expression variants plus a wrapped value.
 struct cir_expr {
-    // Source location this was compiled from.
-    pos_t          pos;
+    // Common expression fields.
+    cir_expr_common_t common;
     // Active union variant.
-    cir_expr_tag_t tag;
+    cir_expr_tag_t    tag;
     union {
         cir_value_t   *value;
         cir_call_t    *call;
@@ -285,6 +355,8 @@ struct cir_expr {
         cir_inc_t     *inc;
         cir_addrof_t  *addrof;
         cir_deref_t   *deref;
+        cir_exprs_t   *exprs;
+        cir_assign_t  *assign;
     };
 };
 
@@ -420,9 +492,40 @@ struct cir_unit {
 // A translation unit; a sequence of global units.
 struct cir_trans_unit {
     // Source location this was compiled from.
-    pos_t           pos;
+    pos_t          pos;
     // Global units in source order.
-    vec_cir_unit_t  units;
+    vec_cir_unit_t units;
+};
+
+
+// One entry in a scope's value namespace; tagged union of decl, func or enum constant.
+// The scope owns this wrapper but the inner pointer is non-owning.
+struct cir_scope_val {
+    // Active union variant.
+    cir_scope_val_tag_t tag;
+    union {
+        cir_decl_t  *decl;
+        cir_func_t  *func;
+        cir_const_t *enum_const;
+    };
+};
+
+// A C scope holding non-owning references to the values, typedefs and tags declared within,
+// plus (on function scope) the labels namespace. Lookups walk the parent chain except for
+// labels, which only resolve against the enclosing function scope.
+struct cir_scope {
+    // Scope kind.
+    cir_scope_kind_t kind;
+    // Parent scope, or `NULL` for global scope.
+    cir_scope_t     *parent;
+    // Values namespace: `char *` -> `cir_scope_val_t *` (owned wrapper, non-owning inner ptr).
+    map_t            values;
+    // Typedefs namespace: `char *` -> `rc_t` of `c_type_t` (owned share, released on delete).
+    map_t            typedefs;
+    // Tag namespace (struct/union/enum types): `char *` -> `rc_t` of `c_type_t` (owned share).
+    map_t            tags;
+    // Labels namespace: `char *` -> `cir_label_t *` (non-owning). Only populated on function scope.
+    map_t            labels;
 };
 
 
@@ -448,50 +551,63 @@ cir_comp_value_t *cir_comp_value_create(pos_t pos, rc_t type_rc, vec_cir_comp_st
 void              cir_comp_value_delete(cir_comp_value_t *node);
 
 // Construct a `cir_value` node wrapping an identifier.
-cir_value_t *cir_value_create_ident(cir_ident_t *ident);
+cir_value_t *cir_value_create_ident(cir_expr_common_t common, cir_ident_t *ident);
 // Construct a `cir_value` node wrapping a primitive constant.
-cir_value_t *cir_value_create_const(cir_const_t *iconst);
+cir_value_t *cir_value_create_const(cir_expr_common_t common, cir_const_t *iconst);
 // Construct a `cir_value` node wrapping a compound constant.
-cir_value_t *cir_value_create_comp_const(cir_comp_const_t *comp_const);
+cir_value_t *cir_value_create_comp_const(cir_expr_common_t common, cir_comp_const_t *comp_const);
 // Construct a `cir_value` node wrapping a compound value.
-cir_value_t *cir_value_create_comp_value(cir_comp_value_t *comp_value);
+cir_value_t *cir_value_create_comp_value(cir_expr_common_t common, cir_comp_value_t *comp_value);
 // Destroy a `cir_value` node and the child it owns.
 void         cir_value_delete(cir_value_t *node);
 
+cir_expr_common_t cir_expr_common_clone(cir_expr_common_t const *common);
+
 // Construct a `cir_call` node.
-cir_call_t *cir_call_create(pos_t pos, cir_expr_t *func, vec_cir_expr_t args);
+cir_call_t *cir_call_create(cir_expr_common_t common, cir_expr_t *func, vec_cir_expr_t args);
 // Destroy a `cir_call` node and any owned children.
 void        cir_call_delete(cir_call_t *node);
 
 // Construct a `cir_cast` node.
-cir_cast_t *cir_cast_create(pos_t pos, rc_t type_rc, cir_expr_t *value);
+cir_cast_t *cir_cast_create(cir_expr_common_t common, cir_expr_t *value);
 // Destroy a `cir_cast` node and any owned children.
 void        cir_cast_delete(cir_cast_t *node);
 
 // Construct a `cir_ternary` node.
-cir_ternary_t *cir_ternary_create(pos_t pos, cir_expr_t *cond, cir_expr_t *if_expr, cir_expr_t *else_expr);
+cir_ternary_t  *
+    cir_ternary_create(cir_expr_common_t common, cir_expr_t *cond, cir_expr_t *if_expr, cir_expr_t *else_expr);
 // Destroy a `cir_ternary` node and any owned children.
-void           cir_ternary_delete(cir_ternary_t *node);
+void cir_ternary_delete(cir_ternary_t *node);
 
 // Construct a `cir_calc` node.
-cir_calc_t *cir_calc_create(pos_t pos, cir_calc_op_t op, cir_expr_t *lhs, cir_expr_t *rhs);
+cir_calc_t *cir_calc_create(cir_expr_common_t common, cir_calc_op_t op, cir_expr_t *lhs, cir_expr_t *rhs);
 // Destroy a `cir_calc` node and any owned children.
 void        cir_calc_delete(cir_calc_t *node);
 
 // Construct a `cir_inc` node.
-cir_inc_t *cir_inc_create(pos_t pos, cir_expr_t *expr, bool is_pre, bool is_dec);
+cir_inc_t *cir_inc_create(cir_expr_common_t common, cir_expr_t *expr, bool is_pre, int64_t increment);
 // Destroy a `cir_inc` node and any owned children.
 void       cir_inc_delete(cir_inc_t *node);
 
 // Construct a `cir_addrof` node.
-cir_addrof_t *cir_addrof_create(pos_t pos, cir_expr_t *expr);
+cir_addrof_t *cir_addrof_create(cir_expr_common_t common, cir_expr_t *expr);
 // Destroy a `cir_addrof` node and any owned children.
 void          cir_addrof_delete(cir_addrof_t *node);
 
 // Construct a `cir_deref` node.
-cir_deref_t *cir_deref_create(pos_t pos, cir_expr_t *expr);
+cir_deref_t *cir_deref_create(cir_expr_common_t common, cir_expr_t *expr);
 // Destroy a `cir_deref` node and any owned children.
 void         cir_deref_delete(cir_deref_t *node);
+
+// Construct a `cir_exprs` node.
+cir_exprs_t *cir_exprs_create(cir_expr_common_t common, vec_cir_expr_t exprs);
+// Destroy a `cir_exprs` node and any owned children.
+void         cir_exprs_delete(cir_exprs_t *node);
+
+// Construct a `cir_assign` node.
+cir_assign_t *cir_assign_create(cir_expr_common_t common, cir_expr_t *lhs, cir_expr_t *rhs);
+// Destroy a `cir_assign` node and any owned children.
+void          cir_assign_delete(cir_assign_t *node);
 
 // Construct a `cir_expr` node wrapping a value.
 cir_expr_t *cir_expr_create_value(cir_value_t *value);
@@ -509,6 +625,10 @@ cir_expr_t *cir_expr_create_inc(cir_inc_t *inc);
 cir_expr_t *cir_expr_create_addrof(cir_addrof_t *addrof);
 // Construct a `cir_expr` node wrapping a pointer dereference.
 cir_expr_t *cir_expr_create_deref(cir_deref_t *deref);
+// Construct a `cir_expr` node wrapping a comma-separated expression list.
+cir_expr_t *cir_expr_create_exprs(cir_exprs_t *exprs);
+// Construct a `cir_expr` node wrapping an assignment.
+cir_expr_t *cir_expr_create_assign(cir_assign_t *assign);
 // Destroy a `cir_expr` node and the child it owns.
 void        cir_expr_delete(cir_expr_t *node);
 
@@ -538,9 +658,9 @@ cir_return_t *cir_return_create(pos_t pos, cir_expr_t *value);
 void          cir_return_delete(cir_return_t *node);
 
 // Construct a `cir_stmts` node.
-cir_stmts_t     *cir_stmts_create(pos_t pos, vec_cir_stmt_t stmts);
+cir_stmts_t *cir_stmts_create(pos_t pos, vec_cir_stmt_t stmts);
 // Destroy a `cir_stmts` node and any owned children.
-void             cir_stmts_delete(cir_stmts_t *node);
+void         cir_stmts_delete(cir_stmts_t *node);
 
 // Construct a `cir_stmt_expr` node.
 cir_stmt_expr_t *cir_stmt_expr_create(pos_t pos, cir_expr_t *expr);
@@ -575,13 +695,49 @@ cir_func_t *cir_func_create(pos_t pos, rc_t type_rc, char *name, vec_cstr_t para
 void        cir_func_delete(cir_func_t *node);
 
 // Construct a `cir_unit` node wrapping a declaration.
-cir_unit_t       *cir_unit_create_decl(cir_decl_t *decl);
+cir_unit_t *cir_unit_create_decl(cir_decl_t *decl);
 // Construct a `cir_unit` node wrapping a function.
-cir_unit_t       *cir_unit_create_func(cir_func_t *func);
+cir_unit_t *cir_unit_create_func(cir_func_t *func);
 // Destroy a `cir_unit` node and the child it owns.
-void              cir_unit_delete(cir_unit_t *node);
+void        cir_unit_delete(cir_unit_t *node);
 
 // Construct a `cir_trans_unit` node.
 cir_trans_unit_t *cir_trans_unit_create(pos_t pos, vec_cir_unit_t units);
 // Destroy a `cir_trans_unit` node and any owned children.
 void              cir_trans_unit_delete(cir_trans_unit_t *node);
+
+
+// Create a new scope. `parent` must be `NULL` iff `kind == CIR_SCOPE_GLOBAL`.
+cir_scope_t *cir_scope_create(cir_scope_kind_t kind, cir_scope_t *parent);
+// Destroy a scope. Frees the owned value-entry wrappers and releases the typedef and tag
+// `rc_t` shares; the referenced nodes, the parent, and any child scopes are untouched.
+void         cir_scope_delete(cir_scope_t *scope);
+
+// Add a variable declaration to the value namespace of `scope`.
+// Returns `false` if `name` already exists in *this* scope (shadowing a parent is allowed).
+bool cir_scope_add_decl(cir_scope_t *scope, char const *name, cir_decl_t *decl);
+// Add a function to the value namespace of `scope`.
+// Returns `false` if `name` already exists in *this* scope.
+bool cir_scope_add_func(cir_scope_t *scope, char const *name, cir_func_t *func);
+// Add an enum constant to the value namespace of `scope`.
+// Returns `false` if `name` already exists in *this* scope.
+bool cir_scope_add_enum_const(cir_scope_t *scope, char const *name, cir_const_t *enum_const);
+// Add a typedef to `scope`. Takes ownership of one `rc_t` share, released on scope delete.
+// Returns `false` if `name` already exists in *this* scope (in which case `type_rc` is released).
+bool cir_scope_add_typedef(cir_scope_t *scope, char const *name, rc_t type_rc);
+// Add a tag (struct/union/enum type) to `scope`. Takes ownership of one `rc_t` share.
+// Returns `false` if `name` already exists in *this* scope (in which case `type_rc` is released).
+bool cir_scope_add_tag(cir_scope_t *scope, char const *name, rc_t type_rc);
+// Add a label to the enclosing function scope, walking up from `scope`.
+// Returns `false` if no function scope is found, or if `name` is already a label in it.
+bool cir_scope_add_label(cir_scope_t *scope, char const *name, cir_label_t *label);
+
+// Look up a value by `name`, walking parent scopes. Returns `NULL` if not found.
+cir_scope_val_t *cir_scope_lookup_value(cir_scope_t const *scope, char const *name);
+// Look up a typedef by `name`, walking parent scopes. Returns `NULL` if not found.
+rc_t             cir_scope_lookup_typedef(cir_scope_t const *scope, char const *name);
+// Look up a tag by `name`, walking parent scopes. Returns `NULL` if not found.
+rc_t             cir_scope_lookup_tag(cir_scope_t const *scope, char const *name);
+// Look up a label by `name` in the enclosing function scope only (no parent walk past it).
+// Returns `NULL` if no function scope is found or the label is not defined there.
+cir_label_t     *cir_scope_lookup_label(cir_scope_t const *scope, char const *name);

@@ -487,7 +487,7 @@ C_AST_META_STRUCT_DEF(stmt_goto)
 
 // One statement; tagged union of the variants above.
 C_AST_UNION_DEF(stmt,
-    C_AST_UNION_CHILD(stmt, stmt_list,    stmts,    STMTS)
+    C_AST_UNION_CHILD(stmt, stmt_list,    stmts,   STMTS)
     C_AST_UNION_CHILD(stmt, stmt_for,     for,     STMT_FOR)
     C_AST_UNION_CHILD(stmt, stmt_while,   while,   STMT_WHILE)
     C_AST_UNION_CHILD(stmt, stmt_if,      if,      STMT_IF)

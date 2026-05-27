@@ -8,6 +8,9 @@ cmake_minimum_required(VERSION 3.16.0)
 add_library(c-frontend STATIC
     c_grammar/c_ast.c
     c_grammar/c_parser2.c
+    c_semantic/c_compile_expr.c
+    c_semantic/c_compile_stmt.c
+    c_semantic/c_compile.c
     c_semantic/c_ir.c
     c_compiler.c
     c_parser.c

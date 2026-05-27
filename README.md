@@ -1,5 +1,5 @@
 # The Lily C compiler
-![Icon image](icon.png)
+![Icon image](logo64.png)
 
 A work-in-progress C compiler for fun. It aims to one day be C23 (and some GNU extensions) compliant.
 # Lily-CC current progress

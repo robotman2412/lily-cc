@@ -44,8 +44,6 @@ cir_expr_t *c_compile2_expr_exprs(c_compiler_t *cc, cir_scope_t *scope, c_ast_ex
 // Compile a compound literal/initializer given a known target type.
 cir_value_t *c_compile2_compinit(c_compiler_t *cc, cir_scope_t *scope, c_ast_init_list_t const *init);
 
-// Performs type promotions and array decay on an expression.
-cir_expr_t *c_compile2_promotion(c_compiler_t *cc, cir_expr_t *value, bool promote_to_int);
 // Multiply/divide a value by the size of the inner type of a given pointer type.
 // Compile error if the inner type of the pointer is an incomplete type.
 // Needed because pointer arithmetic in the C IR does not respect the inner type's size.

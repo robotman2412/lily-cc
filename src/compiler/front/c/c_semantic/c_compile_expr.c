@@ -595,8 +595,56 @@ err0:
 
 // Compile a suffix expression.
 cir_expr_t *c_compile2_expr_suffix(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_suffix_t const *expr) {
-    fprintf(stderr, "TODO: c_compile2_expr_suffix\n");
-    abort();
+    cir_expr_t *val = c_compile2_expr(cc, scope, expr->val);
+    if (!val) {
+        return NULL;
+    }
+
+    if (expr->oper != C_TKN_DEC && expr->oper != C_TKN_INC) {
+        fprintf(stderr, "BUG: Unhandled suffix operator\n");
+        abort();
+    }
+
+    // All prefix operators require pointer or integral type.
+    c_type_t const *type = val->common.type_rc->data;
+    if (type->primitive >= C_PRIM_VOID && type->primitive != C_COMP_POINTER && type->primitive != C_COMP_POINTER) {
+        cctx_diagnostic(
+            cc->cctx,
+            expr->oper_pos,
+            DIAG_ERR,
+            "Invalid argument type supplied to %s",
+            c_token_name[expr->oper]
+        );
+        goto err0;
+    }
+    type = val->common.type_rc->data;
+
+    cir_expr_common_t common = {
+        .pos          = expr->pos,
+        .is_lvalue    = false,
+        .allow_addrof = false,
+        .type_rc      = rc_share(val->common.type_rc),
+    };
+
+    int64_t inc = 1;
+    if (type->primitive == C_COMP_POINTER) {
+        uint64_t size, align;
+        if (!c_type_get_size(cc, type, &size, &align)) {
+            cctx_diagnostic(cc->cctx, expr->pos, DIAG_ERR, "Cannot do pointer arithmetic with incomplete inner type");
+            goto err1;
+        }
+        inc = (int64_t)size;
+    }
+    if (expr->oper == C_TKN_DEC) {
+        inc = -inc;
+    }
+    return cir_expr_create_inc(cir_inc_create(common, val, false, inc));
+
+err1:
+    rc_delete(common.type_rc);
+err0:
+    cir_expr_delete(val);
+    return NULL;
 }
 
 // Compile a cast expression.

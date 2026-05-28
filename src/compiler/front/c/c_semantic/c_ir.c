@@ -180,10 +180,13 @@ void cir_ternary_delete(cir_ternary_t *node) {
 }
 
 
-cir_calc_t *cir_calc_create(cir_expr_common_t common, cir_calc_op_t op, cir_expr_t *lhs, cir_expr_t *rhs) {
+cir_calc_t *cir_calc_create(
+    cir_expr_common_t common, cir_calc_op_t op, bool is_assign, cir_expr_t *lhs, cir_expr_t *rhs
+) {
     cir_calc_t *node = lilycc_malloc(sizeof(cir_calc_t));
     node->common     = common;
     node->op         = op;
+    node->is_assign  = is_assign;
     node->lhs        = lhs;
     node->rhs        = rhs;
     return node;

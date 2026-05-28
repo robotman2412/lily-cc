@@ -17,16 +17,16 @@
 vec_cir_stmt_t *c_compile2_stmt(c_compiler_t *cc, cir_scope_t *scope, c_ast_stmt_t const *stmt) {
     cir_stmt_t *res;
     switch (stmt->tag) {
-        case C_AST_TAG_STMT_FOR: res = c_compile2_stmt_for(cc, scope, stmt->stmt_for);
-        case C_AST_TAG_STMTS: res = c_compile2_stmt_stmts(cc, scope, stmt->stmt_stmts);
-        case C_AST_TAG_STMT_WHILE: res = c_compile2_stmt_while(cc, scope, stmt->stmt_while);
-        case C_AST_TAG_STMT_IF: res = c_compile2_stmt_if(cc, scope, stmt->stmt_if);
-        case C_AST_TAG_STMT_SWITCH: res = c_compile2_stmt_switch(cc, scope, stmt->stmt_switch);
-        case C_AST_TAG_STMT_CASE: res = c_compile2_stmt_case(cc, scope, stmt->stmt_case);
-        case C_AST_TAG_STMT_LABEL: res = c_compile2_stmt_label(cc, scope, stmt->stmt_label);
-        case C_AST_TAG_STMT_RETURN: res = c_compile2_stmt_return(cc, scope, stmt->stmt_return);
-        case C_AST_TAG_STMT_GOTO: res = c_compile2_stmt_goto(cc, scope, stmt->stmt_goto);
-        case C_AST_TAG_STMT_EXPR: res = c_compile2_stmt_expr(cc, scope, stmt->stmt_expr);
+        case C_AST_TAG_STMT_FOR: res = c_compile2_stmt_for(cc, scope, stmt->stmt_for); break;
+        case C_AST_TAG_STMTS: res = c_compile2_stmt_stmts(cc, scope, stmt->stmt_stmts); break;
+        case C_AST_TAG_STMT_WHILE: res = c_compile2_stmt_while(cc, scope, stmt->stmt_while); break;
+        case C_AST_TAG_STMT_IF: res = c_compile2_stmt_if(cc, scope, stmt->stmt_if); break;
+        case C_AST_TAG_STMT_SWITCH: res = c_compile2_stmt_switch(cc, scope, stmt->stmt_switch); break;
+        case C_AST_TAG_STMT_CASE: res = c_compile2_stmt_case(cc, scope, stmt->stmt_case); break;
+        case C_AST_TAG_STMT_LABEL: res = c_compile2_stmt_label(cc, scope, stmt->stmt_label); break;
+        case C_AST_TAG_STMT_RETURN: res = c_compile2_stmt_return(cc, scope, stmt->stmt_return); break;
+        case C_AST_TAG_STMT_GOTO: res = c_compile2_stmt_goto(cc, scope, stmt->stmt_goto); break;
+        case C_AST_TAG_STMT_EXPR: res = c_compile2_stmt_expr(cc, scope, stmt->stmt_expr); break;
         case C_AST_TAG_STMT_DEF: return c_compile2_stmt_def(cc, scope, stmt->stmt_def);
         case C_AST_TAG_STMT_GARBAGE: return NULL;
         default: abort();

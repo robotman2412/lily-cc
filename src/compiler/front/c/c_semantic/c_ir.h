@@ -282,11 +282,16 @@ struct cir_ternary {
 
 // A two-operand calculation that returns one value.
 // The return type depends on operand types and operator.
+// If `is_assign` is set, `lhs` must be an lvalue; the operator is applied to its current value
+// and `rhs`, the result is stored back to `lhs`, and that stored value is the expression result.
+// This represents compound assignment (`+=`, `-=`, ...) without duplicating the lvalue.
 struct cir_calc {
     // Common expression fields.
     cir_expr_common_t common;
     // Calculation operator.
     cir_calc_op_t     op;
+    // Whether this is a compound-assignment form (store result back to `lhs`).
+    bool              is_assign;
     // Left-hand side operand.
     cir_expr_t       *lhs;
     // Right-hand side operand.
@@ -580,7 +585,9 @@ cir_ternary_t  *
 void cir_ternary_delete(cir_ternary_t *node);
 
 // Construct a `cir_calc` node.
-cir_calc_t *cir_calc_create(cir_expr_common_t common, cir_calc_op_t op, cir_expr_t *lhs, cir_expr_t *rhs);
+cir_calc_t *cir_calc_create(
+    cir_expr_common_t common, cir_calc_op_t op, bool is_assign, cir_expr_t *lhs, cir_expr_t *rhs
+);
 // Destroy a `cir_calc` node and any owned children.
 void        cir_calc_delete(cir_calc_t *node);
 

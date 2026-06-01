@@ -575,6 +575,12 @@ struct ir_func {
     map_t        var_by_name;
     // Map from name to frames.
     map_t        frame_by_name;
+    // Number that will be used for the next variable.
+    size_t       var_next_id;
+    // Number that will be used for the next stack frame.
+    size_t       frame_next_id;
+    // Number that will be used for the next code block.
+    size_t       code_next_id;
     // Enforce the SSA form.
     bool         enforce_ssa;
 };

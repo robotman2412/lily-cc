@@ -37,7 +37,7 @@ static void cg_isel(backend_profile_t *profile, ir_code_t *code) {
     code->func->enforce_ssa = false;
     ir_insn_t *cur          = container_of(code->insns.tail, ir_insn_t, node);
     while (cur) {
-        if (cur->type != IR_INSN_MACHINE && cur->type != IR_INSN_COMBINATOR) {
+        if (cur->type != IR_INSN_MACHINE && cur->type != IR_INSN_COMBINATOR && cur->type != IR_INSN_CLOBBER) {
             ir_insn_t *res = profile->backend->isel(profile, cur);
             if (!res) {
                 fprintf(stderr, "BUG: Backend cannot select an instruction for `");
@@ -326,6 +326,17 @@ static void cg_normalize_op_order(ir_insn_t *insn) {
 void codegen(backend_profile_t *profile, ir_func_t *func) {
     ir_func_to_ssa(func);
 
+    // Perform optimizations.
+    // TODO: Make this configurable.
+    ir_optimize(func);
+
+    // Replace arithmetic that is not supported with function calls.
+    dlist_foreach_node(ir_code_t, code, &func->code_list) {
+        dlist_foreach_node(ir_insn_t, insn, &code->insns) {
+            cg_functionize_exprs(profile, insn);
+        }
+    }
+
     // Expand the ABI definition.
     assert(func->enforce_ssa);
     func->enforce_ssa = false;
@@ -335,19 +346,11 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
         cg_xabi(profile, code);
     }
 
-    // Perform optimizations.
-    // TODO: Make this configurable.
+    // Post-ABI optimization pass.
     ir_optimize(func);
 
     // Remove jumps that go the the next code block linearly.
     cg_remove_jumps(func);
-
-    // Replace arithmetic that is not supported with function calls.
-    dlist_foreach_node(ir_code_t, code, &func->code_list) {
-        dlist_foreach_node(ir_insn_t, insn, &code->insns) {
-            cg_functionize_exprs(profile, insn);
-        }
-    }
 
     // TODO: Convert operations into ones which fit in the CPU's registers.
 

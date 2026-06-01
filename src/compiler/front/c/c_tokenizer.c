@@ -53,7 +53,7 @@ static long c_keyw_since[] = {
 
 // Create a new C tokenizer.
 tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std) {
-    c_tokenizer_t *tkn_ctx    = strong_calloc(sizeof(c_tokenizer_t), 1);
+    c_tokenizer_t *tkn_ctx    = strong_calloc(1, sizeof(c_tokenizer_t));
     tkn_ctx->base.cctx        = srcfile->ctx;
     tkn_ctx->base.pos.srcfile = srcfile;
     tkn_ctx->base.file        = srcfile;

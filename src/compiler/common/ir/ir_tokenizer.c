@@ -28,7 +28,7 @@ char const *const ir_keywords[] = {
 
 // Create an IR text tokenizer.
 tokenizer_t *ir_tkn_create(srcfile_t *srcfile) {
-    tokenizer_t *tkn_ctx = strong_calloc(sizeof(tokenizer_t), 1);
+    tokenizer_t *tkn_ctx = strong_calloc(1, sizeof(tokenizer_t));
     tkn_ctx->cctx        = srcfile->ctx;
     tkn_ctx->pos.srcfile = srcfile;
     tkn_ctx->file        = srcfile;

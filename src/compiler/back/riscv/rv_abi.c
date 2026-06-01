@@ -115,8 +115,8 @@ ir_insn_t *rv_xabi_return(backend_profile_t *profile, ir_insn_t *ret_insn) {
     // clang-format on
     uint64_t const ptr_size = rv64 ? 8 : 4;
 
-    bool retval_outparam = ret_insn->returns_len && ret_insn->operands[0].type == IR_OPERAND_TYPE_STRUCT
-                           && ret_insn->operands[0].struct_frame->size > 2 * ptr_size;
+    bool      retval_outparam = ret_insn->returns_len && ret_insn->operands[0].type == IR_OPERAND_TYPE_STRUCT
+                                && ret_insn->operands[0].struct_frame->size > 2 * ptr_size;
     uint64_t  ret_size;
     ir_prim_t retval_prim;
     if (retval_outparam) {
@@ -353,8 +353,8 @@ ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
         .call_frame_offset = 0,
     };
 
-    bool retval_outparam = call_insn->returns_len && call_insn->returns[0].type == IR_RETVAL_TYPE_STRUCT
-                           && call_insn->returns[0].dest_struct->size > 2 * ptr_size;
+    bool      retval_outparam = call_insn->returns_len && call_insn->returns[0].type == IR_RETVAL_TYPE_STRUCT
+                                && call_insn->returns[0].dest_struct->size > 2 * ptr_size;
     uint64_t  ret_size;
     ir_prim_t retval_prim;
     if (retval_outparam) {
@@ -374,7 +374,7 @@ ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
     bool is_float_ret = (f32 && retval_prim == IR_PRIM_f32) || (f64 && retval_prim == IR_PRIM_f64);
     bool is_int_ret   = ret_size && ret_size <= 2 * ptr_size;
 
-    for (size_t i = 0; i < call_insn->operands_len; i++) {
+    for (size_t i = 1; i < call_insn->operands_len; i++) {
         ir_operand_t const *oper = &call_insn->operands[i];
         ir_prim_t           prim = ir_operand_prim(*oper);
         if (oper->type == IR_OPERAND_TYPE_STRUCT) {
@@ -417,14 +417,14 @@ ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
         if (rve && rv_profile->is_rve) {
             ir_add_clobber_va(
                 cc.loc,
-                2,
-                RV_RVE_NONRET_A_REGS(f, c), // a2-a7
-                RV_RVE_T_REGS(f, c)         // t0-t6
+                4 + 3,
+                RV_RVE_NONRET_A_REGS(f, c), // a2-a5
+                RV_RVE_T_REGS(f, c)         // t0-t2
             );
         } else if (rve) {
             ir_add_clobber_va(
                 cc.loc,
-                2,
+                6 + 7 + 10,
                 RV_NONRET_A_REGS(f, c), // a2-a7
                 RV_ALL_T_REGS(f, c),    // t0-t6
                 RV_NONRVE_S_REGS(f, c)  // s2-s11
@@ -432,7 +432,7 @@ ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
         } else {
             ir_add_clobber_va(
                 cc.loc,
-                2,
+                6 + 7,
                 RV_NONRET_A_REGS(f, c), // a2-a7
                 RV_ALL_T_REGS(f, c)     // t0-t6
             );
@@ -476,10 +476,10 @@ ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
         cc.loc   = IR_AFTER_INSN(new_node);
     }
 
-    if (is_float_ret) {
+    if (is_float_ret || (is_int_ret && !retval_outparam)) {
         new_node = ir_add_expr1(cc.loc, call_insn->returns[0], IR_OP1_bitcast, IR_OPERAND_REG(RV_REG_FA(0)));
         cc.loc   = IR_AFTER_INSN(new_node);
-    } else if (call_insn->returns[0].type == IR_RETVAL_TYPE_STRUCT && !retval_outparam) {
+    } else if (call_insn->returns_len == 1 && call_insn->returns[0].type == IR_RETVAL_TYPE_STRUCT && !retval_outparam) {
         uint64_t tmp = ret_size;
         if (tmp > ptr_size) {
             tmp = ptr_size;
@@ -502,10 +502,9 @@ ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
                 (int64_t)(ret_size - ptr_size)
             );
         }
-    } else if (is_int_ret && !retval_outparam) {
-        new_node = ir_add_expr1(cc.loc, call_insn->returns[0], IR_OP1_bitcast, IR_OPERAND_REG(RV_REG_A(0)));
-        cc.loc   = IR_AFTER_INSN(new_node);
     }
+
+    ir_insn_delete(call_insn);
 
     return new_node;
 }

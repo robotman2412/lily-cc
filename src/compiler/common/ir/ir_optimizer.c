@@ -95,18 +95,10 @@ static bool strength_reduce_expr(ir_insn_t *expr) {
 
             ir_add_expr2(IR_BEFORE_INSN(expr), IR_RETVAL_VAR(tmp3), IR_OP2_add, lhs, IR_OPERAND_VAR(tmp2));
 
-            ir_var_t *dest = expr->returns[0].dest_var;
-            set_remove(&dest->assigned_at, expr);
-            expr->returns[0].dest_var = tmp4;
-            set_add(&tmp4->assigned_at, expr);
+            ir_retval_t dest = expr->returns[0];
+            ir_insn_set_return(expr, 0, IR_RETVAL_VAR(tmp4));
 
-            ir_add_expr2(
-                IR_AFTER_INSN(expr),
-                IR_RETVAL_VAR(dest),
-                IR_OP2_sub,
-                IR_OPERAND_VAR(tmp4),
-                IR_OPERAND_VAR(tmp2)
-            );
+            ir_add_expr2(IR_AFTER_INSN(expr), dest, IR_OP2_sub, IR_OPERAND_VAR(tmp4), IR_OPERAND_VAR(tmp2));
         }
         rhs.iconst.const128 = mask;
         oper                = IR_OP2_band;
@@ -283,26 +275,32 @@ static bool const_prop_expr(ir_insn_t *expr) {
         ir_var_delete(expr->returns[0].dest_var);
         return true;
 
-    } else if (expr->type == IR_INSN_EXPR2 && expr->operands[0].type == IR_OPERAND_TYPE_CONST
-               && expr->operands[1].type == IR_OPERAND_TYPE_CONST) {
+    } else if (
+        expr->type == IR_INSN_EXPR2 && expr->operands[0].type == IR_OPERAND_TYPE_CONST
+        && expr->operands[1].type == IR_OPERAND_TYPE_CONST
+    ) {
         // Calculate binary expression at compile time.
         ir_const_t iconst = ir_calc2(expr->op2, expr->operands[0].iconst, expr->operands[1].iconst);
         ir_var_replace(expr->returns[0].dest_var, IR_OPERAND_CONST(iconst));
         ir_var_delete(expr->returns[0].dest_var);
         return true;
 
-    } else if (expr->type == IR_INSN_EXPR1 && expr->op1 == IR_OP1_mov && expr->operands[0].type == IR_OPERAND_TYPE_VAR
-               && expr->returns[0].dest_var->prim_type == expr->operands[0].var->prim_type) {
+    } else if (
+        expr->type == IR_INSN_EXPR1 && expr->op1 == IR_OP1_mov && expr->operands[0].type == IR_OPERAND_TYPE_VAR
+        && expr->returns[0].dest_var->prim_type == expr->operands[0].var->prim_type
+    ) {
         // Move between two variables of the same type; replace the destination.
         ir_var_replace(expr->returns[0].dest_var, IR_OPERAND_VAR(expr->operands[0].var));
         ir_var_delete(expr->returns[0].dest_var);
         return true;
 
-    } else if (expr->type == IR_INSN_EXPR2 && expr->op2 == IR_OP2_mul
-               && ((expr->operands[1].type == IR_OPERAND_TYPE_CONST && expr->operands[1].iconst.consth == 0
-                    && expr->operands[1].iconst.constl == 0)
-                   || (expr->operands[0].type == IR_OPERAND_TYPE_CONST && expr->operands[0].iconst.consth == 0
-                       && expr->operands[0].iconst.constl == 0))) {
+    } else if (
+        expr->type == IR_INSN_EXPR2 && expr->op2 == IR_OP2_mul
+        && ((expr->operands[1].type == IR_OPERAND_TYPE_CONST && expr->operands[1].iconst.consth == 0
+             && expr->operands[1].iconst.constl == 0)
+            || (expr->operands[0].type == IR_OPERAND_TYPE_CONST && expr->operands[0].iconst.consth == 0
+                && expr->operands[0].iconst.constl == 0))
+    ) {
         // Multiply by zero; replace with constant zero.
         ir_var_replace(
             expr->returns[0].dest_var,
@@ -318,16 +316,20 @@ static bool const_prop_expr(ir_insn_t *expr) {
         ir_var_delete(expr->returns[0].dest_var);
         return true;
 
-    } else if (expr->type == IR_INSN_EXPR2 && (expr->op2 == IR_OP2_mul || expr->op2 == IR_OP2_div)
-               && expr->operands[1].type == IR_OPERAND_TYPE_CONST && expr->operands[1].iconst.consth == 0
-               && expr->operands[1].iconst.constl == 1) {
+    } else if (
+        expr->type == IR_INSN_EXPR2 && (expr->op2 == IR_OP2_mul || expr->op2 == IR_OP2_div)
+        && expr->operands[1].type == IR_OPERAND_TYPE_CONST && expr->operands[1].iconst.consth == 0
+        && expr->operands[1].iconst.constl == 1
+    ) {
         // Multiply / divide by one (rhs version); replace with variable.
         ir_var_replace(expr->returns[0].dest_var, expr->operands[0]);
         ir_var_delete(expr->returns[0].dest_var);
         return true;
 
-    } else if (expr->type == IR_INSN_EXPR2 && expr->op2 == IR_OP2_mul && expr->operands[0].type == IR_OPERAND_TYPE_CONST
-               && expr->operands[0].iconst.consth == 0 && expr->operands[0].iconst.constl == 1) {
+    } else if (
+        expr->type == IR_INSN_EXPR2 && expr->op2 == IR_OP2_mul && expr->operands[0].type == IR_OPERAND_TYPE_CONST
+        && expr->operands[0].iconst.consth == 0 && expr->operands[0].iconst.constl == 1
+    ) {
         // Multiply by one (lhs version); replace with variable.
         ir_var_replace(expr->returns[0].dest_var, expr->operands[1]);
         ir_var_delete(expr->returns[0].dest_var);

@@ -458,9 +458,10 @@ ir_frame_t *ir_frame_create(ir_func_t *func, uint64_t size, uint64_t align, char
         frame->name = strong_strdup(name);
     } else {
         char const *fmt = "frame%zu";
-        size_t      len = snprintf(NULL, 0, fmt, func->frames_list.len);
+        size_t      len = snprintf(NULL, 0, fmt, func->frame_next_id);
         frame->name     = calloc(1, len + 1);
-        snprintf(frame->name, len + 1, fmt, func->frames_list.len);
+        snprintf(frame->name, len + 1, fmt, func->frame_next_id);
+        func->frame_next_id++;
     }
     frame->func  = func;
     frame->size  = size;
@@ -483,9 +484,10 @@ ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
         var->name = strong_strdup(name);
     } else {
         char const *fmt = "var%zu";
-        size_t      len = snprintf(NULL, 0, fmt, func->vars_list.len);
+        size_t      len = snprintf(NULL, 0, fmt, func->var_next_id);
         var->name       = calloc(1, len + 1);
-        snprintf(var->name, len + 1, fmt, func->vars_list.len);
+        snprintf(var->name, len + 1, fmt, func->var_next_id);
+        func->var_next_id++;
     }
     name_free_assert(func, var->name);
     var->prim_type   = type;
@@ -516,6 +518,13 @@ void ir_var_delete(ir_var_t *var) {
         var->func->args[var->arg_index].arg_type     = IR_ARG_TYPE_IGNORED;
         var->func->args[var->arg_index].ignored_prim = var->prim_type;
     }
+#ifndef NDEBUG
+    for (size_t i = 0; i < var->func->args_len; i++) {
+        if (var->func->args[i].arg_type == IR_ARG_TYPE_VAR) {
+            assert(var->func->args[i].var != var);
+        }
+    }
+#endif
 
     // Delete the variable itself.
     map_remove(&var->func->var_by_name, var->name);
@@ -539,8 +548,10 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
                 = insn->type == IR_INSN_COMBINATOR ? &insn->combinators[i].bind : &insn->operands[i];
             if (operand->type == IR_OPERAND_TYPE_VAR && operand->var == var) {
                 ir_insn_set_operand(insn, i, value);
-            } else if (operand->type == IR_OPERAND_TYPE_MEM && operand->mem.base_type == IR_MEMBASE_VAR
-                       && operand->mem.base_var == var) {
+            } else if (
+                operand->type == IR_OPERAND_TYPE_MEM && operand->mem.base_type == IR_MEMBASE_VAR
+                && operand->mem.base_var == var
+            ) {
                 ir_prim_t data_type = operand->mem.data_type;
                 switch (value.type) {
                     case IR_OPERAND_TYPE_CONST:
@@ -592,9 +603,10 @@ ir_code_t *ir_code_create(ir_func_t *func, char const *name) {
         code->name = strong_strdup(name);
     } else {
         char const *fmt = "code%zu";
-        size_t      len = snprintf(NULL, 0, fmt, func->code_list.len);
+        size_t      len = snprintf(NULL, 0, fmt, func->code_next_id);
         code->name      = calloc(1, len + 1);
-        snprintf(code->name, len + 1, fmt, func->code_list.len);
+        snprintf(code->name, len + 1, fmt, func->code_next_id);
+        func->code_next_id++;
     }
     name_free_assert(func, code->name);
     map_set(&func->code_by_name, code->name, code);
@@ -736,6 +748,22 @@ void ir_insn_delete(ir_insn_t *insn) {
 void ir_insn_set_operand(ir_insn_t *insn, size_t index, ir_operand_t operand) {
     assert(index < insn->operands_len);
 
+#ifndef NDEBUG
+    if (operand.type == IR_OPERAND_TYPE_VAR) {
+        assert(operand.var);
+    } else if (operand.type == IR_OPERAND_TYPE_MEM) {
+        if (operand.mem.base_type == IR_MEMBASE_VAR) {
+            assert(operand.mem.base_var);
+        } else if (operand.mem.base_type == IR_MEMBASE_CODE) {
+            assert(operand.mem.base_code);
+        } else if (operand.mem.base_type == IR_MEMBASE_FRAME) {
+            assert(operand.mem.base_frame);
+        } else if (operand.mem.base_type == IR_MEMBASE_SYM) {
+            assert(operand.mem.base_sym);
+        }
+    }
+#endif
+
     // Clean up old operand.
     ir_operand_t old = insn->type == IR_INSN_COMBINATOR ? insn->combinators[index].bind : insn->operands[index];
     if (old.type == IR_OPERAND_TYPE_MEM && old.mem.base_type == IR_MEMBASE_SYM) {
@@ -778,6 +806,7 @@ void ir_insn_set_return(ir_insn_t *insn, size_t index, ir_retval_t dest) {
     }
     insn->returns[index] = dest;
     if (dest.type == IR_RETVAL_TYPE_VAR) {
+        assert(dest.dest_var);
         assert(!set_contains(&dest.dest_var->assigned_at, insn));
         set_add(&dest.dest_var->assigned_at, insn);
     }
@@ -842,11 +871,15 @@ static void ir_emplace_insn(ir_insnloc_t loc, ir_insn_t *insn) {
 
 // Helper function to allocate an `ir_insn_t`.
 static ir_insn_t *alloc_ir_insn(size_t operands_len, size_t returns_len) {
-    ir_insn_t *insn    = strong_calloc(1, sizeof(ir_insn_t));
-    insn->operands     = strong_calloc(operands_len, sizeof(ir_operand_t));
-    insn->operands_len = operands_len;
-    insn->returns      = strong_calloc(returns_len, sizeof(ir_retval_t));
-    insn->returns_len  = returns_len;
+    ir_insn_t *insn = strong_calloc(1, sizeof(ir_insn_t));
+    if (operands_len) {
+        insn->operands     = strong_calloc(operands_len, sizeof(ir_operand_t));
+        insn->operands_len = operands_len;
+    }
+    if (returns_len) {
+        insn->returns     = strong_calloc(returns_len, sizeof(ir_retval_t));
+        insn->returns_len = returns_len;
+    }
     return insn;
 }
 
@@ -862,6 +895,7 @@ static ir_insn_t *ir_create_insn(
         insn->returns     = strong_malloc(sizeof(ir_retval_t));
         insn->returns_len = 1;
         if (dest.type == IR_RETVAL_TYPE_VAR) {
+            assert(dest.dest_var);
             if (ir_insnloc_code(loc)->func->enforce_ssa
                 && (dest.dest_var->assigned_at.len || dest.dest_var->arg_index >= 0)) {
                 fprintf(stderr, "BUG: SSA IR variable %%%s assigned twice\n", dest.dest_var->name);
@@ -872,6 +906,22 @@ static ir_insn_t *ir_create_insn(
         insn->returns[0] = dest;
     }
     for (size_t i = 0; i < operands_len; i++) {
+#ifndef NDEBUG
+        if (insn->operands[i].type == IR_OPERAND_TYPE_VAR) {
+            assert(insn->operands[i].var);
+        } else if (insn->operands[i].type == IR_OPERAND_TYPE_MEM) {
+            if (insn->operands[i].mem.base_type == IR_MEMBASE_VAR) {
+                assert(insn->operands[i].mem.base_var);
+            } else if (insn->operands[i].mem.base_type == IR_MEMBASE_CODE) {
+                assert(insn->operands[i].mem.base_code);
+            } else if (insn->operands[i].mem.base_type == IR_MEMBASE_FRAME) {
+                assert(insn->operands[i].mem.base_frame);
+            } else if (insn->operands[i].mem.base_type == IR_MEMBASE_SYM) {
+                assert(insn->operands[i].mem.base_sym);
+            }
+        }
+#endif
+
         ir_mark_used(insn->operands[i], insn);
         if (insn->operands[i].type == IR_OPERAND_TYPE_MEM && insn->operands[i].mem.base_type == IR_MEMBASE_SYM) {
             insn->operands[i].mem.base_sym = strong_strdup(insn->operands[i].mem.base_sym);
@@ -969,8 +1019,10 @@ ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_retval_t dest, ir_op2_type_t oper, 
 // Add a clobbering intrinsic.
 ir_insn_t *ir_add_clobber(ir_insnloc_t loc, size_t returns_len, ir_retval_t const *returns) {
     ir_insn_t *insn = alloc_ir_insn(0, returns_len);
+    insn->type      = IR_INSN_CLOBBER;
     for (size_t i = 0; i < returns_len; i++) {
         insn->returns[i] = returns[i];
+        assert(insn->returns[i].type == IR_RETVAL_TYPE_REG);
     }
     insn->flags = IR_INSN_FLAG_NOREORDER;
     ir_emplace_insn(loc, insn);
@@ -981,10 +1033,12 @@ ir_insn_t *ir_add_clobber(ir_insnloc_t loc, size_t returns_len, ir_retval_t cons
 // The remaining arguments are of type `ir_retval_t const`.
 ir_insn_t *ir_add_clobber_va(ir_insnloc_t loc, size_t returns_len, ...) {
     ir_insn_t *insn = alloc_ir_insn(0, returns_len);
-    va_list    l;
+    insn->type      = IR_INSN_CLOBBER;
+    va_list l;
     va_start(l, returns_len);
     for (size_t i = 0; i < returns_len; i++) {
         insn->returns[i] = va_arg(l, ir_retval_t);
+        assert(insn->returns[i].type == IR_RETVAL_TYPE_REG);
     }
     va_end(l);
     ir_emplace_insn(loc, insn);

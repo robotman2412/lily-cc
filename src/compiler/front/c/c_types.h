@@ -13,6 +13,8 @@
 #include "refcount.h"
 #include "unreachable.h"
 
+#include <stdint.h>
+
 
 
 // C type primitives.
@@ -234,8 +236,8 @@ struct c_comp {
 
 // C enum variant definition.
 struct c_enumvar {
-    char *name;
-    int   ordinal;
+    char   *name;
+    int32_t ordinal;
 };
 
 // C struct/union field delcaration.
@@ -251,6 +253,10 @@ struct c_field {
 };
 
 
+// Clean up a `c_type_t`.
+void c_type_free(c_type_t *type);
+// Delete a compound type.
+void c_comp_free(c_comp_t *comp);
 
 // Create a C type from a specifier-qualifer list.
 // Returns a refcount pointer of `c_type_t`.

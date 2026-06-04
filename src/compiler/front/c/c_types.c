@@ -62,7 +62,7 @@ char const *c_prim_name[] = {
 
 
 // Clean up a `c_type_t`.
-static void c_type_free(c_type_t *type) {
+void c_type_free(c_type_t *type) {
     if (type->primitive == C_COMP_FUNCTION) {
         rc_delete(type->func.return_type);
         for (size_t i = 0; i < type->func.args_len; i++) {
@@ -84,7 +84,7 @@ static void c_type_free(c_type_t *type) {
 }
 
 // Delete a compound type.
-static void c_comp_free(c_comp_t *comp) {
+void c_comp_free(c_comp_t *comp) {
     if (comp->type == C_COMP_TYPE_ENUM) {
         for (size_t i = 0; i < comp->variants.len; i++) {
             lilycc_free(comp->variants.arr[i].name);

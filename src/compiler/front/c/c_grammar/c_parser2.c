@@ -238,8 +238,6 @@ static bool is_spec_qual_list_tkn(c_parser_t *ctx, token_t token) {
            || token.subtype == C_KEYW_struct || token.subtype == C_KEYW_union;
 }
 
-
-
 // Destroy an LR parser stack entry.
 // Does not free the memory of `entry` itself.
 static void lr_entry_delete(lr_entry_t entry) {
@@ -248,6 +246,25 @@ static void lr_entry_delete(lr_entry_t entry) {
         case LR_ENTRY_EXPR: c_ast_expr_delete(entry.expr); break;
         case LR_ENTRY_TYPE: c_ast_type_name_delete(entry.type); break;
     }
+}
+
+
+
+// Parse a whole translation unit (all global declarations until EOF).
+c_ast_def_list_t *c_parse2(c_parser_t *ctx) {
+    vec_c_ast_def_t items = {0};
+    token_t         peek  = tkn_peek(ctx->tkn_ctx);
+    pos_t           pos   = peek.pos;
+    pos.len               = 0;
+
+    while (peek.type != TOKENTYPE_EOF) {
+        c_ast_def_t *unit = c_parse2_def(ctx, true);
+        pos               = pos_including(pos, unit->pos);
+        vec_push(&items, unit);
+        peek = tkn_peek(ctx->tkn_ctx);
+    }
+
+    return c_ast_def_list_create(pos, items);
 }
 
 
@@ -1091,23 +1108,6 @@ garbage:
     }
     vec_clear(&decls);
     return c_ast_def_create_garbage(c_ast_garbage_create(pos_including(spec_qual->pos, decls_pos)));
-}
-
-// Parse a whole translation unit (all global declarations until EOF).
-c_ast_def_list_t *c_parse2_trans_unit(c_parser_t *ctx) {
-    vec_c_ast_def_t items = {0};
-    token_t         peek  = tkn_peek(ctx->tkn_ctx);
-    pos_t           pos   = peek.pos;
-    pos.len               = 0;
-
-    while (peek.type != TOKENTYPE_EOF) {
-        c_ast_def_t *unit = c_parse2_def(ctx, true);
-        pos               = pos_including(pos, unit->pos);
-        vec_push(&items, unit);
-        peek = tkn_peek(ctx->tkn_ctx);
-    }
-
-    return c_ast_def_list_create(pos, items);
 }
 
 // Parse a struct or union specifier/definition.

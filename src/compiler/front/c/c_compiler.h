@@ -7,6 +7,8 @@
 
 
 
+#include "c_options.h"
+#include "c_parser.h"
 #include "c_prepass.h"
 #include "c_tokenizer.h"
 #include "c_types.h"
@@ -15,6 +17,7 @@
 #include "ir_types.h"
 #include "map.h"
 #include "refcount.h"
+#include "tokenizer.h"
 
 
 
@@ -36,8 +39,6 @@ typedef enum {
 typedef struct c_var          c_var_t;
 // C scope.
 typedef struct c_scope        c_scope_t;
-// C compiler options.
-typedef struct c_options      c_options_t;
 // C compiler context.
 typedef struct c_compiler     c_compiler_t;
 // Used for compiling expressions.
@@ -82,26 +83,6 @@ struct c_scope {
     map_t      comp_types;
 };
 
-// C compiler options.
-struct c_options {
-    // Current C standard.
-    int      c_std;
-    // GNU extensions are enabled.
-    uint32_t gnu_ext_enable : 1;
-    // Char is signed by default.
-    uint32_t char_is_signed : 1;
-    // `short` is 16-bit.
-    uint32_t short16        : 1;
-    // `int` is 32-bit.
-    uint32_t int32          : 1;
-    // `long` is 64-bit.
-    uint32_t long64         : 1;
-    // Target is big-endian.
-    uint32_t big_endian     : 1;
-    // C primitive corresponding to unsigned size_t.
-    c_prim_t size_type;
-};
-
 // C compiler context.
 struct c_compiler {
     // C compiler options.
@@ -129,7 +110,15 @@ struct c_compile_expr {
 // Create a new C compiler context.
 c_compiler_t *c_compiler_create(cctx_t *cctx, c_options_t options);
 // Destroy a C compiler context.
-void          c_compiler_destroy(c_compiler_t *cc);
+void          c_compiler_delete(c_compiler_t *cc);
+
+// Create a tokenizing context for this compiler.
+tokenizer_t *c_tokenizer_create(c_compiler_t *cc, srcfile_t *src, bool do_preproc);
+
+// Create a parsing context for this compiler.
+c_parser_t *c_parser_create(c_compiler_t *cc, tokenizer_t *tkn_ctx);
+// Delete a parsing context.
+void        c_parser_delete(c_parser_t *parser);
 
 // Create a new scope.
 c_scope_t c_scope_create(c_scope_t *parent);

@@ -16,22 +16,22 @@ static void compile_explain_type(char const *value) {
         return;
     }
 
-    tokenizer_t  *tctx = &c_tkn_create(src, C_STD_def)->base;
-    c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
-    c_compiler_t *cc   = c_compiler_create(
+    c_compiler_t *cc = c_compiler_create(
         cctx,
         (c_options_t){
-              .c_std          = C_STD_def,
-              .char_is_signed = true,
-              .short16        = true,
-              .int32          = true,
-              .long64         = true,
-              .size_type      = C_PRIM_ULONG,
+            .c_std          = C_STD_def,
+            .char_is_signed = true,
+            .short16        = true,
+            .int32          = true,
+            .long64         = true,
+            .size_type      = C_PRIM_ULONG,
         }
     );
+    tokenizer_t *tctx = c_tokenizer_create(cc, src, true);
+    c_parser_t  *pctx = c_parser_create(cc, tctx);
 
     // While not EOF, keep parsing and compiling stuff.
-    token_t ast     = c_parse_type_name(&pctx);
+    token_t ast     = c_parse_type_name(pctx);
     rc_t    type_rc = NULL;
     if (!cctx->diagnostics.len) {
         if (ast.subtype == C_AST_TYPE_NAME) {
@@ -58,8 +58,8 @@ static void compile_explain_type(char const *value) {
     }
 
     // Clean up.
-    c_compiler_destroy(cc);
-    tkn_ctx_delete(tctx);
+    c_parser_delete(pctx);
+    c_compiler_delete(cc);
     cctx_delete(cctx);
 }
 

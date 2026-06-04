@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "c_options.h"
 #include "compiler.h"
 #include "tokenizer.h"
 
@@ -62,13 +63,13 @@ typedef struct c_tokenizer c_tokenizer_t;
 // C tokenizer handle.
 struct c_tokenizer {
     // Common tokenizer data.
-    tokenizer_t base;
-    // Current C standard.
-    int         c_std;
+    tokenizer_t        base;
+    // Pointer to active C options.
+    c_options_t const *options;
     // Preprocessor tokenizer mode; keywords are left as idents and whitespace is included.
-    bool        preproc_mode;
+    bool               preproc_mode;
     // Keep comments instead of replacing them with a single space each.
-    bool        keep_comments;
+    bool               keep_comments;
 };
 
 
@@ -84,7 +85,7 @@ extern char const *const c_token_name[];
 
 
 // Create a new C tokenizer.
-c_tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std);
+c_tokenizer_t *c_tkn_create_impl(srcfile_t *srcfile, c_options_t const *options);
 // Test whether a character is legal as the first in a C identifier.
 bool           c_is_first_sym_char(int c);
 // Test whether a character is legal in a C identifier.

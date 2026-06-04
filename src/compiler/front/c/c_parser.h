@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "c_options.h"
 #include "set.h"
 #include "tokenizer.h"
 
@@ -119,13 +120,15 @@ typedef enum {
 // C parser context.
 typedef struct {
     // Tokenizer to use.
-    tokenizer_t *tkn_ctx;
+    tokenizer_t       *tkn_ctx;
+    // Pointer to active C options.
+    c_options_t const *options;
     // Set of type names; this makes parsing a great deal easier.
-    set_t        type_names;
+    set_t              type_names;
     // Local set of type names (types local to a function).
-    set_t        local_type_names;
+    set_t              local_type_names;
     // Currently parsing a function body.
-    bool         func_body;
+    bool               func_body;
 } c_parser_t;
 
 

@@ -3,10 +3,23 @@
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
+#include "c_prim.h"
 #include "c_std.h"
 #include "c_tokenizer.h"
-#include "c_types.h"
 #include "testcase.h"
+
+
+
+static c_options_t c_tokenizer_test_options = {
+    .c_std          = C_STD_max,
+    .gnu_ext_enable = true,
+    .char_is_signed = true,
+    .short16        = true,
+    .int32          = true,
+    .long64         = true,
+    .big_endian     = false,
+    .size_type      = C_PRIM_SLONG,
+};
 
 
 
@@ -31,7 +44,7 @@ static char *test_c_tkn_basic() {
     cctx_t    *cctx = cctx_create();
     srcfile_t *src  = srcfile_create(cctx, "<c_tkn_basic>", data, sizeof(data) - 1);
 
-    tokenizer_t *tkn_ctx = &c_tkn_create(src, C_STD_max)->base;
+    tokenizer_t *tkn_ctx = &c_tkn_create_impl(src, &c_tokenizer_test_options)->base;
     token_t      tkn;
 
 
@@ -140,7 +153,7 @@ static char *test_c_tkn_litsuffix() {
     cctx_t    *cctx = cctx_create();
     srcfile_t *src  = srcfile_create(cctx, "<test_c_tkn_litsuffix>", data, sizeof(data) - 1);
 
-    tokenizer_t *tkn_ctx = &c_tkn_create(src, C_STD_max)->base;
+    tokenizer_t *tkn_ctx = &c_tkn_create_impl(src, &c_tokenizer_test_options)->base;
     token_t      tkn;
 
     tkn = c_tkn_next(tkn_ctx); // 0xc0de (sint)
@@ -234,7 +247,7 @@ static char *test_c_tkn_errors() {
     cctx_t    *cctx = cctx_create();
     srcfile_t *src  = srcfile_create(cctx, "<c_tkn_errors>", data, sizeof(data) - 1);
 
-    tokenizer_t *tkn_ctx = &c_tkn_create(src, C_STD_max)->base;
+    tokenizer_t *tkn_ctx = &c_tkn_create_impl(src, &c_tokenizer_test_options)->base;
     token_t      tkn;
     do {
         tkn = c_tkn_next(tkn_ctx);

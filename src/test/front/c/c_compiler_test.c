@@ -23,7 +23,7 @@ static char *test_c_compile_type() {
     char const   source[] = "void (*foobarb)();";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_compile_type>", source, sizeof(source) - 1);
-    tokenizer_t *tctx     = &c_tkn_create(src, C_STD_def)->base;
+    tokenizer_t *tctx     = &c_tkn_create_impl(src, C_STD_def)->base;
     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
     c_compiler_t *cc = c_compiler_create(
@@ -85,7 +85,7 @@ static char *test_c_compile_type() {
 
     tkn_delete(decl);
     rc_delete(full);
-    c_compiler_destroy(cc);
+    c_compiler_delete(cc);
     tkn_ctx_delete(tctx);
     cctx_delete(cctx);
     return TEST_OK;
@@ -97,7 +97,7 @@ static char *test_c_compile_expr() {
     char const   source[] = "1 + 2 * 3";
     cctx_t      *cctx     = cctx_create();
     srcfile_t   *src      = srcfile_create(cctx, "<c_compile_expr>", source, sizeof(source) - 1);
-    tokenizer_t *tctx     = &c_tkn_create(src, C_STD_def)->base;
+    tokenizer_t *tctx     = &c_tkn_create_impl(src, C_STD_def)->base;
     c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
 
     c_compiler_t *cc = c_compiler_create(
@@ -147,7 +147,7 @@ static char *test_c_compile_expr() {
     ir_func_delete(func);
     tkn_delete(expr_tok);
 
-    c_compiler_destroy(cc);
+    c_compiler_delete(cc);
     tkn_ctx_delete(tctx);
     cctx_delete(cctx);
     return TEST_OK;
@@ -173,17 +173,17 @@ static char *test_c_compile_func() {
     // clang-format on
     cctx_t       *cctx = cctx_create();
     srcfile_t    *src  = srcfile_create(cctx, "<c_compile_func>", source, sizeof(source) - 1);
-    tokenizer_t  *tctx = &c_tkn_create(src, C_STD_def)->base;
+    tokenizer_t  *tctx = &c_tkn_create_impl(src, C_STD_def)->base;
     c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
     c_compiler_t *cc   = c_compiler_create(
         cctx,
         (c_options_t){
-              .c_std          = C_STD_def,
-              .char_is_signed = true,
-              .short16        = true,
-              .int32          = true,
-              .long64         = true,
-              .size_type      = C_PRIM_ULONG,
+            .c_std          = C_STD_def,
+            .char_is_signed = true,
+            .short16        = true,
+            .int32          = true,
+            .long64         = true,
+            .size_type      = C_PRIM_ULONG,
         }
     );
 
@@ -232,7 +232,7 @@ static char *test_c_compile_func() {
     tkn_delete(functest_tok);
     tkn_delete(foobar_tok);
 
-    c_compiler_destroy(cc);
+    c_compiler_delete(cc);
     tkn_ctx_delete(tctx);
     cctx_delete(cctx);
     return TEST_OK;
@@ -254,17 +254,17 @@ static char *test_c_compile_enum() {
     // clang-format on
     cctx_t       *cctx = cctx_create();
     srcfile_t    *src  = srcfile_create(cctx, "<test_c_compile_enum>", source, sizeof(source) - 1);
-    tokenizer_t  *tctx = &c_tkn_create(src, C_STD_def)->base;
+    tokenizer_t  *tctx = &c_tkn_create_impl(src, C_STD_def)->base;
     c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
     c_compiler_t *cc   = c_compiler_create(
         cctx,
         (c_options_t){
-              .c_std          = C_STD_def,
-              .char_is_signed = true,
-              .short16        = true,
-              .int32          = true,
-              .long64         = true,
-              .size_type      = C_PRIM_ULONG,
+            .c_std          = C_STD_def,
+            .char_is_signed = true,
+            .short16        = true,
+            .int32          = true,
+            .long64         = true,
+            .size_type      = C_PRIM_ULONG,
         }
     );
 
@@ -329,7 +329,7 @@ static char *test_c_compile_enum() {
     tkn_delete(func_tok);
     tkn_delete(enum_tok);
 
-    c_compiler_destroy(cc);
+    c_compiler_delete(cc);
     tkn_ctx_delete(tctx);
     cctx_delete(cctx);
     return TEST_OK;
@@ -352,17 +352,17 @@ static char *test_c_compile_struct() {
     // clang-format on
     cctx_t       *cctx = cctx_create();
     srcfile_t    *src  = srcfile_create(cctx, "<test_c_compile_enum>", source, sizeof(source) - 1);
-    tokenizer_t  *tctx = &c_tkn_create(src, C_STD_def)->base;
+    tokenizer_t  *tctx = &c_tkn_create_impl(src, C_STD_def)->base;
     c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
     c_compiler_t *cc   = c_compiler_create(
         cctx,
         (c_options_t){
-              .c_std          = C_STD_def,
-              .char_is_signed = true,
-              .short16        = true,
-              .int32          = true,
-              .long64         = true,
-              .size_type      = C_PRIM_ULONG,
+            .c_std          = C_STD_def,
+            .char_is_signed = true,
+            .short16        = true,
+            .int32          = true,
+            .long64         = true,
+            .size_type      = C_PRIM_ULONG,
         }
     );
 
@@ -423,7 +423,7 @@ static char *test_c_compile_struct() {
 
     tkn_delete(struct_tok);
 
-    c_compiler_destroy(cc);
+    c_compiler_delete(cc);
     tkn_ctx_delete(tctx);
     cctx_delete(cctx);
     return TEST_OK;

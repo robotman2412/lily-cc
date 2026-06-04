@@ -6,8 +6,8 @@
 #include "c_tokenizer.h"
 
 #include "arith128.h"
+#include "c_prim.h"
 #include "c_std.h"
-#include "c_types.h"
 #include "compiler.h"
 #include "lilycc_malloc.h"
 #include "tokenizer.h"
@@ -55,13 +55,13 @@ static long c_keyw_since[] = {
 
 
 // Create a new C tokenizer.
-c_tokenizer_t *c_tkn_create(srcfile_t *srcfile, int c_std) {
-    c_tokenizer_t *tkn_ctx    = lilycc_calloc(sizeof(c_tokenizer_t), 1);
+c_tokenizer_t *c_tkn_create_impl(srcfile_t *srcfile, c_options_t const *options) {
+    c_tokenizer_t *tkn_ctx    = lilycc_calloc(1, sizeof(c_tokenizer_t));
     tkn_ctx->base.cctx        = srcfile->ctx;
     tkn_ctx->base.pos.srcfile = srcfile;
     tkn_ctx->base.file        = srcfile;
     tkn_ctx->base.next        = c_tkn_next;
-    tkn_ctx->c_std            = c_std;
+    tkn_ctx->options          = options;
     return tkn_ctx;
 }
 
@@ -415,7 +415,7 @@ static token_t c_tkn_ident(tokenizer_t *ctx, pos_t start_pos, char first) {
     ctx->pos = pos0;
 
     // Test for keywords.
-    c_keyw_t keyw = c_keyw_get(c_ctx->c_std, ptr);
+    c_keyw_t keyw = c_keyw_get(c_ctx->options->c_std, ptr);
     if (keyw < C_N_KEYWS && !c_ctx->preproc_mode) {
         // Replace alternate spellings with main spellings, even if the main spelling is from a later C standard.
 #define C_ALT_KEYW_DEF(main_spelling, alt_spelling)                                                                    \
@@ -798,7 +798,7 @@ retry:
         if (c_ctx->preproc_mode) {
             return tkn;
         }
-        token_t res = c_tkn_conv_str(ctx->cctx, c_ctx->c_std, &tkn);
+        token_t res = c_tkn_conv_str(ctx->cctx, c_ctx->options->c_std, &tkn);
         tkn_delete(tkn);
         return res;
     } else if (c == '\"') {
@@ -806,7 +806,7 @@ retry:
         if (c_ctx->preproc_mode) {
             return tkn;
         }
-        token_t res = c_tkn_conv_str(ctx->cctx, c_ctx->c_std, &tkn);
+        token_t res = c_tkn_conv_str(ctx->cctx, c_ctx->options->c_std, &tkn);
         tkn_delete(tkn);
         return res;
     }
@@ -823,7 +823,7 @@ retry:
             if (c_ctx->preproc_mode) {
                 return tkn;
             }
-            token_t res = c_tkn_conv_number(ctx->cctx, c_ctx->c_std, &tkn);
+            token_t res = c_tkn_conv_number(ctx->cctx, c_ctx->options->c_std, &tkn);
             tkn_delete(tkn);
             return res;
         }
@@ -836,7 +836,7 @@ retry:
         if (c_ctx->preproc_mode) {
             return tkn;
         }
-        token_t res = c_tkn_conv_number(ctx->cctx, c_ctx->c_std, &tkn);
+        token_t res = c_tkn_conv_number(ctx->cctx, c_ctx->options->c_std, &tkn);
         tkn_delete(tkn);
         return res;
     }

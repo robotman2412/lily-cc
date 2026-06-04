@@ -9,6 +9,7 @@
 #include "arrays.h"
 #include "c_parser.h"
 #include "c_prepass.h"
+#include "c_preproc.h"
 #include "c_tokenizer.h"
 #include "c_types.h"
 #include "c_values.h"
@@ -19,6 +20,8 @@
 #include "lilycc_malloc.h"
 #include "map.h"
 #include "refcount.h"
+#include "set.h"
+#include "tokenizer.h"
 #include "unreachable.h"
 
 #include <assert.h>
@@ -58,9 +61,38 @@ c_compiler_t *c_compiler_create(cctx_t *cctx, c_options_t options) {
 }
 
 // Destroy a C compiler context.
-void c_compiler_destroy(c_compiler_t *cc) {
+void c_compiler_delete(c_compiler_t *cc) {
     c_scope_destroy(cc->global_scope);
     lilycc_free(cc);
+}
+
+
+// Create a tokenizing context for this compiler.
+tokenizer_t *c_tokenizer_create(c_compiler_t *cc, srcfile_t *src, bool do_preproc) {
+    if (do_preproc) {
+        c_preproc_t *pre = c_preproc_create(src, &cc->options, false, false);
+        return &pre->base;
+    } else {
+        c_tokenizer_t *ctx = c_tkn_create_impl(src, &cc->options);
+        return &ctx->base;
+    }
+}
+
+
+// Create a parsing context for this compiler.
+c_parser_t *c_parser_create(c_compiler_t *cc, tokenizer_t *tkn_ctx) {
+    c_parser_t *ctx       = lilycc_calloc(1, sizeof(c_parser_t));
+    ctx->local_type_names = STR_SET_EMPTY;
+    ctx->type_names       = STR_SET_EMPTY;
+    ctx->tkn_ctx          = tkn_ctx;
+    return ctx;
+}
+
+// Delete a parsing context.
+void c_parser_delete(c_parser_t *parser) {
+    set_clear(&parser->local_type_names);
+    set_clear(&parser->type_names);
+    tkn_ctx_delete(parser->tkn_ctx);
 }
 
 

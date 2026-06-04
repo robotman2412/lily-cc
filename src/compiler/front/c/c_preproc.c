@@ -213,7 +213,7 @@ __attribute__((format(printf, 2, 3))) static void c_preproc_fmt_builtin_macro(c_
     va_end(vl);
 
     char      *name;
-    c_macro_t *macro  = c_macro_create("<built-in>", spec, &name);
+    c_macro_t *macro  = c_macro_create(pre->shared->options, "<built-in>", spec, &name);
     macro->is_builtin = true;
     c_preproc_add_macro(pre, name, macro);
     lilycc_free(name);
@@ -255,7 +255,7 @@ static void c_preproc_builtin_macros(c_preproc_t *pre) {
     c_preproc_fmt_builtin_macro(pre, "__STDC__=1");
 
     // __STDC_VERSION__
-    c_preproc_fmt_builtin_macro(pre, "__STDC_VERSION__=%dL", pre->shared->c_std);
+    c_preproc_fmt_builtin_macro(pre, "__STDC_VERSION__=%dL", pre->shared->options->c_std);
 
     // __has_attribute
     // c_preproc_fmt_builtin_macro(pre, "__has_attribute=__has_attribute");
@@ -286,10 +286,10 @@ static void c_preproc_builtin_macros(c_preproc_t *pre) {
 // Create a preprocessor for a certain file.
 // See `c_preproc_t` for details about `raw_mode` and `keep_comments`.
 // Applying either flag after creation of the preprocessor will create incorrect output.
-c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std, bool raw_mode, bool keep_comments) {
+c_preproc_t *c_preproc_create(srcfile_t *srcfile, c_options_t const *options, bool raw_mode, bool keep_comments) {
     c_preproc_t *pre = lilycc_calloc(1, sizeof(c_preproc_t));
 
-    c_tokenizer_t *srctok = c_tkn_create(srcfile, c_std);
+    c_tokenizer_t *srctok = c_tkn_create_impl(srcfile, options);
     if (!srctok) {
         lilycc_free(pre);
         return NULL;
@@ -301,7 +301,7 @@ c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std, bool raw_mode, bool
     shared->cctx               = srcfile->ctx;
     shared->macros             = STR_MAP_EMPTY;
     shared->once_files         = PTR_SET_EMPTY;
-    shared->c_std              = c_std;
+    shared->options            = options;
 
     // Note: `base` has a `pos` and `file`, but we do not use either.
     pre->base.next           = c_preproc_next;
@@ -433,7 +433,7 @@ static void c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path, bool s
     }
 
     // TODO: Add include stack info to the tokenizer's position.
-    c_tokenizer_t *tkn_ctx = c_tkn_create(file, pre->shared->c_std);
+    c_tokenizer_t *tkn_ctx = c_tkn_create_impl(file, pre->shared->options);
     tkn_ctx->preproc_mode  = true;
     c_incfile_t incfile    = {
         .tkn_ctx = &tkn_ctx->base,
@@ -696,7 +696,7 @@ static token_t c_preproc_eval_get_helper(c_preproc_t *pre) {
         res = c_preproc_eval_has_attribute(pre, oper.pos, true);
     } else if (oper.type == TOKENTYPE_IDENT) {
         if (oper.subtype == C_PPNUMBER) {
-            res = c_tkn_conv_number(pre->shared->cctx, pre->shared->c_std, &oper);
+            res = c_tkn_conv_number(pre->shared->cctx, pre->shared->options->c_std, &oper);
         } else {
             return oper;
         }
@@ -771,7 +771,7 @@ static bool c_preproc_eval(c_preproc_t *pre, pos_t pos) {
             } else if (tkn.type == TOKENTYPE_IDENT) {                                                                  \
                 peek.type            = ENTRY_VALUE;                                                                    \
                 peek.value.is_signed = true;                                                                           \
-                peek.value.value     = int128(0, pre->shared->c_std >= C_STD_C23 && !strcmp(tkn.strval, "true"));      \
+                peek.value.value = int128(0, pre->shared->options->c_std >= C_STD_C23 && !strcmp(tkn.strval, "true")); \
             } else {                                                                                                   \
                 peek.type = ENTRY_GARBAGE;                                                                             \
             }                                                                                                          \
@@ -1549,11 +1549,11 @@ emit:
 // through `c_tkn_conv_str`. Other token types pass through unchanged.
 token_t c_preproc_tkn_to_c_tkn(c_preproc_t *pre, token_t tkn) {
     if (tkn.type == TOKENTYPE_IDENT && tkn.subtype == C_PPNUMBER) {
-        token_t res = c_tkn_conv_number(pre->shared->cctx, pre->shared->c_std, &tkn);
+        token_t res = c_tkn_conv_number(pre->shared->cctx, pre->shared->options->c_std, &tkn);
         tkn_delete(tkn);
         return res;
     } else if (tkn.type == TOKENTYPE_IDENT) {
-        c_keyw_t keyw = c_keyw_get(pre->shared->c_std, tkn.strval);
+        c_keyw_t keyw = c_keyw_get(pre->shared->options->c_std, tkn.strval);
         if (keyw >= C_N_KEYWS) {
             return tkn;
         }
@@ -1572,7 +1572,7 @@ token_t c_preproc_tkn_to_c_tkn(c_preproc_t *pre, token_t tkn) {
             .subtype = keyw,
         };
     } else if (tkn.type == TOKENTYPE_SCONST && tkn.subtype != C_STR_ANGLEBRAC) {
-        token_t res = c_tkn_conv_str(pre->shared->cctx, pre->shared->c_std, &tkn);
+        token_t res = c_tkn_conv_str(pre->shared->cctx, pre->shared->options->c_std, &tkn);
         tkn_delete(tkn);
         return res;
     }
@@ -1772,7 +1772,7 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
 }
 
 // Create a regular macro.
-c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_out) {
+c_macro_t *c_macro_create(c_options_t const *options, char const *virt_file, char const *spec, char **name_out) {
     cctx_t    *cctx     = cctx_create();
     size_t     spec_len = strlen(spec);
     srcfile_t *src      = srcfile_create(cctx, virt_file, spec, spec_len);
@@ -1884,7 +1884,7 @@ c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_o
 
         // Tokenize the body with a C tokenizer in preprocessor mode, starting
         // just past the '='.
-        tkn               = c_tkn_create(src, C_STD_def);
+        tkn               = c_tkn_create_impl(src, options);
         tkn->preproc_mode = true;
         tkn->base.pos.off = (off_t)i;
         tkn->base.pos.col = (int)i;

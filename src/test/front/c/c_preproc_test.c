@@ -8,6 +8,17 @@
 #include "c_tokenizer.h"
 #include "testcase.h"
 
+static c_options_t c_preproc_test_options = {
+    .c_std          = C_STD_max,
+    .gnu_ext_enable = true,
+    .char_is_signed = true,
+    .short16        = true,
+    .int32          = true,
+    .long64         = true,
+    .big_endian     = false,
+    .size_type      = C_PRIM_SLONG,
+};
+
 
 
 // Pull the next "real" token from a preprocessor, skipping whitespace,
@@ -78,7 +89,7 @@ static char *test_preproc_counter() {
     char const   data[] = "__COUNTER__\n__COUNTER__\n";
     cctx_t      *cctx   = cctx_create();
     srcfile_t   *src    = srcfile_create(cctx, "<test_preproc_counter>", data, sizeof(data) - 1);
-    c_preproc_t *pre    = c_preproc_create(src, C_STD_max, false, false);
+    c_preproc_t *pre    = c_preproc_create(src, &c_preproc_test_options, false, false);
 
     EXPECT_ICONST(pre, 0);
     EXPECT_ICONST(pre, 1);
@@ -103,7 +114,7 @@ static char *test_preproc_object_macros() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<test_preproc_object_macros>", data, sizeof(data) - 1);
-    c_preproc_t *pre  = c_preproc_create(src, C_STD_max, false, false);
+    c_preproc_t *pre  = c_preproc_create(src, &c_preproc_test_options, false, false);
 
     EXPECT_IDENT(pre, "BAR");
     EXPECT_IDENT(pre, "baz");
@@ -128,7 +139,7 @@ static char *test_preproc_object_paste_and_hash() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<test_preproc_object_paste_and_hash>", data, sizeof(data) - 1);
-    c_preproc_t *pre  = c_preproc_create(src, C_STD_max, false, false);
+    c_preproc_t *pre  = c_preproc_create(src, &c_preproc_test_options, false, false);
 
     EXPECT_IDENT(pre, "foobar");
     EXPECT_PUNCT(pre, C_TKN_HASH);
@@ -155,7 +166,7 @@ static char *test_preproc_line_continuation() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<test_preproc_line_continuation>", data, sizeof(data) - 1);
-    c_preproc_t *pre  = c_preproc_create(src, C_STD_max, false, false);
+    c_preproc_t *pre  = c_preproc_create(src, &c_preproc_test_options, false, false);
 
     EXPECT_IDENT(pre, "foobar");
     EXPECT_IDENT(pre, "foobar");
@@ -178,7 +189,7 @@ static char *test_preproc_func_basic() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<test_preproc_func_basic>", data, sizeof(data) - 1);
-    c_preproc_t *pre  = c_preproc_create(src, C_STD_max, false, false);
+    c_preproc_t *pre  = c_preproc_create(src, &c_preproc_test_options, false, false);
 
     EXPECT_IDENT(pre, "a");
     EXPECT_PUNCT(pre, C_TKN_OR);
@@ -203,7 +214,7 @@ static char *test_preproc_va_args() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<test_preproc_va_args>", data, sizeof(data) - 1);
-    c_preproc_t *pre  = c_preproc_create(src, C_STD_max, false, false);
+    c_preproc_t *pre  = c_preproc_create(src, &c_preproc_test_options, false, false);
 
     EXPECT_IDENT(pre, "yes1");
     EXPECT_PUNCT(pre, C_TKN_COMMA);
@@ -226,7 +237,7 @@ static char *test_preproc_va_opt() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<test_preproc_va_opt>", data, sizeof(data) - 1);
-    c_preproc_t *pre  = c_preproc_create(src, C_STD_max, false, false);
+    c_preproc_t *pre  = c_preproc_create(src, &c_preproc_test_options, false, false);
 
     EXPECT_PUNCT(pre, C_TKN_LPAR);
     EXPECT_IDENT(pre, "yes");
@@ -249,7 +260,7 @@ static char *test_preproc_func_paste() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<test_preproc_func_paste>", data, sizeof(data) - 1);
-    c_preproc_t *pre  = c_preproc_create(src, C_STD_max, false, false);
+    c_preproc_t *pre  = c_preproc_create(src, &c_preproc_test_options, false, false);
 
     EXPECT_IDENT(pre, "foobar");
     EXPECT_EOF(pre);
@@ -276,7 +287,7 @@ static char *test_preproc_stringize() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<test_preproc_stringize>", data, sizeof(data) - 1);
-    c_preproc_t *pre  = c_preproc_create(src, C_STD_max, false, false);
+    c_preproc_t *pre  = c_preproc_create(src, &c_preproc_test_options, false, false);
 
     EXPECT_SCONST(pre, "This is some text");
     EXPECT_SCONST(pre, "PASTE(foo, bar)");
@@ -302,7 +313,7 @@ static char *test_preproc_self_reference() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<test_preproc_self_reference>", data, sizeof(data) - 1);
-    c_preproc_t *pre  = c_preproc_create(src, C_STD_max, false, false);
+    c_preproc_t *pre  = c_preproc_create(src, &c_preproc_test_options, false, false);
 
     EXPECT_IDENT(pre, "F0");
     EXPECT_PUNCT(pre, C_TKN_LPAR);
@@ -333,7 +344,7 @@ static char *test_preproc_nested_calls() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<test_preproc_nested_calls>", data, sizeof(data) - 1);
-    c_preproc_t *pre  = c_preproc_create(src, C_STD_max, false, false);
+    c_preproc_t *pre  = c_preproc_create(src, &c_preproc_test_options, false, false);
 
     EXPECT_IDENT(pre, "fin");
     EXPECT_IDENT(pre, "fin");
@@ -362,7 +373,7 @@ static char *test_preproc_if_arith() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<test_preproc_if_arith>", data, sizeof(data) - 1);
-    c_preproc_t *pre  = c_preproc_create(src, C_STD_max, false, false);
+    c_preproc_t *pre  = c_preproc_create(src, &c_preproc_test_options, false, false);
 
     EXPECT_IDENT(pre, "done");
     EXPECT_EOF(pre);
@@ -396,7 +407,7 @@ static char *test_preproc_defined_op() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<test_preproc_defined_op>", data, sizeof(data) - 1);
-    c_preproc_t *pre  = c_preproc_create(src, C_STD_max, false, false);
+    c_preproc_t *pre  = c_preproc_create(src, &c_preproc_test_options, false, false);
 
     EXPECT_IDENT(pre, "present_yes");
     EXPECT_IDENT(pre, "present_yes_paren");
@@ -438,7 +449,7 @@ static char *test_preproc_if_branches() {
     // clang-format on
     cctx_t      *cctx = cctx_create();
     srcfile_t   *src  = srcfile_create(cctx, "<test_preproc_if_branches>", data, sizeof(data) - 1);
-    c_preproc_t *pre  = c_preproc_create(src, C_STD_max, false, false);
+    c_preproc_t *pre  = c_preproc_create(src, &c_preproc_test_options, false, false);
 
     EXPECT_IDENT(pre, "first");
     EXPECT_IDENT(pre, "second_elif");

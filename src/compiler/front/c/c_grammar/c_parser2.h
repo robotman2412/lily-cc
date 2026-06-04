@@ -6,22 +6,9 @@
 #pragma once
 
 #include "c_ast.h"
+#include "c_parser.h" // TODO: Merge with this header.
 #include "set.h"
 #include "tokenizer.h"
-
-
-
-// C parser context.
-typedef struct {
-    // Tokenizer to use.
-    tokenizer_t *tkn_ctx;
-    // Set of type names; this makes parsing a great deal easier.
-    set_t        type_names;
-    // Local set of type names (types local to a function).
-    set_t        local_type_names;
-    // Currently parsing a function body.
-    bool         func_body;
-} c_parser_t;
 
 
 

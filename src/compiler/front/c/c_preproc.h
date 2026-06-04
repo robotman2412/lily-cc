@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "c_options.h"
 #include "c_tokenizer.h"
 #include "compiler.h"
 #include "map.h"
@@ -59,16 +60,16 @@ typedef c_expansion_t (*c_proc_macro_cb_t)(c_preproc_t *pre, vec_macro_arg_t con
 // state, and the diagnostics sink stay consistent across all expansions.
 struct c_preproc_shared {
     // Parent compiler context.
-    cctx_t  *cctx;
+    cctx_t            *cctx;
+    // Pointer to active C options.
+    c_options_t const *options;
     // Macro definitions by name.
     // Map of `char *` -> `c_macro_t *`.
-    map_t    macros;
+    map_t              macros;
     // Set of files which have already executed a `#pragma once`.
-    set_t    once_files;
-    // Current C standard.
-    int      c_std;
+    set_t              once_files;
     // Next value for `__COUNTER__`.
-    uint64_t counter_macro;
+    uint64_t           counter_macro;
 };
 
 // C preprocessor state.
@@ -190,7 +191,7 @@ struct c_expansion {
 // Create a preprocessor for a certain file.
 // See `c_preproc_t` for details about `raw_mode` and `keep_comments`.
 // Applying either flag after creation of the preprocessor will create incorrect output.
-c_preproc_t *c_preproc_create(srcfile_t *srcfile, int c_std, bool raw_mode, bool keep_comments);
+c_preproc_t *c_preproc_create(srcfile_t *srcfile, c_options_t const *options, bool raw_mode, bool keep_comments);
 // Create a nested preprocessor that shares macro/file/pragma state with `parent`.
 // Used for recursively expanding a function-like macro's arguments before
 // they are substituted. The caller is responsible for feeding input tokens
@@ -210,7 +211,7 @@ void         c_preproc_add_path(c_preproc_t *pre, char const *path, bool is_sysi
 // On success, `*name_out` is set to a heap-allocated copy of the parsed macro
 // name (caller takes ownership). On failure, prints diagnostics to stdout,
 // returns NULL, and leaves `*name_out` unchanged.
-c_macro_t *c_macro_create(char const *virt_file, char const *spec, char **name_out);
+c_macro_t *c_macro_create(c_options_t const *options, char const *virt_file, char const *spec, char **name_out);
 // Create a procedural macro.
 c_macro_t *c_proc_macro_create(bool uses_args, c_proc_macro_cb_t callback, void *cookie);
 // Destroy a macro.

@@ -16,7 +16,15 @@ static void preprocess(char const *path) {
         cctx_delete(cctx);
         return;
     }
-    c_preproc_t *pre = c_preproc_create(src, C_STD_def, true, true);
+    c_options_t options = {
+        .c_std          = C_STD_def,
+        .char_is_signed = true,
+        .short16        = true,
+        .int32          = true,
+        .long64         = true,
+        .size_type      = C_PRIM_ULONG,
+    };
+    c_preproc_t *pre = c_preproc_create(src, &options, true, true);
     if (!pre) {
         cctx_delete(cctx);
         return;

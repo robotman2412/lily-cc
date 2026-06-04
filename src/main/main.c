@@ -22,19 +22,19 @@ static void compile(char const *path) {
         cctx_delete(cctx);
         return;
     }
-    tokenizer_t  *tctx = &c_tkn_create(src, C_STD_def)->base;
-    c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
-    c_compiler_t *cc   = c_compiler_create(
+    c_compiler_t *cc = c_compiler_create(
         cctx,
         (c_options_t){
-              .c_std          = C_STD_def,
-              .char_is_signed = true,
-              .short16        = true,
-              .int32          = true,
-              .long64         = true,
-              .size_type      = C_PRIM_ULONG,
+            .c_std          = C_STD_def,
+            .char_is_signed = true,
+            .short16        = true,
+            .int32          = true,
+            .long64         = true,
+            .size_type      = C_PRIM_ULONG,
         }
     );
+    tokenizer_t       *tctx    = c_tokenizer_create(cc, src, true);
+    c_parser_t        *pctx    = c_parser_create(cc, tctx);
     backend_t const   *backend = backend_default();
     backend_profile_t *profile = backend->create_profile();
     backend->init_codegen(profile);
@@ -43,7 +43,7 @@ static void compile(char const *path) {
 
     // While not EOF, keep parsing and compiling stuff.
     while (tkn_peek(tctx).type != TOKENTYPE_EOF) {
-        token_t decls = c_parse_decls(&pctx, true);
+        token_t decls = c_parse_decls(pctx, true);
         if (decls.subtype == C_AST_FUNC_DEF) {
             // Function definition.
             c_prepass_t prepass = c_precompile_pass(&decls);
@@ -74,10 +74,8 @@ static void compile(char const *path) {
 
     // Clean up.
     backend->delete_profile(profile);
-    set_clear(&pctx.type_names);
-    set_clear(&pctx.local_type_names);
-    c_compiler_destroy(cc);
-    tkn_ctx_delete(tctx);
+    c_parser_delete(pctx);
+    c_compiler_delete(cc);
     cctx_delete(cctx);
 }
 

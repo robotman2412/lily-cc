@@ -40,10 +40,110 @@ cir_expr_t *c_compile2_expr(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_t c
 }
 
 
+// Decay an array type into a pointer to its element type; share any other type unchanged.
+// Returns a new owned type rc.
+static rc_t c_compile2_decay_share(c_compiler_t *cc, rc_t type_rc) {
+    c_type_t const *type = type_rc->data;
+    if (type->primitive == C_COMP_ARRAY) {
+        return c_type_to_pointer(cc, rc_share(type->inner));
+    }
+    return rc_share(type_rc);
+}
+
+// Whether a primitive is an arithmetic type (integer or floating point).
+static bool c_prim_is_arith(c_prim_t prim) {
+    return prim < C_N_PRIM && prim != C_PRIM_VOID;
+}
+
+// Determine the common result type of a ternary expression's two value operands.
+// Integer promotion follows the infix rules; arrays first decay into pointers.
+// For two pointers: if exactly one points to void, the other's type is used; if their inner
+// types are incompatible, `void *` is used; otherwise the (compatible) left pointer type is kept.
+// Takes shares of the operand type rcs (not consumed); returns a new owned type rc, or NULL on
+// incompatible operands (after emitting a diagnostic).
+static rc_t c_compile2_ternary_result_type(c_compiler_t *cc, pos_t pos, rc_t lrc, rc_t rrc) {
+    lrc                  = c_compile2_decay_share(cc, lrc);
+    rrc                  = c_compile2_decay_share(cc, rrc);
+    c_type_t const *ltyp = lrc->data;
+    c_type_t const *rtyp = rrc->data;
+
+    // Both arithmetic: apply the usual arithmetic conversions.
+    if (c_prim_is_arith(ltyp->primitive) && c_prim_is_arith(rtyp->primitive)) {
+        c_prim_t prim = c_prim_promote(ltyp->primitive, rtyp->primitive);
+        rc_delete(lrc);
+        rc_delete(rrc);
+        return rc_share(&cc->prim_rcs[prim]);
+    }
+
+    // Both pointers: apply the pointer compatibility rules.
+    if (ltyp->primitive == C_COMP_POINTER && rtyp->primitive == C_COMP_POINTER) {
+        bool lvoid = ((c_type_t const *)ltyp->inner->data)->primitive == C_PRIM_VOID;
+        bool rvoid = ((c_type_t const *)rtyp->inner->data)->primitive == C_PRIM_VOID;
+        if (lvoid != rvoid) {
+            // Exactly one points to void: use the other (non-void) pointer's type.
+            rc_delete(lvoid ? lrc : rrc);
+            return lvoid ? rrc : lrc;
+        }
+        if (c_type_is_compatible(cc, ltyp->inner->data, rtyp->inner->data)) {
+            // Compatible inner types: keep the left pointer type.
+            rc_delete(rrc);
+            return lrc;
+        }
+        // Incompatible inner types: fall back to `void *`.
+        rc_delete(lrc);
+        rc_delete(rrc);
+        return c_type_to_pointer(cc, rc_share(&cc->prim_rcs[C_PRIM_VOID]));
+    }
+
+    // Identical struct/union/void operands: that type is the result.
+    if (c_type_is_identical(cc, ltyp, rtyp, false)) {
+        rc_delete(rrc);
+        return lrc;
+    }
+
+    cctx_diagnostic(cc->cctx, pos, DIAG_ERR, "Incompatible operand types in ternary expression");
+    rc_delete(lrc);
+    rc_delete(rrc);
+    return NULL;
+}
+
 // Compile a ternary expression.
 cir_expr_t *c_compile2_expr_ternary(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_ternary_t const *expr) {
-    fprintf(stderr, "TODO: c_compile2_expr_ternary\n");
-    abort();
+    cir_expr_t *cond = c_compile2_expr(cc, scope, expr->cond);
+    cir_expr_t *lhs  = c_compile2_expr(cc, scope, expr->lhs);
+    cir_expr_t *rhs  = c_compile2_expr(cc, scope, expr->rhs);
+    if (!cond || !lhs || !rhs) {
+        goto error;
+    }
+
+    rc_t type_rc = c_compile2_ternary_result_type(cc, expr->pos, lhs->common.type_rc, rhs->common.type_rc);
+    if (!type_rc) {
+        goto error;
+    }
+
+    return cir_expr_create_ternary(cir_ternary_create(
+        (cir_expr_common_t){
+            .pos          = expr->pos,
+            .type_rc      = type_rc,
+            .is_lvalue    = false,
+            .allow_addrof = false,
+        },
+        cond,
+        lhs,
+        rhs
+    ));
+
+error:
+    if (cond) {
+        cir_expr_delete(cond);
+    }
+    if (lhs) {
+        cir_expr_delete(lhs);
+    }
+    if (rhs) {
+        cir_expr_delete(rhs);
+    }
+    return NULL;
 }
 
 // Compile an index expression.
@@ -290,15 +390,15 @@ static cir_expr_t *c_compile2_arith_op(
             rhs = c_compile2_cast_to_prim(cc, rhs, lhs_prim);
         }
         result_rc = rc_share(lhs->common.type_rc);
+    } else if (is_bool_result) {
+        result_rc = rc_share(&cc->prim_rcs[C_PRIM_SINT]);
+
     } else if (lhs_prim == C_COMP_POINTER || rhs_prim == C_COMP_POINTER) {
         // Pointer compares produce `int`; the calc itself operates at the size type.
-        result_rc
-            = is_bool_result ? rc_share(&cc->prim_rcs[C_PRIM_SINT]) : rc_share(&cc->prim_rcs[cc->options.size_type]);
+        result_rc = rc_share(&cc->prim_rcs[cc->options.size_type]);
     } else {
         c_prim_t result_prim = c_prim_promote(lhs_prim, rhs_prim);
-        lhs                  = c_compile2_cast_to_prim(cc, lhs, result_prim);
-        rhs                  = c_compile2_cast_to_prim(cc, rhs, result_prim);
-        result_rc = is_bool_result ? rc_share(&cc->prim_rcs[C_PRIM_SINT]) : rc_share(&cc->prim_rcs[result_prim]);
+        result_rc            = rc_share(&cc->prim_rcs[result_prim]);
     }
 
     return cir_expr_create_calc(cir_calc_create(

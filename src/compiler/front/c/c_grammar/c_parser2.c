@@ -96,7 +96,9 @@ static bool is_first_expr_tkn(c_parser_t *ctx, token_t tkn) {
                 case C_TKN_MUL:
                 case C_TKN_LPAR:
                 case C_TKN_INC:
-                case C_TKN_DEC: return true;
+                case C_TKN_DEC:
+                case C_TKN_LNOT:
+                case C_TKN_NOT: return true;
                 default: return false;
             }
     }
@@ -128,44 +130,49 @@ static int oper_precedence(token_t token, bool is_prefix) {
     if (token.type != TOKENTYPE_OTHER) {
         return -1;
     }
-    // TODO: sizeof, alignof, compound literal.
     switch (token.subtype) {
         case C_TKN_LPAR:
         case C_TKN_LBRAC:
         case C_TKN_LCURL:
         case C_TKN_DOT:
-        case C_TKN_ARROW: return 12;
+        case C_TKN_ARROW: return 13;
+
+        case C_TKN_NOT:
+        case C_TKN_LNOT: return is_prefix ? 12 : -1;
 
         case C_TKN_INC:
-        case C_TKN_DEC: return is_prefix ? 11 : 12;
+        case C_TKN_DEC: return is_prefix ? 12 : 13;
 
-        case C_TKN_MUL: return is_prefix ? 11 : 10;
+        case C_TKN_MUL: return is_prefix ? 12 : 11;
         case C_TKN_DIV:
-        case C_TKN_MOD: return 10;
+        case C_TKN_MOD: return 11;
 
         case C_TKN_ADD:
-        case C_TKN_SUB: return is_prefix ? 11 : 9;
+        case C_TKN_SUB: return is_prefix ? 12 : 10;
 
         case C_TKN_SHL:
-        case C_TKN_SHR: return 8;
+        case C_TKN_SHR: return 9;
 
         case C_TKN_LT:
         case C_TKN_LE:
         case C_TKN_GT:
-        case C_TKN_GE: return 7;
+        case C_TKN_GE: return 8;
 
         case C_TKN_NE:
-        case C_TKN_EQ: return 6;
+        case C_TKN_EQ: return 7;
 
-        case C_TKN_AND: return is_prefix ? 11 : 5;
+        case C_TKN_AND: return is_prefix ? 12 : 6;
 
-        case C_TKN_XOR: return 4;
+        case C_TKN_XOR: return 5;
 
-        case C_TKN_OR: return 3;
+        case C_TKN_OR: return 4;
 
-        case C_TKN_LAND: return 2;
+        case C_TKN_LAND: return 3;
 
-        case C_TKN_LOR: return 1;
+        case C_TKN_LOR: return 2;
+
+        case C_TKN_QUESTION:
+        case C_TKN_COLON: return 1;
 
         case C_TKN_ADD_S ... C_TKN_XOR_S:
         case C_TKN_ASSIGN: return 0;
@@ -188,6 +195,56 @@ static bool is_prefix_oper_tkn(token_t token) {
         case C_TKN_DEC:
         case C_TKN_NOT:
         case C_TKN_LNOT: return true;
+        default: return false;
+    }
+}
+
+// Is this a valid infix operator token?
+static bool is_infix_oper_tkn(token_t token) {
+    if (token.type != TOKENTYPE_OTHER) {
+        return -1;
+    }
+    switch (token.subtype) {
+        case C_TKN_LPAR:
+        case C_TKN_LBRAC:
+        case C_TKN_LCURL:
+        case C_TKN_DOT:
+        case C_TKN_ARROW:
+
+        case C_TKN_INC:
+        case C_TKN_DEC:
+
+        case C_TKN_MUL:
+        case C_TKN_DIV:
+        case C_TKN_MOD:
+
+        case C_TKN_ADD:
+        case C_TKN_SUB:
+
+        case C_TKN_SHL:
+        case C_TKN_SHR:
+
+        case C_TKN_LT:
+        case C_TKN_LE:
+        case C_TKN_GT:
+        case C_TKN_GE:
+
+        case C_TKN_NE:
+        case C_TKN_EQ:
+
+        case C_TKN_AND:
+
+        case C_TKN_XOR:
+
+        case C_TKN_OR:
+
+        case C_TKN_LAND:
+
+        case C_TKN_LOR:
+
+        case C_TKN_ADD_S ... C_TKN_XOR_S:
+        case C_TKN_ASSIGN: return true;
+
         default: return false;
     }
 }
@@ -571,7 +628,8 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
             ));
 
         } else if (
-            !is_expr(2) && is_expr(0) && stack.len >= 2 && is_prefix_oper_tkn(stack.arr[stack.len - 2].token)
+            !is_expr(2) && is_token(1, TOKENTYPE_OTHER) && is_expr(0)
+            && is_prefix_oper_tkn(stack.arr[stack.len - 2].token)
             && oper_precedence(stack.arr[stack.len - 2].token, true) >= oper_precedence(peek, false)
         ) { // Reduce prefix.
             c_ast_expr_t *val      = pop_expr();
@@ -584,7 +642,7 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
             ));
 
         } else if (
-            is_expr(2) && is_expr(0) && oper_precedence(stack.arr[stack.len - 2].token, false) >= 0
+            is_expr(2) && is_expr(0) && is_infix_oper_tkn(stack.arr[stack.len - 2].token)
             && (!can_push || oper_precedence(stack.arr[stack.len - 2].token, false) >= oper_precedence(peek, false))
         ) { // Reduce infix.
             c_ast_expr_t *rhs      = pop_expr();
@@ -596,6 +654,21 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
             push_expr(c_ast_expr_create_infix(
                 c_ast_expr_infix_create(pos_including(lhs->pos, rhs->pos), lhs, oper, oper_pos, rhs)
             ));
+
+        } else if (
+            is_expr(4) && is_punct(3, C_TKN_QUESTION) && is_expr(2) && is_punct(1, C_TKN_COLON) && is_expr(0)
+            && oper_precedence(stack.arr[stack.len - 2].token, true) >= oper_precedence(peek, false)
+        ) { // Reduce ternary.
+            c_ast_expr_t *rhs      = pop_expr();
+            token_t       colon    = pop_token();
+            c_ast_expr_t *lhs      = pop_expr();
+            token_t       question = pop_token();
+            c_ast_expr_t *cond     = pop_expr();
+            tkn_delete(colon);
+            tkn_delete(question);
+            push_expr(
+                c_ast_expr_create_ternary(c_ast_expr_ternary_create(pos_including(cond->pos, rhs->pos), cond, lhs, rhs))
+            );
 
         } else if (is_token(0, TOKENTYPE_ICONST) || is_token(0, TOKENTYPE_CCONST)) { // Reduce iconst / cconst to expr.
             token_t  tkn  = pop_token();

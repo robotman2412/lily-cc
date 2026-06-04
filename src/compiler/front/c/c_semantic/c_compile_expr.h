@@ -17,6 +17,8 @@
 // Returns `NULL` on semantic errors.
 cir_expr_t *c_compile2_expr(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_t const *expr);
 
+// Compile a ternary expression.
+cir_expr_t *c_compile2_expr_ternary(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_ternary_t const *expr);
 // Compile an index expression.
 cir_expr_t *c_compile2_expr_index(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_index_t const *expr);
 // Compile an infix expression.

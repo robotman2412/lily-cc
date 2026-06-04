@@ -22,6 +22,33 @@ static c_options_t c_parse2_test_options = {
 };
 
 
+static char *test_c_expr_prefix() {
+    char const   source[] = "~!1";
+    cctx_t      *cctx     = cctx_create();
+    srcfile_t   *src      = srcfile_create(cctx, "<c_expr_prefix>", source, sizeof(source) - 1);
+    tokenizer_t *tctx     = &c_tkn_create_impl(src, &c_parse2_test_options)->base;
+    c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
+
+    c_ast_expr_t *expr = c_parse2_expr(&pctx);
+
+    if (cctx->diagnostics.len) {
+        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
+        printf("\n");
+        while (diag) {
+            print_diagnostic(diag, stderr);
+            diag = (diagnostic_t const *)diag->node.next;
+        }
+        c_ast_expr_print(expr, stdout, 0);
+        return TEST_FAIL;
+    }
+
+    c_ast_expr_delete(expr);
+    tkn_ctx_delete(tctx);
+    cctx_delete(cctx);
+    return TEST_OK;
+}
+LILY_TEST_CASE(test_c_expr_prefix)
+
 
 static char *test_c_expr_basic() {
     char const   source[] = "1 + 2 * 3 - 4 % 5 / 6";

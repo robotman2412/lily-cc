@@ -22,6 +22,7 @@
 // Returns `NULL` on semantic errors.
 cir_expr_t *c_compile2_expr(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_t const *expr) {
     switch (expr->tag) {
+        case C_AST_TAG_EXPR_TERNARY: return c_compile2_expr_ternary(cc, scope, expr->expr_ternary);
         case C_AST_TAG_EXPR_INDEX: return c_compile2_expr_index(cc, scope, expr->expr_index);
         case C_AST_TAG_EXPR_INFIX: return c_compile2_expr_infix(cc, scope, expr->expr_infix);
         case C_AST_TAG_EXPR_PREFIX: return c_compile2_expr_prefix(cc, scope, expr->expr_prefix);
@@ -38,6 +39,12 @@ cir_expr_t *c_compile2_expr(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_t c
     }
 }
 
+
+// Compile a ternary expression.
+cir_expr_t *c_compile2_expr_ternary(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_ternary_t const *expr) {
+    fprintf(stderr, "TODO: c_compile2_expr_ternary\n");
+    abort();
+}
 
 // Compile an index expression.
 cir_expr_t *c_compile2_expr_index(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_index_t const *expr) {
@@ -667,8 +674,8 @@ cir_expr_t *c_compile2_expr_ident(c_compiler_t *cc, cir_scope_t *scope, c_ast_id
 
 // Compile an integer constant as part of an expression.
 cir_expr_t *c_compile2_expr_iconst(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_iconst_t const *iconst) {
-    fprintf(stderr, "TODO: c_compile2_expr_iconst\n");
-    abort();
+    (void)scope;
+    return c_compile2_synth_iconst(cc, iconst->pos, iconst->prim, iconst->iconst);
 }
 
 // Compile a string constant as part of an expression.

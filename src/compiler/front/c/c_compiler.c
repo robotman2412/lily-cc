@@ -85,6 +85,7 @@ c_parser_t *c_parser_create(c_compiler_t *cc, tokenizer_t *tkn_ctx) {
     ctx->local_type_names = STR_SET_EMPTY;
     ctx->type_names       = STR_SET_EMPTY;
     ctx->tkn_ctx          = tkn_ctx;
+    ctx->options          = &cc->options;
     return ctx;
 }
 
@@ -93,6 +94,7 @@ void c_parser_delete(c_parser_t *parser) {
     set_clear(&parser->local_type_names);
     set_clear(&parser->type_names);
     tkn_ctx_delete(parser->tkn_ctx);
+    lilycc_free(parser);
 }
 
 

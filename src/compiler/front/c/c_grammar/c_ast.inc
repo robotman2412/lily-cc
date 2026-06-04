@@ -45,6 +45,18 @@
 
 
 
+#define C_AST_STRUCT_DEF_expr_ternary(C_AST_STRUCT_DEF, C_AST_STRUCT_FIELD, C_AST_STRUCT_CHILD) \
+/* Infix expression (e.g. `1 + 2`). */ \
+C_AST_STRUCT_DEF(expr_ternary, \
+    /* Condition. */ \
+    C_AST_STRUCT_CHILD(expr_ternary, expr, cond) \
+    /* Left-hand side. */ \
+    C_AST_STRUCT_CHILD(expr_ternary, expr, lhs) \
+    /* Right-hand side. */ \
+    C_AST_STRUCT_CHILD(expr_ternary, expr, rhs) \
+)
+C_AST_META_STRUCT_DEF(expr_ternary)
+
 #define C_AST_STRUCT_DEF_expr_infix(C_AST_STRUCT_DEF, C_AST_STRUCT_FIELD, C_AST_STRUCT_CHILD) \
 /* Infix expression (e.g. `1 + 2`). */ \
 C_AST_STRUCT_DEF(expr_infix, \
@@ -152,6 +164,7 @@ C_AST_META_STRUCT_DEF(expr_compliteral)
 
 // One expression; tagged union of the variants above.
 C_AST_UNION_DEF(expr,
+    C_AST_UNION_CHILD(expr, expr_ternary,     ternary,     EXPR_TERNARY)
     C_AST_UNION_CHILD(expr, expr_index,       index,       EXPR_INDEX)
     C_AST_UNION_CHILD(expr, expr_infix,       infix,       EXPR_INFIX)
     C_AST_UNION_CHILD(expr, expr_prefix,      prefix,      EXPR_PREFIX)

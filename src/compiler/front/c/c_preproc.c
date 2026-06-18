@@ -1612,6 +1612,8 @@ static void c_macro_mark_pasting(vec_macro_subst_t *tokens) {
 static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
     cctx_t *cctx = tkn_ctx->cctx;
 
+    bool  stringize = false;
+    pos_t hash_pos;
     while (1) {
         // Skip whitespace; stop at EOL/EOF without consuming it.
         token_t peek = tkn_peek(tkn_ctx);
@@ -1628,7 +1630,7 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
         if (macro->regular.subst.len == 0 && tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_PASTE) {
             cctx_diagnostic(cctx, tkn.pos, DIAG_ERR, "`##` is not allowed at the start/end of macro expansion lists");
             tkn_delete(tkn);
-            return false;
+            abort();
         }
         if (!macro->regular.is_variadic && tkn.type == TOKENTYPE_IDENT
             && (!strcmp(tkn.strval, "__VA_ARGS__") || !strcmp(tkn.strval, "__VA_OPT__"))) {
@@ -1638,37 +1640,11 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
         c_macro_subst_t subst   = {0};
         bool            matched = false;
         if (macro->uses_args && tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_HASH) {
-            pos_t   hash_pos = tkn.pos;
-            token_t next     = tkn_next(tkn_ctx);
-            while (next.type == TOKENTYPE_WHITESPACE) {
-                tkn_delete(next);
-                next = tkn_next(tkn_ctx);
-            }
-            if (next.type != TOKENTYPE_IDENT) {
-                cctx_diagnostic(cctx, hash_pos, DIAG_ERR, "`#` must be followed by a macro parameter name");
-                tkn_delete(tkn);
-                tkn_delete(next);
-                return false;
-            }
-            bool found = false;
-            for (size_t i = 0; i < macro->regular.args.len; i++) {
-                if (!strcmp(next.strval, macro->regular.args.arr[i])) {
-                    found           = true;
-                    subst.type      = C_SUBST_ARG;
-                    subst.stringize = true;
-                    subst.arg_index = i;
-                    break;
-                }
-            }
-            if (!found) {
-                cctx_diagnostic(cctx, hash_pos, DIAG_ERR, "`#` must be followed by a macro parameter name");
-                tkn_delete(tkn);
-                tkn_delete(next);
-                return false;
-            }
-            tkn_delete(next);
+            hash_pos  = tkn.pos;
+            stringize = true;
+            tkn_delete(tkn);
             matched = true;
-        } else if (tkn.type == TOKENTYPE_IDENT && !strcmp(tkn.strval, "__VA_OPT__")) {
+        } else if (tkn.type == TOKENTYPE_IDENT && macro->regular.is_variadic && !strcmp(tkn.strval, "__VA_OPT__")) {
             pos_t opt_pos = tkn.pos;
 
             // Skip whitespace before `(`.
@@ -1679,7 +1655,7 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
             }
             if (pp.type != TOKENTYPE_OTHER || pp.subtype != C_TKN_LPAR) {
                 cctx_diagnostic(cctx, opt_pos, DIAG_ERR, "`__VA_OPT__` must be followed by `(`");
-                return false;
+                abort();
             }
             token_t lpar    = tkn_next(tkn_ctx);
             pos_t   end_pos = lpar.pos;
@@ -1701,7 +1677,7 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
                     }
                     vec_clear(&opt_tokens);
                     vec_clear(&opt_ws);
-                    return false;
+                    abort();
                 }
                 if (p.type == TOKENTYPE_WHITESPACE) {
                     tkn_delete(tkn_next(tkn_ctx));
@@ -1727,23 +1703,32 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
             }
 
             subst.type             = C_SUBST_VA_OPT;
+            subst.stringize        = stringize;
             subst.va_opt.pos       = pos_including(opt_pos, end_pos);
             subst.va_opt.tokens    = opt_tokens;
             subst.va_opt.ws_before = opt_ws;
             matched                = true;
-        } else if (tkn.type == TOKENTYPE_IDENT && !strcmp(tkn.strval, "__VA_ARGS__")) {
-            subst.type = C_SUBST_VA_ARGS;
-            matched    = true;
+            stringize              = false;
+        } else if (tkn.type == TOKENTYPE_IDENT && macro->regular.is_variadic && !strcmp(tkn.strval, "__VA_ARGS__")) {
+            subst.type      = C_SUBST_VA_ARGS;
+            subst.stringize = stringize;
+            matched         = true;
+            stringize       = false;
         } else if (tkn.type == TOKENTYPE_IDENT) {
             for (size_t i = 0; i < macro->regular.args.len; i++) {
                 if (!strcmp(tkn.strval, macro->regular.args.arr[i])) {
                     subst.type      = C_SUBST_ARG;
-                    subst.stringize = false;
+                    subst.stringize = stringize;
                     subst.arg_index = i;
                     matched         = true;
+                    stringize       = false;
                     break;
                 }
             }
+        } else if (stringize) {
+            cctx_diagnostic(cctx, hash_pos, DIAG_ERR, "Expected identifier after #");
+            tkn_delete(tkn);
+            abort();
         }
         if (!matched) {
             subst.type  = C_SUBST_TOKEN;
@@ -1752,6 +1737,10 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
             tkn_delete(tkn);
         }
         vec_push(&macro->regular.subst, subst);
+    }
+    if (stringize) {
+        cctx_diagnostic(cctx, hash_pos, DIAG_ERR, "Expected identifier after #");
+        abort();
     }
 
     if (macro->regular.subst.len) {
@@ -1763,7 +1752,7 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
                 DIAG_ERR,
                 "`##` is not allowed at the start/end of macro expansion lists"
             );
-            return false;
+            abort();
         }
     }
 
@@ -2295,21 +2284,53 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
             }
 
             // Get the matching argument ptr.
-            c_macro_arg_t *arg;
+            c_macro_arg_t *arg = NULL;
             if (subst->type == C_SUBST_ARG) {
                 arg = &args.arr[subst->arg_index];
             } else if (subst->type == C_SUBST_VA_ARGS) {
-                arg = &args.arr[args.len - 1];
+                if (args.len >= 1) {
+                    // Only expand __VA_ARGS__ if there are varargs specified.
+                    // If not, put a placemarker token there instead.
+                    arg = &args.arr[args.len - 1];
+                }
             } else if (subst->type == C_SUBST_VA_OPT) {
-                arg = &subst->va_opt;
+                if (args.len > macro->regular.args.len) {
+                    // Only expand __VA_OPT__ if there are varargs specified.
+                    // If not, put a placemarker token there instead.
+                    arg = &subst->va_opt;
+                }
             } else {
                 abort();
             }
 
-            if (subst->stringize) {
+            if (!arg) {
+                // Special case used for empty variadics.
+                if (subst->stringize) {
+                    // To emit an empty string.
+                    token_t tkn = {
+                        .pos        = pos,
+                        .type       = TOKENTYPE_SCONST,
+                        .subtype    = C_STR_RAW_DQUOT,
+                        .strval     = lilycc_calloc(1, 1),
+                        .strval_len = 0,
+                    };
+                    vec_push(&expand.tokens, tkn);
+
+                } else {
+                    // Nothing emitted; put a placemarker down instead.
+                    token_t tkn = {
+                        .pos     = pos,
+                        .type    = TOKENTYPE_OTHER,
+                        .subtype = C_TKN_MARKER,
+                    };
+                    vec_push(&expand.tokens, tkn);
+                }
+
+            } else if (subst->stringize) {
                 // Stringization: turn the argument's tokens into a single string literal.
                 token_t tkn = c_macro_arg_stringize(arg, pos);
                 vec_push(&expand.tokens, tkn);
+
             } else {
                 // This is a macro argument.
                 token_t const *tokens;
@@ -2330,6 +2351,16 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
                         tkn.subtype = C_TKN_ESCPASTE;
                     }
                     tkn.pos = pos;
+                    vec_push(&expand.tokens, tkn);
+                }
+
+                if (tokens_len == 0) {
+                    // Nothing emitted; put a placemarker down instead.
+                    token_t tkn = {
+                        .pos     = pos,
+                        .type    = TOKENTYPE_OTHER,
+                        .subtype = C_TKN_MARKER,
+                    };
                     vec_push(&expand.tokens, tkn);
                 }
             }

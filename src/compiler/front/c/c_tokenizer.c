@@ -674,7 +674,7 @@ static token_t c_tkn_whitespace(tokenizer_t *ctx, pos_t start_pos, c_whitespace_
         pos   = ctx->pos;
         int c = c_srcfile_getc(ctx->file, &pos);
         if (subtype == C_WHITESPACE) {
-            if (c > 0x20 || c == -1) {
+            if (c == '\n' || c > 0x20 || c == -1) {
                 break;
             }
         } else if (subtype == C_LINE_COMMENT) {
@@ -687,12 +687,15 @@ static token_t c_tkn_whitespace(tokenizer_t *ctx, pos_t start_pos, c_whitespace_
                 cctx_diagnostic(ctx->cctx, pos, DIAG_ERR, "Unterminated block comment");
                 break;
             } else if (c == '/' && prev == '*') {
-                len--; // Exclude the `*` from the `*/`.
+                if (c_ctx->keep_comments) {
+                    len--; // Exclude the `*` from the `*/`.
+                }
+                ctx->pos = pos;
                 break;
             }
             prev = c;
         }
-        if (c_ctx->keep_comments || subtype == C_WHITESPACE) {
+        if (c_ctx->keep_comments) {
             char    enc[4];
             uint8_t enc_len = utf8_encode(enc, sizeof(enc), c);
             array_lencap_insert_n_strong(&buf, 1, &len, &cap, enc, len, enc_len);
@@ -700,7 +703,7 @@ static token_t c_tkn_whitespace(tokenizer_t *ctx, pos_t start_pos, c_whitespace_
         ctx->pos = pos;
     }
 
-    if (c_ctx->keep_comments || subtype == C_WHITESPACE) {
+    if (c_ctx->keep_comments) {
         array_lencap_insert_strong(&buf, 1, &len, &cap, "", len);
     } else {
         buf[0]  = ' ';

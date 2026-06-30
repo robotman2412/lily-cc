@@ -7,6 +7,7 @@
 #include "c_compiler.h"
 #include "c_parser.h"
 #include "codegen.h"
+#include "ir.h"
 #include "ir/ir_optimizer.h"
 #include "ir_serialization.h"
 
@@ -49,10 +50,21 @@ static void compile(char const *path) {
             c_prepass_t prepass = c_precompile_pass(&decls);
             ir_func_t  *func    = c_compile_func_def(cc, &decls, &prepass);
             c_prepass_destroy(prepass);
-            codegen(profile, func);
-            printf("\n");
+
+            printf("\n// Compiled, unoptimized IR:\n");
             ir_func_serialize(func, profile, stdout);
+
+            ir_func_to_ssa(func);
+            ir_optimize(func);
+            printf("\n// Optimized IR:\n");
+            ir_func_serialize(func, profile, stdout);
+
+            codegen(profile, func);
+            printf("\n// IR lowering to RISC-V instructions:\n");
+            ir_func_serialize(func, profile, stdout);
+
             ir_func_delete(func);
+            printf("\n\n");
         } else {
             // Declarations.
             c_compile_decls(cc, NULL, NULL, &cc->global_scope, &decls);

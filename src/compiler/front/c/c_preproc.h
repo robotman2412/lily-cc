@@ -89,7 +89,7 @@ struct c_preproc {
     vec_incfile_t       stack;
     // Whether the current line has non-whitespace tokens on it.
     bool                blank_line;
-    // Do not convert tokens to C tokens before emitting them.
+    // Do not convert tokens to C tokens before emitting them, and do not remove whitespace tokens.
     bool                raw_mode;
     // Keep comments instead of replacing them with a single space each.
     bool                keep_comments;

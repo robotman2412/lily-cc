@@ -1533,6 +1533,10 @@ emit:
     if (c_preproc_do_emit(pre)) {
         token_t tkn = c_preproc_get_tkn(pre, NEXT_EXPAND);
         if (!pre->raw_mode) {
+            if (tkn.type == TOKENTYPE_WHITESPACE || tkn.type == TOKENTYPE_EOL) {
+                tkn_delete(tkn);
+                goto again;
+            }
             tkn = c_preproc_tkn_to_c_tkn(pre, tkn);
         }
         return tkn;

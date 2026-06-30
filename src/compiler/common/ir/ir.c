@@ -470,10 +470,11 @@ ir_frame_t *ir_frame_create(ir_func_t *func, uint64_t size, uint64_t align, char
     if (name) {
         frame->name = lilycc_strdup(name);
     } else {
-        char const *fmt = "frame%zu";
-        size_t      len = snprintf(NULL, 0, fmt, func->frames_list.len);
+        char const *fmt = ".frame%zu";
+        size_t      len = snprintf(NULL, 0, fmt, func->frame_name_ctr);
         frame->name     = lilycc_calloc(1, len + 1);
-        snprintf(frame->name, len + 1, fmt, func->frames_list.len);
+        snprintf(frame->name, len + 1, fmt, func->frame_name_ctr);
+        func->frame_name_ctr++;
     }
     frame->func  = func;
     frame->size  = size;
@@ -495,10 +496,11 @@ ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
     if (name) {
         var->name = lilycc_strdup(name);
     } else {
-        char const *fmt = "var%zu";
-        size_t      len = snprintf(NULL, 0, fmt, func->vars_list.len);
+        char const *fmt = ".var%zu";
+        size_t      len = snprintf(NULL, 0, fmt, func->var_name_ctr);
         var->name       = lilycc_calloc(1, len + 1);
-        snprintf(var->name, len + 1, fmt, func->vars_list.len);
+        snprintf(var->name, len + 1, fmt, func->var_name_ctr);
+        func->var_name_ctr++;
     }
     name_free_assert(func, var->name);
     var->prim_type   = type;
@@ -605,10 +607,11 @@ ir_code_t *ir_code_create(ir_func_t *func, char const *name) {
     if (name) {
         code->name = lilycc_strdup(name);
     } else {
-        char const *fmt = "code%zu";
-        size_t      len = snprintf(NULL, 0, fmt, func->code_list.len);
+        char const *fmt = ".code%zu";
+        size_t      len = snprintf(NULL, 0, fmt, func->code_name_ctr);
         code->name      = lilycc_calloc(1, len + 1);
-        snprintf(code->name, len + 1, fmt, func->code_list.len);
+        snprintf(code->name, len + 1, fmt, func->code_name_ctr);
+        func->code_name_ctr++;
     }
     name_free_assert(func, code->name);
     map_set(&func->code_by_name, code->name, code);

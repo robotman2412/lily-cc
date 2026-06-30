@@ -524,6 +524,12 @@ struct ir_func {
     dlist_t      vars_list;
     // Unordered list of stack frames.
     dlist_t      frames_list;
+    // Name counters for code blocks.
+    size_t       code_name_ctr;
+    // Name counters for stack frames.
+    size_t       frame_name_ctr;
+    // Name counters for variables.
+    size_t       var_name_ctr;
     // Map from name to code blocks.
     map_t        code_by_name;
     // Map from name to variables.

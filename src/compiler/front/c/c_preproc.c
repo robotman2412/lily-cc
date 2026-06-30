@@ -304,6 +304,7 @@ c_preproc_t *c_preproc_create(srcfile_t *srcfile, c_options_t const *options, bo
     shared->options            = options;
 
     // Note: `base` has a `pos` and `file`, but we do not use either.
+    pre->base.cctx           = srcfile->ctx;
     pre->base.next           = c_preproc_next;
     pre->base.cleanup        = c_preproc_destroy;
     pre->root                = pre;

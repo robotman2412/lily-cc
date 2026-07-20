@@ -169,7 +169,7 @@ struct c_macro_subst {
     union {
         // Literal token to emit (`C_SUBST_TOKEN`).
         token_t       token;
-        // Index into the macro argument list (`C_SUBST_ARG` and `C_SUBST_STRINGIZE`).
+        // Index into the macro argument list (`C_SUBST_ARG`).
         size_t        arg_index;
         // Synthetic arg for `__VA_OPT__` value.
         c_macro_arg_t va_opt;

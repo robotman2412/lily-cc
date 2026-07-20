@@ -1648,7 +1648,7 @@ static bool c_macro_parse_body(c_macro_t *macro, tokenizer_t *tkn_ctx) {
             hash_pos  = tkn.pos;
             stringize = true;
             tkn_delete(tkn);
-            matched = true;
+            continue;
         } else if (tkn.type == TOKENTYPE_IDENT && macro->regular.is_variadic && !strcmp(tkn.strval, "__VA_OPT__")) {
             pos_t opt_pos = tkn.pos;
 

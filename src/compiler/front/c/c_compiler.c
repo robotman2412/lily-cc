@@ -2527,6 +2527,7 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
                 case C_VAR_STORAGE_REG:
                     func->args[i].arg_type = IR_ARG_TYPE_VAR;
                     func->args[i].var      = var->ir_var;
+                    var->ir_var->arg_index = (ptrdiff_t)i;
                     break;
                 case C_VAR_STORAGE_FRAME: {
                     uint64_t size, align;
@@ -2597,6 +2598,7 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
     c_var_t *var = lilycc_calloc(1, sizeof(c_var_t));
     var->storage = C_VAR_STORAGE_GLOBAL;
     var->type    = func_type_rc;
+    var->sym     = lilycc_strdup(name->strval);
     map_set(&ctx->global_scope.locals, name->strval, var);
 
     return func;

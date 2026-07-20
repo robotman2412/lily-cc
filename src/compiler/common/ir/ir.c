@@ -26,28 +26,15 @@
 #include <string.h>
 
 
-// Helper macro for performing an operation on all variables in an IR operand.
-#define FOR_OPERAND_VARS(operand, name, action)                                                                        \
-    ({                                                                                                                 \
-        if ((operand).type == IR_OPERAND_TYPE_VAR) {                                                                   \
-            ir_var_t *name = (operand).var;                                                                            \
-            action                                                                                                     \
-        } else if ((operand).type == IR_OPERAND_TYPE_MEM) {                                                            \
-            if ((operand).mem.base_type == IR_MEMBASE_VAR) {                                                           \
-                ir_var_t *name = (operand).mem.base_var;                                                               \
-                action                                                                                                 \
-            }                                                                                                          \
-        }                                                                                                              \
-    })
 
 // Helper function that marks an operand as not used by an instruction.
 static void ir_unmark_used(ir_operand_t operand, ir_insn_t *insn) {
-    FOR_OPERAND_VARS(operand, var, set_remove(&var->used_at, insn););
+    IR_FOR_OPERAND_VARS(operand, var, set_remove(&var->used_at, insn););
 }
 
 // Helper function that marks an operand as used by an instruction.
 void ir_mark_used(ir_operand_t operand, ir_insn_t *insn) {
-    FOR_OPERAND_VARS(operand, var, set_add(&var->used_at, insn););
+    IR_FOR_OPERAND_VARS(operand, var, set_add(&var->used_at, insn););
 }
 
 // Create a new IR function.
@@ -515,6 +502,7 @@ ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
 }
 
 // Delete an IR variable, removing all assignments and references in the process.
+// TODO: A variant is needed that only deletes if it would not have side effects.
 void ir_var_delete(ir_var_t *var) {
     // Delete variable's usages.
     set_t to_delete = PTR_SET_EMPTY;
@@ -530,6 +518,13 @@ void ir_var_delete(ir_var_t *var) {
         var->func->args[var->arg_index].arg_type     = IR_ARG_TYPE_IGNORED;
         var->func->args[var->arg_index].ignored_prim = var->prim_type;
     }
+#ifndef NDEBUG
+    for (size_t i = 0; i < var->func->args_len; i++) {
+        if (var->func->args[i].arg_type == IR_ARG_TYPE_VAR) {
+            assert(var->func->args[i].var != var);
+        }
+    }
+#endif
 
     // Delete the variable itself.
     map_remove(&var->func->var_by_name, var->name);
@@ -689,30 +684,36 @@ void ir_insn_delete(ir_insn_t *insn) {
         case IR_INSN_JUMP:
         case IR_INSN_BRANCH:
         case IR_INSN_STORE:
-        case IR_INSN_CALL:
         case IR_INSN_RETURN:
-        case IR_INSN_MEMCPY: assert(insn->returns_len == 0); break;
-        case IR_INSN_MEMSET: assert(insn->returns_len == 0); break;
+        case IR_INSN_MEMCPY:
+        case IR_INSN_ALLOCA:
+        case IR_INSN_MEMSET:
+        case IR_INSN_CALLFRAME_ENTER:
+        case IR_INSN_CALLFRAME_EXIT: assert(insn->returns_len == 0); break;
+        case IR_INSN_CALL: assert(insn->returns_len <= 1); break;
         case IR_INSN_MACHINE:
         case IR_INSN_CLOBBER: break;
     }
 
     // Debug-assert parameter lengths.
     switch (insn->type) {
+        case IR_INSN_EXPR1:
+        case IR_INSN_LEA:
+        case IR_INSN_LOAD:
+        case IR_INSN_JUMP:
+        case IR_INSN_ALLOCA:
+        case IR_INSN_CALLFRAME_ENTER:
+        case IR_INSN_CALLFRAME_EXIT: assert(insn->operands_len == 1); break;
+        case IR_INSN_BRANCH:
+        case IR_INSN_STORE:
         case IR_INSN_EXPR2: assert(insn->operands_len == 2); break;
-        case IR_INSN_EXPR1: assert(insn->operands_len == 1); break;
-        case IR_INSN_JUMP: assert(insn->operands_len == 1); break;
-        case IR_INSN_BRANCH: assert(insn->operands_len == 2); break;
-        case IR_INSN_LEA: assert(insn->operands_len == 1); break;
-        case IR_INSN_LOAD: assert(insn->operands_len == 1); break;
-        case IR_INSN_STORE: assert(insn->operands_len == 2); break;
         case IR_INSN_COMBINATOR: assert(insn->operands_len > 0); break;
-        case IR_INSN_CALL: break;
         case IR_INSN_RETURN: assert(insn->operands_len <= 1); break;
         case IR_INSN_MEMCPY: assert(insn->operands_len == 3); break;
         case IR_INSN_MEMSET: assert(insn->operands_len == 3); break;
-        case IR_INSN_MACHINE:
-        case IR_INSN_CLOBBER: break;
+        case IR_INSN_CLOBBER: assert(insn->operands_len == 0);
+        case IR_INSN_CALL:
+        case IR_INSN_MACHINE: break;
     }
 
     if (insn->type == IR_INSN_COMBINATOR) {
@@ -747,18 +748,34 @@ void ir_insn_delete(ir_insn_t *insn) {
 void ir_insn_set_operand(ir_insn_t *insn, size_t index, ir_operand_t operand) {
     assert(index < insn->operands_len);
 
+#ifndef NDEBUG
+    if (operand.type == IR_OPERAND_TYPE_VAR) {
+        assert(operand.var);
+    } else if (operand.type == IR_OPERAND_TYPE_MEM) {
+        if (operand.mem.base_type == IR_MEMBASE_VAR) {
+            assert(operand.mem.base_var);
+        } else if (operand.mem.base_type == IR_MEMBASE_CODE) {
+            assert(operand.mem.base_code);
+        } else if (operand.mem.base_type == IR_MEMBASE_FRAME) {
+            assert(operand.mem.base_frame);
+        } else if (operand.mem.base_type == IR_MEMBASE_SYM) {
+            assert(operand.mem.base_sym);
+        }
+    }
+#endif
+
     // Clean up old operand.
     ir_operand_t old = insn->type == IR_INSN_COMBINATOR ? insn->combinators[index].bind : insn->operands[index];
     if (old.type == IR_OPERAND_TYPE_MEM && old.mem.base_type == IR_MEMBASE_SYM) {
         lilycc_free(old.mem.base_sym);
     }
-    FOR_OPERAND_VARS(old, var, set_remove(&var->used_at, insn););
+    IR_FOR_OPERAND_VARS(old, var, set_remove(&var->used_at, insn););
 
     // Install new operand.
     if (operand.type == IR_OPERAND_TYPE_MEM && operand.mem.base_type == IR_MEMBASE_SYM) {
         operand.mem.base_sym = lilycc_strdup(operand.mem.base_sym);
     }
-    FOR_OPERAND_VARS(operand, var, set_add(&var->used_at, insn););
+    IR_FOR_OPERAND_VARS(operand, var, set_add(&var->used_at, insn););
     if (insn->type == IR_INSN_COMBINATOR) {
         insn->combinators[index].bind = operand;
     } else {
@@ -769,13 +786,13 @@ void ir_insn_set_operand(ir_insn_t *insn, size_t index, ir_operand_t operand) {
     if (insn->type == IR_INSN_COMBINATOR) {
         for (size_t i = 0; i < insn->combinators_len; i++) {
             if (i != index) {
-                FOR_OPERAND_VARS(insn->combinators[i].bind, var, set_add(&var->used_at, insn););
+                IR_FOR_OPERAND_VARS(insn->combinators[i].bind, var, set_add(&var->used_at, insn););
             }
         }
     } else {
         for (size_t i = 0; i < insn->operands_len; i++) {
             if (i != index) {
-                FOR_OPERAND_VARS(insn->operands[i], var, set_add(&var->used_at, insn););
+                IR_FOR_OPERAND_VARS(insn->operands[i], var, set_add(&var->used_at, insn););
             }
         }
     }
@@ -789,6 +806,7 @@ void ir_insn_set_return(ir_insn_t *insn, size_t index, ir_retval_t dest) {
     }
     insn->returns[index] = dest;
     if (dest.type == IR_RETVAL_TYPE_VAR) {
+        assert(dest.dest_var);
         assert(!set_contains(&dest.dest_var->assigned_at, insn));
         set_add(&dest.dest_var->assigned_at, insn);
     }
@@ -853,11 +871,15 @@ static void ir_emplace_insn(ir_insnloc_t loc, ir_insn_t *insn) {
 
 // Helper function to allocate an `ir_insn_t`.
 static ir_insn_t *alloc_ir_insn(size_t operands_len, size_t returns_len) {
-    ir_insn_t *insn    = lilycc_calloc(1, sizeof(ir_insn_t));
-    insn->operands     = lilycc_calloc(operands_len, sizeof(ir_operand_t));
-    insn->operands_len = operands_len;
-    insn->returns      = lilycc_calloc(returns_len, sizeof(ir_retval_t));
-    insn->returns_len  = returns_len;
+    ir_insn_t *insn = lilycc_calloc(1, sizeof(ir_insn_t));
+    if (operands_len) {
+        insn->operands     = lilycc_calloc(operands_len, sizeof(ir_operand_t));
+        insn->operands_len = operands_len;
+    }
+    if (returns_len) {
+        insn->returns     = lilycc_calloc(returns_len, sizeof(ir_retval_t));
+        insn->returns_len = returns_len;
+    }
     return insn;
 }
 
@@ -873,6 +895,7 @@ static ir_insn_t *ir_create_insn(
         insn->returns     = lilycc_malloc(sizeof(ir_retval_t));
         insn->returns_len = 1;
         if (dest.type == IR_RETVAL_TYPE_VAR) {
+            assert(dest.dest_var);
             if (ir_insnloc_code(loc)->func->enforce_ssa
                 && (dest.dest_var->assigned_at.len || dest.dest_var->arg_index >= 0)) {
                 fprintf(stderr, "BUG: SSA IR variable %%%s assigned twice\n", dest.dest_var->name);
@@ -883,6 +906,22 @@ static ir_insn_t *ir_create_insn(
         insn->returns[0] = dest;
     }
     for (size_t i = 0; i < operands_len; i++) {
+#ifndef NDEBUG
+        if (insn->operands[i].type == IR_OPERAND_TYPE_VAR) {
+            assert(insn->operands[i].var);
+        } else if (insn->operands[i].type == IR_OPERAND_TYPE_MEM) {
+            if (insn->operands[i].mem.base_type == IR_MEMBASE_VAR) {
+                assert(insn->operands[i].mem.base_var);
+            } else if (insn->operands[i].mem.base_type == IR_MEMBASE_CODE) {
+                assert(insn->operands[i].mem.base_code);
+            } else if (insn->operands[i].mem.base_type == IR_MEMBASE_FRAME) {
+                assert(insn->operands[i].mem.base_frame);
+            } else if (insn->operands[i].mem.base_type == IR_MEMBASE_SYM) {
+                assert(insn->operands[i].mem.base_sym);
+            }
+        }
+#endif
+
         ir_mark_used(insn->operands[i], insn);
         if (insn->operands[i].type == IR_OPERAND_TYPE_MEM && insn->operands[i].mem.base_type == IR_MEMBASE_SYM) {
             insn->operands[i].mem.base_sym = lilycc_strdup(insn->operands[i].mem.base_sym);
@@ -980,9 +1019,12 @@ ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_retval_t dest, ir_op2_type_t oper, 
 // Add a clobbering intrinsic.
 ir_insn_t *ir_add_clobber(ir_insnloc_t loc, size_t returns_len, ir_retval_t const *returns) {
     ir_insn_t *insn = alloc_ir_insn(0, returns_len);
+    insn->type      = IR_INSN_CLOBBER;
     for (size_t i = 0; i < returns_len; i++) {
         insn->returns[i] = returns[i];
+        assert(insn->returns[i].type == IR_RETVAL_TYPE_REG);
     }
+    insn->flags = IR_INSN_FLAG_NOREORDER;
     ir_emplace_insn(loc, insn);
     return insn;
 }
@@ -991,10 +1033,12 @@ ir_insn_t *ir_add_clobber(ir_insnloc_t loc, size_t returns_len, ir_retval_t cons
 // The remaining arguments are of type `ir_retval_t const`.
 ir_insn_t *ir_add_clobber_va(ir_insnloc_t loc, size_t returns_len, ...) {
     ir_insn_t *insn = alloc_ir_insn(0, returns_len);
-    va_list    l;
+    insn->type      = IR_INSN_CLOBBER;
+    va_list l;
     va_start(l, returns_len);
     for (size_t i = 0; i < returns_len; i++) {
         insn->returns[i] = va_arg(l, ir_retval_t);
+        assert(insn->returns[i].type == IR_RETVAL_TYPE_REG);
     }
     va_end(l);
     ir_emplace_insn(loc, insn);
@@ -1042,6 +1086,39 @@ ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_memref_t memref) 
     return ir_create_insn_va(loc, IR_INSN_STORE, false, (ir_retval_t){}, 2, IR_OPERAND_MEM(memref), src);
 }
 
+
+// Add a dynamic stack allocation.
+ir_insn_t *ir_add_alloca(ir_insnloc_t loc, ir_retval_t dest, ir_operand_t size) {
+    return ir_create_insn_va(loc, IR_INSN_ALLOCA, true, dest, 1, size);
+}
+
+// Add a call frame entry marker.
+ir_insn_t *ir_add_callframe_enter(ir_insnloc_t loc, ir_frame_t *frame) {
+    ir_insn_t *tmp = ir_create_insn_va(
+        loc,
+        IR_INSN_CALLFRAME_ENTER,
+        false,
+        (ir_retval_t){},
+        1,
+        IR_OPERAND_MEM(IR_MEMREF(IR_N_PRIM, IR_BADDR_FRAME(frame)))
+    );
+    tmp->flags |= IR_INSN_FLAG_NOREORDER;
+    return tmp;
+}
+
+// Add a call frame exit marker.
+ir_insn_t *ir_add_callframe_exit(ir_insnloc_t loc, ir_frame_t *frame) {
+    ir_insn_t *tmp = ir_create_insn_va(
+        loc,
+        IR_INSN_CALLFRAME_EXIT,
+        false,
+        (ir_retval_t){},
+        1,
+        IR_OPERAND_MEM(IR_MEMREF(IR_N_PRIM, IR_BADDR_FRAME(frame)))
+    );
+    tmp->flags |= IR_INSN_FLAG_NOREORDER;
+    return tmp;
+}
 
 
 // Add a memory filling intrinsic.
@@ -1258,4 +1335,38 @@ ir_insn_t *ir_add_mach_insn(
     ir_insn_t *insn = ir_create_insn(loc, IR_INSN_MACHINE, has_dest, dest, operands_len, operands_copy);
     insn->prototype = proto;
     return insn;
+}
+
+
+// Get the next instruction after this one.
+ir_insn_t *ir_next_after(ir_insn_t const *insn) {
+    if (insn->type == IR_INSN_JUMP) {
+        return ir_first_in_code(insn->operands[0].mem.base_code);
+    }
+    if (insn->node.next) {
+        return container_of(insn->node.next, ir_insn_t, node);
+    }
+    if (insn->code->node.next) {
+        return ir_first_in_code(container_of(insn->code->node.next, ir_code_t, node));
+    }
+    return NULL;
+}
+
+// Get the branch target instruction.
+ir_insn_t *ir_branch_target(ir_insn_t const *insn) {
+    if (insn->type != IR_INSN_BRANCH) {
+        return NULL;
+    }
+    return ir_first_in_code(insn->operands[0].mem.base_code);
+}
+
+// Get the first instruction at or after some code.
+ir_insn_t *ir_first_in_code(ir_code_t const *code) {
+    while (code->insns.len == 0) {
+        if (!code->node.next) {
+            return NULL;
+        }
+        code = container_of(code->node.next, ir_code_t, node);
+    }
+    return container_of(code->insns.head, ir_insn_t, node);
 }

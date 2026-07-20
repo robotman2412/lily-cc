@@ -79,7 +79,8 @@ ir_code_t *ir_code_create(ir_func_t *func, char const *name);
 // Delete an IR code block and all contained instructions.
 void       ir_code_delete(ir_code_t *code);
 
-// Delete an instruction from the code.
+// Delete an IR variable, removing all assignments and references in the process.
+// TODO: A variant is needed that only deletes if it would not have side effects.
 void ir_insn_delete(ir_insn_t *insn);
 // Set an IR instruction's operand by index.
 void ir_insn_set_operand(ir_insn_t *insn, size_t index, ir_operand_t operand);
@@ -110,6 +111,13 @@ ir_insn_t *ir_add_lea(ir_insnloc_t loc, ir_retval_t dest, ir_memref_t memref);
 ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_retval_t dest, ir_memref_t memref);
 // Add a memory store to a code block.
 ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_memref_t memref);
+
+// Add a dynamic stack allocation.
+ir_insn_t *ir_add_alloca(ir_insnloc_t loc, ir_retval_t dest, ir_operand_t size);
+// Add a call frame entry marker.
+ir_insn_t *ir_add_callframe_enter(ir_insnloc_t loc, ir_frame_t *frame);
+// Add a call frame exit marker.
+ir_insn_t *ir_add_callframe_exit(ir_insnloc_t loc, ir_frame_t *frame);
 
 // Add a memory filling intrinsic.
 // The fill value must be either u8 or s8.
@@ -169,6 +177,13 @@ ir_insn_t *ir_add_mach_insn(
     size_t              operands_len,
     ir_operand_t const *operands
 );
+
+// Get the next instruction after this one.
+ir_insn_t *ir_next_after(ir_insn_t const *insn);
+// Get the branch target instruction.
+ir_insn_t *ir_branch_target(ir_insn_t const *insn);
+// Get the first instruction at or after some code.
+ir_insn_t *ir_first_in_code(ir_code_t const *code);
 
 
 

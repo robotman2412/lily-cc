@@ -84,8 +84,9 @@ static ir_insn_t *rv_emit_int_cast(
     if (dest_prim == IR_PRIM_bool) {
         // slt dest, x0, src
         return ir_add_mach_insn(loc, true, dest, &rv_insn_sltu, 2, (ir_operand_t const[]){IR_OPERAND_REG(0), src});
-    } else if (ir_prim_is_signed(src_prim)
-               || (ir_prim_is_signed(dest_prim) && ir_prim_as_signed(src_prim) == dest_prim)) {
+    } else if (
+        ir_prim_is_signed(src_prim) || (ir_prim_is_signed(dest_prim) && ir_prim_as_signed(src_prim) == dest_prim)
+    ) {
         // Sign-extend.
         uint8_t   shamt = ptr_bits - ir_prim_sizes[dest_prim] * 8;
         ir_var_t *tmp   = ir_var_create(ir_insnloc_code(loc)->func, dest_prim, NULL);
@@ -312,7 +313,7 @@ static inline ir_insn_t *rv_isel_cmp_branch(rv_profile_t const *profile, ir_insn
             }
         );
 
-        if (pred_insn->returns[0].dest_var->used_at.len == 1) {
+        if (pred_insn->returns[0].type == IR_RETVAL_TYPE_VAR && pred_insn->returns[0].dest_var->used_at.len == 1) {
             ir_insn_delete(pred_insn);
         }
         ir_insn_delete(ir_insn);
@@ -359,7 +360,7 @@ static inline ir_insn_t *rv_isel_cmp_branch(rv_profile_t const *profile, ir_insn
             (ir_operand_t const[]){pred_insn->operands[swap], pred_insn->operands[!swap], ir_insn->operands[0]}
         );
 
-        if (pred_insn->returns[0].dest_var->used_at.len == 1) {
+        if (pred_insn->returns[0].type == IR_RETVAL_TYPE_VAR && pred_insn->returns[0].dest_var->used_at.len == 1) {
             ir_insn_delete(pred_insn);
         }
         ir_insn_delete(ir_insn);
@@ -438,8 +439,9 @@ static inline ir_insn_t *rv_isel_expr2_ri(rv_profile_t const *profile, ir_insn_t
 // Binary expressions.
 static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t const *profile, ir_insn_t *ir_insn) {
     (void)profile;
-    if (ir_insn->returns[0].dest_var->prim_type == IR_PRIM_f32
-        || ir_insn->returns[0].dest_var->prim_type == IR_PRIM_f64) {
+    if (ir_insn->returns[0].type == IR_RETVAL_TYPE_VAR
+        && (ir_insn->returns[0].dest_var->prim_type == IR_PRIM_f32
+            || ir_insn->returns[0].dest_var->prim_type == IR_PRIM_f64)) {
         return NULL;
     }
 
@@ -532,7 +534,7 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t const *profile, ir_insn_t
         //     break;
         case IR_OP2_shl: proto = &rv_insn_sll; break;
         case IR_OP2_shr:
-            proto = ir_prim_is_signed(ir_insn->returns[0].dest_var->prim_type) ? &rv_insn_sra : &rv_insn_srl;
+            proto = ir_prim_is_signed(ir_operand_prim(ir_insn->operands[0])) ? &rv_insn_sra : &rv_insn_srl;
             break;
         case IR_OP2_band: proto = &rv_insn_and; break;
         case IR_OP2_bor: proto = &rv_insn_or; break;
@@ -819,7 +821,7 @@ ir_insn_t *rv_isel(backend_profile_t *base_profile, ir_insn_t *ir_insn) {
 
     if (ir_insn->type == IR_INSN_EXPR1 && (ir_insn->op1 == IR_OP1_mov || ir_insn->op1 == IR_OP1_bitcast)) {
         if (ir_insn->operands[0].type == IR_OPERAND_TYPE_CONST) {
-            if (ir_insn->op1 == IR_OP1_bitcast) {
+            if (ir_insn->op1 == IR_OP1_bitcast || ir_insn->returns[0].type == IR_RETVAL_TYPE_REG) {
                 // Constant bit-cast.
                 return rv_isel_const_bitcast(profile, ir_insn);
             } else {
@@ -827,7 +829,7 @@ ir_insn_t *rv_isel(backend_profile_t *base_profile, ir_insn_t *ir_insn) {
                 return rv_isel_const_mov(profile, ir_insn);
             }
         } else {
-            if (ir_insn->op1 == IR_OP1_bitcast) {
+            if (ir_insn->op1 == IR_OP1_bitcast || ir_insn->returns[0].type == IR_RETVAL_TYPE_REG) {
                 // Register-register bitcast.
                 return rv_isel_rr_bitcast(profile, ir_insn);
             } else {

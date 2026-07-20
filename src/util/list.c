@@ -93,6 +93,38 @@ void dlist_concat(dlist_t *front, dlist_t *back) {
     consistency_check(front);
 }
 
+
+// Iterate to the Nth element in the list, if it exists. Will return NULL if the index is out of range.
+// `list` must be non-NULL.
+dlist_node_t *dlist_index(dlist_t const *list, size_t index) {
+    assert_dev_drop(list != NULL);
+    consistency_check(list);
+
+    dlist_node_t *node = list->head;
+
+    while (node && index--) {
+        node = node->next;
+    }
+
+    return node;
+}
+
+// Iterate to the Nth element in the list in reverse order, if it exists. Will return NULL if the index is out of range.
+// `list` must be non-NULL.
+dlist_node_t *dlist_rindex(dlist_t const *list, size_t reverse_index) {
+    assert_dev_drop(list != NULL);
+    consistency_check(list);
+
+    dlist_node_t *node = list->tail;
+
+    while (node && reverse_index--) {
+        node = node->previous;
+    }
+
+    return node;
+}
+
+
 // Appends `node` after the `tail` of the `list`.
 // `node` must not be in `list` already.
 // Both `list` and `node` must be non-NULL.
@@ -275,6 +307,7 @@ dlist_node_t *dlist_pop_back(dlist_t *const list) {
         return NULL;
     }
 }
+
 
 // Checks if `list` contains the given `node`.
 // Both `list` and `node` must be non-NULL.

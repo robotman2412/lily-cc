@@ -281,6 +281,8 @@ struct ir_var {
     ir_func_t   *func;
     // Variable type.
     ir_prim_t    prim_type;
+    // Whether this variable was visited; used by the optimizer.
+    bool         visited;
     // Is one of this function's args and if so, which.
     ptrdiff_t    arg_index;
     // Expressions that assign this variable.

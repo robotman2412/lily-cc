@@ -9,6 +9,7 @@
 #include "ir.h"
 #include "ir/ir_interpreter.h"
 #include "ir_types.h"
+#include "list.h"
 #include "set.h"
 
 
@@ -141,23 +142,69 @@ bool opt_strength_reduce(ir_func_t *func) {
     return reduced;
 }
 
+static void mark_used_dfs(ir_var_t *var) {
+    if (var->visited) {
+        return;
+    }
+    var->visited = true;
+    assert(var->assigned_at.len <= 1);
+    if (var->assigned_at.len == 0) {
+        return;
+    }
+    ir_insn_t *assign = set_next(&var->assigned_at, NULL)->value;
+
+    if (assign->type != IR_INSN_COMBINATOR) {
+        return;
+    }
+
+    for (size_t i = 0; i < assign->combinators_len; i++) {
+        IR_FOR_OPERAND_VARS(assign->combinators[i].bind, var, {
+            var->visited = true;
+            mark_used_dfs(var);
+        });
+    }
+}
+
+static void check_var_used(ir_var_t *var) {
+    if (var->visited || !var->used_at.len) {
+        return;
+    }
+
+    set_foreach(ir_insn_t, insn, &var->used_at) {
+        if (insn->type != IR_INSN_COMBINATOR) {
+            mark_used_dfs(var);
+            return;
+        }
+    }
+}
+
 // Optimization: Delete all variables and assignments to them whose value is never read.
 // Returns whether any variables were deleted.
 bool opt_unused_vars(ir_func_t *func) {
     bool deleted = false, loop;
+
     do {
-        loop          = false;
+        loop = false;
+        dlist_foreach_node(ir_var_t, var, &func->vars_list) {
+            var->visited = false;
+        }
+
+        dlist_foreach_node(ir_var_t, var, &func->vars_list) {
+            check_var_used(var);
+        }
+
         ir_var_t *var = container_of(func->vars_list.head, ir_var_t, node);
         while (var) {
             ir_var_t *next = container_of(var->node.next, ir_var_t, node);
-            if (!var->used_at.len) {
-                ir_var_delete(var);
+            if (!var->visited) {
                 deleted = true;
                 loop    = true;
+                ir_var_delete(var);
             }
             var = next;
         }
     } while (loop);
+
     return deleted;
 }
 

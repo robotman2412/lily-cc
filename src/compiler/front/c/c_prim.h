@@ -74,7 +74,21 @@ typedef enum {
 // Primitive types' names.
 extern char const *c_prim_name[];
 
-// Whether a primitive is an integer type.
+// Whether a primitive is an usigned integer type.
+static inline bool c_prim_is_uint(bool char_is_signed, c_prim_t prim) {
+    switch (prim) {
+        case C_PRIM_CHAR: return char_is_signed;
+        case C_PRIM_UCHAR:
+        case C_PRIM_USHORT:
+        case C_PRIM_UINT:
+        case C_PRIM_ULONG:
+        case C_PRIM_ULLONG:
+        case C_PRIM_U128: return true;
+        default: return false;
+    }
+}
+
+// Whether a primitive is a signed or unsigned integer type.
 static inline bool c_prim_is_int(c_prim_t prim) {
     switch (prim) {
         case C_PRIM_BOOL:
@@ -91,19 +105,8 @@ static inline bool c_prim_is_int(c_prim_t prim) {
         case C_PRIM_SLLONG:
         case C_PRIM_S128:
         case C_PRIM_U128: return true;
-        case C_N_PRIM:
-        case C_PRIM_FLOAT:
-        case C_PRIM_DOUBLE:
-        case C_PRIM_LDOUBLE:
-        case C_PRIM_VOID:
-        case C_COMP_STRUCT:
-        case C_COMP_UNION:
-        case C_COMP_ENUM:
-        case C_COMP_POINTER:
-        case C_COMP_ARRAY:
-        case C_COMP_FUNCTION: return false;
+        default: return false;
     }
-    UNREACHABLE();
 }
 
 // Whether a primitive is a scalar type.

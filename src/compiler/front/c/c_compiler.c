@@ -975,7 +975,7 @@ static inline c_compile_expr_t
 
     // Determine promotion.
     c_tokentype_t op2     = is_assign ? expr->params[0].subtype + C_TKN_ADD - C_TKN_ADD_S : expr->params[0].subtype;
-    c_prim_t      c_prim  = c_prim_promote(lhs_type->primitive, rhs_type->primitive);
+    c_prim_t      c_prim  = c_prim_promote(ctx, lhs_type->primitive, rhs_type->primitive);
     ir_prim_t     ir_prim = c_prim_to_ir_type(ctx, c_prim);
     bool const    is_cmp  = op2 >= C_TKN_EQ && op2 <= C_TKN_GE;
 

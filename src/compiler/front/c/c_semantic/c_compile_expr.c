@@ -69,7 +69,7 @@ static rc_t c_compile2_ternary_result_type(c_compiler_t *cc, pos_t pos, rc_t lrc
 
     // Both arithmetic: apply the usual arithmetic conversions.
     if (c_prim_is_arith(ltyp->primitive) && c_prim_is_arith(rtyp->primitive)) {
-        c_prim_t prim = c_prim_promote(ltyp->primitive, rtyp->primitive);
+        c_prim_t prim = c_prim_promote(cc, ltyp->primitive, rtyp->primitive);
         rc_delete(lrc);
         rc_delete(rrc);
         return rc_share(&cc->prim_rcs[prim]);
@@ -384,11 +384,7 @@ static cir_expr_t *c_compile2_arith_op(
 
     rc_t result_rc;
     if (is_assign) {
-        // Compound assignment: the calc operates at the lhs's type. Cast rhs in if needed.
-        // The lhs is left as-is — codegen will load it via the assign semantics of the calc.
-        if (rhs_prim != lhs_prim && lhs_prim < C_N_PRIM && rhs_prim < C_N_PRIM) {
-            rhs = c_compile2_cast_to_prim(cc, rhs, lhs_prim);
-        }
+        // Compound assignment: type promotion happens as normal, the result is then cast to LHS' type.
         result_rc = rc_share(lhs->common.type_rc);
     } else if (is_bool_result) {
         result_rc = rc_share(&cc->prim_rcs[C_PRIM_SINT]);
@@ -397,7 +393,7 @@ static cir_expr_t *c_compile2_arith_op(
         // Pointer compares produce `int`; the calc itself operates at the size type.
         result_rc = rc_share(&cc->prim_rcs[cc->options.size_type]);
     } else {
-        c_prim_t result_prim = c_prim_promote(lhs_prim, rhs_prim);
+        c_prim_t result_prim = c_prim_promote(cc, lhs_prim, rhs_prim);
         result_rc            = rc_share(&cc->prim_rcs[result_prim]);
     }
 

@@ -9,6 +9,7 @@
 #include "arrays.h"
 #include "c_compiler.h"
 #include "c_parser.h"
+#include "c_prim.h"
 #include "c_values.h"
 #include "compiler.h"
 #include "ir_interpreter.h"
@@ -683,7 +684,7 @@ rc_t c_type_to_pointer(c_compiler_t *ctx, rc_t inner) {
 }
 
 // Determine type promotion to apply in an infix context.
-c_prim_t c_prim_promote(c_prim_t a, c_prim_t b) {
+c_prim_t c_prim_promote(c_compiler_t *ctx, c_prim_t a, c_prim_t b) {
     c_prim_t tmp;
     if (a >= C_N_PRIM || b >= C_N_PRIM) {
         UNREACHABLE();
@@ -695,11 +696,16 @@ c_prim_t c_prim_promote(c_prim_t a, c_prim_t b) {
 
     if (tmp < C_PRIM_SINT) {
         // Promote smaller types to `int`.
-        return C_PRIM_SINT;
-    } else {
-        // Otherwise, merely use the wider of the two types.
-        return tmp;
+        tmp = C_PRIM_SINT;
     }
+    if (c_prim_is_int(tmp)
+        && (c_prim_is_uint(ctx->options.char_is_signed, a) || c_prim_is_uint(ctx->options.char_is_signed, b))) {
+        // If one of the types is unsigned, promote to the corresponding *unsigned* integer.
+        // Makes use of the layout of c_prim_t having all unsigned integers be odd-numbered.
+        tmp |= 1;
+    }
+
+    return tmp;
 }
 
 // Determine whether a type is a scalar type.

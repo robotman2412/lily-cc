@@ -140,7 +140,7 @@ rc_t c_compile_decl(
 // Create a type that is a pointer to an existing type.
 rc_t     c_type_to_pointer(c_compiler_t *ctx, rc_t inner);
 // Determine type promotion to apply in an infix context.
-c_prim_t c_prim_promote(c_prim_t a, c_prim_t b);
+c_prim_t c_prim_promote(c_compiler_t *ctx, c_prim_t a, c_prim_t b);
 // Determine whether a type is a scalar type.
 bool     c_type_is_scalar(c_type_t const *type);
 // Determine whether a value of type `old_type` can be cast to `new_type`.

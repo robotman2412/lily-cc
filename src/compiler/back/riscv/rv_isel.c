@@ -58,7 +58,9 @@ static ir_insn_t *rv_emit_rr_copy(rv_profile_t const *profile, ir_insnloc_t loc,
         abort();
     }
 
-    return ir_add_mach_insn(loc, true, dest, &rv_insn_mv, 1, (ir_operand_t const[]){src});
+    ir_insn_t *new_node  = ir_add_mach_insn(loc, true, dest, &rv_insn_mv, 1, (ir_operand_t const[]){src});
+    new_node->flags     |= IR_INSN_FLAG_RR_COPY;
+    return new_node;
 }
 
 // Emit an integer casting operation.
@@ -73,7 +75,9 @@ static ir_insn_t *rv_emit_int_cast(
 
     if (src_prim == dest_prim) { // TODO: Add checks for cast signed <-> unsigned int.
         // mv dest, src
-        return ir_add_mach_insn(loc, true, dest, &rv_insn_mv, 1, (ir_operand_t const[]){src});
+        ir_insn_t *new_node  = ir_add_mach_insn(loc, true, dest, &rv_insn_mv, 1, (ir_operand_t const[]){src});
+        new_node->flags     |= IR_INSN_FLAG_RR_COPY;
+        return new_node;
     } else if (dest_prim == IR_PRIM_bool) {
         // slt dest, x0, src
         return ir_add_mach_insn(loc, true, dest, &rv_insn_sltu, 2, (ir_operand_t const[]){IR_OPERAND_REG(0), src});

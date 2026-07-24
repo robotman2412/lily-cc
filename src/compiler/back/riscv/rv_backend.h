@@ -22,8 +22,8 @@
 #define RV_REG_S(sn) ((sn) <= 2 ? (sn) + 8 : (sn) + 18 - 2)
 #define RV_REG_A(an) ((an) + 10)
 
-#define RV_ALL_T_REGS(X, C)        X(5) C X(6) C X(7) C X(28) C X(29) C X(30) C X(31)
-#define RV_ALL_S_REGS(X, C)        X(8) C X(9) C X(18) C X(19) C X(20) C X(21) C X(22) C X(23) C X(24) C X(25) C X(26) C X(27)
+#define RV_ALL_T_REGS(X, C) X(5) C X(6) C X(7) C X(28) C X(29) C X(30) C X(31)
+#define RV_ALL_S_REGS(X, C) X(8) C X(9) C X(18) C X(19) C X(20) C X(21) C X(22) C X(23) C X(24) C X(25) C X(26) C X(27)
 #define RV_NONRVE_S_REGS(X, C)     X(18) C X(19) C X(20) C X(21) C X(22) C X(23) C X(24) C X(25) C X(26) C X(27)
 #define RV_NONRET_A_REGS(X, C)     X(12) C X(13) C X(14) C X(15) C X(16) C X(17)
 #define RV_RVE_NONRET_A_REGS(X, C) X(12) C X(13) C X(14) C X(15)
@@ -44,8 +44,8 @@
 #define RV_REG_FS(sn) ((sn) <= 2 ? (sn) + 8 : (sn) + 18 - 2)
 #define RV_REG_FA(an) ((an) + 10)
 
-#define RV_ALL_FT_REGS(X, C)    X(0) C X(1) C X(2) C X(3) C X(4) C X(5) C X(6) C X(7) C X(28) C X(29) C X(30) C X(31)
-#define RV_ALL_FS_REGS(X, C)    X(8) C X(9) C X(18) C X(19) C X(20) C X(21) C X(22) C X(23) C X(24) C X(25) C X(26) C X(27)
+#define RV_ALL_FT_REGS(X, C) X(0) C X(1) C X(2) C X(3) C X(4) C X(5) C X(6) C X(7) C X(28) C X(29) C X(30) C X(31)
+#define RV_ALL_FS_REGS(X, C) X(8) C X(9) C X(18) C X(19) C X(20) C X(21) C X(22) C X(23) C X(24) C X(25) C X(26) C X(27)
 #define RV_NONRET_FA_REGS(X, C) X(12) C X(13) C X(14) C X(15) C X(16) C X(17)
 #define RV_ALL_FA_REGS(X, C)    X(10) C X(11) C X(12) C X(13) C X(14) C X(15) C X(16) C X(17)
 #define RV_ALL_FPRS(X, C)                                                                                              \
@@ -105,6 +105,11 @@ backend_profile_t *rv_create_profile();
 void               rv_delete_profile(backend_profile_t *profile);
 // Prepare backend for codegen stage.
 void               rv_init_codegen(backend_profile_t *profile);
+
+// Emit load for register spilling.
+void rv_spill_load(backend_profile_t *profile, ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame);
+// Emit store for register spilling.
+void rv_spill_store(backend_profile_t *profile, ir_insnloc_t loc, ir_var_t *src, ir_frame_t *frame);
 
 
 

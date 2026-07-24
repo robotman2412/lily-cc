@@ -30,6 +30,8 @@ struct ra_node {
     regno_t   regno;
     // Links to `ra_node_t` nodes that are alive at the same time.
     set_t     links;
+    // Node spill cost heuristic.
+    int64_t   spill_cost;
 };
 
 // A graph-coloring problem node as used for register selection.
@@ -44,7 +46,13 @@ struct ra_nodes {
 
 // Perform liveness analisys for all variables in a function.
 // Assumes at least trivial dead-code elimination has been done.
-ra_nodes_t ra_liveness(backend_profile_t *profile, ir_func_t const *func);
+ra_nodes_t ra_liveness(ir_func_t const *func);
+
+// Delete an `ra_nodes_t`.
+void ra_nodes_destroy(ra_nodes_t nodes);
+
+// Estimate node spill cost.
+void ra_spill_cost(backend_profile_t *profile, ra_node_t *node);
 
 // Perform resource allocation for the given function.
 // Allocates registers to IR variables and frame offsets ir IR stack frames.

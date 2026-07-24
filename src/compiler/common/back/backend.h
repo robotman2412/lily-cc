@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "ir.h"
 #include "ir_types.h"
 
 #include <stdbool.h>
@@ -79,6 +80,10 @@ struct backend {
     ir_insn_t *(*isel)(backend_profile_t *profile, ir_insn_t *ir_insn);
     // Perform target-specific passes after instruction selection.
     void (*post_isel_pass)(backend_profile_t *profile, ir_func_t *func);
+    // Emit load for register spilling.
+    void (*ra_spill_load)(backend_profile_t *profile, ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame);
+    // Emit store for register spilling.
+    void (*ra_spill_store)(backend_profile_t *profile, ir_insnloc_t loc, ir_var_t *src, ir_frame_t *frame);
 };
 
 // Information specific to a certain profile for a backend.

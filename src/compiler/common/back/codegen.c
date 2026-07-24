@@ -466,6 +466,8 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
         }
     }
 
+    // TODO: Deduplication of return code.
+
     // Expand the ABI definition.
     assert(func->enforce_ssa);
     func->enforce_ssa = false;

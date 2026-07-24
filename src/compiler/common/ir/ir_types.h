@@ -362,7 +362,7 @@ struct ir_var {
     ir_func_t   *func;
     // Variable type.
     ir_prim_t    prim_type;
-    // Variable type pre-promotion; only relevant to `cg_promote_var`.
+    // Variable type pre-promotion; only relevant during codegen.
     ir_prim_t    orig_prim_type;
     // Whether this variable was visited; used by the optimizer.
     bool         visited;
@@ -574,6 +574,9 @@ struct ir_retval {
 // Pure function call (depends only on inputs and does not read global state).
 // May be re-ordered, removed or combined with identical calls.
 #define IR_INSN_FLAG_PURE            (1 << 4)
+// Is a 1:1 register-register copy that can be eliminated if dest==src.
+// Used to optimize out redundant copies after register selection.
+#define IR_INSN_FLAG_RR_COPY         (1 << 5)
 
 // IR instruction.
 struct ir_insn {

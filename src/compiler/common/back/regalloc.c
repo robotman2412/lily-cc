@@ -8,7 +8,6 @@
 #include "arrays.h"
 #include "backend.h"
 #include "ir.h"
-#include "ir_serialization.h"
 #include "ir_types.h"
 #include "lilycc_malloc.h"
 #include "list.h"
@@ -17,8 +16,10 @@
 #include "unreachable.h"
 
 #include <assert.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 
 
@@ -74,7 +75,7 @@ static ra_node_t *alloc_reg_node(set_t *ra_nodes, map_t *ra_regs, regno_t regno)
 // Perform liveness analisys for variables in a function.
 // Assumes at least trivial dead-code elimination has been done.
 // Returns a map of `ir_var_t *` -> `ra_node_t *`.
-ra_nodes_t ra_liveness(backend_profile_t *profile, ir_func_t const *func) {
+ra_nodes_t ra_liveness(ir_func_t const *func) {
     // TODO: This may need to be changed to increase efficiency.
 
     // Lifetime analisys graph node.
@@ -316,6 +317,123 @@ ra_nodes_t ra_liveness(backend_profile_t *profile, ir_func_t const *func) {
     };
 }
 
+// Delete an `ra_nodes_t`.
+void ra_nodes_destroy(ra_nodes_t nodes) {
+    set_foreach(ra_node_t, node, &nodes.nodes) {
+        set_clear(&node->links);
+        lilycc_free(node);
+    }
+    set_clear(&nodes.nodes);
+    map_clear(&nodes.by_var);
+}
+
+// Count IR instructions until first use.
+static int64_t time_to_use(ir_var_t *var) {
+    set_t work = PTR_SET_EMPTY;
+    set_addall(&work, &var->assigned_at);
+
+    int64_t time = -1;
+    while (1) {
+        set_t next = PTR_SET_EMPTY;
+        set_foreach(ir_insn_t, insn, &work) {
+            if (set_contains(&var->used_at, insn)) {
+                set_clear(&next);
+                set_clear(&work);
+                return time;
+            }
+            if (insn->type == IR_INSN_JUMP) {
+                ir_insn_t *tmp = ir_branch_target(insn);
+                if (tmp) {
+                    set_add(&next, tmp);
+                }
+            } else if (insn->type != IR_INSN_RETURN) {
+                if (insn->type == IR_INSN_BRANCH) {
+                    ir_insn_t *tmp = ir_branch_target(insn);
+                    if (tmp) {
+                        set_add(&next, tmp);
+                    }
+                }
+                ir_insn_t *tmp = ir_next_after(insn);
+                if (tmp) {
+                    set_add(&next, tmp);
+                }
+            }
+        }
+        set_clear(&work);
+        work = next;
+
+        time++;
+    }
+
+    return time;
+}
+
+// Estimate node spill cost.
+void ra_spill_cost(backend_profile_t *profile, ra_node_t *node) {
+    (void)profile;
+    if (node->var == NULL) {
+        // Can't spill precolored nodes.
+        node->spill_cost = INT_MAX;
+        return;
+    }
+
+    if (node->var->used_at.len == 0) {
+        // Don't spill something never used.
+        assert(node->links.len == 0);
+        node->spill_cost = INT_MAX;
+        return;
+    }
+
+    int64_t ttu = time_to_use(node->var);
+    if (ttu < 1 && node->var->used_at.len == 1) {
+        // Variable used immediately and only once; don't spill.
+        node->spill_cost = INT_MAX;
+        return;
+    } else if (ttu < 1) {
+        ttu = 1;
+    }
+
+    // TODO: Optimizer settings could change the heuristic formula here.
+    node->spill_cost = 1024 * (int64_t)node->var->used_at.len / ttu;
+}
+
+static void ra_spill(backend_profile_t *profile, ra_nodes_t nodes) {
+    int64_t   spill_cost = INT64_MAX;
+    ir_var_t *to_spill   = NULL;
+
+    map_foreach_value(ra_node_t, node, &nodes.by_var) {
+        ra_spill_cost(profile, node);
+        if (node->spill_cost < spill_cost) {
+            to_spill   = node->var;
+            spill_cost = node->spill_cost;
+        }
+    }
+
+    if (spill_cost == INT64_MAX) {
+        fprintf(stderr, "BUG: Cannot select IR variable to spill\n");
+        abort();
+    }
+
+    uint64_t    size     = ir_prim_sizes[to_spill->orig_prim_type];
+    ir_frame_t *frame    = ir_frame_create(to_spill->func, size, size, NULL);
+    set_t       orig_def = PTR_SET_EMPTY;
+    set_t       orig_use = PTR_SET_EMPTY;
+    set_addall(&orig_def, &to_spill->assigned_at);
+    set_addall(&orig_use, &to_spill->used_at);
+
+    set_foreach(ir_insn_t, insn, &orig_def) {
+        profile->backend->ra_spill_store(profile, IR_AFTER_INSN(insn), to_spill, frame);
+    }
+    set_foreach(ir_insn_t, insn, &orig_use) {
+        profile->backend->ra_spill_load(profile, IR_BEFORE_INSN(insn), to_spill, frame);
+    }
+
+    set_clear(&orig_def);
+    set_clear(&orig_use);
+
+    ra_nodes_destroy(nodes);
+}
+
 static void pop_node(ra_nodes_t *nodes, ra_node_t *node) {
     set_foreach(ra_node_t, linked, &node->links) {
         set_remove(&linked->links, node);
@@ -418,7 +536,9 @@ static void choose_one_reg(backend_profile_t *profile, ra_node_t *node) {
 // Perform resource allocation for the given function.
 // Allocates registers to IR variables and frame offsets ir IR stack frames.
 void regalloc(backend_profile_t *profile, ir_func_t *func) {
-    ra_nodes_t nodes = ra_liveness(profile, func);
+    ra_nodes_t nodes;
+again:
+    nodes = ra_liveness(func);
 
     // K values per type of IR variable.
     regno_t k_values[IR_N_PRIM];
@@ -492,7 +612,11 @@ constrained: // Constrained, uncolored nodes.
         must_spill |= node->regno == REGNO_NONE;
     }
 
-    // TODO: on `must_spill`, decide what to spill and try again.
+    if (must_spill) {
+        // Must spill a node.
+        ra_spill(profile, nodes);
+        goto again;
+    }
 
     set_foreach(ra_node_t, node, &nodes.nodes) {
         if (node->var) {
@@ -541,10 +665,5 @@ constrained: // Constrained, uncolored nodes.
         ir_var_replace(node->var, IR_OPERAND_REG(node->regno));
     }
 
-    set_foreach(ra_node_t, node, &nodes.nodes) {
-        set_clear(&node->links);
-        lilycc_free(node);
-    }
-    set_clear(&nodes.nodes);
-    map_clear(&nodes.by_var);
+    ra_nodes_destroy(nodes);
 }

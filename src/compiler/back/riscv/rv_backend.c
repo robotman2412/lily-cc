@@ -6,10 +6,16 @@
 #include "rv_backend.h"
 
 #include "backend.h"
+#include "ir.h"
+#include "ir_types.h"
 #include "lilycc_malloc.h"
 #include "rv_abi.h"
+#include "rv_instructions.h"
 #include "rv_isel.h"
 #include "rv_misc.h"
+#include "unreachable.h"
+
+#include <stdbool.h>
 
 // Get the default backend.
 backend_t const *backend_default() {
@@ -74,6 +80,85 @@ void rv_init_codegen(backend_profile_t *profile0) {
 
 
 
+// Emit load for register spilling.
+void rv_spill_load(backend_profile_t *profile0, ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame) {
+    rv_profile_t       *profile = (void *)profile0;
+    insn_proto_t const *op;
+    switch (dest->orig_prim_type) {
+        case IR_PRIM_s8: op = &rv_insn_lb; break;
+        case IR_PRIM_bool:
+        case IR_PRIM_u8: op = &rv_insn_lbu; break;
+        case IR_PRIM_s16: op = &rv_insn_lh; break;
+        case IR_PRIM_u16: op = &rv_insn_lhu; break;
+        case IR_PRIM_s32: op = &rv_insn_lw; break;
+        case IR_PRIM_u32:
+            if (profile->ext_enabled[RV_64]) {
+                UNREACHABLE(); // TODO.
+            } else {
+                op = &rv_insn_lw;
+            }
+            break;
+        // case IR_PRIM_s64:
+        // case IR_PRIM_u64:
+        // case IR_PRIM_s128:
+        // case IR_PRIM_u128:
+        // case IR_PRIM_f32:
+        // case IR_PRIM_f64:
+        default: UNREACHABLE();
+    }
+    ir_add_mach_insn(
+        loc,
+        true,
+        IR_RETVAL_VAR(dest),
+        op,
+        1,
+        (ir_operand_t const[]){
+            IR_OPERAND_MEM(IR_MEMREF(dest->orig_prim_type, IR_BADDR_FRAME(frame))),
+        }
+    );
+}
+
+// Emit store for register spilling.
+void rv_spill_store(backend_profile_t *profile0, ir_insnloc_t loc, ir_var_t *src, ir_frame_t *frame) {
+    rv_profile_t       *profile = (void *)profile0;
+    insn_proto_t const *op;
+    switch (src->orig_prim_type) {
+        case IR_PRIM_s8: op = &rv_insn_lb; break;
+        case IR_PRIM_bool:
+        case IR_PRIM_u8: op = &rv_insn_lbu; break;
+        case IR_PRIM_s16: op = &rv_insn_lh; break;
+        case IR_PRIM_u16: op = &rv_insn_lhu; break;
+        case IR_PRIM_s32: op = &rv_insn_lw; break;
+        case IR_PRIM_u32:
+            if (profile->ext_enabled[RV_64]) {
+                UNREACHABLE(); // TODO.
+            } else {
+                op = &rv_insn_lw;
+            }
+            break;
+        // case IR_PRIM_s64:
+        // case IR_PRIM_u64:
+        // case IR_PRIM_s128:
+        // case IR_PRIM_u128:
+        // case IR_PRIM_f32:
+        // case IR_PRIM_f64:
+        default: UNREACHABLE();
+    }
+    ir_add_mach_insn(
+        loc,
+        false,
+        (ir_retval_t){},
+        op,
+        2,
+        (ir_operand_t const[]){
+            IR_OPERAND_VAR(src),
+            IR_OPERAND_MEM(IR_MEMREF(src->orig_prim_type, IR_BADDR_FRAME(frame))),
+        }
+    );
+}
+
+
+
 // The RISC-V backend.
 backend_t const rv_backend = {
     .id             = "riscv",
@@ -84,6 +169,8 @@ backend_t const rv_backend = {
     .xabi_entry     = rv_xabi_entry,
     .xabi_call      = rv_xabi_call,
     .xabi_return    = rv_xabi_return,
+    .ra_spill_load  = rv_spill_load,
+    .ra_spill_store = rv_spill_store,
 };
 
 // Table of RISC-V register names.

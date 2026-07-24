@@ -180,7 +180,6 @@ ra_nodes_t ra_liveness(ir_func_t const *func) {
     // Nodes that may need to be updated.
     size_t      dirty_len = lt_nodes_len;
     lt_node_t **dirty     = lilycc_calloc(lt_nodes_len, sizeof(lt_node_t *));
-    // printf("\n\nInitial:\n");
     for (size_t i = 0; i < lt_nodes_len; i++) {
         // printf("%%%s insn @ %p:\n", lt_nodes[i].insn->code->name, lt_nodes[i].insn);
         // printf("  in:");
@@ -236,30 +235,6 @@ ra_nodes_t ra_liveness(ir_func_t const *func) {
         }
     }
 
-    // printf("\nAfter updating:\n");
-    // for (size_t i = 0; i < lt_nodes_len; i++) {
-    //     printf("%%%s insn @ %p: ", lt_nodes[i].insn->code->name, lt_nodes[i].insn);
-    //     ir_insn_serialize(lt_nodes[i].insn, profile, stdout);
-    //     printf("\n  in:");
-    //     set_foreach(ir_var_t, var, &lt_nodes[i].in) {
-    //         printf(" %%%s", var->name);
-    //     }
-    //     printf("\n  out:");
-    //     set_foreach(ir_var_t, var, &lt_nodes[i].out) {
-    //         printf(" %%%s", var->name);
-    //     }
-    //     printf("\n  use:");
-    //     set_foreach(ir_var_t, var, &lt_nodes[i].use) {
-    //         printf(" %%%s", var->name);
-    //     }
-    //     printf("\n  def:");
-    //     set_foreach(ir_var_t, var, &lt_nodes[i].def) {
-    //         printf(" %%%s", var->name);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("\n");
-
     set_t ra_nodes = PTR_SET_EMPTY;
     map_t ra_vars  = PTR_MAP_EMPTY;
 
@@ -268,7 +243,7 @@ ra_nodes_t ra_liveness(ir_func_t const *func) {
         if (var->used_at.len) {
             ra_node_t *node = lilycc_calloc(1, sizeof(ra_node_t));
             node->links     = PTR_SET_EMPTY;
-            node->regno     = SIZE_MAX;
+            node->regno     = REGNO_NONE;
             node->var       = var;
             map_set(&ra_vars, var, node);
             set_add(&ra_nodes, node);
@@ -463,7 +438,8 @@ static void choose_one_reg(backend_profile_t *profile, ra_node_t *node) {
     // TODO: Try registers that would reduce copies first.
     // TODO: Heuristic-based register choice.
 
-    bool any_match = false;
+    bool any_match  = false;
+    bool weak_match = false;
     for (regno_t regno = 0; regno < profile->gpr_count; regno++) {
         // Check regclass matches.
         regclass_t regclass = profile->gpr_classes[regno];
@@ -511,7 +487,8 @@ static void choose_one_reg(backend_profile_t *profile, ra_node_t *node) {
                 break;
             case IR_N_PRIM: UNREACHABLE();
         }
-        any_match = true;
+        weak_match = regclass.callee_save;
+        any_match  = true;
 
         // Check register is free in neighbors.
         set_foreach(ra_node_t, node, &node->links) {
@@ -522,7 +499,9 @@ static void choose_one_reg(backend_profile_t *profile, ra_node_t *node) {
 
         // Register successfully chosen.
         node->regno = regno;
-        return;
+        if (!weak_match) {
+            return;
+        }
 
     next:;
     }
@@ -616,38 +595,6 @@ constrained: // Constrained, uncolored nodes.
         // Must spill a node.
         ra_spill(profile, nodes);
         goto again;
-    }
-
-    set_foreach(ra_node_t, node, &nodes.nodes) {
-        if (node->var) {
-            printf("%%%s", node->var->name);
-        }
-        if (node->var && node->regno != REGNO_NONE) {
-            printf(":");
-        }
-        if (node->regno != REGNO_NONE) {
-            printf("$%s", profile->gpr_names[node->regno]);
-        }
-        if (node->links.len > 0) {
-            bool delim = false;
-            printf(" <= ");
-            set_foreach(ra_node_t, linked, &node->links) {
-                if (delim) {
-                    printf(", ");
-                }
-                if (linked->var) {
-                    printf("%%%s", linked->var->name);
-                }
-                if (linked->var && linked->regno != REGNO_NONE) {
-                    printf(":");
-                }
-                if (linked->regno != REGNO_NONE) {
-                    printf("$%s", profile->gpr_names[linked->regno]);
-                }
-                delim = true;
-            }
-        }
-        printf("\n");
     }
 
     // Replace all IR variables by their register numbers, and delete the variables.

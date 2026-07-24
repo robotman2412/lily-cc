@@ -337,6 +337,8 @@ struct ir_frame {
     uint64_t     align;
     // Frame size.
     uint64_t     size;
+    // Offset from frame pointer.
+    uint64_t     offset;
 };
 
 // IR function argument.

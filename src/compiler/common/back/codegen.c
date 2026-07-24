@@ -528,5 +528,7 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
         profile->backend->post_isel_pass(profile, func);
     }
 
+    // TODO: Stack offsets and what happens when they go out of range for immediate offsets.
+
     regalloc(profile, func);
 }

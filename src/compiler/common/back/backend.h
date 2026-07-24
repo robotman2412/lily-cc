@@ -41,19 +41,21 @@ typedef struct backend_profile backend_profile_t;
 union regclass {
     struct {
         // Can be used to operate on 8-bit integers.
-        uint16_t int8   : 1;
+        uint16_t int8        : 1;
         // Can be used to operate on 16-bit integers.
-        uint16_t int16  : 1;
+        uint16_t int16       : 1;
         // Can be used to operate on 32-bit integers.
-        uint16_t int32  : 1;
+        uint16_t int32       : 1;
         // Can be used to operate on 64-bit integers.
-        uint16_t int64  : 1;
+        uint16_t int64       : 1;
         // Can be used to operate on 128-bit integers.
-        uint16_t int128 : 1;
+        uint16_t int128      : 1;
         // Can be used to operate on 32-bit floats.
-        uint16_t f32    : 1;
+        uint16_t f32         : 1;
         // Can be used to operate on 64-bit floats.
-        uint16_t f64    : 1;
+        uint16_t f64         : 1;
+        // Is allocatable as a caller-save register.
+        uint16_t callee_save : 1;
     };
     uint16_t val;
 };
@@ -84,6 +86,10 @@ struct backend {
     void (*ra_spill_load)(backend_profile_t *profile, ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame);
     // Emit store for register spilling.
     void (*ra_spill_store)(backend_profile_t *profile, ir_insnloc_t loc, ir_var_t *src, ir_frame_t *frame);
+    // Print directives before the function label.
+    void (*asm_print_prefunc)(backend_profile_t *profile, ir_func_t const *func, FILE *to);
+    // Print instruction for the assembler.
+    void (*asm_print_insn)(backend_profile_t *profile, ir_insn_t const *insn, FILE *to);
 };
 
 // Information specific to a certain profile for a backend.
@@ -94,6 +100,8 @@ struct backend_profile {
     lily_bits_t        arith_min_bits;
     // What the maximum bits for this profile's arithmetic is.
     lily_bits_t        arith_max_bits;
+    // Log-base 2 alignment requirement for functions.
+    uint8_t            log2_func_align;
     // Has insns for f32.
     bool               has_f32;
     // Has insns for f64.

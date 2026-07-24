@@ -3,6 +3,7 @@
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
+#include "asm_print.h"
 #include "backend.h"
 #include "c_compiler.h"
 #include "c_parser.h"
@@ -62,6 +63,9 @@ static void compile(char const *path) {
             codegen(profile, func);
             printf("\n// IR lowering to RISC-V instructions:\n");
             ir_func_serialize(func, profile, stdout);
+
+            printf("\n// Assembly printing:\n");
+            asm_print_func(func, profile, stdout);
 
             ir_func_delete(func);
             printf("\n\n");

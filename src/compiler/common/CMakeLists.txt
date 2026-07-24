@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: MIT
 
 add_library(compiler-common STATIC
+    back/asm_print.c
     back/backend.c
     back/codegen.c
     back/match_tree.c

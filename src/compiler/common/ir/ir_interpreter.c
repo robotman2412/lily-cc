@@ -20,8 +20,9 @@ int ir_count_bits(ir_const_t iconst, bool allow_s, bool allow_u) {
         abort();
     }
 
-    i128_t value = ir_trim_const(iconst).const128;
-    int    sign  = cmp128s(value, I128_ZERO);
+    iconst.prim_type = ir_prim_as_signed(iconst.prim_type);
+    i128_t value     = ir_trim_const(iconst).const128;
+    int    sign      = cmp128s(value, I128_ZERO);
     if (sign == 0) {
         return 0;
     }

@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "backend.h"
 #include "insn_proto.h"
 #include "rv_misc.h"
 
@@ -84,3 +85,6 @@ extern size_t const              rv_insns_len;
     extern insn_proto_t const rv_insn_##name;
 #include "rv_instructions.inc"
 // clang-format on
+
+// Print instruction for the assembler.
+void rv_asm_print_insn(backend_profile_t *profile, ir_insn_t const *insn, FILE *to);

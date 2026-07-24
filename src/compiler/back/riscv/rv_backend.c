@@ -65,12 +65,26 @@ void rv_init_codegen(backend_profile_t *profile0) {
     for (regno_t i = 5; i < 32; i++) {
         profile->base.gpr_classes[i] = (regclass_t){.int32 = 1, .int64 = profile->ext_enabled[RV_64]};
     }
+    // Callee-save registers s0 and s1.
+    profile->base.gpr_classes[8].callee_save = 1;
+    profile->base.gpr_classes[9].callee_save = 1;
+    // Callee-save registers s2 through s11.
+    for (regno_t i = 18; i < 28; i++) {
+        profile->base.gpr_classes[i].callee_save = 1;
+    }
     // Enable FPRs iff the ISA supports them.
     // ABI is separate; FPRs are tempregs if the ABI is not float.
     // TODO: Correct support for f32 ABI when f64 extension is enabled.
     if (profile->ext_enabled[RV_EXT_F]) {
         for (regno_t i = 32; i < 64; i++) {
             profile->base.gpr_classes[i] = (regclass_t){.f32 = 1, .f64 = profile->ext_enabled[RV_EXT_D]};
+        }
+        // Float callee-saved registers fs0 and fs1.
+        profile->base.gpr_classes[32 + 8].callee_save = 1;
+        profile->base.gpr_classes[32 + 9].callee_save = 1;
+        // Float callee-saved registers fs2 through fs11.
+        for (regno_t i = 18; i < 28; i++) {
+            profile->base.gpr_classes[32 + i].callee_save = 1;
         }
     }
 
@@ -120,22 +134,17 @@ void rv_spill_load(backend_profile_t *profile0, ir_insnloc_t loc, ir_var_t *dest
 
 // Emit store for register spilling.
 void rv_spill_store(backend_profile_t *profile0, ir_insnloc_t loc, ir_var_t *src, ir_frame_t *frame) {
-    rv_profile_t       *profile = (void *)profile0;
+    rv_profile_t *profile = (void *)profile0;
+    (void)profile;
     insn_proto_t const *op;
     switch (src->orig_prim_type) {
-        case IR_PRIM_s8: op = &rv_insn_lb; break;
+        case IR_PRIM_s8:
         case IR_PRIM_bool:
-        case IR_PRIM_u8: op = &rv_insn_lbu; break;
-        case IR_PRIM_s16: op = &rv_insn_lh; break;
-        case IR_PRIM_u16: op = &rv_insn_lhu; break;
-        case IR_PRIM_s32: op = &rv_insn_lw; break;
-        case IR_PRIM_u32:
-            if (profile->ext_enabled[RV_64]) {
-                UNREACHABLE(); // TODO.
-            } else {
-                op = &rv_insn_lw;
-            }
-            break;
+        case IR_PRIM_u8: op = &rv_insn_sb; break;
+        case IR_PRIM_s16:
+        case IR_PRIM_u16: op = &rv_insn_sh; break;
+        case IR_PRIM_s32:
+        case IR_PRIM_u32: op = &rv_insn_sw; break;
         // case IR_PRIM_s64:
         // case IR_PRIM_u64:
         // case IR_PRIM_s128:
@@ -157,20 +166,29 @@ void rv_spill_store(backend_profile_t *profile0, ir_insnloc_t loc, ir_var_t *src
     );
 }
 
+// Print directives before the function label.
+void rv_asm_print_prefunc(backend_profile_t *profile, ir_func_t const *func, FILE *to) {
+    (void)profile;
+    (void)func;
+    fputs("    .p2align 1\n", to);
+}
+
 
 
 // The RISC-V backend.
 backend_t const rv_backend = {
-    .id             = "riscv",
-    .create_profile = rv_create_profile,
-    .delete_profile = rv_delete_profile,
-    .init_codegen   = rv_init_codegen,
-    .isel           = rv_isel,
-    .xabi_entry     = rv_xabi_entry,
-    .xabi_call      = rv_xabi_call,
-    .xabi_return    = rv_xabi_return,
-    .ra_spill_load  = rv_spill_load,
-    .ra_spill_store = rv_spill_store,
+    .id                = "riscv",
+    .create_profile    = rv_create_profile,
+    .delete_profile    = rv_delete_profile,
+    .init_codegen      = rv_init_codegen,
+    .isel              = rv_isel,
+    .xabi_entry        = rv_xabi_entry,
+    .xabi_call         = rv_xabi_call,
+    .xabi_return       = rv_xabi_return,
+    .ra_spill_load     = rv_spill_load,
+    .ra_spill_store    = rv_spill_store,
+    .asm_print_prefunc = rv_asm_print_prefunc,
+    .asm_print_insn    = rv_asm_print_insn,
 };
 
 // Table of RISC-V register names.

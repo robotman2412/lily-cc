@@ -99,7 +99,7 @@ RV_INSN_ALU_RR(srl,      RV_BASE, RV_OP_OP,       0b101, 0b0000000, IR_OP2_shr, 
 RV_INSN_ALU_RR(sra,      RV_BASE, RV_OP_OP,       0b101, 0b0100000, IR_OP2_shr,          1, 0)
 RV_INSN_ALU_RR(or,       RV_BASE, RV_OP_OP,       0b110, 0b0000000, IR_OP2_bor,          1, 1)
 RV_INSN_ALU_RR(and,      RV_BASE, RV_OP_OP,       0b111, 0b0000000, IR_OP2_band,         1, 1)
-RV_INSN_BASE(  fence,    RV_BASE, RV_OP_MISC_MEM, 0b000, 0b0000000, 0b000000000000,            RV_ENC_I)
+RV_INSN_BASE(  fence,    RV_BASE, RV_OP_MISC_MEM, 0b000, 0b0000000, 0b000000000000,            RV_ENC_BITS) // Actually I encoding, but Lily-CC never emits that
 RV_INSN_BASE(  ecall,    RV_BASE, RV_OP_SYSTEM,   0b000, 0b0000000, 0b000000000000,            RV_ENC_BITS)
 RV_INSN_BASE(  ebreak,   RV_BASE, RV_OP_SYSTEM,   0b000, 0b0000000, 0b000000000001,            RV_ENC_BITS)
 

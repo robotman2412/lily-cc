@@ -110,7 +110,8 @@ void               rv_init_codegen(backend_profile_t *profile);
 void rv_spill_load(backend_profile_t *profile, ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame);
 // Emit store for register spilling.
 void rv_spill_store(backend_profile_t *profile, ir_insnloc_t loc, ir_var_t *src, ir_frame_t *frame);
-
+// Print directives before the function label.
+void rv_asm_print_prefunc(backend_profile_t *profile, ir_func_t const *func, FILE *to);
 
 
 // The RISC-V backend.

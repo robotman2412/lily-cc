@@ -199,8 +199,7 @@ static ir_insn_t *rv_isel_const_bitcast(rv_profile_t const *profile, ir_insn_t *
 // Jump instruction.
 static inline ir_insn_t *rv_isel_jump(rv_profile_t const *profile, ir_insn_t *insn) {
     (void)profile;
-    ir_insn_t *new_node
-        = ir_add_mach_insn(IR_BEFORE_INSN(insn), true, IR_RETVAL_REG(0), &rv_insn_jal, 1, insn->operands);
+    ir_insn_t *new_node = ir_add_mach_insn(IR_BEFORE_INSN(insn), false, (ir_retval_t){}, &rv_insn_j, 1, insn->operands);
     ir_insn_delete(insn);
     return new_node;
 }
@@ -335,9 +334,13 @@ static inline ir_insn_t *rv_isel_expr2_ri(rv_profile_t const *profile, ir_insn_t
         return NULL;
     }
     ir_const_t iconst = ir_insn->operands[1].iconst;
+    if (ir_insn->op2 == IR_OP2_sub) {
+        iconst = ir_calc1(IR_OP1_neg, iconst);
+    }
     if (iconst.prim_type == IR_PRIM_f32 || iconst.prim_type == IR_PRIM_f64 || ir_count_bits(iconst, true, false) > 12) {
         return NULL;
     }
+    iconst.prim_type = ir_prim_as_signed(iconst.prim_type);
 
     insn_proto_t const *proto;
     switch (ir_insn->op2) {
@@ -347,11 +350,8 @@ static inline ir_insn_t *rv_isel_expr2_ri(rv_profile_t const *profile, ir_insn_t
         // case IR_OP2_sge:
         // case IR_OP2_seq:
         // case IR_OP2_sne:
-        case IR_OP2_add: proto = &rv_insn_addi; break;
-        case IR_OP2_sub:
-            proto  = &rv_insn_addi;
-            iconst = ir_calc1(IR_OP1_neg, iconst);
-            break;
+        case IR_OP2_add:
+        case IR_OP2_sub: proto = &rv_insn_addi; break;
         case IR_OP2_shl: proto = &rv_insn_slli; break;
         case IR_OP2_shr:
             proto = ir_prim_is_signed(ir_operand_prim(ir_insn->operands[0])) ? &rv_insn_srai : &rv_insn_srli;
@@ -362,8 +362,9 @@ static inline ir_insn_t *rv_isel_expr2_ri(rv_profile_t const *profile, ir_insn_t
         default: return NULL;
     }
 
-    ir_insn->type      = IR_INSN_MACHINE;
-    ir_insn->prototype = proto;
+    ir_insn->type               = IR_INSN_MACHINE;
+    ir_insn->prototype          = proto;
+    ir_insn->operands[1].iconst = iconst;
 
     return ir_insn;
 }
@@ -382,6 +383,22 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t const *profile, ir_insn_t
         ir_operand_t tmp     = ir_insn->operands[0];
         ir_insn->operands[0] = ir_insn->operands[1];
         ir_insn->operands[1] = tmp;
+    }
+
+    // Load constants into registers.
+    for (size_t i = 0; i < 2; i++) {
+        if (ir_insn->operands[i].type == IR_OPERAND_TYPE_CONST) {
+            ir_var_t *tmp = ir_var_create(ir_insn->code->func, ir_insn->operands[i].iconst.prim_type, NULL);
+            ir_add_mach_insn(
+                IR_BEFORE_INSN(ir_insn),
+                true,
+                IR_RETVAL_VAR(tmp),
+                &rv_insn_li,
+                1,
+                (ir_operand_t const[]){ir_insn->operands[i]}
+            );
+            ir_insn_set_operand(ir_insn, i, IR_OPERAND_VAR(tmp));
+        }
     }
 
     if (ir_insn->op2 == IR_OP2_sle || ir_insn->op2 == IR_OP2_sge) {

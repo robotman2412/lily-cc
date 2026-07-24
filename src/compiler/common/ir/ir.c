@@ -463,10 +463,11 @@ ir_frame_t *ir_frame_create(ir_func_t *func, uint64_t size, uint64_t align, char
         snprintf(frame->name, len + 1, fmt, func->frame_name_ctr);
         func->frame_name_ctr++;
     }
-    frame->func  = func;
-    frame->size  = size;
-    frame->align = align;
-    frame->node  = DLIST_NODE_EMPTY;
+    frame->node   = DLIST_NODE_EMPTY;
+    frame->func   = func;
+    frame->size   = size;
+    frame->align  = align;
+    frame->offset = 0;
     name_free_assert(func, frame->name);
     map_set(&func->frame_by_name, frame->name, frame);
     dlist_append(&func->frames_list, &frame->node);

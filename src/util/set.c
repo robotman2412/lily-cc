@@ -39,9 +39,9 @@ set_vtable_t const ptr_set_vtable = {
 
 
 // Change the amount of buckets that a set has.
-bool set_resize(set_t *set, size_t new_buckets_len) {
+static void set_resize(set_t *set, size_t new_buckets_len) {
     if (new_buckets_len == set->buckets_len) {
-        return true;
+        return;
     }
 
     // Try to allocate memory for the new buckets.
@@ -59,11 +59,10 @@ bool set_resize(set_t *set, size_t new_buckets_len) {
     lilycc_free(set->buckets);
     set->buckets     = new_buckets;
     set->buckets_len = new_buckets_len;
-    return true;
 }
 
 // Try to resize the set according to the current occupancy (but don't fail if OOM).
-void set_auto_resize(set_t *set) {
+static void set_auto_resize(set_t *set) {
     if (set->len == 0) {
         lilycc_free(set->buckets);
         set->buckets     = NULL;
@@ -127,9 +126,7 @@ set_get_t set_get(set_t const *set, void const *value) {
 // Insert an item into the set.
 bool set_add(set_t *set, void const *value) {
     if (!set->buckets_len) {
-        if (!set_resize(set, 2)) {
-            return false;
-        }
+        set_resize(set, 2);
     }
 
     // Figure out which bucket the value is in.
@@ -173,47 +170,14 @@ size_t set_addall(set_t *set, set_t const *other) {
 
     if (!other->len) {
         return 0;
-    } else if (!set->len) {
-        if (!set_resize(set, other->buckets_len)) {
-            return 0;
+    }
+
+    for (size_t x = 0; x < other->buckets_len; x++) {
+        dlist_foreach_node(set_ent_t, ent, &other->buckets[x]) {
+            added += set_add(set, ent->value);
         }
     }
 
-    // For all buckets in `set` ...
-    for (size_t x = 0; x < set->buckets_len; x++) {
-        dlist_t tmp = DLIST_EMPTY;
-
-        // ... with all matching buckets in `other` ...
-        size_t inc = set->buckets_len < other->buckets_len ? set->buckets_len : other->buckets_len;
-        for (size_t y = x & (other->buckets_len - 1); y < other->buckets_len; y += inc) {
-            dlist_foreach_node(set_ent_t const, other_ent, &other->buckets[y]) {
-                // ... if the entry exists in this set already, do not add it.
-                dlist_foreach_node(set_ent_t const, this_ent, &set->buckets[x]) {
-                    if (other_ent->hash == this_ent->hash && !set->vtable->val_cmp(other_ent->value, this_ent->value)) {
-                        goto skip;
-                    }
-                }
-
-                // Allocate a new item.
-                set_ent_t *new_ent = lilycc_malloc(sizeof(set_ent_t));
-                new_ent->node      = DLIST_NODE_EMPTY;
-                new_ent->value     = set->vtable->val_dup(other_ent->value);
-                if (!new_ent->value && other_ent->value) {
-                    fprintf(stderr, "Out of memory\n");
-                    abort();
-                }
-                new_ent->hash = other_ent->hash;
-                dlist_append(&tmp, &new_ent->node);
-                added++;
-                set->len++;
-            skip:;
-            }
-        }
-
-        dlist_concat(&set->buckets[x], &tmp);
-    }
-
-    set_auto_resize(set);
     return added;
 }
 
@@ -225,34 +189,13 @@ size_t set_removeall(set_t *set, set_t const *other) {
     }
     size_t removed = 0;
 
-    if (!other->len || !set->len) {
+    if (!other->len) {
         return 0;
     }
 
-    // For all buckets in `set`...
-    for (size_t x = 0; x < set->buckets_len; x++) {
-        // ... iterate all entries ...
-        set_ent_t *this_ent = (void *)set->buckets[x].head;
-        while (this_ent) {
-            set_ent_t *next = (void *)this_ent->node.next;
-            // ... with all matching buckets in `other` ...
-            size_t     inc  = set->buckets_len < other->buckets_len ? set->buckets_len : other->buckets_len;
-            for (size_t y = x & (other->buckets_len - 1); y < other->buckets_len; y += inc) {
-                // ... compare each entry ...
-                dlist_foreach_node(set_ent_t, other_ent, &other->buckets[y]) {
-                    // ... and remove if they are equal.
-                    if (this_ent->hash == other_ent->hash && !set->vtable->val_cmp(this_ent->value, other_ent->value)) {
-                        dlist_remove(&set->buckets[x], &this_ent->node);
-                        set->vtable->val_del(this_ent->value);
-                        lilycc_free(this_ent);
-                        removed++;
-                        // If equal,
-                        goto cont;
-                    }
-                }
-            }
-        cont:
-            this_ent = next;
+    for (size_t x = 0; x < other->buckets_len; x++) {
+        dlist_foreach_node(set_ent_t, ent, &other->buckets[x]) {
+            removed += set_remove(set, ent->value);
         }
     }
 
@@ -271,13 +214,7 @@ size_t set_intersect(set_t *set, set_t const *other) {
     for (size_t i = 0; i < set->buckets_len; i++) {
         set_ent_t *ent = (void *)set->buckets[i].head;
         while (ent) {
-            bool keep = false;
-            dlist_foreach_node(set_ent_t, other_ent, &other->buckets[i]) {
-                if (ent->hash == other_ent->hash && set->vtable->val_cmp(ent->value, other_ent->value) == 0) {
-                    keep = true;
-                    break;
-                }
-            }
+            bool       keep = set_contains(other, ent->value);
             set_ent_t *next = (void *)ent->node.next;
             if (!keep) {
                 dlist_remove(&set->buckets[i], &ent->node);

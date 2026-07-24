@@ -164,6 +164,25 @@ i128_t rem128s(i128_t lhs, i128_t rhs) {
 
 
 
+// Count trailing zeroes.
+int ctz128(i128_t a) {
+    if (lo64(a) == 0) {
+        return 64 + __builtin_ctzll(hi64(a));
+    } else {
+        return __builtin_ctzll(lo64(a));
+    }
+}
+
+// Count leading zeroes.
+int clz128(i128_t a) {
+    if (hi64(a) == 0) {
+        return 64 + __builtin_clzll(lo64(a));
+    } else {
+        return __builtin_clzll(hi64(a));
+    }
+}
+
+
 // Convert a 128-bit integer to decimal (unsigned).
 // Assumes a buffer of at least 40 bytes is provided.
 void itoa128(i128_t n, int decimals, char buf[static 40]) {
@@ -180,7 +199,7 @@ void itoa128(i128_t n, int decimals, char buf[static 40]) {
     }
 
     // Need to manually do 128-bit double dabble.
-    i128_t   dd_buf_lo = int128(0, hi64(n) >> 63);
+    i128_t   dd_buf_lo = ui128(hi64(n) >> 63);
     uint32_t dd_buf_hi = 0;
     n                  = shl128(n, 1);
     for (int i = 0; i < 127; i++) {
@@ -191,7 +210,7 @@ void itoa128(i128_t n, int decimals, char buf[static 40]) {
 
         // Same idea expanded to 128-bit arithmetic.
         i128_t ge5_128 = and128(
-            int128(0x1111111111111111, 0x1111111111111111),
+            i128_pack(0x1111111111111111, 0x1111111111111111),
             or128(shr128u(dd_buf_lo, 3), and128(shr128u(dd_buf_lo, 2), or128(shr128u(dd_buf_lo, 1), dd_buf_lo)))
         );
         dd_buf_lo = add128(dd_buf_lo, or128(ge5_128, shl128(ge5_128, 1)));

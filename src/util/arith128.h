@@ -14,6 +14,11 @@
 
 #define INLINE_MATH128 static inline __attribute__((always_inline)) __attribute__((const))
 
+#define I128_ZERO i128_pack(0, 0)
+#define UI128_MAX i128_pack(UINT64_MAX, UINT64_MAX)
+#define I128_MIN  i128_pack(INT64_MIN, 0)
+#define I128_MAX  i128_pack(INT64_MAX, UINT64_MAX)
+
 #if defined(__SIZEOF_INT128__) && !defined(LILY_SOFT_INT128)
 // Structure that stores 128 bits of data.
 typedef struct __attribute__((packed, aligned(8))) {
@@ -22,12 +27,16 @@ typedef struct __attribute__((packed, aligned(8))) {
     __uint128_t val;
 } i128_t;
 
+// Cast to signed 128-bit integer.
+#define i128(i64)         ((i128_t){(__int128_t)(i64)})
+// Cast to unsigned 128-bit integer.
+#define ui128(ui64)       ((i128_t){(__uint128_t)(ui64)})
 // Create a 128-bit integer from two 64-bit ones.
-#define int128(hi, lo) ((i128_t){(((__uint128_t)(uint64_t)(hi) << 64) | ((uint64_t)(lo)))})
+#define i128_pack(hi, lo) ((i128_t){(((__uint128_t)(uint64_t)(hi) << 64) | ((uint64_t)(lo)))})
 // Get low 64 bits of 128-bit integer.
-#define lo64(i128)     ((uint64_t)(i128).val)
+#define lo64(i128)        ((uint64_t)(i128).val)
 // Get high 64 bits of 128-bit integer.
-#define hi64(i128)     ((uint64_t)((i128).val >> 64))
+#define hi64(i128)        ((uint64_t)((i128).val >> 64))
 
 // Perform 128-bit multipliciation.
 INLINE_MATH128 i128_t mul128(i128_t lhs, i128_t rhs) {
@@ -57,6 +66,11 @@ INLINE_MATH128 i128_t rem128s(i128_t lhs, i128_t rhs) {
 // Perform 128-bit addition.
 INLINE_MATH128 i128_t add128(i128_t lhs, i128_t rhs) {
     return (i128_t){lhs.val + rhs.val};
+}
+
+// Perform 128-bit subtraction.
+INLINE_MATH128 i128_t sub128(i128_t lhs, i128_t rhs) {
+    return (i128_t){lhs.val - rhs.val};
 }
 
 // Perform 128-bit arithmetic negation.
@@ -139,12 +153,16 @@ typedef struct {
 #endif
 } i128_t;
 
+// Cast to signed 128-bit integer.
+#define i128(i64)         ((i128_t){.lo = (i64), .hi = (int64_t)(i64) >> 63})
+// Cast to unsigned 128-bit integer.
+#define ui128(ui64)       ((i128_t){.lo = (ui64), .hi = 0})
 // Create a 128-bit integer from two 64-bit ones.
-#define int128(hi, lo) ((i128_t){.lo = (lo), .hi = (hi)})
+#define i128_pack(hi, lo) ((i128_t){.lo = (lo), .hi = (hi)})
 // Get low 64 bits of 128-bit integer.
-#define lo64(i128)     ((i128).lo)
+#define lo64(i128)        ((i128).lo)
 // Get high 64 bits of 128-bit integer.
-#define hi64(i128)     ((i128).hi)
+#define hi64(i128)        ((i128).hi)
 
 // Perform 128-bit multipliciation.
 i128_t mul128(i128_t lhs, i128_t rhs) __attribute__((const));
@@ -163,6 +181,16 @@ INLINE_MATH128 i128_t add128(i128_t lhs, i128_t rhs) {
     lhs.hi += rhs.hi;
     if (lhs.lo < rhs.lo) {
         lhs.hi++;
+    }
+    return lhs;
+}
+
+// Perform 128-bit subtraction.
+INLINE_MATH128 i128_t sub128(i128_t lhs, i128_t rhs) {
+    lhs.lo -= rhs.lo;
+    lhs.hi -= rhs.hi;
+    if (lhs.lo > rhs.lo) {
+        lhs.hi--;
     }
     return lhs;
 }
@@ -271,6 +299,80 @@ INLINE_MATH128 i128_t bneg128(i128_t a) {
     };
 }
 #endif
+
+// Perform 128-bit addition (saturating, unsigned).
+INLINE_MATH128 i128_t add128u_saturate(i128_t lhs, i128_t rhs) {
+    i128_t res = add128(lhs, rhs);
+    if (cmp128u(res, lhs) < 0) {
+        return UI128_MAX;
+    }
+    return res;
+}
+
+// Perform 128-bit addition (saturating, signed).
+INLINE_MATH128 i128_t add128s_saturate(i128_t lhs, i128_t rhs) {
+    if (cmp128s(lhs, I128_ZERO) > 0) {
+        if (cmp128s(rhs, sub128(I128_MAX, lhs)) > 0) {
+            return I128_MAX;
+        }
+    } else {
+        if (cmp128s(rhs, sub128(I128_MIN, lhs)) < 0) {
+            return I128_MIN;
+        }
+    }
+    return add128(lhs, rhs);
+}
+
+// Perform 128-bit subtraction (saturating, unsigned).
+INLINE_MATH128 i128_t sub128u_saturate(i128_t lhs, i128_t rhs) {
+    i128_t res = sub128(lhs, rhs);
+    if (cmp128u(res, lhs) > 0) {
+        return I128_ZERO;
+    }
+    return res;
+}
+
+// Perform 128-bit subtraction (saturating, signed).
+INLINE_MATH128 i128_t sub128s_saturate(i128_t lhs, i128_t rhs) {
+    if (cmp128s(lhs, I128_ZERO) > 0) {
+        if (cmp128s(rhs, sub128(lhs, I128_MAX)) < 0) {
+            return I128_MAX;
+        }
+    } else {
+        if (cmp128s(rhs, sub128(lhs, I128_MIN)) > 0) {
+            return I128_MIN;
+        }
+    }
+    return sub128(lhs, rhs);
+}
+
+// Perform 128-bit multiplication (saturating, unsigned).
+INLINE_MATH128 i128_t mul128u_saturate(i128_t lhs, i128_t rhs) {
+    i128_t res = mul128(lhs, rhs);
+    if (cmp128u(lhs, I128_ZERO) != 0 && cmp128u(div128u(res, lhs), rhs) != 0) {
+        return UI128_MAX;
+    }
+    return res;
+}
+
+// Perform 128-bit multiplication (saturating, signed).
+INLINE_MATH128 i128_t mul128s_saturate(i128_t lhs, i128_t rhs) {
+    i128_t res = mul128(lhs, rhs);
+    if (cmp128s(lhs, I128_ZERO) != 0 && cmp128s(div128s(res, lhs), rhs) != 0) {
+        if ((cmp128s(lhs, I128_ZERO) > 0) == (cmp128s(rhs, I128_ZERO) > 0)) {
+            return I128_MAX;
+        }
+        return I128_MIN;
+    }
+    return res;
+}
+
+
+
+// Count trailing zeroes.
+int ctz128(i128_t a) __attribute__((const));
+// Count leading zeroes.
+int clz128(i128_t a) __attribute__((const));
 
 // Convert a 128-bit integer to decimal (unsigned).
 // Assumes a buffer of at least 40 bytes is provided.

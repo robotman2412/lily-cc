@@ -15,7 +15,7 @@ typedef struct dlist_node_t {
     // Pointer to the next item in the linked list.
     struct dlist_node_t *next;
     // Pointer to the previous item in the linked list.
-    struct dlist_node_t *previous;
+    struct dlist_node_t *prev;
 } dlist_node_t;
 
 // A doubly linekd list.
@@ -33,7 +33,7 @@ typedef struct dlist_t {
 #define DLIST_EMPTY ((dlist_t){.len = 0, .head = NULL, .tail = NULL})
 
 // Initializer value for a list node. Convenience macro for zero-initialization.
-#define DLIST_NODE_EMPTY ((dlist_node_t){.next = NULL, .previous = NULL})
+#define DLIST_NODE_EMPTY ((dlist_node_t){.next = NULL, .prev = NULL})
 
 #ifndef container_of
 #define container_of(ptr, type, member)                                                                                \
@@ -42,6 +42,14 @@ typedef struct dlist_t {
         (type *)((size_t)ptr - offsetof(type, member));                                                                \
     })
 #endif
+
+// Generate a foreach loop for a dlist.
+#define dlist_foreach_rev(type, varname, nodename, list)                                                               \
+    for (type *varname = container_of((list)->tail, type, nodename); &varname->nodename;                               \
+         varname       = container_of(varname->nodename.prev, type, nodename))
+
+// Generate a foreach loop for a dlist where the node name is `node`.
+#define dlist_foreach_node_rev(type, varname, list) dlist_foreach_rev(type, varname, node, list)
 
 // Generate a foreach loop for a dlist.
 #define dlist_foreach(type, varname, nodename, list)                                                                   \

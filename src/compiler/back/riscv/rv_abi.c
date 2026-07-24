@@ -19,8 +19,6 @@
 
 
 
-// Helper function that loads a struct into registers.
-
 // Helper function the stores a struct from registers.
 static ir_insn_t *rv_reg_to_struct(
     ir_insnloc_t loc, backend_profile_t *profile, ir_operand_t value, ir_frame_t *frame, int64_t offset, int64_t size
@@ -96,7 +94,7 @@ typedef struct {
 // Expand the ABI for a specific return instruction.
 ir_insn_t *rv_xabi_return(backend_profile_t *profile, ir_insn_t *ret_insn) {
     rv_profile_t const *rv_profile = (void *)profile;
-    if (ret_insn->returns_len == 0) {
+    if (ret_insn->operands_len == 0) {
         // No need to consider how to return nothing.
         goto replace;
     }
@@ -115,7 +113,7 @@ ir_insn_t *rv_xabi_return(backend_profile_t *profile, ir_insn_t *ret_insn) {
     // clang-format on
     uint64_t const ptr_size = rv64 ? 8 : 4;
 
-    bool      retval_outparam = ret_insn->returns_len && ret_insn->operands[0].type == IR_OPERAND_TYPE_STRUCT
+    bool      retval_outparam = ret_insn->operands_len && ret_insn->operands[0].type == IR_OPERAND_TYPE_STRUCT
                                 && ret_insn->operands[0].struct_frame->size > 2 * ptr_size;
     uint64_t  ret_size;
     ir_prim_t retval_prim;
@@ -123,8 +121,8 @@ ir_insn_t *rv_xabi_return(backend_profile_t *profile, ir_insn_t *ret_insn) {
         // Implicit out-parameter.
         retval_prim = IR_N_PRIM;
         ret_size    = ret_insn->operands[0].struct_frame->size;
-    } else if (ret_insn->returns_len) {
-        retval_prim = ret_insn->returns[0].dest_var->prim_type;
+    } else if (ret_insn->operands_len) {
+        retval_prim = ret_insn->operands[0].var->prim_type;
         ret_size    = ir_prim_sizes[retval_prim];
     } else {
         retval_prim = IR_N_PRIM;
@@ -164,15 +162,8 @@ ir_insn_t *rv_xabi_return(backend_profile_t *profile, ir_insn_t *ret_insn) {
     }
 
 replace:;
-    // ret / jr ra / jalr zero, 0(ra)
-    ir_insn_t *mach = ir_add_mach_insn(
-        IR_BEFORE_INSN(ret_insn),
-        false,
-        (ir_retval_t){},
-        &rv_insn_jalr,
-        2,
-        (ir_operand_t[]){IR_OPERAND_REG(RV_REG_RA), IR_OPERAND_CONST(IR_CONST_S16(0))}
-    );
+    // ret
+    ir_insn_t *mach = ir_add_mach_insn(IR_BEFORE_INSN(ret_insn), false, (ir_retval_t){}, &rv_insn_ret, 0, NULL);
     ir_insn_delete(ret_insn);
     return mach;
 }

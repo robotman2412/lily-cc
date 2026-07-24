@@ -8,8 +8,14 @@
 
 
 #ifndef RV_INSN_BASE
-// Base instruction that does not come with a substitution and match tree.
+// Base instruction that does not fit any other category.
 #define RV_INSN_BASE(name, ext, op_maj, funct3, funct7, funct12, encoding)
+#endif
+
+#ifndef RV_INSN_PSEUDO
+// Pseudo-instructions.
+#define RV_INSN_PSEUDO(name, encoding) \
+    RV_INSN_BASE(name, RV_BASE, 0, 0, 0, 0, encoding)
 #endif
 
 #ifndef RV_INSN_ALU_RI
@@ -44,9 +50,18 @@
 
 
 
+/* ==== RV pseudo-instructions ==== */
+
+//              []       [   encoding    ]
+RV_INSN_PSEUDO( mv,      RV_ENC_PSEUDO_MV)
+RV_INSN_PSEUDO( li,      RV_ENC_PSEUDO_LI)
+RV_INSN_PSEUDO( ret,     RV_ENC_PSEUDO_RET)
+RV_INSN_PSEUDO( j,       RV_ENC_PSEUDO_J)
+RV_INSN_PSEUDO( jr,      RV_ENC_PSEUDO_JR)
+
 /* ==== RV32I instructions ==== */
 
-//              [ name ]  [ ext ]  [   opcode   ]  [f3 ]  [funct7 ]  [ ir op  ]     imm  s  u  [   encoding    ]
+//             [ name ]  [ ext ]  [   opcode   ]  [f3 ]  [funct7 ]  [ ir op  ]      imm  s  u  [   encoding    ]
 RV_INSN_BASE(  lui,      RV_BASE, RV_OP_LUI,      0b000, 0b0000000, 0b000000000000,            RV_ENC_U)
 RV_INSN_BASE(  auipc,    RV_BASE, RV_OP_LUI,      0b000, 0b0000000, 0b000000000000,            RV_ENC_U)
 RV_INSN_BASE(  jal,      RV_BASE, RV_OP_JAL,      0b000, 0b0000000, 0b000000000000,            RV_ENC_J)

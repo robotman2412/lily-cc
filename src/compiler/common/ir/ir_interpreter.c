@@ -21,7 +21,7 @@ int ir_count_bits(ir_const_t iconst, bool allow_s, bool allow_u) {
     }
 
     i128_t value = ir_trim_const(iconst).const128;
-    int    sign  = cmp128s(value, int128(0, 0));
+    int    sign  = cmp128s(value, I128_ZERO);
     if (sign == 0) {
         return 0;
     }

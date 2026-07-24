@@ -58,17 +58,7 @@ static ir_insn_t *rv_emit_rr_copy(rv_profile_t const *profile, ir_insnloc_t loc,
         abort();
     }
 
-    return ir_add_mach_insn(
-        loc,
-        true,
-        dest,
-        &rv_insn_addi,
-        2,
-        (ir_operand_t const[]){
-            src,
-            IR_OPERAND_CONST(IR_CONST_S16(0)),
-        }
-    );
+    return ir_add_mach_insn(loc, true, dest, &rv_insn_mv, 1, (ir_operand_t const[]){src});
 }
 
 // Emit an integer casting operation.
@@ -81,7 +71,10 @@ static ir_insn_t *rv_emit_int_cast(
     ir_prim_t src_prim = ir_operand_prim(src);
     uint8_t   ptr_bits = profile->ext_enabled[RV_64] ? 64 : 32;
 
-    if (dest_prim == IR_PRIM_bool) {
+    if (src_prim == dest_prim) { // TODO: Add checks for cast signed <-> unsigned int.
+        // mv dest, src
+        return ir_add_mach_insn(loc, true, dest, &rv_insn_mv, 1, (ir_operand_t const[]){src});
+    } else if (dest_prim == IR_PRIM_bool) {
         // slt dest, x0, src
         return ir_add_mach_insn(loc, true, dest, &rv_insn_sltu, 2, (ir_operand_t const[]){IR_OPERAND_REG(0), src});
     } else if (
@@ -177,82 +170,17 @@ static ir_insn_t *rv_isel_rr_mov(rv_profile_t const *profile, ir_insn_t *insn) {
 // Constant mov.
 static ir_insn_t *rv_isel_const_mov(rv_profile_t const *profile, ir_insn_t *insn) {
     (void)profile;
-    ir_func_t *const func   = insn->code->func;
     ir_const_t const iconst = ir_trim_const(insn->operands[0].iconst);
 
     if (iconst.prim_type == IR_PRIM_f32 || iconst.prim_type == IR_PRIM_f64) {
         fprintf(stderr, "TODO: Emit constant for FP\n");
         return NULL;
-    } else if (iconst.prim_type >= IR_PRIM_s64 && iconst.prim_type <= IR_PRIM_u128) {
-        fprintf(stderr, "TODO: Emit constant for 64-bit or larger\n");
-        return NULL;
     }
 
-    // Determine the operands to the `lui` and `addi` instructions.
-    int32_t lui  = (int32_t)(iconst.constl >> 12);
-    int16_t addi = (int16_t)((iconst.constl << 4) >> 4);
-    if (addi < 0) {
-        lui++;
-    }
-    lui &= 0x000fffff;
-
-    // Replace instruction.
-    func->enforce_ssa = false;
-    ir_insn_t *new_node;
-    if (lui && addi) {
-        // Use `lui` followed by `addi`.
-        ir_var_t *tmp = ir_var_create(func, IR_PRIM_s32, NULL);
-        ir_add_mach_insn(
-            IR_BEFORE_INSN(insn),
-            true,
-            IR_RETVAL_VAR(tmp),
-            &rv_insn_lui,
-            1,
-            (ir_operand_t const[]){
-                IR_OPERAND_CONST(IR_CONST_S32(lui)),
-            }
-        );
-        new_node = ir_add_mach_insn(
-            IR_BEFORE_INSN(insn),
-            true,
-            insn->returns[0],
-            &rv_insn_addi,
-            2,
-            (ir_operand_t const[]){
-                IR_OPERAND_VAR(tmp),
-                IR_OPERAND_CONST(IR_CONST_S16(addi)),
-            }
-        );
-
-    } else if (lui) {
-        // Use just `lui`.
-        new_node = ir_add_mach_insn(
-            IR_BEFORE_INSN(insn),
-            true,
-            insn->returns[0],
-            &rv_insn_lui,
-            1,
-            (ir_operand_t const[]){
-                IR_OPERAND_CONST(IR_CONST_S32(lui)),
-            }
-        );
-
-    } else {
-        // Use just `addi`.
-        new_node = ir_add_mach_insn(
-            IR_BEFORE_INSN(insn),
-            true,
-            insn->returns[0],
-            &rv_insn_addi,
-            2,
-            (ir_operand_t const[]){
-                IR_OPERAND_REG(0),
-                IR_OPERAND_CONST(IR_CONST_S16(addi)),
-            }
-        );
-    }
+    // li dest, imm
+    ir_insn_t *new_node
+        = ir_add_mach_insn(IR_BEFORE_INSN(insn), true, insn->returns[0], &rv_insn_li, 1, insn->operands);
     ir_insn_delete(insn);
-    func->enforce_ssa = true;
 
     return new_node;
 }

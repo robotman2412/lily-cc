@@ -74,7 +74,7 @@ static bool strength_reduce_expr(ir_insn_t *expr) {
     } else if (oper == IR_OP2_rem && ir_const_popcnt(p_rhs) == 1) {
         // Replace a remainder with a bitmask.
         int    bits = ir_const_ctz(p_rhs);
-        i128_t mask = add128(int128(-1, -1), shl128(int128(0, 1), bits));
+        i128_t mask = add128(i128_pack(-1, -1), shl128(i128_pack(0, 1), bits));
         if (!(prim & 1)) {
             // Add instructions to extract and copy the sign from the lhs to the output.
             ir_var_t *tmp1 = ir_var_create(expr->code->func, prim, NULL);
@@ -158,10 +158,7 @@ static void mark_used_dfs(ir_var_t *var) {
     }
 
     for (size_t i = 0; i < assign->combinators_len; i++) {
-        IR_FOR_OPERAND_VARS(assign->combinators[i].bind, var, {
-            var->visited = true;
-            mark_used_dfs(var);
-        });
+        IR_FOR_OPERAND_VARS(assign->combinators[i].bind, var, mark_used_dfs(var););
     }
 }
 

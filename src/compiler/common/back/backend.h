@@ -112,11 +112,11 @@ struct backend_profile {
     // Native general-purpose register size.
     lily_bits_t        gpr_bits;
     // Number of general-purpose registers.
-    size_t             gpr_count;
+    regno_t            gpr_count;
     // Frame pointer register number.
-    size_t             frame_ptr_regno;
+    regno_t            frame_ptr_regno;
     // Stack pointer register number.
-    size_t             stack_ptr_regno;
+    regno_t            stack_ptr_regno;
     // Type of data that can be operated on in a register.
     // Setting a regclass to all 0 will cause the register not to be used by resource allocation.
     regclass_t        *gpr_classes;

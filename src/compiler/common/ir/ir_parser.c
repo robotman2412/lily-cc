@@ -191,7 +191,8 @@ token_t ir_parse_insn(tokenizer_t *from) {
             case IR_KEYW_clobber:
             case IR_KEYW_alloca:
             case IR_KEYW_callframe_enter:
-            case IR_KEYW_callframe_exit: break; // Valid instruction mnemonic.
+            case IR_KEYW_callframe_exit:
+            case IR_KEYW_mark_used: break; // Valid instruction mnemonic.
         }
     }
     pos1 = insn.pos;

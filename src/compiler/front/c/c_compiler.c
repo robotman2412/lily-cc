@@ -436,7 +436,7 @@ static inline bool
     ir_const_t ir_index = c_value_read(ctx, NULL, &index).iconst;
     if (ir_prim_is_signed(ir_index.prim_type)) {
         i128_t s_index = ir_cast(IR_PRIM_s128, ir_index).const128;
-        if (cmp128s(s_index, int128(0, 0)) < 0) {
+        if (cmp128s(s_index, I128_ZERO) < 0) {
             char buf[40];
             itoa128(neg128(s_index), 0, buf);
             cctx_diagnostic(ctx->cctx, index_pos, DIAG_ERR, "Negative initializer index -%s is not allowed", buf);
@@ -445,7 +445,7 @@ static inline bool
         }
     }
     i128_t u_index = ir_cast(IR_PRIM_u128, ir_index).const128;
-    if (cmp128u(u_index, int128(0, field_type->length)) > 0) {
+    if (cmp128u(u_index, ui128(field_type->length)) > 0) {
         char buf[40];
         itoa128(u_index, 0, buf);
         cctx_diagnostic(

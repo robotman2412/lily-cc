@@ -538,7 +538,7 @@ rc_t c_compile2_type(
                             usize_max = (1llu << (sizeof_usize * 8)) - 1;
                         }
 
-                        if (ir_prim_is_signed(iconst.prim_type) && cmp128s(len, int128(0, 0)) < 0) {
+                        if (ir_prim_is_signed(iconst.prim_type) && cmp128s(len, I128_ZERO) < 0) {
                             char buf[40];
                             itoa128(neg128(len), 0, buf);
                             cctx_diagnostic(
@@ -548,7 +548,7 @@ rc_t c_compile2_type(
                                 "Negative array length of -%s is not allowed",
                                 buf
                             );
-                        } else if (cmp128u(len, int128(0, INT64_MAX / 2)) > 0) {
+                        } else if (cmp128u(len, ui128(INT64_MAX / 2)) > 0) {
                             char buf[40];
                             itoa128(len, 0, buf);
                             cctx_diagnostic(
@@ -558,9 +558,9 @@ rc_t c_compile2_type(
                                 "Array length of %s is not supported by Lily-CC",
                                 buf
                             );
-                        } else if (cmp128u(mul128(len, int128(0, inner_size)), int128(0, usize_max)) > 0) {
+                        } else if (cmp128u(mul128(len, ui128(inner_size)), ui128(usize_max)) > 0) {
                             char buf[40];
-                            itoa128(mul128(len, int128(0, inner_size)), 0, buf);
+                            itoa128(mul128(len, ui128(inner_size)), 0, buf);
                             cctx_diagnostic(
                                 ctx->cctx,
                                 decl->params[1].pos,

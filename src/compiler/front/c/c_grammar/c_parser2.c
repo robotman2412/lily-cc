@@ -674,7 +674,7 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
             token_t  tkn  = pop_token();
             pos_t    pos  = tkn.pos;
             c_prim_t prim = tkn.type == TOKENTYPE_CCONST ? C_PRIM_CHAR : tkn.subtype;
-            i128_t   val  = int128(tkn.ivalh, tkn.ival);
+            i128_t   val  = i128_pack(tkn.ivalh, tkn.ival);
             tkn_delete(tkn);
             push_expr(c_ast_expr_create_iconst(c_ast_expr_iconst_create(pos, prim, val)));
 

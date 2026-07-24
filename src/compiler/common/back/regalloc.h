@@ -8,31 +8,43 @@
 #include "backend.h"
 #include "ir_types.h"
 #include "set.h"
+#include "vec.h"
 
 
 
+// Represents one IR variable and/or physical register.
+typedef struct ra_node  ra_node_t;
 // A graph-coloring problem node as used for register selection.
-typedef struct ra_node ra_node_t;
+typedef struct ra_nodes ra_nodes_t;
+
+VEC_TYPE_DEF(vec_ra_node_t, ra_node_t *);
 
 
 
-// A graph-coloring problem node as used for register selection.
+// Represents one IR variable and/or physical register.
 struct ra_node {
     // IR variable linked to this node, if any.
     // The `clobber` instruction generates nodes without variables, one each per register clobbered.
     ir_var_t *var;
     // Physical register assigned to this node.
-    // Set to `SIZE_MAX` if not yet allocated.
-    size_t    regno;
-    // Links to nodes that are alive at the same time.
+    regno_t   regno;
+    // Links to `ra_node_t` nodes that are alive at the same time.
     set_t     links;
+};
+
+// A graph-coloring problem node as used for register selection.
+struct ra_nodes {
+    // Set of all nodes.
+    set_t nodes;
+    // Non-owning map of nodes by IR variable.
+    map_t by_var;
 };
 
 
 
 // Perform liveness analisys for all variables in a function.
 // Assumes at least trivial dead-code elimination has been done.
-void ra_liveness(ir_func_t const *func, ra_node_t **nodes_out, size_t *nodes_len_out);
+ra_nodes_t ra_liveness(backend_profile_t *profile, ir_func_t const *func);
 
 // Perform resource allocation for the given function.
 // Allocates registers to IR variables and frame offsets ir IR stack frames.

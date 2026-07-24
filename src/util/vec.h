@@ -24,6 +24,9 @@ typedef struct {
 #define VEC_ELEM_SIZE(ptr) sizeof(*(ptr)->arr)
 // Get vector element type.
 #define VEC_ELEM_TYPE(ptr) __typeof__(*(ptr)->arr)
+#ifdef NDEBUG
+#define ASSERT_IS_VEC(ptr)
+#else
 // Statically assert that some pointer is a vector type.
 #define ASSERT_IS_VEC(ptr)                                                                                             \
     {                                                                                                                  \
@@ -44,6 +47,7 @@ typedef struct {
             "Vector `cap` must be third element"                                                                       \
         );                                                                                                             \
     }
+#endif
 
 // Define a vector type.
 #define VEC_TYPE_DEF(name, elem_type)                                                                                  \
@@ -100,6 +104,14 @@ void rawvec_remove_n(rawvec_t *vec, size_t elem_size, size_t index, size_t count
         rawvec_call(rawvec_reserve, vec__push, 1);                                                                     \
         vec__push->arr[vec__push->len] = (value);                                                                      \
         vec__push->len++;                                                                                              \
+    })
+// Pop an element from the back of the vector.
+#define vec_pop(vec)                                                                                                   \
+    ({                                                                                                                 \
+        __auto_type vec__pop = (vec);                                                                                  \
+        VEC_ELEM_TYPE(vec) out;                                                                                        \
+        rawvec_call(rawvec_remove_n, vec__pop, vec__pop->len - 1, 1, &out);                                            \
+        out;                                                                                                           \
     })
 // Run a function on all elements in the vector by value.
 #define vec_foreach_val(vec, func_)                                                                                    \

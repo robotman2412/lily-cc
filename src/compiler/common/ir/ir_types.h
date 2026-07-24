@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "arith128.h"
 #include "map.h"
 #include "unreachable.h"
 
@@ -22,7 +23,79 @@ typedef enum __attribute__((packed)) {
     IR_N_PRIM,
 } ir_prim_t;
 
-// Wehter a primitive is of float type.
+// Number of bits (exluding padding) per IR type.
+__attribute__((const)) static inline int ir_prim_bits(ir_prim_t prim) {
+    switch (prim) {
+        case IR_PRIM_s8:
+        case IR_PRIM_u8: return 8;
+        case IR_PRIM_s16:
+        case IR_PRIM_u16: return 16;
+        case IR_PRIM_s32:
+        case IR_PRIM_u32: return 32;
+        case IR_PRIM_s64:
+        case IR_PRIM_u64: return 64;
+        case IR_PRIM_s128:
+        case IR_PRIM_u128: return 128;
+        case IR_PRIM_bool: return 1;
+        case IR_PRIM_f32: return 32;
+        case IR_PRIM_f64: return 64;
+        default: UNREACHABLE();
+    }
+}
+
+// Minimum value of integer primitive types (including bool).
+// Meaningless for other primitive types.
+__attribute__((const)) static inline i128_t ir_prim_min(ir_prim_t prim) {
+    switch (prim) {
+            // clang-format off
+        case IR_PRIM_bool: return I128_ZERO; break;
+        case IR_PRIM_s8:   return i128(INT8_MIN); break;
+        case IR_PRIM_u8:   return I128_ZERO; break;
+        case IR_PRIM_s16:  return i128(INT16_MIN); break;
+        case IR_PRIM_u16:  return I128_ZERO; break;
+        case IR_PRIM_s32:  return i128(INT32_MIN); break;
+        case IR_PRIM_u32:  return I128_ZERO; break;
+        case IR_PRIM_s64:  return i128(INT64_MIN); break;
+        case IR_PRIM_u64:  return I128_ZERO; break;
+        case IR_PRIM_s128: return I128_MIN; break;
+        case IR_PRIM_u128: return I128_ZERO; break;
+            // clang-format on
+        default: // Intentionally meaningless value.
+#ifdef NDEBUG
+            return I128_ZERO;
+#else
+            return i128_pack(0xdddddddddddddddd, 0xdddddddddddddddd);
+#endif
+    }
+}
+
+// Maximum value of integer primitive types (including bool).
+// Meaningless for other primitive types.
+__attribute__((const)) static inline i128_t ir_prim_max(ir_prim_t prim) {
+    switch (prim) {
+            // clang-format off
+        case IR_PRIM_bool: return ui128(1); break;
+        case IR_PRIM_s8:   return i128(INT8_MAX); break;
+        case IR_PRIM_u8:   return ui128(UINT8_MAX); break;
+        case IR_PRIM_s16:  return i128(INT16_MAX); break;
+        case IR_PRIM_u16:  return ui128(UINT16_MAX); break;
+        case IR_PRIM_s32:  return i128(INT32_MAX); break;
+        case IR_PRIM_u32:  return ui128(UINT32_MAX); break;
+        case IR_PRIM_s64:  return i128(INT64_MAX); break;
+        case IR_PRIM_u64:  return ui128(UINT64_MAX); break;
+        case IR_PRIM_s128: return I128_MAX; break;
+        case IR_PRIM_u128: return UI128_MAX; break;
+            // clang-format on
+        default: // Intentionally meaningless value.
+#ifdef NDEBUG
+            return I128_ZERO;
+#else
+            return i128_pack(0xcccccccccccccccc, 0xcccccccccccccccc);
+#endif
+    }
+}
+
+// Whether a primitive is of float type.
 __attribute__((const)) static inline bool ir_prim_is_float(ir_prim_t prim) {
     switch (prim) {
         case IR_PRIM_f32:
@@ -148,6 +221,9 @@ typedef enum __attribute__((packed)) {
     // Exit a call frame.
     // Typically increments the stack pointer to match.
     IR_INSN_CALLFRAME_EXIT,
+    // Mark arbitrary values as used.
+    // Used by ABI lowering and inline assembly.
+    IR_INSN_MARK_USED,
 } ir_insn_type_t;
 
 // Type of IR operand.
@@ -236,6 +312,11 @@ typedef struct ir_code       ir_code_t;
 typedef struct ir_funcret    ir_funcret_t;
 // IR function.
 typedef struct ir_func       ir_func_t;
+// Machine register number.
+typedef uint16_t             regno_t;
+
+// No register assigned.
+#define REGNO_NONE UINT16_MAX
 
 // IR frame is a call frame.
 // Call frames are always at the bottom the the stack,
@@ -281,14 +362,19 @@ struct ir_var {
     ir_func_t   *func;
     // Variable type.
     ir_prim_t    prim_type;
+    // Variable type pre-promotion; only relevant to `cg_promote_var`.
+    ir_prim_t    orig_prim_type;
     // Whether this variable was visited; used by the optimizer.
     bool         visited;
     // Is one of this function's args and if so, which.
     ptrdiff_t    arg_index;
-    // Expressions that assign this variable.
+    // Instructions that assign this variable.
     set_t        assigned_at;
-    // instructions that read this variable.
+    // Instructions that read this variable.
     set_t        used_at;
+    // For integer typed vars: possible range of the values in this variable (inclusive).
+    // Interpret as signed iff the IR type is signed.
+    // i128_t       range_min, range_max;
 };
 
 // IR constant.
@@ -354,7 +440,7 @@ struct ir_memref {
         // Base address IR variable.
         ir_var_t   *base_var;
         // Base address register.
-        size_t      base_regno;
+        regno_t     base_regno;
     };
     // Offset from base.
     // TODO: Should this be 128-bit?
@@ -438,10 +524,24 @@ static inline ir_prim_t ir_operand_prim(ir_operand_t oper) {
         }                                                                                                              \
     })
 
+// Helper macro for performing an operation on all registers in an IR operand.
+#define IR_FOR_OPERAND_REGS(operand, name, action)                                                                     \
+    ({                                                                                                                 \
+        if ((operand).type == IR_OPERAND_TYPE_REG) {                                                                   \
+            regno_t name = (operand).regno;                                                                            \
+            action                                                                                                     \
+        } else if ((operand).type == IR_OPERAND_TYPE_MEM) {                                                            \
+            if ((operand).mem.base_type == IR_MEMBASE_REG) {                                                           \
+                regno_t name = (operand).mem.base_regno;                                                               \
+                action                                                                                                 \
+            }                                                                                                          \
+        }                                                                                                              \
+    })
+
 // IR combinator code block -> variable map.
 struct ir_combinator {
-    // Previous code block.
-    ir_code_t   *prev;
+    // Predecessor code block.
+    ir_code_t   *pred;
     // Variable or constant to bind.
     ir_operand_t bind;
 };
@@ -452,7 +552,7 @@ struct ir_retval {
     union {
         ir_var_t   *dest_var;
         ir_frame_t *dest_struct;
-        size_t      dest_regno;
+        regno_t     dest_regno;
     };
 };
 
@@ -589,6 +689,8 @@ struct ir_func {
     size_t       code_next_id;
     // Enforce the SSA form.
     bool         enforce_ssa;
+    // Enforce comparison insn returns bool.
+    bool         enforce_cmp_bool;
 };
 
 // Byte size per primitive type.

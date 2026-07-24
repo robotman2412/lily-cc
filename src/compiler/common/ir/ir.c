@@ -233,7 +233,7 @@ static void create_combinator(ir_code_t *code, ir_var_t *dest) {
     set_foreach(ir_code_t, pred, &code->pred) {
         expr->combinators[i++] = (ir_combinator_t){
             .bind = IR_OPERAND_UNDEF(dest->prim_type),
-            .prev = pred,
+            .pred = pred,
         };
     }
     set_add(&dest->assigned_at, expr);
@@ -331,7 +331,7 @@ static void replace_phi_vars(ir_code_t *pred, ir_code_t *code, set_t *from, ir_v
             continue;
         } else if (insn->returns[0].type == IR_RETVAL_TYPE_VAR && set_contains(from, insn->returns[0].dest_var)) {
             for (size_t i = 0; i < insn->combinators_len; i++) {
-                if (insn->combinators[i].prev == pred) {
+                if (insn->combinators[i].pred == pred) {
                     ir_unmark_used(insn->combinators[i].bind, insn);
                     set_add(&to->used_at, insn);
                     insn->combinators[i].bind = IR_OPERAND_VAR(to);
@@ -490,12 +490,13 @@ ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
         func->var_name_ctr++;
     }
     name_free_assert(func, var->name);
-    var->prim_type   = type;
-    var->func        = func;
-    var->assigned_at = PTR_SET_EMPTY;
-    var->used_at     = PTR_SET_EMPTY;
-    var->node        = DLIST_NODE_EMPTY;
-    var->arg_index   = -1;
+    var->prim_type      = type;
+    var->orig_prim_type = type;
+    var->func           = func;
+    var->assigned_at    = PTR_SET_EMPTY;
+    var->used_at        = PTR_SET_EMPTY;
+    var->node           = DLIST_NODE_EMPTY;
+    var->arg_index      = -1;
     dlist_append(&func->vars_list, &var->node);
     map_set(&func->var_by_name, var->name, var);
     return var;
@@ -617,7 +618,7 @@ ir_code_t *ir_code_create(ir_func_t *func, char const *name) {
 // Remove a predecessor from a combinator.
 static void remove_combinator_path(ir_insn_t *expr, ir_code_t *code) {
     for (size_t i = 0; i < expr->combinators_len; i++) {
-        if (expr->combinators[i].prev == code) {
+        if (expr->combinators[i].pred == code) {
             ir_unmark_used(expr->combinators[i].bind, expr);
             array_remove(expr->combinators, sizeof(ir_combinator_t), expr->combinators_len, NULL, i);
             expr->combinators_len--;
@@ -689,7 +690,8 @@ void ir_insn_delete(ir_insn_t *insn) {
         case IR_INSN_ALLOCA:
         case IR_INSN_MEMSET:
         case IR_INSN_CALLFRAME_ENTER:
-        case IR_INSN_CALLFRAME_EXIT: assert(insn->returns_len == 0); break;
+        case IR_INSN_CALLFRAME_EXIT:
+        case IR_INSN_MARK_USED: assert(insn->returns_len == 0); break;
         case IR_INSN_CALL: assert(insn->returns_len <= 1); break;
         case IR_INSN_MACHINE:
         case IR_INSN_CLOBBER: break;
@@ -711,9 +713,10 @@ void ir_insn_delete(ir_insn_t *insn) {
         case IR_INSN_RETURN: assert(insn->operands_len <= 1); break;
         case IR_INSN_MEMCPY: assert(insn->operands_len == 3); break;
         case IR_INSN_MEMSET: assert(insn->operands_len == 3); break;
-        case IR_INSN_CLOBBER: assert(insn->operands_len == 0);
+        case IR_INSN_CLOBBER: assert(insn->operands_len == 0); break;
         case IR_INSN_CALL:
-        case IR_INSN_MACHINE: break;
+        case IR_INSN_MACHINE:
+        case IR_INSN_MARK_USED: break;
     }
 
     if (insn->type == IR_INSN_COMBINATOR) {
@@ -837,7 +840,7 @@ static void ir_emplace_insn(ir_insnloc_t loc, ir_insn_t *insn) {
             next = container_of(loc.insn->node.next, ir_insn_t, node);
             break;
         case IR_INSNLOC_BEFORE_INSN:
-            prev = container_of(loc.insn->node.previous, ir_insn_t, node);
+            prev = container_of(loc.insn->node.prev, ir_insn_t, node);
             next = loc.insn;
             break;
         default: UNREACHABLE();
@@ -971,16 +974,23 @@ ir_insn_t *ir_add_combinator(ir_insnloc_t loc, ir_var_t *dest, size_t from_len, 
 
 // Add an expression to a code block.
 ir_insn_t *ir_add_expr1(ir_insnloc_t loc, ir_retval_t dest, ir_op1_type_t oper, ir_operand_t operand) {
+    // TODO: Enforce no additive operations for bool.
     assert(oper < IR_N_OP1);
+    bool enforce_cmp_bool = ir_insnloc_code(loc)->func->enforce_cmp_bool;
     if (oper == IR_OP1_snez || oper == IR_OP1_seqz) {
-        if (dest.type == IR_RETVAL_TYPE_VAR && dest.dest_var->prim_type != IR_PRIM_bool) {
-            fprintf(stderr, "BUG: IR %s must return a boolean\n", ir_op1_names[oper]);
-            abort();
+        if (dest.type == IR_RETVAL_TYPE_VAR) {
+            if (dest.dest_var->prim_type != IR_PRIM_bool && enforce_cmp_bool) {
+                fprintf(stderr, "BUG: IR %s must return a boolean\n", ir_op1_names[oper]);
+                abort();
+            } else if (dest.dest_var->prim_type != IR_PRIM_bool && !ir_prim_is_integer(dest.dest_var->prim_type)) {
+                fprintf(stderr, "BUG: IR %s must return a boolean or integer type\n", ir_op1_names[oper]);
+                abort();
+            }
         }
     } else if (oper != IR_OP1_mov) {
         if (dest.type == IR_RETVAL_TYPE_VAR && operand.type != IR_OPERAND_TYPE_REG
             && ir_operand_prim(operand) != dest.dest_var->prim_type) {
-            fprintf(stderr, "BUG: IR expr1 has conflicting operand and return types\n");
+            fprintf(stderr, "BUG: IR %s has conflicting operand and return types\n", ir_op1_names[oper]);
             abort();
         }
     }
@@ -991,23 +1001,30 @@ ir_insn_t *ir_add_expr1(ir_insnloc_t loc, ir_retval_t dest, ir_op1_type_t oper, 
 
 // Add an expression to a code block.
 ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_retval_t dest, ir_op2_type_t oper, ir_operand_t lhs, ir_operand_t rhs) {
+    // TODO: Enforce no additive operations for bool.
     assert(oper < IR_N_OP2);
-    ir_prim_t lhs_prim = lhs.type != IR_OPERAND_TYPE_REG ? ir_operand_prim(lhs) : IR_N_PRIM;
-    ir_prim_t rhs_prim = rhs.type != IR_OPERAND_TYPE_REG ? ir_operand_prim(rhs) : IR_N_PRIM;
+    bool      enforce_cmp_bool = ir_insnloc_code(loc)->func->enforce_cmp_bool;
+    ir_prim_t lhs_prim         = lhs.type != IR_OPERAND_TYPE_REG ? ir_operand_prim(lhs) : IR_N_PRIM;
+    ir_prim_t rhs_prim         = rhs.type != IR_OPERAND_TYPE_REG ? ir_operand_prim(rhs) : IR_N_PRIM;
     if (lhs.type != IR_OPERAND_TYPE_REG && rhs.type != IR_OPERAND_TYPE_REG && lhs_prim != rhs_prim) {
-        fprintf(stderr, "BUG: IR expr2 has conflicting operand types\n");
+        fprintf(stderr, "BUG: IR %s has conflicting operand types\n", ir_op2_names[oper]);
         abort();
     }
     if (oper >= IR_OP2_sgt && oper <= IR_OP2_sne) {
-        if (dest.type == IR_RETVAL_TYPE_VAR && dest.dest_var->prim_type != IR_PRIM_bool) {
-            fprintf(stderr, "BUG: IR expr2 should be returning IR_PRIM_bool\n");
-            abort();
+        if (dest.type == IR_RETVAL_TYPE_VAR) {
+            if (dest.dest_var->prim_type != IR_PRIM_bool && enforce_cmp_bool) {
+                fprintf(stderr, "BUG: IR %s must return a boolean\n", ir_op2_names[oper]);
+                abort();
+            } else if (dest.dest_var->prim_type != IR_PRIM_bool && !ir_prim_is_integer(dest.dest_var->prim_type)) {
+                fprintf(stderr, "BUG: IR %s must return a boolean or integer type\n", ir_op2_names[oper]);
+                abort();
+            }
         }
     } else {
         if (dest.type == IR_RETVAL_TYPE_VAR
             && ((lhs.type != IR_OPERAND_TYPE_REG && lhs_prim != dest.dest_var->prim_type)
                 || (rhs.type != IR_OPERAND_TYPE_REG && rhs_prim != dest.dest_var->prim_type))) {
-            fprintf(stderr, "BUG: IR expr2 has conflicting operand and return types\n");
+            fprintf(stderr, "BUG: IR %s has conflicting operand and return types\n", ir_op2_names[oper]);
             abort();
         }
     }
@@ -1118,6 +1135,41 @@ ir_insn_t *ir_add_callframe_exit(ir_insnloc_t loc, ir_frame_t *frame) {
     );
     tmp->flags |= IR_INSN_FLAG_NOREORDER;
     return tmp;
+}
+
+// Add a variable usage marker.
+ir_insn_t *ir_add_mark_used(ir_insnloc_t loc, size_t operands_len, ir_operand_t const *operands) {
+    ir_insn_t *insn = alloc_ir_insn(operands_len, 0);
+    insn->type      = IR_INSN_CLOBBER;
+    for (size_t i = 0; i < operands_len; i++) {
+        insn->operands[i] = operands[i];
+        ir_mark_used(insn->operands[i], insn);
+        if (insn->operands[i].type == IR_OPERAND_TYPE_MEM && insn->operands[i].mem.base_type == IR_MEMBASE_SYM) {
+            insn->operands[i].mem.base_sym = lilycc_strdup(insn->operands[i].mem.base_sym);
+        }
+    }
+    insn->flags = IR_INSN_FLAG_NOREORDER;
+    ir_emplace_insn(loc, insn);
+    return insn;
+}
+
+// Add a variable usage marker.
+ir_insn_t *ir_add_mark_used_va(ir_insnloc_t loc, size_t operands_len, ...) {
+    ir_insn_t *insn = alloc_ir_insn(operands_len, 0);
+    va_list    l;
+    insn->type = IR_INSN_CLOBBER;
+    va_start(l, operands_len);
+    for (size_t i = 0; i < operands_len; i++) {
+        insn->operands[i] = va_arg(l, ir_operand_t);
+        ir_mark_used(insn->operands[i], insn);
+        if (insn->operands[i].type == IR_OPERAND_TYPE_MEM && insn->operands[i].mem.base_type == IR_MEMBASE_SYM) {
+            insn->operands[i].mem.base_sym = lilycc_strdup(insn->operands[i].mem.base_sym);
+        }
+    }
+    va_end(l);
+    insn->flags = IR_INSN_FLAG_NOREORDER;
+    ir_emplace_insn(loc, insn);
+    return insn;
 }
 
 

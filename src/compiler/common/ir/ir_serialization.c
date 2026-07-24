@@ -56,7 +56,7 @@ void ir_const_serialize(ir_const_t iconst, FILE *to) {
             // Positive number.
             u_val = iconst.const128;
         }
-        bool nontrivial = cmp128u(u_val, int128(0, 9)) > 0;
+        bool nontrivial = cmp128u(u_val, ui128(9)) > 0;
         if (size == 16) {
             char buf[40];
             itoa128(u_val, 0, buf);
@@ -163,6 +163,7 @@ void ir_insn_serialize(ir_insn_t const *insn, backend_profile_t const *profile_o
         case IR_INSN_ALLOCA: fputs("alloca", to); break;
         case IR_INSN_CALLFRAME_ENTER: fputs("callframe_enter", to); break;
         case IR_INSN_CALLFRAME_EXIT: fputs("callframe_exit", to); break;
+        case IR_INSN_MARK_USED: fputs("mark_used", to); break;
     }
 
     if (insn->type == IR_INSN_COMBINATOR) {
@@ -174,7 +175,7 @@ void ir_insn_serialize(ir_insn_t const *insn, backend_profile_t const *profile_o
             if (i) {
                 fputs(", ", to);
             }
-            printf("%%%s ", insn->combinators[i].prev->name);
+            printf("%%%s ", insn->combinators[i].pred->name);
             ir_operand_serialize(&insn->combinators[i].bind, profile_opt, true, to);
         }
     } else {
@@ -523,6 +524,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     case IR_KEYW_memset:
                     case IR_KEYW_callframe_enter:
                     case IR_KEYW_callframe_exit:
+                    case IR_KEYW_mark_used:
                         if (returns_len != 0) {
                             cctx_diagnostic(from->cctx, stmt->params[1].pos, DIAG_ERR, "Instruction returns nothing");
                             insn_ok = false;
@@ -852,6 +854,8 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                         case IR_KEYW_callframe_exit:
                             ir_add_callframe_exit(IR_APPEND(cur_code), operands[0].mem.base_frame);
                             break;
+
+                        case IR_KEYW_mark_used: ir_add_mark_used(IR_APPEND(cur_code), operands_len, operands); break;
                     }
                 }
 

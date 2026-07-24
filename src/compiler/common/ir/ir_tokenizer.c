@@ -62,7 +62,7 @@ static inline bool ir_is_sym_char(int c) {
 
 // Tokenize numeric constant.
 static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos, unsigned int base, bool is_negative) {
-    i128_t val      = int128(0, 0);
+    i128_t val      = i128_pack(0, 0);
     bool   hasdat   = false;
     bool   toolarge = false;
     bool   invalid  = false;
@@ -103,7 +103,7 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
         if (digit >= base) {
             invalid = true;
         }
-        i128_t new_val = add128(mul128(val, int128(0, base)), int128(0, digit));
+        i128_t new_val = add128(mul128(val, i128_pack(0, base)), i128_pack(0, digit));
         if (cmp128u(new_val, val) < 0) {
             toolarge = true;
         }
@@ -143,8 +143,8 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
     // Negate and check for overflow.
     if (is_signed) {
         // Check for overflow (signed edition).
-        i128_t const sign_mask = shl128(int128(0, 1), bitcount - 1);
-        i128_t const max_val   = add128(sign_mask, neg128(int128(0, 1)));
+        i128_t const sign_mask = shl128(i128_pack(0, 1), bitcount - 1);
+        i128_t const max_val   = add128(sign_mask, neg128(i128_pack(0, 1)));
         if (is_negative) {
             toolarge |= cmp128u(val, sign_mask) > 0;
         } else {
@@ -156,7 +156,7 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
         }
 
         // Truncate signed number.
-        if (cmp128u(and128(val, sign_mask), int128(0, 0))) {
+        if (cmp128u(and128(val, sign_mask), i128_pack(0, 0))) {
             // Sign-extend.
             val = or128(val, neg128(sign_mask));
         } else {
@@ -165,7 +165,7 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
         }
     } else {
         // Check for overflow (unsigned edition).
-        i128_t const max_val = add128(shl128(int128(0, 1), bitcount), neg128(int128(0, 1)));
+        i128_t const max_val = add128(shl128(i128_pack(0, 1), bitcount), neg128(i128_pack(0, 1)));
         if (is_negative || cmp128u(val, max_val) > 0) {
             toolarge = true;
         }
@@ -187,7 +187,7 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
             "Invalid bool constant; use `%s` instead",
             lo64(val) || hi64(val) ? "true" : "false"
         );
-        val = int128(0, lo64(val) || hi64(val));
+        val = i128_pack(0, lo64(val) || hi64(val));
     } else if (toolarge) {
         bool   val_u_negative = false;
         i128_t val_u;
@@ -202,9 +202,9 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
 
         i128_t val_trunc;
         if (ir_prim_sizes[prim] == 8) {
-            val_trunc = int128(0, lo64(val));
+            val_trunc = i128_pack(0, lo64(val));
         } else if (ir_prim_sizes[prim] < 16) {
-            val_trunc = int128(0, lo64(val) % (1llu << (8 * ir_prim_sizes[prim])));
+            val_trunc = i128_pack(0, lo64(val) % (1llu << (8 * ir_prim_sizes[prim])));
         }
 
         cctx_diagnostic(

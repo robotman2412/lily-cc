@@ -98,8 +98,6 @@ size_t           set_intersect(set_t *set, set_t const *other);
 size_t           set_removeall(set_t *set, set_t const *other);
 // Remove an item from the set.
 bool             set_remove(set_t *set, void const *value);
-// Remove all items in another set from this one.
-size_t           set_removeall(set_t *set, set_t const *other);
 // Get next item in the set (or first if `ent` is NULL).
 set_ent_t const *set_next(set_t const *set, set_ent_t const *ent);
 

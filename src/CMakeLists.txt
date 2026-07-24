@@ -12,8 +12,8 @@ add_compile_options(
     -std=gnu17
     -O0 -ggdb
     -Wall -Wextra -Wno-type-limits -Wno-unused-function
-    -Werror=all -Werror=extra -Werror=enum-conversion -Werror=incompatible-pointer-types
-    -Wno-error=unused-parameter -Wno-error=unused-variable -Wno-error=unused
+    -Werror=all -Wextra -Werror=enum-conversion -Werror=incompatible-pointer-types
+    -Wno-error=unused-parameter -Wno-error=unused-variable -Wno-error=unused-but-set-variable -Wno-error=unused
     -DDLIST_CONSISTENCY_CHECK
 )
 

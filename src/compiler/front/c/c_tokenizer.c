@@ -170,7 +170,7 @@ static token_t c_tkn_pre_number(tokenizer_t *ctx) {
 // Convert preprocessing number token to C number token.
 // TODO: Convert to options, gate binary behind C23 || gnu extension flag, gate _x128 behind Lily-CC extension flag.
 token_t c_tkn_conv_number(cctx_t *cctx, int c_std, token_t const *pre_tkn) {
-    i128_t val      = int128(0, 0);
+    i128_t val      = I128_ZERO;
     bool   hasdat   = false;
     bool   toolarge = false;
     bool   invalid  = false;
@@ -216,7 +216,7 @@ token_t c_tkn_conv_number(cctx_t *cctx, int c_std, token_t const *pre_tkn) {
         if (digit >= base) {
             invalid = true;
         }
-        i128_t next = add128(mul128(val, int128(0, base)), int128(0, digit));
+        i128_t next = add128(mul128(val, ui128(base)), ui128(digit));
         if (cmp128u(next, val) < 0) {
             toolarge = true;
         }
@@ -238,10 +238,10 @@ token_t c_tkn_conv_number(cctx_t *cctx, int c_std, token_t const *pre_tkn) {
 
     // Promote the primitive to be bigger if necessary.
     // TODO: Tokenizer is currently not aware of the C options.
-    i128_t const i32_max = int128(0, INT32_MAX);
-    i128_t const u32_max = int128(0, UINT32_MAX);
-    i128_t const i64_max = int128(0, INT64_MAX);
-    i128_t const u64_max = int128(0, UINT64_MAX);
+    i128_t const i32_max = ui128(INT32_MAX);
+    i128_t const u32_max = ui128(UINT32_MAX);
+    i128_t const i64_max = ui128(INT64_MAX);
+    i128_t const u64_max = ui128(UINT64_MAX);
     // Note: No automatic promotion to 128-bit without explicit suffix;
     // 128-bit literals are a Lily-C (not even GCC/clang) extension.
     if (cmp128u(val, i32_max) < 0) {
@@ -319,7 +319,7 @@ token_t c_tkn_conv_number(cctx_t *cctx, int c_std, token_t const *pre_tkn) {
         c_prim = C_PRIM_SLONG;
     }
     if (hi64(val) != 0 && !i128_suffix) {
-        val      = int128(0, lo64(val));
+        val      = ui128(lo64(val));
         toolarge = true;
     }
     if (u_suffix) {

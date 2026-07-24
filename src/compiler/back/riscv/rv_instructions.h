@@ -39,6 +39,8 @@ typedef enum {
     RV_ENC_J,
     // Instructions without registers; for some reason the RISC-V spec doesn't give a name to this.
     RV_ENC_BITS,
+    // The `mv` pseudo-instruction.
+    RV_ENC_PSEUDO_MV,
     // The `li` pseudo-instruction.
     RV_ENC_PSEUDO_LI,
     // The `ret` pseudo-instruction.

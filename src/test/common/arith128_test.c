@@ -13,7 +13,7 @@
 char *test_mul128() {
     i128_t mul;
 
-    mul = mul128(int128(0, 0), int128(0, 0));
+    mul = mul128(I128_ZERO, I128_ZERO);
     EXPECT_INT(lo64(mul), 0);
     EXPECT_INT(hi64(mul), 0);
 
@@ -21,11 +21,11 @@ char *test_mul128() {
     EXPECT_INT(lo64(mul), 1);
     EXPECT_INT(hi64(mul), 0);
 
-    mul = mul128(int128(1, 0), int128(0, 1));
+    mul = mul128(int128(1, 0), ui128(1));
     EXPECT_INT(lo64(mul), 0);
     EXPECT_INT(hi64(mul), 1);
 
-    mul = mul128(int128(0, 1), int128(-1, -1));
+    mul = mul128(ui128(1), int128(-1, -1));
     EXPECT_INT(lo64(mul), 0);
     EXPECT_INT(hi64(mul), -1);
 

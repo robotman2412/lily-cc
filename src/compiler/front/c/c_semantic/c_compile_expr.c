@@ -345,7 +345,7 @@ static cir_expr_t *
 
     // Build a pointer-to-field type, then `ptr + offset` as that type, then deref.
     rc_t        field_ptr_rc = c_type_to_pointer(cc, rc_share(field->type_rc));
-    cir_expr_t *off_iconst   = c_compile2_synth_iconst(cc, expr->oper_pos, cc->options.size_type, int128(0, offset));
+    cir_expr_t *off_iconst   = c_compile2_synth_iconst(cc, expr->oper_pos, cc->options.size_type, ui128(offset));
     cir_expr_t *add          = cir_expr_create_calc(cir_calc_create(
         (cir_expr_common_t){
             .pos          = expr->pos,
@@ -624,11 +624,11 @@ cir_expr_t *c_compile2_expr_prefix(c_compiler_t *cc, cir_scope_t *scope, c_ast_e
 
     switch (expr->oper) {
         case C_TKN_LNOT: { // Logical NOT `!expr`
-            cir_expr_t *zero = c_compile2_synth_iconst(cc, expr->pos, prim, int128(0, 0));
+            cir_expr_t *zero = c_compile2_synth_iconst(cc, expr->pos, prim, I128_ZERO);
             return cir_expr_create_calc(cir_calc_create(common, CIR_CALC_EQ, false, val, zero));
         }
         case C_TKN_NOT: { // Bitwise NOT `~expr`
-            cir_expr_t *mask = c_compile2_synth_iconst(cc, expr->pos, prim, int128(UINT64_MAX, UINT64_MAX));
+            cir_expr_t *mask = c_compile2_synth_iconst(cc, expr->pos, prim, UI128_MAX);
             return cir_expr_create_calc(cir_calc_create(common, CIR_CALC_BXOR, false, val, mask));
         }
         case C_TKN_INC:   // Pre-increment `++expr`
@@ -656,7 +656,7 @@ cir_expr_t *c_compile2_expr_prefix(c_compiler_t *cc, cir_scope_t *scope, c_ast_e
             rc_delete(common.type_rc);
             return val;
         case C_TKN_SUB: { // Arithmetic negate `-`.
-            cir_expr_t *zero = c_compile2_synth_iconst(cc, expr->pos, prim, int128(0, 0));
+            cir_expr_t *zero = c_compile2_synth_iconst(cc, expr->pos, prim, I128_ZERO);
             return cir_expr_create_calc(cir_calc_create(common, CIR_CALC_SUB, false, zero, val));
         }
         case C_TKN_AND: { // Address-of `&`
@@ -849,7 +849,7 @@ cir_expr_t *c_compile2_ptr_premul(c_compiler_t *cc, cir_expr_t *value, c_type_t 
         return NULL;
     }
 
-    cir_expr_t *iconst = c_compile2_synth_iconst(cc, value->common.pos, cc->options.size_type, int128(0, size));
+    cir_expr_t *iconst = c_compile2_synth_iconst(cc, value->common.pos, cc->options.size_type, ui128(size));
 
     return cir_expr_create_calc(cir_calc_create(
         (cir_expr_common_t){

@@ -39,11 +39,11 @@ __attribute__((always_inline)) static inline void consistency_check(dlist_t cons
             fprintf(stderr, "BUG: List length mismatch: %zu vs %zu\n", count, list->len);
             abort();
         }
-        if (!node->previous && node != list->head) {
+        if (!node->prev && node != list->head) {
             fprintf(stderr, "BUG: List head node mismatch\n");
             abort();
         }
-        node = node->previous;
+        node = node->prev;
     }
     assert(count == list->len);
 #else
@@ -62,11 +62,11 @@ void dlist_concat(dlist_t *front, dlist_t *back) {
     if (front->tail != NULL && back->tail != NULL) {
         // Both lists have elements.
         // Concatenate lists.
-        front->tail->next     = back->head;
-        back->head->previous  = front->tail;
-        front->tail           = back->tail;
-        front->len           += back->len;
-        *back                 = DLIST_EMPTY;
+        front->tail->next  = back->head;
+        back->head->prev   = front->tail;
+        front->tail        = back->tail;
+        front->len        += back->len;
+        *back              = DLIST_EMPTY;
 
     } else if (front->tail != NULL) {
         // Front list has elements, back is empty.
@@ -118,7 +118,7 @@ dlist_node_t *dlist_rindex(dlist_t const *list, size_t reverse_index) {
     dlist_node_t *node = list->tail;
 
     while (node && reverse_index--) {
-        node = node->previous;
+        node = node->prev;
     }
 
     return node;
@@ -132,13 +132,13 @@ void dlist_append(dlist_t *const list, dlist_node_t *const node) {
     assert_dev_drop(list != NULL);
     assert_dev_drop(node != NULL);
     assert_dev_drop(node->next == NULL);
-    assert_dev_drop(node->previous == NULL);
+    assert_dev_drop(node->prev == NULL);
     consistency_check(list);
     assert_dev_drop(!dlist_contains(list, node));
 
     *node = (dlist_node_t){
-        .next     = NULL,
-        .previous = list->tail,
+        .next = NULL,
+        .prev = list->tail,
     };
 
     if (list->tail != NULL) {
@@ -160,17 +160,17 @@ void dlist_prepend(dlist_t *const list, dlist_node_t *const node) {
     assert_dev_drop(list != NULL);
     assert_dev_drop(node != NULL);
     assert_dev_drop(node->next == NULL);
-    assert_dev_drop(node->previous == NULL);
+    assert_dev_drop(node->prev == NULL);
     consistency_check(list);
     assert_dev_drop(!dlist_contains(list, node));
 
     *node = (dlist_node_t){
-        .next     = list->head,
-        .previous = NULL,
+        .next = list->head,
+        .prev = NULL,
     };
 
     if (list->head != NULL) {
-        list->head->previous = node;
+        list->head->prev = node;
     } else {
         assert_dev_drop(list->tail == NULL);
         assert_dev_drop(list->len == 0);
@@ -189,7 +189,7 @@ void dlist_insert_after(dlist_t *list, dlist_node_t *existing, dlist_node_t *nod
     assert_dev_drop(list != NULL);
     assert_dev_drop(node != NULL);
     assert_dev_drop(node->next == NULL);
-    assert_dev_drop(node->previous == NULL);
+    assert_dev_drop(node->prev == NULL);
     consistency_check(list);
 #ifdef DLIST_CONSISTENCY_CHECK
     assert_dev_drop(!dlist_contains(list, node));
@@ -197,11 +197,11 @@ void dlist_insert_after(dlist_t *list, dlist_node_t *existing, dlist_node_t *nod
 #endif
 
     *node = (dlist_node_t){
-        .next     = existing->next,
-        .previous = existing,
+        .next = existing->next,
+        .prev = existing,
     };
     if (existing->next) {
-        existing->next->previous = node;
+        existing->next->prev = node;
     } else {
         list->tail = node;
     }
@@ -218,22 +218,22 @@ void dlist_insert_before(dlist_t *list, dlist_node_t *existing, dlist_node_t *no
     assert_dev_drop(list != NULL);
     assert_dev_drop(node != NULL);
     assert_dev_drop(node->next == NULL);
-    assert_dev_drop(node->previous == NULL);
+    assert_dev_drop(node->prev == NULL);
     consistency_check(list);
     assert_dev_drop(!dlist_contains(list, node));
     assert_dev_drop(dlist_contains(list, existing));
 
     *node = (dlist_node_t){
-        .next     = existing,
-        .previous = existing->previous,
+        .next = existing,
+        .prev = existing->prev,
     };
-    if (existing->previous) {
-        existing->previous->next = node;
+    if (existing->prev) {
+        existing->prev->next = node;
     } else {
         list->head = node;
     }
-    existing->previous  = node;
-    list->len          += 1;
+    existing->prev  = node;
+    list->len      += 1;
 
     consistency_check(list);
 }
@@ -251,7 +251,7 @@ dlist_node_t *dlist_pop_front(dlist_t *const list) {
         dlist_node_t *const node = list->head;
 
         if (node->next != NULL) {
-            node->next->previous = node->previous;
+            node->next->prev = node->prev;
         }
 
         list->len  -= 1;
@@ -285,12 +285,12 @@ dlist_node_t *dlist_pop_back(dlist_t *const list) {
 
         dlist_node_t *const node = list->tail;
 
-        if (node->previous != NULL) {
-            node->previous->next = node->next;
+        if (node->prev != NULL) {
+            node->prev->next = node->next;
         }
 
         list->len  -= 1;
-        list->tail  = node->previous;
+        list->tail  = node->prev;
         if (list->tail == NULL) {
             list->head = NULL;
         }
@@ -335,18 +335,18 @@ void dlist_remove(dlist_t *const list, dlist_node_t *const node) {
 #endif
     assert_dev_drop(list->len > 0);
 
-    if (node->previous != NULL) {
-        node->previous->next = node->next;
+    if (node->prev != NULL) {
+        node->prev->next = node->next;
     }
     if (node->next != NULL) {
-        node->next->previous = node->previous;
+        node->next->prev = node->prev;
     }
 
     if (node == list->head) {
         list->head = node->next;
     }
     if (node == list->tail) {
-        list->tail = node->previous;
+        list->tail = node->prev;
     }
 
     list->len -= 1;

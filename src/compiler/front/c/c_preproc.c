@@ -530,7 +530,7 @@ static i128_t c_preproc_eval_prefix(c_tokentype_t oper, i128_t value) {
         case C_TKN_ADD: return value;
         case C_TKN_SUB: return neg128(value);
         case C_TKN_NOT: return bneg128(value);
-        case C_TKN_LNOT: return int128(0, cmp128u(value, int128(0, 0)) == 0);
+        case C_TKN_LNOT: return ui128(cmp128u(value, I128_ZERO) == 0);
         default: abort();
     }
 }
@@ -565,31 +565,31 @@ static i128_t c_preproc_eval_infix(bool is_signed, i128_t lhs, c_tokentype_t ope
 
         case C_TKN_LT:
             if (is_signed) {
-                return int128(0, cmp128s(lhs, rhs) < 0);
+                return ui128(cmp128s(lhs, rhs) < 0);
             } else {
-                return int128(0, cmp128u(lhs, rhs) < 0);
+                return ui128(cmp128u(lhs, rhs) < 0);
             }
         case C_TKN_LE:
             if (is_signed) {
-                return int128(0, cmp128s(lhs, rhs) <= 0);
+                return ui128(cmp128s(lhs, rhs) <= 0);
             } else {
-                return int128(0, cmp128u(lhs, rhs) <= 0);
+                return ui128(cmp128u(lhs, rhs) <= 0);
             }
         case C_TKN_GT:
             if (is_signed) {
-                return int128(0, cmp128s(lhs, rhs) > 0);
+                return ui128(cmp128s(lhs, rhs) > 0);
             } else {
-                return int128(0, cmp128u(lhs, rhs) > 0);
+                return ui128(cmp128u(lhs, rhs) > 0);
             }
         case C_TKN_GE:
             if (is_signed) {
-                return int128(0, cmp128s(lhs, rhs) >= 0);
+                return ui128(cmp128s(lhs, rhs) >= 0);
             } else {
-                return int128(0, cmp128u(lhs, rhs) >= 0);
+                return ui128(cmp128u(lhs, rhs) >= 0);
             }
 
-        case C_TKN_NE: return int128(0, cmp128u(lhs, rhs) != 0);
-        case C_TKN_EQ: return int128(0, cmp128u(lhs, rhs) == 0);
+        case C_TKN_NE: return ui128(cmp128u(lhs, rhs) != 0);
+        case C_TKN_EQ: return ui128(cmp128u(lhs, rhs) == 0);
 
         case C_TKN_AND: return and128(lhs, rhs);
 
@@ -597,9 +597,9 @@ static i128_t c_preproc_eval_infix(bool is_signed, i128_t lhs, c_tokentype_t ope
 
         case C_TKN_OR: return or128(lhs, rhs);
 
-        case C_TKN_LAND: return int128(0, cmp128u(lhs, int128(0, 0)) && cmp128u(rhs, int128(0, 0)));
+        case C_TKN_LAND: return ui128(cmp128u(lhs, I128_ZERO) && cmp128u(rhs, I128_ZERO));
 
-        case C_TKN_LOR: return int128(0, cmp128u(lhs, int128(0, 0)) || cmp128u(rhs, int128(0, 0)));
+        case C_TKN_LOR: return ui128(cmp128u(lhs, I128_ZERO) || cmp128u(rhs, I128_ZERO));
 
         default: abort();
     }
@@ -760,7 +760,7 @@ static bool c_preproc_eval(c_preproc_t *pre, pos_t pos) {
             peek.pos = tkn.pos;                                                                                        \
             if (tkn.type == TOKENTYPE_ICONST || tkn.type == TOKENTYPE_CCONST) {                                        \
                 peek.type            = ENTRY_VALUE;                                                                    \
-                peek.value.value     = int128(tkn.ivalh, tkn.ival);                                                    \
+                peek.value.value     = i128_pack(tkn.ivalh, tkn.ival);                                                 \
                 peek.value.is_signed = (tkn.subtype & 1) == 0;                                                         \
             } else if (                                                                                                \
                 tkn.type == TOKENTYPE_OTHER                                                                            \
@@ -772,7 +772,7 @@ static bool c_preproc_eval(c_preproc_t *pre, pos_t pos) {
             } else if (tkn.type == TOKENTYPE_IDENT) {                                                                  \
                 peek.type            = ENTRY_VALUE;                                                                    \
                 peek.value.is_signed = true;                                                                           \
-                peek.value.value = int128(0, pre->shared->options->c_std >= C_STD_C23 && !strcmp(tkn.strval, "true")); \
+                peek.value.value     = ui128(pre->shared->options->c_std >= C_STD_C23 && !strcmp(tkn.strval, "true")); \
             } else {                                                                                                   \
                 peek.type = ENTRY_GARBAGE;                                                                             \
             }                                                                                                          \
@@ -830,7 +830,7 @@ static bool c_preproc_eval(c_preproc_t *pre, pos_t pos) {
         cctx_diagnostic(pre->shared->cctx, pos, DIAG_ERR, "Expected preprocessor expression");
         result = false;
     } else if (stack.len == 1 && stack.arr[0].type == ENTRY_VALUE) {
-        result = cmp128u(stack.arr[0].value.value, int128(0, 0)) != 0;
+        result = cmp128u(stack.arr[0].value.value, I128_ZERO) != 0;
     } else {
         cctx_diagnostic(
             pre->shared->cctx,

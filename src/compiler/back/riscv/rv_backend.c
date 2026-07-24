@@ -51,12 +51,19 @@ void rv_init_codegen(backend_profile_t *profile0) {
     profile->base.gpr_count         = profile->ext_enabled[RV_EXT_F] ? 64 : 32;
     profile->base.gpr_classes       = lilycc_calloc(profile->base.gpr_count, sizeof(regclass_t));
 
-    profile->base.gpr_classes[0].val = 0;
-    for (int i = 1; i < 32; i++) {
+    // zero, ra, sp, gp and tp - all unallocatable in the standard ABIs.
+    for (regno_t i = 0; i < 5; i++) {
+        profile->base.gpr_classes[0].val = 0;
+    }
+    // Remaining integer registers are usable for general allocations.
+    for (regno_t i = 5; i < 32; i++) {
         profile->base.gpr_classes[i] = (regclass_t){.int32 = 1, .int64 = profile->ext_enabled[RV_64]};
     }
+    // Enable FPRs iff the ISA supports them.
+    // ABI is separate; FPRs are tempregs if the ABI is not float.
+    // TODO: Correct support for f32 ABI when f64 extension is enabled.
     if (profile->ext_enabled[RV_EXT_F]) {
-        for (int i = 32; i < 64; i++) {
+        for (regno_t i = 32; i < 64; i++) {
             profile->base.gpr_classes[i] = (regclass_t){.f32 = 1, .f64 = profile->ext_enabled[RV_EXT_D]};
         }
     }

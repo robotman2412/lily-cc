@@ -984,7 +984,8 @@ static inline c_compile_expr_t
     ir_operand_t ir_rhs = c_cast_ir_operand(code, c_value_read(ctx, code, &rhs), ir_prim);
 
     ir_op2_type_t ir_op2 = c_op2_to_ir_op2(op2);
-    if ((ir_op2 == IR_OP2_div || ir_op2 == IR_OP2_rem) && ir_calc1(IR_OP1_seqz, ir_rhs.iconst).constl) {
+    if ((ir_op2 == IR_OP2_div || ir_op2 == IR_OP2_rem) && ir_rhs.type == IR_OPERAND_TYPE_CONST
+        && ir_calc1(IR_OP1_seqz, ir_rhs.iconst).constl) {
         cctx_diagnostic(ctx->cctx, expr->pos, DIAG_ERR, "Constant division by zero");
         return (c_compile_expr_t){
             .code = code,

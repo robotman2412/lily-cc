@@ -61,8 +61,6 @@ typedef struct rv_encoding rv_encoding_t;
 
 // RISC-V instruction encoding.
 struct rv_encoding {
-    // What extensions this instruction is allowed in.
-    rv_ext_t      ext;
     // Major opcode.
     rv_opcode_t   opcode;
     // Instruction encoding type.

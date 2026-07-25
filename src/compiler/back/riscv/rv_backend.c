@@ -26,12 +26,13 @@ backend_t const *backend_default() {
 
 // Create a copy of the default profile for this type of backend.
 backend_profile_t *rv_create_profile() {
-    rv_profile_t *profile         = lilycc_calloc(1, sizeof(rv_profile_t));
-    profile->ext_enabled[RV_BASE] = true;
-    profile->ext_enabled[RV_64]   = true;
-    profile->abi                  = RV_ABI_LP64;
-    profile->base.backend         = &rv_backend;
-    profile->base.reloc_names     = rv_reloc_names;
+    rv_profile_t *profile          = lilycc_calloc(1, sizeof(rv_profile_t));
+    profile->ext_enabled[RV_BASE]  = true;
+    profile->ext_enabled[RV_64]    = true;
+    profile->ext_enabled[RV_EXT_M] = true;
+    profile->abi                   = RV_ABI_LP64;
+    profile->base.backend          = &rv_backend;
+    profile->base.reloc_names      = rv_reloc_names;
     return (void *)profile;
 }
 
@@ -52,6 +53,9 @@ void rv_init_codegen(backend_profile_t *profile0) {
     profile->base.arith_min_bits    = LILY_32_BITS;
     profile->base.arith_max_bits    = profile->base.gpr_bits;
     profile->base.ptr_bits          = profile->base.gpr_bits;
+    profile->base.has_mul           = profile->ext_enabled[RV_EXT_M];
+    profile->base.has_div           = profile->ext_enabled[RV_EXT_M];
+    profile->base.has_rem           = profile->ext_enabled[RV_EXT_M];
     profile->base.has_f32           = profile->ext_enabled[RV_EXT_F];
     profile->base.has_f64           = profile->ext_enabled[RV_EXT_D];
     profile->base.gpr_count         = profile->ext_enabled[RV_EXT_F] ? 64 : 32;

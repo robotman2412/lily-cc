@@ -520,7 +520,7 @@ again:
     nodes = ra_liveness(func);
 
     // K values per type of IR variable.
-    regno_t k_values[IR_N_PRIM];
+    regno_t k_values[IR_N_PRIM] = {0};
     for (regno_t i = 0; i < profile->gpr_count; i++) {
         regclass_t class = profile->gpr_classes[i];
         if (class.f64) {

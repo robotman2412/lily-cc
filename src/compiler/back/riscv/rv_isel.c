@@ -437,6 +437,8 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t const *profile, ir_insn_t
     bool op32
         = profile->ext_enabled[RV_64]
           && (ir_operand_prim(insn->operands[0]) == IR_PRIM_s32 || ir_operand_prim(insn->operands[0]) == IR_PRIM_u32);
+    bool is_signed
+        = ir_operand_prim(insn->operands[0]) == IR_PRIM_s32 || ir_operand_prim(insn->operands[0]) == IR_PRIM_s64;
 
     if (insn->op2 == IR_OP2_sle || insn->op2 == IR_OP2_sge) {
         // a <= b written as (b < a) ^ 1
@@ -500,24 +502,32 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t const *profile, ir_insn_t
         case IR_OP2_slt: proto = &rv_insn_slt; break;
         case IR_OP2_add: proto = op32 ? &rv_insn_addw : &rv_insn_add; break;
         case IR_OP2_sub: proto = op32 ? &rv_insn_subw : &rv_insn_sub; break;
-        // case IR_OP2_mul:
-        //     if (!profile->ext_enabled[RV_EXT_M]) {
-        //         return NULL;
-        //     }
-        //     proto = &rv_insn_mul;
-        //     break;
-        // case IR_OP2_div:
-        //     if (!profile->ext_enabled[RV_EXT_M]) {
-        //         return NULL;
-        //     }
-        //     proto = &rv_insn_div;
-        //     break;
-        // case IR_OP2_rem:
-        //     if (!profile->ext_enabled[RV_EXT_M]) {
-        //         return NULL;
-        //     }
-        //     proto = &rv_insn_rem;
-        //     break;
+        case IR_OP2_mul:
+            if (!profile->ext_enabled[RV_EXT_M]) {
+                return NULL;
+            }
+            proto = op32 ? &rv_insn_mulw : &rv_insn_mul;
+            break;
+        case IR_OP2_div:
+            if (!profile->ext_enabled[RV_EXT_M]) {
+                return NULL;
+            }
+            if (is_signed) {
+                proto = op32 ? &rv_insn_divw : &rv_insn_div;
+            } else {
+                proto = op32 ? &rv_insn_divuw : &rv_insn_divu;
+            }
+            break;
+        case IR_OP2_rem:
+            if (!profile->ext_enabled[RV_EXT_M]) {
+                return NULL;
+            }
+            if (is_signed) {
+                proto = op32 ? &rv_insn_remw : &rv_insn_rem;
+            } else {
+                proto = op32 ? &rv_insn_remuw : &rv_insn_remu;
+            }
+            break;
         case IR_OP2_shl: proto = op32 ? &rv_insn_sllw : &rv_insn_sll; break;
         case IR_OP2_shr:
             if (ir_prim_is_signed(ir_operand_prim(insn->operands[0]))) {

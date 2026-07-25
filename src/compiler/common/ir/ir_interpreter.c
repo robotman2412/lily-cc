@@ -103,16 +103,14 @@ void ir_expr2_range(ir_var_t *var, ir_insn_t const *insn) {
 
         case IR_OP2_div:
             if (ir_prim_is_signed(var->prim_type)) {
-                if (cmp128s(rhs_min, I128_ZERO) != 0) {
-                    var->range_min = prim_min;
-                    var->range_max = prim_max;
+                if (cmp128s(rhs_min, I128_ZERO) == 0) {
+                    ir_expand_range(var, lhs_min, lhs_max);
                 } else {
                     ir_expand_range(var, div128s(lhs_min, rhs_min), div128s(lhs_max, rhs_min));
                 }
             } else {
-                if (cmp128u(rhs_min, I128_ZERO) != 0) {
-                    var->range_min = prim_min;
-                    var->range_max = prim_max;
+                if (cmp128u(rhs_min, I128_ZERO) == 0) {
+                    ir_expand_range(var, lhs_min, lhs_max);
                 } else {
                     ir_expand_range(var, div128u(lhs_min, rhs_min), div128u(lhs_max, rhs_min));
                 }
@@ -382,11 +380,11 @@ int ir_const_popcnt(ir_const_t value) {
     int count = 0;
     while (value.constl) {
         value.constl &= value.constl - 1;
-        count--;
+        count++;
     }
     while (value.consth) {
         value.consth &= value.consth - 1;
-        count--;
+        count++;
     }
 
     return count;
@@ -394,21 +392,23 @@ int ir_const_popcnt(ir_const_t value) {
 
 // Whether a constant is negative.
 bool ir_const_is_negative(ir_const_t value) {
-    if (value.prim_type == IR_PRIM_bool) { // NOLINT.
-        return false;
-    } else if (value.prim_type == IR_PRIM_f32) {
-        return value.constf32 < 0;
-    } else if (value.prim_type == IR_PRIM_f64) {
-        return value.constf64 < 0;
-    } else if (value.prim_type & 1) {
-        return false;
-    } else if (value.prim_type == IR_PRIM_s128) {
-        return value.consth >> 63;
-    } else {
-        int bytes = value.prim_type >> 1;
-        int bits  = bytes * 8;
-        return value.constl >> (bits - 1);
+    switch (value.prim_type) {
+        case IR_PRIM_u8:
+        case IR_PRIM_u16:
+        case IR_PRIM_u32:
+        case IR_PRIM_u64:
+        case IR_PRIM_u128:
+        case IR_PRIM_bool: return false;
+        case IR_PRIM_s8: return (value.constl >> 7) & 1;
+        case IR_PRIM_s16: return (value.constl >> 15) & 1;
+        case IR_PRIM_s32: return (value.constl >> 31) & 1;
+        case IR_PRIM_s64: return (value.constl >> 63) & 1;
+        case IR_PRIM_s128: return (value.consth >> 63) & 1;
+        case IR_PRIM_f32: return value.constf32 < 0;
+        case IR_PRIM_f64: return value.constf64 < 0;
+        case IR_N_PRIM: break;
     }
+    UNREACHABLE();
 }
 
 // Determines whether two constants are identical. Floats will be compared bitwise.

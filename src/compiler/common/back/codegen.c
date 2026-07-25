@@ -363,10 +363,6 @@ static void cg_promote_var_0(backend_profile_t *profile, ir_var_t *var) {
     }
 }
 
-// Fix up a `mov` instruction affected by a variable that was promoted.
-static void fixup_mov(ir_insn_t *insn) {
-}
-
 // Insert additional computations as needded to clamp promoted variable back in range.
 static void cg_promote_var_1(backend_profile_t *profile, ir_var_t *orig) {
     (void)profile;
@@ -580,4 +576,22 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
     // TODO: Stack offsets and what happens when they go out of range for immediate offsets.
 
     regalloc(profile, func);
+
+    // Stip meta-instructions.
+    dlist_foreach_node(ir_code_t, code, &func->code_list) {
+        ir_insn_t *insn = (ir_insn_t *)code->insns.head;
+        while (insn) {
+            ir_insn_t *next = (ir_insn_t *)insn->node.next;
+            switch (insn->type) {
+                case IR_INSN_MACHINE: break;
+                case IR_INSN_CLOBBER:
+                case IR_INSN_ALLOCA:
+                case IR_INSN_CALLFRAME_ENTER:
+                case IR_INSN_CALLFRAME_EXIT:
+                case IR_INSN_MARK_USED: ir_insn_delete(insn); break;
+                default: UNREACHABLE();
+            }
+            insn = next;
+        }
+    }
 }

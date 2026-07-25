@@ -456,7 +456,7 @@ ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
     } else {
         proto = &rv_insn_jal;
     }
-    ir_insn_t *new_node = ir_add_mach_insn(cc.loc, false, (ir_retval_t){}, proto, 1, (ir_operand_t const[]){call_dest});
+    ir_insn_t *new_node = ir_add_mach_insn(cc.loc, true, IR_RETVAL_REG(0), proto, 1, (ir_operand_t const[]){call_dest});
     new_node->flags |= IR_INSN_FLAG_NOREORDER;
     cc.loc           = IR_AFTER_INSN(new_node);
 

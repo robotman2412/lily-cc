@@ -126,17 +126,17 @@ bool opt_strength_reduce(ir_func_t *func) {
     bool reduced = false, loop;
     do {
         loop          = false;
-        ir_var_t *var = container_of(func->vars_list.head, ir_var_t, node);
+        ir_var_t *var = (ir_var_t *)func->vars_list.head;
         while (var) {
-            ir_var_t *next = container_of(var->node.next, ir_var_t, node);
+            ir_var_t *next = (ir_var_t *)var->node.next;
             if (var->assigned_at.len != 1) {
                 var = next;
                 continue;
             }
-            set_ent_t const *ent  = set_next(&var->assigned_at, NULL);
-            loop                 |= strength_reduce_expr(ent->value);
-            reduced              |= loop;
-            var                   = next;
+            ir_insn_t *insn  = set_next(&var->assigned_at, NULL)->value;
+            loop            |= strength_reduce_expr(insn);
+            reduced         |= loop;
+            var              = next;
         }
     } while (loop);
     return reduced;

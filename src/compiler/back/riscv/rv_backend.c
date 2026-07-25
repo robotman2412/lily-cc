@@ -26,12 +26,12 @@ backend_t const *backend_default() {
 
 // Create a copy of the default profile for this type of backend.
 backend_profile_t *rv_create_profile() {
-    rv_profile_t *profile           = lilycc_calloc(1, sizeof(rv_profile_t));
-    profile->ext_enabled[RV_BASE]   = true;
-    profile->ext_enabled[RV_32ONLY] = true;
-    profile->abi                    = RV_ABI_ILP32;
-    profile->base.backend           = &rv_backend;
-    profile->base.reloc_names       = rv_reloc_names;
+    rv_profile_t *profile         = lilycc_calloc(1, sizeof(rv_profile_t));
+    profile->ext_enabled[RV_BASE] = true;
+    profile->ext_enabled[RV_64]   = true;
+    profile->abi                  = RV_ABI_LP64;
+    profile->base.backend         = &rv_backend;
+    profile->base.reloc_names     = rv_reloc_names;
     return (void *)profile;
 }
 

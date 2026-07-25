@@ -296,6 +296,19 @@ static bool const_prop_expr(ir_insn_t *expr) {
         }
     }
 
+    // Check for cast from bool to int and then back.
+    // This optimization is specifically useful for the C frontend.
+    if (expr->type == IR_INSN_EXPR1 && expr->op1 == IR_OP1_snez && expr->operands[0].type == IR_OPERAND_TYPE_VAR
+        && expr->operands[0].var->assigned_at.len == 1) {
+        ir_insn_t *pred = set_next(&expr->operands[0].var->assigned_at, NULL)->value;
+        if (pred->type == IR_INSN_EXPR1 && pred->op1 == IR_OP1_mov && pred->operands[0].type == IR_OPERAND_TYPE_VAR
+            && pred->operands[0].var->prim_type == IR_PRIM_bool) {
+            ir_var_replace(expr->returns[0].dest_var, pred->operands[0]);
+            ir_var_delete(expr->returns[0].dest_var);
+            return true;
+        }
+    }
+
     if (expr->type == IR_INSN_COMBINATOR) {
         // Flatten phi-nodes with only a single predecessor or all identical bindings.
         for (size_t i = 1; i < expr->combinators_len; i++) {
@@ -330,8 +343,11 @@ static bool const_prop_expr(ir_insn_t *expr) {
         return true;
 
     } else if (
-        expr->type == IR_INSN_EXPR1 && expr->op1 == IR_OP1_mov && expr->operands[0].type == IR_OPERAND_TYPE_VAR
+        expr->type == IR_INSN_EXPR1 && expr->operands[0].type == IR_OPERAND_TYPE_VAR
         && expr->returns[0].dest_var->prim_type == expr->operands[0].var->prim_type
+        && (expr->op1 == IR_OP1_mov
+            // Second clause checks for casting bool to bool again.
+            || (expr->op1 == IR_OP1_snez && expr->returns[0].dest_var->prim_type == IR_PRIM_bool))
     ) {
         // Move between two variables of the same type; replace the destination.
         ir_var_replace(expr->returns[0].dest_var, IR_OPERAND_VAR(expr->operands[0].var));

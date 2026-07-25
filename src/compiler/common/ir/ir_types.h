@@ -376,7 +376,7 @@ struct ir_var {
     set_t        used_at;
     // For integer typed vars: possible range of the values in this variable (inclusive).
     // Interpret as signed iff the IR type is signed.
-    // i128_t       range_min, range_max;
+    i128_t       range_min, range_max;
 };
 
 // IR constant.
@@ -579,6 +579,9 @@ struct ir_retval {
 // Is a 1:1 register-register copy that can be eliminated if dest==src.
 // Used to optimize out redundant copies after register selection.
 #define IR_INSN_FLAG_RR_COPY         (1 << 5)
+// This instruction is part of a sequence that clamps the destination back in range;
+// do not clamp the input variable just for this instruction.
+#define IR_INSN_FLAG_CLAMPING        (1 << 6)
 
 // IR instruction.
 struct ir_insn {

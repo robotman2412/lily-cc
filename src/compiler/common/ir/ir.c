@@ -498,6 +498,11 @@ ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
     var->used_at        = PTR_SET_EMPTY;
     var->node           = DLIST_NODE_EMPTY;
     var->arg_index      = -1;
+
+    // Intentionally reversed; causes range to be calculated properly when assigned.
+    var->range_min = ir_prim_max(type);
+    var->range_max = ir_prim_min(type);
+
     dlist_append(&func->vars_list, &var->node);
     map_set(&func->var_by_name, var->name, var);
     return var;

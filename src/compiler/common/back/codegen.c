@@ -363,6 +363,10 @@ static void cg_promote_var_0(backend_profile_t *profile, ir_var_t *var) {
     }
 }
 
+// Fix up a `mov` instruction affected by a variable that was promoted.
+static void fixup_mov(ir_insn_t *insn) {
+}
+
 // Insert additional computations as needded to clamp promoted variable back in range.
 static void cg_promote_var_1(backend_profile_t *profile, ir_var_t *orig) {
     (void)profile;
@@ -376,19 +380,47 @@ static void cg_promote_var_1(backend_profile_t *profile, ir_var_t *orig) {
     // TODO: Use IR var ranges to optimize out truncations.
 
     set_foreach(ir_insn_t, insn, &orig->used_at) {
+        if (insn->flags & IR_INSN_FLAG_CLAMPING) {
+            continue;
+        }
         switch (insn->type) {
             case IR_INSN_EXPR1:
-            case IR_INSN_EXPR2: goto needs_clamp; // TODO: Eval per expr type.
+                switch (insn->op1) {
+                    case IR_OP1_seqz:
+                    case IR_OP1_snez:
+                    case IR_OP1_mov:
+                    case IR_OP1_bitcast: goto needs_clamp;
+                    case IR_OP1_neg:
+                    case IR_OP1_bneg:
+                    case IR_N_OP1: break;
+                }
+                break;
+            case IR_INSN_EXPR2:
+                switch (insn->op2) {
+                    case IR_OP2_shr:
+                    case IR_OP2_div:
+                    case IR_OP2_rem:
+                    case IR_OP2_sgt:
+                    case IR_OP2_sle:
+                    case IR_OP2_slt:
+                    case IR_OP2_sge:
+                    case IR_OP2_seq:
+                    case IR_OP2_sne: goto needs_clamp;
+                    case IR_OP2_add:
+                    case IR_OP2_sub:
+                    case IR_OP2_mul:
+                    case IR_OP2_shl:
+                    case IR_OP2_band:
+                    case IR_OP2_bor:
+                    case IR_OP2_bxor:
+                    case IR_N_OP2: break;
+                }
+                break;
             case IR_INSN_JUMP:
             case IR_INSN_BRANCH:
             case IR_INSN_STORE:
             case IR_INSN_LOAD:
-            case IR_INSN_LEA: // Out of range only matters if used as address.
-                assert(insn->operands[0].type == IR_OPERAND_TYPE_MEM);
-                if (insn->operands[0].mem.base_type == IR_MEMBASE_VAR && insn->operands[0].mem.base_var == orig) {
-                    goto needs_clamp;
-                }
-                break;
+            case IR_INSN_LEA: goto needs_clamp;
             case IR_INSN_MARK_USED: break; // Out of range doesn't matter here.
             case IR_INSN_COMBINATOR:
             case IR_INSN_CALL:
@@ -405,6 +437,23 @@ static void cg_promote_var_1(backend_profile_t *profile, ir_var_t *orig) {
     return;
 
 needs_clamp:;
+    i128_t const prim_min = ir_prim_min(orig->orig_prim_type);
+    i128_t const prim_max = ir_prim_max(orig->orig_prim_type);
+    if (ir_prim_is_signed(orig->orig_prim_type)) {
+        if (cmp128s(prim_min, orig->range_min) <= 0 && cmp128s(prim_max, orig->range_max) >= 0) {
+            // Already in range.
+            printf("%%%s: Already in range\n", orig->name);
+            return;
+        }
+    } else {
+        if (cmp128u(prim_min, orig->range_min) <= 0 && cmp128u(prim_max, orig->range_max) >= 0) {
+            // Already in range.
+            printf("%%%s: Already in range\n", orig->name);
+            return;
+        }
+    }
+    printf("%%%s: Clamping now\n", orig->name);
+
     int       bits  = ir_prim_bits(orig->orig_prim_type);
     ir_var_t *dirty = ir_var_create(orig->func, orig->prim_type, NULL);
     ir_insn_set_return(assignment, 0, IR_RETVAL_VAR(dirty));
@@ -502,7 +551,7 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
     dlist_foreach_node(ir_var_t, var, &func->vars_list) {
         cg_promote_var_0(profile, var);
     }
-    // TODO: Calc var ranges so we can optimize out some of the truncations.
+    ir_calc_all_ranges(func);
     dlist_foreach_node(ir_var_t, var, &func->vars_list) {
         cg_promote_var_1(profile, var);
     }

@@ -12,6 +12,7 @@
 #include "c_prim.h"
 #include "c_values.h"
 #include "compiler.h"
+#include "ir.h"
 #include "ir_interpreter.h"
 #include "ir_types.h"
 #include "lilycc_malloc.h"

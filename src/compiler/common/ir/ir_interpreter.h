@@ -5,9 +5,24 @@
 
 #pragma once
 
-#include "ir.h"
+#include "ir_types.h"
 
 
+
+// Get the range of possible values from an IR operand.
+bool ir_get_operand_range(ir_operand_t operand, i128_t *min_out, i128_t *max_out);
+// Update the possible range according to an expr2 instruction.
+void ir_expr2_range(ir_var_t *var, ir_insn_t const *insn);
+// Update the possible range according to an expr1 instruction.
+void ir_expr1_range(ir_var_t *var, ir_insn_t const *insn);
+// Update the possible range according to an instruction.
+void ir_insn_range(ir_var_t *var, ir_insn_t const *insn);
+// Expand the possible range of a variable.
+void ir_expand_range(ir_var_t *var, i128_t min, i128_t max);
+// Recompute the possible range of a variable.
+void ir_calc_var_range(ir_var_t *var);
+// Recompute the possible ranges of all variables in the function.
+void ir_calc_all_ranges(ir_func_t *func);
 
 // Count how many bits are needed to represent the value.
 int        ir_count_bits(ir_const_t value, bool allow_s, bool allow_u) __attribute__((const));

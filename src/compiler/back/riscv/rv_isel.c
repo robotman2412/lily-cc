@@ -522,7 +522,7 @@ static inline ir_insn_t *rv_isel_expr1(rv_profile_t const *profile, ir_insn_t *i
                 dest,
                 &rv_insn_sltu,
                 2,
-                (ir_operand_t const[]){IR_OPERAND_REG(0)}
+                (ir_operand_t const[]){IR_OPERAND_REG(0), src}
             );
             break;
         case IR_OP1_neg: // sub rd, x0, rs2
@@ -532,7 +532,7 @@ static inline ir_insn_t *rv_isel_expr1(rv_profile_t const *profile, ir_insn_t *i
                 dest,
                 &rv_insn_sub,
                 2,
-                (ir_operand_t const[]){IR_OPERAND_REG(0)}
+                (ir_operand_t const[]){IR_OPERAND_REG(0), src}
             );
             break;
         case IR_OP1_bneg: // xori rd, rs1, -1

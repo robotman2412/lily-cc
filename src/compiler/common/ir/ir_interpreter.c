@@ -7,9 +7,303 @@
 
 #include "arith128.h"
 #include "ir_types.h"
+#include "list.h"
+#include "set.h"
+#include "unreachable.h"
 
 #include <stdlib.h>
 #include <string.h>
+
+
+
+// Get the range of possible values from an IR operand.
+bool ir_get_operand_range(ir_operand_t operand, i128_t *min_out, i128_t *max_out) {
+    switch (operand.type) {
+        case IR_OPERAND_TYPE_CONST:
+            if (operand.iconst.prim_type >= IR_PRIM_f32) {
+                return false;
+            }
+            *min_out = operand.iconst.const128;
+            *max_out = operand.iconst.const128;
+            return true;
+        case IR_OPERAND_TYPE_VAR:
+            if (operand.var->prim_type >= IR_PRIM_f32) {
+                return false;
+            }
+            *min_out = operand.var->range_min;
+            *max_out = operand.var->range_max;
+            return true;
+        case IR_OPERAND_TYPE_UNDEF:
+        case IR_OPERAND_TYPE_MEM:
+        case IR_OPERAND_TYPE_STRUCT:
+        case IR_OPERAND_TYPE_REG:
+        default: return false;
+    }
+}
+
+// Update the possible range according to an expr2 instruction.
+void ir_expr2_range(ir_var_t *var, ir_insn_t const *insn) {
+    if (var->prim_type >= IR_PRIM_f32) {
+        return;
+    }
+
+    switch (insn->op2) {
+        case IR_OP2_sgt:
+        case IR_OP2_sle:
+        case IR_OP2_slt:
+        case IR_OP2_sge:
+        case IR_OP2_seq:
+        case IR_OP2_sne: ir_expand_range(var, I128_ZERO, ui128(1)); return;
+        default: break;
+    }
+
+    i128_t const prim_min = ir_prim_min(var->prim_type);
+    i128_t const prim_max = ir_prim_max(var->prim_type);
+
+    i128_t lhs_min = prim_min, lhs_max = prim_max;
+    i128_t rhs_min = prim_min, rhs_max = prim_max;
+    if (!ir_get_operand_range(insn->operands[0], &lhs_min, &lhs_max)
+        && !ir_get_operand_range(insn->operands[1], &rhs_min, &rhs_max)) {
+        var->range_min = prim_min;
+        var->range_max = prim_max;
+        return;
+    }
+
+    switch (insn->op2) {
+        case IR_OP2_sgt:
+        case IR_OP2_sle:
+        case IR_OP2_slt:
+        case IR_OP2_sge:
+        case IR_OP2_seq:
+        case IR_OP2_sne: UNREACHABLE(); // Already covered.
+
+        case IR_OP2_add:
+            if (ir_prim_is_signed(var->prim_type)) {
+                ir_expand_range(var, add128s_saturate(lhs_min, rhs_min), add128s_saturate(lhs_max, rhs_max));
+            } else {
+                ir_expand_range(var, add128u_saturate(lhs_min, rhs_min), add128u_saturate(lhs_max, rhs_max));
+            }
+            break;
+
+        case IR_OP2_sub:
+            if (ir_prim_is_signed(var->prim_type)) {
+                ir_expand_range(var, sub128s_saturate(lhs_min, rhs_min), sub128s_saturate(lhs_max, rhs_max));
+            } else {
+                ir_expand_range(var, sub128u_saturate(lhs_min, rhs_min), sub128u_saturate(lhs_max, rhs_max));
+            }
+            break;
+
+        case IR_OP2_mul:
+            if (ir_prim_is_signed(var->prim_type)) {
+                ir_expand_range(var, mul128s_saturate(lhs_min, rhs_min), mul128s_saturate(lhs_max, rhs_max));
+            } else {
+                ir_expand_range(var, mul128u_saturate(lhs_min, rhs_min), mul128u_saturate(lhs_max, rhs_max));
+            }
+            break;
+
+        case IR_OP2_div:
+            if (ir_prim_is_signed(var->prim_type)) {
+                if (cmp128s(rhs_min, I128_ZERO) != 0) {
+                    var->range_min = prim_min;
+                    var->range_max = prim_max;
+                } else {
+                    ir_expand_range(var, div128s(lhs_min, rhs_min), div128s(lhs_max, rhs_min));
+                }
+            } else {
+                if (cmp128u(rhs_min, I128_ZERO) != 0) {
+                    var->range_min = prim_min;
+                    var->range_max = prim_max;
+                } else {
+                    ir_expand_range(var, div128u(lhs_min, rhs_min), div128u(lhs_max, rhs_min));
+                }
+            }
+            break;
+
+        case IR_OP2_rem:
+            if (ir_prim_is_signed(var->prim_type)) {
+                i128_t max = sub128u_saturate(max128u(abs128s(rhs_min), abs128s(rhs_max)), ui128(1));
+                ir_expand_range(var, neg128(max), max);
+            } else {
+                ir_expand_range(var, I128_ZERO, sub128u_saturate(rhs_max, ui128(1)));
+            }
+            break;
+
+        case IR_OP2_shl:
+            // TODO: Could calculate accurately, probably not worth doing.
+            var->range_min = prim_min;
+            var->range_max = prim_max;
+            break;
+
+        case IR_OP2_shr: {
+            int shamt = ir_prim_bits(var->prim_type) - 1;
+            if (cmp128u(rhs_min, ui128(shamt)) < 0) {
+                shamt = (int)lo64(rhs_min);
+            }
+
+            if (ir_prim_is_signed(var->prim_type)) {
+                ir_expand_range(var, shr128s(lhs_min, shamt), shr128s(lhs_max, shamt));
+            } else {
+                ir_expand_range(var, shr128u(lhs_min, shamt), shr128u(lhs_max, shamt));
+            }
+        } break;
+
+        case IR_OP2_band: {
+            // Again, could do better for non-constant, but probably not worth doing.
+            i128_t lhs_mask = lhs_max, rhs_mask = rhs_max;
+            if (cmp128u(lhs_min, lhs_max) != 0) {
+                lhs_mask = or128(prim_min, prim_max);
+            }
+            if (cmp128u(rhs_min, rhs_max) != 0) {
+                rhs_mask = or128(prim_min, prim_max);
+            }
+
+            i128_t mask = and128(lhs_mask, rhs_mask);
+            i128_t a    = and128(prim_min, mask);
+            i128_t b    = and128(prim_min, mask);
+            ir_expand_range(var, a, b);
+            ir_expand_range(var, b, a);
+        } break;
+
+        case IR_OP2_bor:
+        case IR_OP2_bxor:
+            ir_expand_range(var, or128(lhs_min, rhs_min), or128(lhs_max, rhs_max));
+            ir_expand_range(var, lhs_min, lhs_max);
+            ir_expand_range(var, rhs_min, rhs_max);
+            break;
+
+        case IR_N_OP2: UNREACHABLE();
+    }
+}
+
+// Update the possible range according to an expr1 instruction.
+void ir_expr1_range(ir_var_t *var, ir_insn_t const *insn) {
+    if (var->prim_type >= IR_PRIM_f32) {
+        return;
+    }
+    switch (insn->op1) {
+        case IR_OP1_mov:
+            if (insn->operands[0].type == IR_OPERAND_TYPE_VAR && insn->operands[0].var->prim_type < IR_PRIM_f32) {
+                ir_expand_range(var, insn->operands[0].var->range_min, insn->operands[0].var->range_max);
+            } else {
+                var->range_min = ir_prim_min(var->orig_prim_type);
+                var->range_max = ir_prim_max(var->orig_prim_type);
+            }
+            break;
+        case IR_OP1_bneg:
+        case IR_OP1_bitcast:
+            var->range_min = ir_prim_min(var->orig_prim_type);
+            var->range_max = ir_prim_max(var->orig_prim_type);
+            break;
+        case IR_OP1_seqz:
+        case IR_OP1_snez: ir_expand_range(var, I128_ZERO, ui128(1)); break;
+        case IR_OP1_neg: ir_expand_range(var, var->range_max, var->range_min); break;
+        case IR_N_OP1: UNREACHABLE();
+    }
+}
+
+// Update the possible range according to an instruction.
+void ir_insn_range(ir_var_t *var, ir_insn_t const *insn) {
+    switch (insn->type) {
+        case IR_INSN_EXPR2: ir_expr2_range(var, insn); break;
+        case IR_INSN_EXPR1: ir_expr1_range(var, insn); break;
+        case IR_INSN_LEA:
+        case IR_INSN_LOAD:
+        case IR_INSN_COMBINATOR:
+        case IR_INSN_CALL:
+        case IR_INSN_MACHINE:
+        case IR_INSN_ALLOCA:
+            var->range_min = ir_prim_min(var->orig_prim_type);
+            var->range_max = ir_prim_max(var->orig_prim_type);
+            break;
+        default: break;
+    }
+}
+
+// Expand the possible range of a variable.
+void ir_expand_range(ir_var_t *var, i128_t min, i128_t max) {
+    if (var->assigned_at.len == 0) {
+        var->range_min = min;
+        var->range_max = max;
+    } else if (ir_prim_is_signed(var->prim_type)) {
+        var->range_min = min128s(var->range_min, min);
+        var->range_max = max128s(var->range_max, max);
+    } else {
+        var->range_min = min128u(var->range_min, min);
+        var->range_max = max128u(var->range_max, max);
+    }
+    i128_t const prim_min = ir_prim_min(var->prim_type);
+    i128_t const prim_max = ir_prim_max(var->prim_type);
+    if (ir_prim_is_signed(var->prim_type)) {
+        if (cmp128s(var->range_min, prim_min) < 0) {
+            var->range_min = prim_min;
+        }
+        if (cmp128s(var->range_max, prim_max) > 0) {
+            var->range_max = prim_max;
+        }
+    } else {
+        if (cmp128u(var->range_min, prim_min) < 0) {
+            var->range_min = prim_min;
+        }
+        if (cmp128u(var->range_max, prim_max) > 0) {
+            var->range_max = prim_max;
+        }
+    }
+}
+
+// Recompute the possible range of a variable.
+void ir_calc_var_range(ir_var_t *var) {
+    if (var->prim_type >= IR_PRIM_f32) {
+        return;
+    }
+    i128_t const prim_min = ir_prim_min(var->prim_type);
+    i128_t const prim_max = ir_prim_max(var->prim_type);
+    if (var->assigned_at.len == 0) {
+        var->range_min = prim_min;
+        var->range_max = prim_max;
+        return;
+    }
+
+    var->range_min = prim_max;
+    var->range_max = prim_min;
+
+    set_foreach(ir_insn_t, insn, &var->assigned_at) {
+        ir_insn_range(var, insn);
+    }
+}
+
+static bool calc_ready(ir_var_t const *var, set_t const *work) {
+    set_foreach(ir_insn_t, insn, &var->assigned_at) {
+        if (insn->type == IR_INSN_EXPR1 || insn->type == IR_INSN_EXPR2) {
+            for (size_t i = 0; i < insn->operands_len; i++) {
+                if (insn->operands[i].type == IR_OPERAND_TYPE_VAR && set_contains(work, insn->operands[i].var)) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+// Recompute the possible ranges of all variables in the function.
+void ir_calc_all_ranges(ir_func_t *func) {
+    set_t work = PTR_SET_EMPTY;
+    dlist_foreach_node(ir_var_t, var, &func->vars_list) {
+        if (var->prim_type < IR_PRIM_f32) {
+            set_add(&work, var);
+        }
+    }
+
+    while (work.len) {
+        set_foreach(ir_var_t, var, &work) {
+            if (calc_ready(var, &work)) {
+                ir_calc_var_range(var);
+                set_remove(&work, var);
+                goto again;
+            }
+        }
+    again:;
+    }
+}
 
 
 

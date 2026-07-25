@@ -300,6 +300,51 @@ INLINE_MATH128 i128_t bneg128(i128_t a) {
 }
 #endif
 
+// Asbolute value
+INLINE_MATH128 i128_t abs128s(i128_t a) {
+    if (cmp128u(a, I128_ZERO) < 0) {
+        return neg128(a);
+    } else {
+        return a;
+    }
+}
+
+// Minimum of two values (unsigned).
+INLINE_MATH128 i128_t min128u(i128_t lhs, i128_t rhs) {
+    if (cmp128u(lhs, rhs) < 0) {
+        return lhs;
+    } else {
+        return rhs;
+    }
+}
+
+// Minimum of two values (signed).
+INLINE_MATH128 i128_t min128s(i128_t lhs, i128_t rhs) {
+    if (cmp128s(lhs, rhs) < 0) {
+        return lhs;
+    } else {
+        return rhs;
+    }
+}
+
+// Minimum of two values (unsigned).
+INLINE_MATH128 i128_t max128u(i128_t lhs, i128_t rhs) {
+    if (cmp128u(lhs, rhs) > 0) {
+        return lhs;
+    } else {
+        return rhs;
+    }
+}
+
+// Minimum of two values (signed).
+INLINE_MATH128 i128_t max128s(i128_t lhs, i128_t rhs) {
+    if (cmp128s(lhs, rhs) > 0) {
+        return lhs;
+    } else {
+        return rhs;
+    }
+}
+
 // Perform 128-bit addition (saturating, unsigned).
 INLINE_MATH128 i128_t add128u_saturate(i128_t lhs, i128_t rhs) {
     i128_t res = add128(lhs, rhs);

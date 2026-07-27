@@ -235,6 +235,7 @@ c_var_t *c_var_create(
 
     if (type->primitive == C_COMP_FUNCTION) {
         fprintf(stderr, "TODO: c_var_create C_COMP_FUNCTION\n");
+        rc_delete(type_rc);
         return NULL;
     }
 
@@ -2633,7 +2634,6 @@ ir_code_t *
         c_var_t *var = c_var_create(ctx, prepass, code ? code->func : NULL, decl_type, name, scope);
         if (!var) {
             // A diagnostic will have already been created.
-            rc_delete(decl_type);
             continue;
         }
 

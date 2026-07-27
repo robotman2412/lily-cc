@@ -458,6 +458,7 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
         n_long       = 0;
         has_signed   = false;
         has_unsigned = false;
+        has_int      = false;
     } else if (n_long == 1) {
         if (has_unsigned) {
             type->primitive = C_PRIM_ULONG;
@@ -467,6 +468,7 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
         n_long       = 0;
         has_signed   = false;
         has_unsigned = false;
+        has_int      = false;
     } else if (has_int || has_unsigned || has_signed) {
         if (has_unsigned) {
             type->primitive = C_PRIM_UINT;
@@ -493,6 +495,8 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
     } else if (has_void) {
         type->primitive = C_PRIM_VOID;
         has_void        = false;
+    } else {
+        type->primitive = C_PRIM_SINT;
     }
 
     if (!struct_tkn

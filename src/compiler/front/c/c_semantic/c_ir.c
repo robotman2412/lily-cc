@@ -9,6 +9,8 @@
 #include "refcount.h"
 #include "vec.h"
 
+#include <stdio.h>
+
 
 
 static inline void cir_expr_common_delete(cir_expr_common_t common) {
@@ -18,18 +20,6 @@ static inline void cir_expr_common_delete(cir_expr_common_t common) {
 cir_expr_common_t cir_expr_common_clone(cir_expr_common_t const *common) {
     rc_share(common->type_rc);
     return *common;
-}
-
-cir_ident_t *cir_ident_create(pos_t pos, char *ident) {
-    cir_ident_t *node = lilycc_malloc(sizeof(cir_ident_t));
-    node->pos         = pos;
-    node->ident       = ident;
-    return node;
-}
-
-void cir_ident_delete(cir_ident_t *node) {
-    lilycc_free(node->ident);
-    lilycc_free(node);
 }
 
 
@@ -79,12 +69,46 @@ void cir_comp_value_delete(cir_comp_value_t *node) {
 }
 
 
-cir_value_t *cir_value_create_ident(cir_expr_common_t common, cir_ident_t *ident) {
+cir_value_t *cir_value_create_tmpval(cir_tmpval_t const *tmpval) {
     cir_value_t *node = lilycc_malloc(sizeof(cir_value_t));
-    node->common      = common;
-    node->common.pos  = ident->pos;
-    node->tag         = CIR_VALUE_IDENT;
-    node->ident       = ident;
+    node->common      = cir_expr_common_clone(&tmpval->common);
+    node->tag         = CIR_VALUE_TMPVAL;
+    node->tmpval      = tmpval;
+    return node;
+}
+
+cir_value_t *cir_value_create_scope_val(cir_scope_val_t const *scope_val) {
+    cir_value_t *node = lilycc_malloc(sizeof(cir_value_t));
+    switch (scope_val->tag) {
+        case CIR_SCOPE_VAL_DECL:
+            node->common = (cir_expr_common_t){
+                .pos          = scope_val->decl->pos,
+                .is_lvalue    = true,
+                .allow_addrof = true,
+                .type_rc      = rc_share(scope_val->decl->type_rc),
+            };
+            break;
+        case CIR_SCOPE_VAL_FUNC:
+            node->common = (cir_expr_common_t){
+                .pos          = scope_val->func->pos,
+                .is_lvalue    = true,
+                .allow_addrof = true,
+                .type_rc      = rc_share(scope_val->func->type_rc),
+            };
+            break;
+        case CIR_SCOPE_VAL_ENUM_CONST:
+            node->common = (cir_expr_common_t){
+                .pos          = scope_val->enum_const->pos,
+                .is_lvalue    = false,
+                .allow_addrof = false,
+                .type_rc      = NULL, // TODO.
+            };
+            fprintf(stderr, "TODO: Enum constant values\n");
+            abort();
+            break;
+    }
+    node->tag       = CIR_VALUE_TMPVAL;
+    node->scope_val = scope_val;
     return node;
 }
 
@@ -118,7 +142,8 @@ cir_value_t *cir_value_create_comp_value(cir_expr_common_t common, cir_comp_valu
 void cir_value_delete(cir_value_t *node) {
     cir_expr_common_delete(node->common);
     switch (node->tag) {
-        case CIR_VALUE_IDENT: cir_ident_delete(node->ident); break;
+        case CIR_VALUE_TMPVAL:
+        case CIR_VALUE_SCOPE_VAL: break;
         case CIR_VALUE_CONST: cir_const_delete(node->iconst); break;
         case CIR_VALUE_COMP_CONST: cir_comp_const_delete(node->comp_const); break;
         case CIR_VALUE_COMP_VALUE: cir_comp_value_delete(node->comp_value); break;
@@ -161,32 +186,10 @@ void cir_cast_delete(cir_cast_t *node) {
 }
 
 
-cir_ternary_t *
-    cir_ternary_create(cir_expr_common_t common, cir_expr_t *cond, cir_expr_t *if_expr, cir_expr_t *else_expr) {
-    cir_ternary_t *node = lilycc_malloc(sizeof(cir_ternary_t));
-    node->common        = common;
-    node->cond          = cond;
-    node->if_expr       = if_expr;
-    node->else_expr     = else_expr;
-    return node;
-}
-
-void cir_ternary_delete(cir_ternary_t *node) {
-    cir_expr_common_delete(node->common);
-    cir_expr_delete(node->cond);
-    cir_expr_delete(node->if_expr);
-    cir_expr_delete(node->else_expr);
-    lilycc_free(node);
-}
-
-
-cir_calc_t *cir_calc_create(
-    cir_expr_common_t common, cir_calc_op_t op, bool is_assign, cir_expr_t *lhs, cir_expr_t *rhs
-) {
+cir_calc_t *cir_calc_create(cir_expr_common_t common, cir_calc_op_t op, cir_expr_t *lhs, cir_expr_t *rhs) {
     cir_calc_t *node = lilycc_malloc(sizeof(cir_calc_t));
     node->common     = common;
     node->op         = op;
-    node->is_assign  = is_assign;
     node->lhs        = lhs;
     node->rhs        = rhs;
     return node;
@@ -196,22 +199,6 @@ void cir_calc_delete(cir_calc_t *node) {
     cir_expr_common_delete(node->common);
     cir_expr_delete(node->lhs);
     cir_expr_delete(node->rhs);
-    lilycc_free(node);
-}
-
-
-cir_inc_t *cir_inc_create(cir_expr_common_t common, cir_expr_t *expr, bool is_pre, int64_t increment) {
-    cir_inc_t *node = lilycc_malloc(sizeof(cir_inc_t));
-    node->common    = common;
-    node->expr      = expr;
-    node->is_pre    = is_pre;
-    node->increment = increment;
-    return node;
-}
-
-void cir_inc_delete(cir_inc_t *node) {
-    cir_expr_common_delete(node->common);
-    cir_expr_delete(node->expr);
     lilycc_free(node);
 }
 
@@ -245,8 +232,13 @@ void cir_deref_delete(cir_deref_t *node) {
 
 
 cir_exprs_t *cir_exprs_create(cir_expr_common_t common, vec_cir_expr_t exprs) {
+    return cir_exprs_create2(common, (vec_cir_tmpval_t){0}, exprs);
+}
+
+cir_exprs_t *cir_exprs_create2(cir_expr_common_t common, vec_cir_tmpval_t tmpvals, vec_cir_expr_t exprs) {
     cir_exprs_t *node = lilycc_malloc(sizeof(cir_exprs_t));
     node->common      = common;
+    node->tmpvals     = tmpvals;
     node->exprs       = exprs;
     return node;
 }
@@ -256,6 +248,7 @@ void cir_exprs_delete(cir_exprs_t *node) {
     for (size_t i = 0; i < node->exprs.len; i++) {
         cir_expr_delete(node->exprs.arr[i]);
     }
+    vec_clear(&node->tmpvals);
     vec_clear(&node->exprs);
     lilycc_free(node);
 }
@@ -301,27 +294,11 @@ cir_expr_t *cir_expr_create_cast(cir_cast_t *cast) {
     return node;
 }
 
-cir_expr_t *cir_expr_create_ternary(cir_ternary_t *ternary) {
-    cir_expr_t *node = lilycc_malloc(sizeof(cir_expr_t));
-    node->common     = cir_expr_common_clone(&ternary->common);
-    node->tag        = CIR_EXPR_TERNARY;
-    node->ternary    = ternary;
-    return node;
-}
-
 cir_expr_t *cir_expr_create_calc(cir_calc_t *calc) {
     cir_expr_t *node = lilycc_malloc(sizeof(cir_expr_t));
     node->common     = cir_expr_common_clone(&calc->common);
     node->tag        = CIR_EXPR_CALC;
     node->calc       = calc;
-    return node;
-}
-
-cir_expr_t *cir_expr_create_inc(cir_inc_t *inc) {
-    cir_expr_t *node = lilycc_malloc(sizeof(cir_expr_t));
-    node->common     = cir_expr_common_clone(&inc->common);
-    node->tag        = CIR_EXPR_INC;
-    node->inc        = inc;
     return node;
 }
 
@@ -357,19 +334,31 @@ cir_expr_t *cir_expr_create_assign(cir_assign_t *assign) {
     return node;
 }
 
+cir_expr_t *cir_expr_create_stmt(cir_stmt_t *stmt) {
+    cir_expr_t *node = lilycc_malloc(sizeof(cir_expr_t));
+    node->common     = (cir_expr_common_t){
+        .pos          = stmt->pos,
+        .type_rc      = NULL, // TODO.
+        .is_lvalue    = false,
+        .allow_addrof = false,
+    };
+    node->tag  = CIR_EXPR_ASSIGN;
+    node->stmt = stmt;
+    return node;
+}
+
 void cir_expr_delete(cir_expr_t *node) {
     cir_expr_common_delete(node->common);
     switch (node->tag) {
         case CIR_EXPR_VALUE: cir_value_delete(node->value); break;
         case CIR_EXPR_CALL: cir_call_delete(node->call); break;
         case CIR_EXPR_CAST: cir_cast_delete(node->cast); break;
-        case CIR_EXPR_TERNARY: cir_ternary_delete(node->ternary); break;
         case CIR_EXPR_CALC: cir_calc_delete(node->calc); break;
-        case CIR_EXPR_INC: cir_inc_delete(node->inc); break;
         case CIR_EXPR_ADDROF: cir_addrof_delete(node->addrof); break;
         case CIR_EXPR_DEREF: cir_deref_delete(node->deref); break;
         case CIR_EXPR_EXPRS: cir_exprs_delete(node->exprs); break;
         case CIR_EXPR_ASSIGN: cir_assign_delete(node->assign); break;
+        case CIR_EXPR_STMT: cir_stmt_delete(node->stmt); break;
     }
     lilycc_free(node);
 }

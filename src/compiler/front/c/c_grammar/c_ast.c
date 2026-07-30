@@ -7,7 +7,7 @@
 
 #include "arith128.h"
 #include "c_tokenizer.h"
-#include "c_types.h"
+#include "c_types1.h"
 #include "char_repr.h"
 #include "lilycc_malloc.h"
 

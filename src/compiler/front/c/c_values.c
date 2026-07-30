@@ -6,7 +6,7 @@
 #include "c_values.h"
 
 #include "c_compiler.h"
-#include "c_types.h"
+#include "c_types1.h"
 #include "compiler.h"
 #include "ir.h"
 #include "ir_types.h"
@@ -42,13 +42,13 @@ void c_value_destroy(c_value_t value) {
 
 // Write to a memory lvalue.
 static void c_lvalue_write_mem(c_compiler_t *ctx, ir_code_t *code, ir_memref_t lvalue_memref, c_value_t const *rvalue) {
-    c_type_t const *rvalue_type = rvalue->c_type->data;
-    uint64_t        size, align;
-    c_type_get_size(ctx, rvalue_type, &size, &align);
+    c_type1_t const *rvalue_type = rvalue->c_type->data;
+    uint64_t         size, align;
+    c_type1_get_size(ctx, rvalue_type, &size, &align);
     ir_prim_t usize_prim    = c_prim_to_ir_type(ctx, ctx->options.size_type);
     ir_prim_t copy_max_prim = IR_PRIM_u8 + 2 * __builtin_ctzll(ir_prim_sizes[usize_prim] | align);
 
-    if (lvalue_memref.data_type < IR_N_PRIM && lvalue_memref.data_type != c_type_to_ir_type(ctx, rvalue_type)) {
+    if (lvalue_memref.data_type < IR_N_PRIM && lvalue_memref.data_type != c_type1_to_ir_type(ctx, rvalue_type)) {
         // Must cast the rvalue before it can be stored.
         ir_var_t *tmp = ir_var_create(code->func, lvalue_memref.data_type, NULL);
         ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(tmp), IR_OP1_mov, c_value_read(ctx, code, rvalue));
@@ -100,7 +100,7 @@ static void c_lvalue_write_mem(c_compiler_t *ctx, ir_code_t *code, ir_memref_t l
 
 // Write to an lvalue.
 void c_value_write(c_compiler_t *ctx, ir_code_t *code, c_value_t const *lvalue, c_value_t const *rvalue) {
-    assert(c_type_is_compatible(ctx, lvalue->c_type->data, rvalue->c_type->data));
+    assert(c_type1_is_compatible(ctx, lvalue->c_type->data, rvalue->c_type->data));
     switch (lvalue->value_type) {
         default: UNREACHABLE(); break;
         case C_VALUE_ERROR:
@@ -168,13 +168,13 @@ ir_operand_t c_value_read(c_compiler_t *ctx, ir_code_t *code, c_value_t const *v
             // Rvalues don't need any reading because they're already in an `ir_operand_t`.
             return value->rvalue.operand;
         case C_LVALUE_MEM: {
-            c_type_t *type = value->c_type->data;
+            c_type1_t *type = value->c_type->data;
             if (type->primitive >= C_N_PRIM) {
                 fprintf(stderr, "BUG: c_value_read called on compound type lvalue\n");
                 abort();
             }
             // Pointer lvalue is read from memory.
-            ir_var_t *tmp = ir_var_create(code->func, c_type_to_ir_type(ctx, value->c_type->data), NULL);
+            ir_var_t *tmp = ir_var_create(code->func, c_type1_to_ir_type(ctx, value->c_type->data), NULL);
             ir_add_load(IR_APPEND(code), IR_RETVAL_VAR(tmp), c_value_memref(ctx, code, value));
             return IR_OPERAND_VAR(tmp);
         }
@@ -196,7 +196,7 @@ void c_value_memcpy(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value, 
 
         case C_RVALUE_BINARY: {
             uint64_t size, align;
-            c_type_get_size(ctx, value->c_type->data, &size, &align);
+            c_type1_get_size(ctx, value->c_type->data, &size, &align);
             ir_prim_t usize_prim    = c_prim_to_ir_type(ctx, ctx->options.size_type);
             ir_prim_t copy_max_prim = IR_PRIM_u8 + 2 * __builtin_ctzll(ir_prim_sizes[usize_prim] | align);
             ir_gen_memcpy_const(
@@ -226,7 +226,7 @@ void c_value_memcpy(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value, 
             goto with_memcpy;
         with_memcpy: {
             uint64_t size, align;
-            c_type_get_size(ctx, value->c_type->data, &size, &align);
+            c_type1_get_size(ctx, value->c_type->data, &size, &align);
             ir_add_memcpy(
                 IR_APPEND(code),
                 dest,
@@ -242,14 +242,14 @@ void c_value_memcpy(c_compiler_t *ctx, ir_code_t *code, c_value_t const *value, 
 
 // Access the field of a struct/union value.
 c_value_t c_value_access_field(c_compiler_t *ctx, c_value_t const *value, token_t const *field_name) {
-    c_type_t const *type = value->c_type->data;
+    c_type1_t const *type = value->c_type->data;
     if (type->primitive != C_COMP_STRUCT && type->primitive != C_COMP_UNION) {
         fprintf(stderr, "BUG: c_value_field called on non-struct/union type\n");
         abort();
     }
 
-    uint64_t         field_offset;
-    c_field_t const *field = c_type_get_field(ctx, type, field_name->strval, &field_offset);
+    uint64_t          field_offset;
+    c_field1_t const *field = c_type1_get_field(ctx, type, field_name->strval, &field_offset);
     if (!field) {
         cctx_diagnostic(ctx->cctx, field_name->pos, DIAG_ERR, "No such struct/union field");
         return (c_value_t){0};
@@ -270,7 +270,7 @@ c_value_t c_value_access_field(c_compiler_t *ctx, c_value_t const *value, token_
         case C_RVALUE_OPERAND: UNREACHABLE();
         case C_RVALUE_STACK: {
             ir_memref_t memref = IR_MEMREF(
-                c_type_to_ir_type(ctx, value->c_type->data),
+                c_type1_to_ir_type(ctx, value->c_type->data),
                 IR_BADDR_FRAME(value->rvalue.frame),
                 .offset = field_offset
             );
@@ -282,17 +282,17 @@ c_value_t c_value_access_field(c_compiler_t *ctx, c_value_t const *value, token_
         }
         case C_RVALUE_BINARY: {
             uint64_t size, align;
-            if (!c_type_get_size(ctx, field->type_rc->data, &size, &align)) {
+            if (!c_type1_get_size(ctx, field->type_rc->data, &size, &align)) {
                 UNREACHABLE();
             }
             uint8_t *blob = lilycc_malloc(size);
             memcpy(blob, value->rvalue.blob + field_offset, size);
 
-            c_type_t const *field_type = field->type_rc->data;
+            c_type1_t const *field_type = field->type_rc->data;
             if (field_type->primitive < C_N_PRIM || field_type->primitive == C_COMP_POINTER) {
                 // Primitives must be converted into IR constants.
                 ir_const_t value
-                    = ir_const_from_blob(c_type_to_ir_type(ctx, field_type), blob, ctx->options.big_endian);
+                    = ir_const_from_blob(c_type1_to_ir_type(ctx, field_type), blob, ctx->options.big_endian);
                 lilycc_free(blob);
                 return (c_value_t){
                     .value_type     = C_RVALUE_OPERAND,
@@ -323,7 +323,7 @@ c_value_t c_value_clone(c_compiler_t *ctx, c_value_t const *value) {
         case C_RVALUE_STACK: rc_share(value->c_type); return *value;
         case C_RVALUE_BINARY: {
             uint64_t size, align;
-            c_type_get_size(ctx, value->c_type->data, &size, &align);
+            c_type1_get_size(ctx, value->c_type->data, &size, &align);
             uint8_t *blob = lilycc_malloc(size);
             memcpy(blob, value->rvalue.blob, size);
             return (c_value_t){
@@ -339,7 +339,7 @@ c_value_t c_value_clone(c_compiler_t *ctx, c_value_t const *value) {
 // Determine whether a value is assignable.
 // Produces a diagnostic if it is not.
 bool c_value_is_assignable(c_compiler_t *ctx, c_value_t const *value, pos_t diag_pos) {
-    c_type_t const *type = value->c_type->data;
+    c_type1_t const *type = value->c_type->data;
     if (type->is_const || (value->value_type != C_LVALUE_MEM && value->value_type != C_LVALUE_VAR)) {
         cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Expression must be a modifiable lvalue");
         return false;

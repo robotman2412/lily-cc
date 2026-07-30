@@ -11,7 +11,7 @@
 #include "c_parser.h"
 #include "c_prepass.h"
 #include "c_tokenizer.h"
-#include "c_types.h"
+#include "c_types1.h"
 #include "c_values.h"
 #include "compiler.h"
 #include "ir_types.h"
@@ -88,7 +88,7 @@ struct c_compiler {
     // C compiler options.
     c_options_t options;
     // Actual primitive type definitions derived from options.
-    c_type_t    prim_types[C_N_PRIM];
+    c_type1_t   prim_types[C_N_PRIM];
     // Fake refcount ptrs to `c_type_t` for all C primitive types.
     struct rc_t prim_rcs[C_N_PRIM];
     // Global scope.
@@ -170,4 +170,4 @@ ir_code_t *
     c_compile_decls(c_compiler_t *ctx, c_prepass_t *prepass, ir_code_t *code, c_scope_t *scope, token_t const *decls);
 
 // Explain a C type.
-void c_type_explain(c_type_t const *type, FILE *to);
+void c_type_explain(c_type1_t const *type, FILE *to);

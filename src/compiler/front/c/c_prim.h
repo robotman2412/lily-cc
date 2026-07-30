@@ -14,7 +14,7 @@
 
 
 // C type primitives.
-typedef enum {
+typedef enum __attribute__((packed)) {
     // `_Bool`, `bool`
     C_PRIM_BOOL,
     // `char`

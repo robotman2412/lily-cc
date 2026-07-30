@@ -6,7 +6,7 @@
 #include "c_compiler.h"
 #include "c_parser.h"
 #include "c_std.h"
-#include "c_types.h"
+#include "c_types1.h"
 #include "ir.h"
 #include "ir_optimizer.h"
 #include "ir_serialization.h"

@@ -67,6 +67,7 @@
     - `__STDC_VERSION__` - `yyyymmL` (e.g. `202311L`) format C standard version ✓
     - `__TIME__` - `"hh:mm:ss"` format compile time ✓
     - `__COUNTER__` - increments every time it is expanded, starting at 0 ✓
+    - `__BIGGEST_ALIGNMENT__` - the largest alignment the current target CPU ever needs
 
 ### C parser and AST builder
 - Design clean, generic struct for building the AST ✓

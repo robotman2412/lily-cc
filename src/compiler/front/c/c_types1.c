@@ -3,7 +3,7 @@
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
-#include "c_types.h"
+#include "c_types1.h"
 
 #include "arith128.h"
 #include "arrays.h"
@@ -63,8 +63,8 @@ char const *c_prim_name[] = {
 };
 
 
-// Clean up a `c_type_t`.
-void c_type_free(c_type_t *type) {
+// Clean up a `c_type1_t`.
+void c_type1_free(c_type1_t *type) {
     if (type->primitive == C_COMP_FUNCTION) {
         rc_delete(type->func.return_type);
         for (size_t i = 0; i < type->func.args_len; i++) {
@@ -86,8 +86,8 @@ void c_type_free(c_type_t *type) {
 }
 
 // Delete a compound type.
-void c_comp_free(c_comp_t *comp) {
-    if (comp->type == C_COMP_TYPE_ENUM) {
+void c_comp_free(c_comp1_t *comp) {
+    if (comp->type == C_COMP_TYPE1_ENUM) {
         for (size_t i = 0; i < comp->variants.len; i++) {
             lilycc_free(comp->variants.arr[i].name);
         }
@@ -107,7 +107,7 @@ void c_comp_free(c_comp_t *comp) {
 
 // Compile the body of an enum definition.
 static void
-    c_compile_enum_body(c_compiler_t *ctx, token_t const *body, size_t body_len, c_scope_t *scope, c_comp_t *comp) {
+    c_compile_enum_body(c_compiler_t *ctx, token_t const *body, size_t body_len, c_scope_t *scope, c_comp1_t *comp) {
     size_t cap = 0;
     // TODO: Packed enums support.
     int    cur = 0;
@@ -133,12 +133,12 @@ static void
             map_set(&scope->locals, name->strval, var);
             map_set(&scope->locals_by_decl, name, var);
 
-            c_enumvar_t enumvar;
+            c_enumvar1_t enumvar;
             enumvar.name    = lilycc_strdup(name->strval);
             enumvar.ordinal = cur;
             array_lencap_insert_strong(
                 &comp->variants.arr,
-                sizeof(c_enumvar_t),
+                sizeof(c_enumvar1_t),
                 &comp->variants.len,
                 &cap,
                 &enumvar,
@@ -152,7 +152,7 @@ static void
 
 // Compile the body of a struct/union definition.
 static void
-    c_compile_struct_body(c_compiler_t *ctx, token_t const *body, size_t body_len, c_scope_t *scope, c_comp_t *comp) {
+    c_compile_struct_body(c_compiler_t *ctx, token_t const *body, size_t body_len, c_scope_t *scope, c_comp1_t *comp) {
     size_t   cap    = 0;
     uint64_t offset = 0;
     uint64_t size   = 0;
@@ -167,24 +167,24 @@ static void
             continue;
         }
 
-        c_type_t const *inner_type = inner_rc->data;
+        c_type1_t const *inner_type = inner_rc->data;
         // TODO: This check does not exclude `struct a` in `struct { struct a; }`.
         if (decl->params_len == 1
             && (inner_type->primitive == C_COMP_STRUCT || inner_type->primitive == C_COMP_UNION)) {
-            c_comp_t const *inner_comp = inner_type->comp->data;
+            c_comp1_t const *inner_comp = inner_type->comp->data;
 
             // Pad to alignment of inner type.
             if (offset % inner_comp->align) {
                 offset += inner_comp->align - offset % inner_comp->align;
             }
 
-            c_field_t field;
+            c_field1_t field;
             field.type_rc = rc_share(inner_rc);
             field.name    = NULL;
             field.offset  = offset;
             array_lencap_insert_strong(
                 &comp->fields.arr,
-                sizeof(c_field_t),
+                sizeof(c_field1_t),
                 &comp->fields.len,
                 &cap,
                 &field,
@@ -195,7 +195,7 @@ static void
             if (align < inner_comp->align) {
                 align = inner_comp->align;
             }
-            if (comp->type == C_COMP_TYPE_STRUCT) {
+            if (comp->type == C_COMP_TYPE1_STRUCT) {
                 offset += inner_comp->size;
                 size    = offset;
             } else if (size < inner_comp->size) {
@@ -212,18 +212,18 @@ static void
                     continue;
                 }
                 uint64_t field_size, field_align;
-                if (c_type_get_size(ctx, field_type->data, &field_size, &field_align)) {
+                if (c_type1_get_size(ctx, field_type->data, &field_size, &field_align)) {
                     if (offset % field_align) {
                         offset += field_align - offset % field_align;
                     }
-                    c_field_t field;
+                    c_field1_t field;
                     field.type_rc  = field_type;
                     field.name     = lilycc_strdup(name_tkn->strval);
                     field.name_pos = name_tkn->pos;
                     field.offset   = offset;
                     array_lencap_insert_strong(
                         &comp->fields.arr,
-                        sizeof(c_field_t),
+                        sizeof(c_field1_t),
                         &comp->fields.len,
                         &cap,
                         &field,
@@ -238,7 +238,7 @@ static void
                 if (align < field_align) {
                     align = field_align;
                 }
-                if (comp->type == C_COMP_TYPE_STRUCT) {
+                if (comp->type == C_COMP_TYPE1_STRUCT) {
                     offset += field_size;
                     size    = offset;
                 } else if (size < field_size) {
@@ -276,22 +276,22 @@ static rc_t c_compile_comp_spec(c_compiler_t *ctx, token_t const *struct_spec, c
     }
 
     // What tag type this specifier has.
-    c_comp_type_t comp_type;
+    c_comp1_type_t comp_type;
     switch (struct_spec->params[0].subtype) {
-        case C_KEYW_enum: comp_type = C_COMP_TYPE_ENUM; break;
-        case C_KEYW_struct: comp_type = C_COMP_TYPE_STRUCT; break;
-        case C_KEYW_union: comp_type = C_COMP_TYPE_UNION; break;
+        case C_KEYW_enum: comp_type = C_COMP_TYPE1_ENUM; break;
+        case C_KEYW_struct: comp_type = C_COMP_TYPE1_STRUCT; break;
+        case C_KEYW_union: comp_type = C_COMP_TYPE1_UNION; break;
         default: UNREACHABLE();
     }
 
     // Get or create the compound type.
-    rc_t      comp_rc = NULL;
-    c_comp_t *comp;
+    rc_t       comp_rc = NULL;
+    c_comp1_t *comp;
     if (name) {
         comp_rc = c_scope_lookup_comp(scope, name->strval);
     }
     if (!comp_rc) {
-        comp       = lilycc_calloc(1, sizeof(c_comp_t));
+        comp       = lilycc_calloc(1, sizeof(c_comp1_t));
         comp_rc    = rc_new_strong(comp, (void (*)(void *))c_comp_free);
         comp->name = name ? lilycc_strdup(name->strval) : NULL;
         comp->type = comp_type;
@@ -305,9 +305,9 @@ static rc_t c_compile_comp_spec(c_compiler_t *ctx, token_t const *struct_spec, c
     // Assert that the tag type matches.
     if (comp->type != comp_type) {
         static char const *const names[] = {
-            [C_COMP_TYPE_ENUM]   = "an enum",
-            [C_COMP_TYPE_STRUCT] = "a struct",
-            [C_COMP_TYPE_UNION]  = "a union",
+            [C_COMP_TYPE1_ENUM]   = "an enum",
+            [C_COMP_TYPE1_STRUCT] = "a struct",
+            [C_COMP_TYPE1_UNION]  = "a union",
         };
         cctx_diagnostic(
             ctx->cctx,
@@ -324,7 +324,7 @@ static rc_t c_compile_comp_spec(c_compiler_t *ctx, token_t const *struct_spec, c
 
     // Finally compile the body with the appropriate type.
     if (body_len) {
-        if (comp_type == C_COMP_TYPE_ENUM) {
+        if (comp_type == C_COMP_TYPE1_ENUM) {
             c_compile_enum_body(ctx, body, body_len, scope, comp);
         } else {
             c_compile_struct_body(ctx, body, body_len, scope, comp);
@@ -335,7 +335,7 @@ static rc_t c_compile_comp_spec(c_compiler_t *ctx, token_t const *struct_spec, c
 }
 
 // Create a C type from a specifier-qualifer list.
-// Returns a refcount pointer of `c_type_t`.
+// Returns a refcount pointer of `c_type1_t`.
 rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t *scope) {
     token_t const *struct_tkn   = NULL;
     int            n_long       = 0;
@@ -350,8 +350,8 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
     bool           has_signed   = false;
     bool           has_int128   = false;
 
-    rc_t      type_rc = rc_new_strong(lilycc_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
-    c_type_t *type    = type_rc->data;
+    rc_t       type_rc = rc_new_strong(lilycc_calloc(1, sizeof(c_type1_t)), (void (*)(void *))c_type1_free);
+    c_type1_t *type    = type_rc->data;
 
     // Turn the list into a more manageable format.
     for (size_t i = 0; i < list->params_len; i++) {
@@ -412,12 +412,12 @@ rc_t c_compile_spec_qual_list(c_compiler_t *ctx, token_t const *list, c_scope_t 
             rc_delete(type_rc);
             return NULL;
         }
-        c_comp_t *comp = comp_rc->data;
-        type->comp     = comp_rc;
+        c_comp1_t *comp = comp_rc->data;
+        type->comp      = comp_rc;
         switch (comp->type) {
-            case C_COMP_TYPE_ENUM: type->primitive = C_COMP_ENUM; break;
-            case C_COMP_TYPE_STRUCT: type->primitive = C_COMP_STRUCT; break;
-            case C_COMP_TYPE_UNION: type->primitive = C_COMP_UNION; break;
+            case C_COMP_TYPE1_ENUM: type->primitive = C_COMP_ENUM; break;
+            case C_COMP_TYPE1_STRUCT: type->primitive = C_COMP_STRUCT; break;
+            case C_COMP_TYPE1_UNION: type->primitive = C_COMP_UNION; break;
         }
 
     } else if (has_char) {
@@ -532,8 +532,8 @@ rc_t c_compile_decl(
             return cur;
 
         } else if (decl->type == TOKENTYPE_AST && decl->subtype == C_AST_TYPE_FUNC) {
-            rc_t      func       = rc_new_strong(lilycc_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
-            c_type_t *func_type  = func->data;
+            rc_t       func      = rc_new_strong(lilycc_calloc(1, sizeof(c_type1_t)), (void (*)(void *))c_type1_free);
+            c_type1_t *func_type = func->data;
             func_type->primitive = C_COMP_FUNCTION;
             func_type->func.return_type = cur;
             func_type->func.args_len    = decl->params_len - 1;
@@ -560,20 +560,20 @@ rc_t c_compile_decl(
             cur  = func;
 
         } else if (decl->type == TOKENTYPE_AST && decl->subtype == C_AST_TYPE_ARRAY) {
-            rc_t      next       = rc_new_strong(lilycc_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
-            c_type_t *next_type  = next->data;
+            rc_t       next      = rc_new_strong(lilycc_calloc(1, sizeof(c_type1_t)), (void (*)(void *))c_type1_free);
+            c_type1_t *next_type = next->data;
             next_type->primitive = C_COMP_ARRAY;
             next_type->inner     = cur;
             next_type->length    = -1;
 
             uint64_t inner_size, inner_align;
-            if (!c_type_get_size(ctx, cur->data, &inner_size, &inner_align)) {
+            if (!c_type1_get_size(ctx, cur->data, &inner_size, &inner_align)) {
                 cctx_diagnostic(ctx->cctx, decl->pos, DIAG_ERR, "Array has incomplete inner type");
             } else if (decl->params_len == 2) {
                 // Has size expression.
                 c_compile_expr_t res = c_compile_expr(ctx, NULL, NULL, scope, &decl->params[1]);
                 if (c_value_is_const(&res.res)) {
-                    if (!c_type_is_scalar(res.res.c_type->data)) {
+                    if (!c_type1_is_scalar(res.res.c_type->data)) {
                         cctx_diagnostic(
                             ctx->cctx,
                             decl->params[1].pos,
@@ -638,8 +638,8 @@ rc_t c_compile_decl(
             cur  = next;
 
         } else if (decl->type == TOKENTYPE_AST && decl->subtype == C_AST_TYPE_PTR_TO) {
-            rc_t      next       = rc_new_strong(lilycc_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
-            c_type_t *next_type  = next->data;
+            rc_t       next      = rc_new_strong(lilycc_calloc(1, sizeof(c_type1_t)), (void (*)(void *))c_type1_free);
+            c_type1_t *next_type = next->data;
             next_type->primitive = C_COMP_POINTER;
             next_type->inner     = cur;
 
@@ -680,12 +680,12 @@ rc_t c_compile_decl(
 
 
 // Create a type that is a pointer to an existing type.
-rc_t c_type_to_pointer(c_compiler_t *ctx, rc_t inner) {
+rc_t c_type1_to_pointer(c_compiler_t *ctx, rc_t inner) {
     (void)ctx;
-    c_type_t *data  = lilycc_calloc(1, sizeof(c_type_t));
+    c_type1_t *data = lilycc_calloc(1, sizeof(c_type1_t));
     data->primitive = C_COMP_POINTER;
     data->inner     = inner;
-    return rc_new_strong(data, (void (*)(void *))c_type_free);
+    return rc_new_strong(data, (void (*)(void *))c_type1_free);
 }
 
 // Determine type promotion to apply in an infix context.
@@ -714,7 +714,7 @@ c_prim_t c_prim_promote(c_compiler_t *ctx, c_prim_t a, c_prim_t b) {
 }
 
 // Determine whether a type is a scalar type.
-bool c_type_is_scalar(c_type_t const *type) {
+bool c_type1_is_scalar(c_type1_t const *type) {
     switch (type->primitive) {
         case C_PRIM_BOOL:
         case C_PRIM_CHAR:
@@ -746,8 +746,8 @@ bool c_type_is_scalar(c_type_t const *type) {
 }
 
 // Determine whether a value of type `old_type` can be cast to `new_type`.
-bool c_type_is_castable(c_compiler_t *ctx, c_type_t const *new_type, c_type_t const *old_type) {
-    if (c_type_is_identical(ctx, new_type, old_type, false)) {
+bool c_type1_is_castable(c_compiler_t *ctx, c_type1_t const *new_type, c_type1_t const *old_type) {
+    if (c_type1_is_identical(ctx, new_type, old_type, false)) {
         return true;
     }
     if (new_type->primitive == C_PRIM_VOID) {
@@ -758,7 +758,7 @@ bool c_type_is_castable(c_compiler_t *ctx, c_type_t const *new_type, c_type_t co
 }
 
 // Determine whether a type is usable in pointer arithmetic (i.e. it is a pointer or array type).
-bool c_type_is_pointer(c_type_t const *type) {
+bool c_type1_is_pointer(c_type1_t const *type) {
     switch (type->primitive) {
         case C_PRIM_BOOL:
         case C_PRIM_CHAR:
@@ -791,7 +791,7 @@ bool c_type_is_pointer(c_type_t const *type) {
 
 // Determine whether two types are the same.
 // If `strict`, then modifiers like `_Atomic` and `volatile` also apply.
-bool c_type_is_identical(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b, bool strict) {
+bool c_type1_is_identical(c_compiler_t *ctx, c_type1_t const *a, c_type1_t const *b, bool strict) {
     if (a == b) {
         return true;
     }
@@ -827,7 +827,7 @@ bool c_type_is_identical(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b
         case C_COMP_UNION: return a->comp == b->comp;
         case C_COMP_ENUM:
         case C_COMP_POINTER: return true;
-        case C_COMP_ARRAY: return c_type_is_compatible(ctx, a->inner->data, b->inner->data);
+        case C_COMP_ARRAY: return c_type1_is_compatible(ctx, a->inner->data, b->inner->data);
         case C_N_PRIM:
         case C_COMP_FUNCTION: return false;
     }
@@ -835,7 +835,7 @@ bool c_type_is_identical(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b
 }
 
 // Determine whether two types are compatible.
-bool c_type_is_compatible(c_compiler_t *ctx, c_type_t const *a, c_type_t const *b) {
+bool c_type1_is_compatible(c_compiler_t *ctx, c_type1_t const *a, c_type1_t const *b) {
     if (a == b) {
         return true;
     }
@@ -866,21 +866,21 @@ bool c_type_is_compatible(c_compiler_t *ctx, c_type_t const *a, c_type_t const *
         case C_COMP_UNION: return a->comp == b->comp;
         case C_COMP_ENUM:
         case C_COMP_POINTER: return true;
-        case C_COMP_ARRAY: return c_type_is_compatible(ctx, a->inner->data, b->inner->data);
+        case C_COMP_ARRAY: return c_type1_is_compatible(ctx, a->inner->data, b->inner->data);
         case C_N_PRIM:
         case C_COMP_FUNCTION: return false;
     }
     UNREACHABLE();
 }
 
-// Helper for `c_type_arith_compatible` that determines pointer arithmetic compatibility.
-static bool c_type_ptrarith_compatible(
-    c_compiler_t   *ctx,
-    c_type_t const *ptr,
-    c_type_t const *other,
-    c_tokentype_t   oper_tkn,
-    pos_t           diag_pos,
-    bool            is_swapped
+// Helper for `c_type1_arith_compatible` that determines pointer arithmetic compatibility.
+static bool c_type1_ptrarith_compatible(
+    c_compiler_t    *ctx,
+    c_type1_t const *ptr,
+    c_type1_t const *other,
+    c_tokentype_t    oper_tkn,
+    pos_t            diag_pos,
+    bool             is_swapped
 ) {
     switch (oper_tkn) {
         case C_TKN_LAND:
@@ -905,10 +905,10 @@ static bool c_type_ptrarith_compatible(
         case C_TKN_SUB:
             if (c_prim_is_ptr(other->primitive)) {
                 // Pointers must be to compatible types.
-                c_type_t const *ptr_inner   = ptr->inner->data;
-                c_type_t const *other_inner = other->inner->data;
+                c_type1_t const *ptr_inner   = ptr->inner->data;
+                c_type1_t const *other_inner = other->inner->data;
                 if (ptr_inner->primitive != C_PRIM_VOID && other_inner->primitive != C_PRIM_VOID
-                    && !c_type_is_compatible(ctx, ptr_inner, other_inner)) {
+                    && !c_type1_is_compatible(ctx, ptr_inner, other_inner)) {
                     cctx_diagnostic(ctx->cctx, diag_pos, DIAG_ERR, "Difference of pointers to incompatible types");
                     return false;
                 }
@@ -957,10 +957,10 @@ static bool c_type_ptrarith_compatible(
         case C_TKN_GE:
             if (c_prim_is_ptr(other->primitive)) {
                 // Warn if incompatible pointers.
-                c_type_t const *ptr_inner   = ptr->inner->data;
-                c_type_t const *other_inner = other->inner->data;
+                c_type1_t const *ptr_inner   = ptr->inner->data;
+                c_type1_t const *other_inner = other->inner->data;
                 if (ptr_inner->primitive != C_PRIM_VOID && other_inner->primitive != C_PRIM_VOID
-                    && !c_type_is_compatible(ctx, ptr_inner, other_inner)) {
+                    && !c_type1_is_compatible(ctx, ptr_inner, other_inner)) {
                     cctx_diagnostic(ctx->cctx, diag_pos, DIAG_WARN, "Comparison of pointers to incompatible types");
                 }
             } else if (!c_prim_is_int(other->primitive)) {
@@ -979,14 +979,14 @@ static bool c_type_ptrarith_compatible(
 
 // Determine whether two types can be used with a certain operator token.
 // Produces a diagnostic if they cannot.
-bool c_type_arith_compatible(
-    c_compiler_t *ctx, c_type_t const *a, c_type_t const *b, c_tokentype_t oper_tkn, pos_t diag_pos
+bool c_type1_arith_compatible(
+    c_compiler_t *ctx, c_type1_t const *a, c_type1_t const *b, c_tokentype_t oper_tkn, pos_t diag_pos
 ) {
     // There are additional checks and restrictions to pointer arithmetic.
     if (c_prim_is_ptr(a->primitive)) {
-        return c_type_ptrarith_compatible(ctx, a, b, oper_tkn, diag_pos, false);
+        return c_type1_ptrarith_compatible(ctx, a, b, oper_tkn, diag_pos, false);
     } else if (c_prim_is_ptr(b->primitive)) {
-        return c_type_ptrarith_compatible(ctx, b, a, oper_tkn, diag_pos, true);
+        return c_type1_ptrarith_compatible(ctx, b, a, oper_tkn, diag_pos, true);
     }
 
     // Otherwise, they are arithmetic compatible if both types are primitives.
@@ -999,7 +999,7 @@ bool c_type_arith_compatible(
 }
 
 // Get the alignment and size of a C type.
-bool c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out, uint64_t *align_out) {
+bool c_type1_get_size(c_compiler_t *ctx, c_type1_t const *type, uint64_t *size_out, uint64_t *align_out) {
     c_prim_t prim = type->primitive;
     if (prim == C_COMP_POINTER) {
         prim = ctx->options.size_type;
@@ -1027,7 +1027,7 @@ bool c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out
         case C_COMP_STRUCT:
         case C_COMP_ENUM:
         case C_COMP_UNION: {
-            c_comp_t *comp = type->comp->data;
+            c_comp1_t *comp = type->comp->data;
             if (comp->align == 0) {
                 return false;
             }
@@ -1043,7 +1043,7 @@ bool c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out
                 return false;
             }
             uint64_t inner_size, inner_align;
-            if (!c_type_get_size(ctx, type->inner->data, &inner_size, &inner_align)) {
+            if (!c_type1_get_size(ctx, type->inner->data, &inner_size, &inner_align)) {
                 UNREACHABLE();
             }
             *align_out = inner_align;
@@ -1055,20 +1055,20 @@ bool c_type_get_size(c_compiler_t *ctx, c_type_t const *type, uint64_t *size_out
     UNREACHABLE();
 }
 
-// Recursive implementation of `c_type_get_field`.
-static c_field_t const *
-    c_type_get_field_r(c_compiler_t *ctx, c_type_t const *type, char const *name, uint64_t *field_offset) {
-    c_comp_t const *comp = type->comp->data;
+// Recursive implementation of `c_type1_get_field`.
+static c_field1_t const *
+    c_type1_get_field_r(c_compiler_t *ctx, c_type1_t const *type, char const *name, uint64_t *field_offset) {
+    c_comp1_t const *comp = type->comp->data;
 
     for (size_t i = 0; i < comp->fields.len; i++) {
-        c_field_t const *field      = &comp->fields.arr[i];
-        c_type_t const  *field_type = field->type_rc->data;
+        c_field1_t const *field      = &comp->fields.arr[i];
+        c_type1_t const  *field_type = field->type_rc->data;
 
         if (field->name && !strcmp(field->name, name)) {
             *field_offset = field->offset;
             return field;
         } else if (!field->name && (field_type->primitive == C_COMP_STRUCT || field_type->primitive == C_COMP_UNION)) {
-            c_field_t const *res = c_type_get_field_r(ctx, field_type, name, field_offset);
+            c_field1_t const *res = c_type1_get_field_r(ctx, field_type, name, field_offset);
             if (res) {
                 *field_offset += field->offset;
                 return res;
@@ -1081,14 +1081,15 @@ static c_field_t const *
 
 // Get the descriptor and effective offset of a field.
 // WARNING: `field->offset` may differ from `*field_offset`; use the latter for accessing the field.
-c_field_t const *c_type_get_field(c_compiler_t *ctx, c_type_t const *type, char const *name, uint64_t *field_offset) {
+c_field1_t const *
+    c_type1_get_field(c_compiler_t *ctx, c_type1_t const *type, char const *name, uint64_t *field_offset) {
     *field_offset = 0;
 
     if (type->primitive != C_COMP_STRUCT && type->primitive != C_COMP_UNION) {
         UNREACHABLE();
     }
 
-    return c_type_get_field_r(ctx, type, name, field_offset);
+    return c_type1_get_field_r(ctx, type, name, field_offset);
 }
 
 // Convert C primitive or pointer type to IR primitive type.
@@ -1124,7 +1125,7 @@ ir_prim_t c_prim_to_ir_type(c_compiler_t *ctx, c_prim_t prim) {
 }
 
 // Convert C primitive or pointer type to IR primitive type.
-ir_prim_t c_type_to_ir_type(c_compiler_t *ctx, c_type_t const *type) {
+ir_prim_t c_type1_to_ir_type(c_compiler_t *ctx, c_type1_t const *type) {
     c_prim_t c_prim = type->primitive;
     if (c_prim == C_COMP_POINTER) {
         c_prim = ctx->options.size_type;

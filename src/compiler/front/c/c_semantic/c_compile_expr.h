@@ -9,7 +9,7 @@
 #include "c_ast.h"
 #include "c_compiler.h"
 #include "c_ir.h"
-#include "c_types.h"
+#include "c_types1.h"
 
 
 
@@ -41,14 +41,8 @@ cir_expr_t *c_compile2_expr_sconst(c_compiler_t *cc, cir_scope_t *scope, c_ast_e
 cir_expr_t *
     c_compile2_expr_compliteral(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_compliteral_t const *compliteral);
 // Compile an expression list.
-cir_expr_t *c_compile2_expr_exprs(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_list_t const *exprs);
-
+cir_expr_t  *c_compile2_expr_exprs(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_list_t const *exprs);
 // Compile a compound literal/initializer given a known target type.
 cir_value_t *c_compile2_compinit(c_compiler_t *cc, cir_scope_t *scope, c_ast_init_list_t const *init);
-
-// Multiply/divide a value by the size of the inner type of a given pointer type.
-// Compile error if the inner type of the pointer is an incomplete type.
-// Needed because pointer arithmetic in the C IR does not respect the inner type's size.
-cir_expr_t *c_compile2_ptr_premul(c_compiler_t *cc, cir_expr_t *value, c_type_t const *ptr_type, bool is_division);
 // Helper that creates a synthetic integer constant.
-cir_expr_t *c_compile2_synth_iconst(c_compiler_t *cc, pos_t pos, c_prim_t prim, i128_t value);
+cir_expr_t  *c_compile2_synth_iconst(c_compiler_t *cc, pos_t pos, c_prim_t prim, i128_t value);

@@ -6,6 +6,7 @@
 #pragma once
 
 #include "c_types.h"
+#include "c_types1.h"
 #include "compiler.h"
 #include "ir_types.h"
 #include "map.h"
@@ -198,13 +199,13 @@ VEC_TYPE_DEF(vec_cir_unit_t, cir_unit_t *);
 // Common fields of all expression subtypes.
 struct cir_expr_common {
     // Source location this was compiled from.
-    pos_t pos;
-    // Resolved type; refcount ptr of `c_type_t`.
-    rc_t  type_rc;
+    pos_t    pos;
+    // Resolved type.
+    c_type_t type;
     // Is an lvalue.
-    bool  is_lvalue;
+    bool     is_lvalue;
     // Allows address-of operator.
-    bool  allow_addrof;
+    bool     allow_addrof;
 };
 
 
@@ -223,8 +224,8 @@ struct cir_const {
 struct cir_comp_const {
     // Source location this was compiled from.
     pos_t    pos;
-    // Compound type; refcount ptr of `c_type_t`.
-    rc_t     type_rc;
+    // Compound type.
+    c_type_t type;
     // Compound constant blob; size is implied by the type.
     uint8_t *blob;
 };
@@ -241,8 +242,8 @@ struct cir_comp_store {
 struct cir_comp_value {
     // Source location this was compiled from.
     pos_t                pos;
-    // Compound type; refcount ptr of `c_type_t`.
-    rc_t                 type_rc;
+    // Compound type.
+    c_type_t             type;
     // Vector of expressions and store offsets.
     vec_cir_comp_store_t stores;
 };
@@ -277,8 +278,8 @@ struct cir_call {
 struct cir_cast {
     // Common expression fields.
     cir_expr_common_t common;
-    // Cast target type; refcount ptr of `c_type_t`.
-    rc_t              type_rc;
+    // Cast target type.
+    c_type_t          type;
     // Expression to be cast.
     cir_expr_t       *value;
 };
@@ -480,8 +481,8 @@ struct cir_stmt {
 struct cir_decl {
     // Source location this was compiled from.
     pos_t       pos;
-    // Variable type; refcount ptr of `c_type_t`.
-    rc_t        type_rc;
+    // Variable type.
+    c_type_t    type;
     // Variable name.
     char       *name;
     // Initializer (nullable).
@@ -492,8 +493,8 @@ struct cir_decl {
 struct cir_func {
     // Source location this was compiled from.
     pos_t       pos;
-    // Function type; refcount ptr of `c_type_t`.
-    rc_t        type_rc;
+    // Function type.
+    c_type_t    type;
     // Function name.
     char       *name;
     // Parameter names (owned, NUL-terminated). Order and length match the parameter list of `type_rc`.
@@ -545,9 +546,9 @@ struct cir_scope {
     cir_scope_t     *parent;
     // Values namespace: `char *` -> `cir_scope_val_t *` (owned wrapper, non-owning inner ptr).
     map_t            values;
-    // Typedefs namespace: `char *` -> `rc_t` of `c_type_t` (owned share, released on delete).
+    // Typedefs namespace: `char *` -> `c_type_t` (owned share, released on delete).
     map_t            typedefs;
-    // Tag namespace (struct/union/enum types): `char *` -> `rc_t` of `c_type_t` (owned share).
+    // Tag namespace (struct/union/enum types): `char *` -> `c_comp_type_t` (owned share).
     map_t            tags;
     // Labels namespace: `char *` -> `cir_label_t *` (non-owning). Only populated on function scope.
     map_t            labels;
@@ -561,12 +562,12 @@ cir_const_t *cir_const_create(pos_t pos, c_prim_t prim, ir_const_t iconst);
 void         cir_const_delete(cir_const_t *node);
 
 // Construct a `cir_comp_const` node.
-cir_comp_const_t *cir_comp_const_create(pos_t pos, rc_t type_rc, uint8_t *blob);
+cir_comp_const_t *cir_comp_const_create(pos_t pos, c_type_t type, uint8_t *blob);
 // Destroy a `cir_comp_const` node and any owned children.
 void              cir_comp_const_delete(cir_comp_const_t *node);
 
 // Construct a `cir_comp_value` node.
-cir_comp_value_t *cir_comp_value_create(pos_t pos, rc_t type_rc, vec_cir_comp_store_t stores);
+cir_comp_value_t *cir_comp_value_create(pos_t pos, c_type_t type, vec_cir_comp_store_t stores);
 // Destroy a `cir_comp_value` node and any owned children.
 void              cir_comp_value_delete(cir_comp_value_t *node);
 
@@ -696,12 +697,12 @@ cir_stmt_t *cir_stmt_create_expr(cir_stmt_expr_t *expr_stmt);
 void        cir_stmt_delete(cir_stmt_t *node);
 
 // Construct a `cir_decl` node.
-cir_decl_t *cir_decl_create(pos_t pos, rc_t type_rc, char *name, cir_expr_t *init);
+cir_decl_t *cir_decl_create(pos_t pos, c_type_t type, char *name, cir_expr_t *init);
 // Destroy a `cir_decl` node and any owned children.
 void        cir_decl_delete(cir_decl_t *node);
 
 // Construct a `cir_func` node.
-cir_func_t *cir_func_create(pos_t pos, rc_t type_rc, char *name, vec_cstr_t param_names, cir_stmt_t *body);
+cir_func_t *cir_func_create(pos_t pos, c_type_t type, char *name, vec_cstr_t param_names, cir_stmt_t *body);
 // Destroy a `cir_func` node and any owned children.
 void        cir_func_delete(cir_func_t *node);
 
@@ -720,8 +721,8 @@ void              cir_trans_unit_delete(cir_trans_unit_t *node);
 
 // Create a new scope. `parent` must be `NULL` iff `kind == CIR_SCOPE_GLOBAL`.
 cir_scope_t *cir_scope_create(cir_scope_kind_t kind, cir_scope_t *parent);
-// Destroy a scope. Frees the owned value-entry wrappers and releases the typedef and tag
-// `rc_t` shares; the referenced nodes, the parent, and any child scopes are untouched.
+// Destroy a scope. Frees the owned value-entry wrappers and releases the typedef and tags;
+// the referenced nodes, the parent, and any child scopes are untouched.
 void         cir_scope_delete(cir_scope_t *scope);
 
 // Add a variable declaration to the value namespace of `scope`.
@@ -733,12 +734,12 @@ bool cir_scope_add_func(cir_scope_t *scope, char const *name, cir_func_t *func);
 // Add an enum constant to the value namespace of `scope`.
 // Returns `false` if `name` already exists in *this* scope.
 bool cir_scope_add_enum_const(cir_scope_t *scope, char const *name, cir_const_t *enum_const);
-// Add a typedef to `scope`. Takes ownership of one `rc_t` share, released on scope delete.
-// Returns `false` if `name` already exists in *this* scope (in which case `type_rc` is released).
-bool cir_scope_add_typedef(cir_scope_t *scope, char const *name, rc_t type_rc);
-// Add a tag (struct/union/enum type) to `scope`. Takes ownership of one `rc_t` share.
-// Returns `false` if `name` already exists in *this* scope (in which case `type_rc` is released).
-bool cir_scope_add_tag(cir_scope_t *scope, char const *name, rc_t type_rc);
+// Add a typedef to `scope`. Takes ownership of the passed type.
+// Returns `false` if `name` already exists in *this* scope.
+bool cir_scope_add_typedef(cir_scope_t *scope, char const *name, c_type_t type);
+// Add a tag (struct/union/enum type) to `scope`. Takes ownership of the passed type.
+// Returns `false` if `name` already exists in *this* scope.
+bool cir_scope_add_tag(cir_scope_t *scope, char const *name, c_comp_type_t *type);
 // Add a label to the enclosing function scope, walking up from `scope`.
 // Returns `false` if no function scope is found, or if `name` is already a label in it.
 bool cir_scope_add_label(cir_scope_t *scope, char const *name, cir_label_t *label);
@@ -746,9 +747,10 @@ bool cir_scope_add_label(cir_scope_t *scope, char const *name, cir_label_t *labe
 // Look up a value by `name`, walking parent scopes. Returns `NULL` if not found.
 cir_scope_val_t *cir_scope_lookup_value(cir_scope_t const *scope, char const *name);
 // Look up a typedef by `name`, walking parent scopes. Returns `NULL` if not found.
-rc_t             cir_scope_lookup_typedef(cir_scope_t const *scope, char const *name);
+c_type_t const  *cir_scope_lookup_typedef(cir_scope_t const *scope, char const *name);
 // Look up a tag by `name`, walking parent scopes. Returns `NULL` if not found.
-rc_t             cir_scope_lookup_tag(cir_scope_t const *scope, char const *name);
+// Returns a non-owning pointer.
+c_comp_type_t   *cir_scope_lookup_tag(cir_scope_t const *scope, char const *name);
 // Look up a label by `name` in the enclosing function scope only (no parent walk past it).
 // Returns `NULL` if no function scope is found or the label is not defined there.
 cir_label_t     *cir_scope_lookup_label(cir_scope_t const *scope, char const *name);

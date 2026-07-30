@@ -6,18 +6,19 @@
 #include "c_compile.h"
 
 #include "arith128.h"
-#include "arrays.h"
 #include "c_ast.h"
-#include "c_compile_expr.h"
 #include "c_ir.h"
-#include "c_parser.h"
+#include "c_prim.h"
 #include "c_tokenizer.h"
 #include "c_types.h"
+#include "c_types1.h"
 #include "compiler.h"
 #include "ir_interpreter.h"
 #include "ir_types.h"
 #include "lilycc_malloc.h"
 #include "refcount.h"
+#include "unreachable.h"
+#include "vec.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -54,13 +55,14 @@ cir_func_t *c_compile2_func(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_func
 
 
 // Compile the body of an enum definition.
-static void c_compile2_enum_body(c_compiler_t *ctx, c_ast_enum_spec_t const *spec, cir_scope_t *scope, c_comp_t *comp) {
+static void
+    c_compile2_enum_body(c_compiler_t *ctx, c_ast_enum_spec_t const *spec, cir_scope_t *scope, c_enum_type_t *comp) {
     vec_c_ast_enumvar_t const *body    = &spec->definition->items;
     ir_prim_t const            ir_prim = ctx->options.int32 ? IR_PRIM_s32 : IR_PRIM_s16;
 
     // TODO: Packed enums support.
+    comp->prim = C_PRIM_SINT;
 
-    size_t  cap = 0;
     int32_t cur = 0;
     for (size_t i = 0; i < body->len; i++, cur++) {
         c_ast_ident_t const *name  = body->arr[i]->name;
@@ -79,170 +81,157 @@ static void c_compile2_enum_body(c_compiler_t *ctx, c_ast_enum_spec_t const *spe
 
             c_enumvar_t enumvar;
             enumvar.name    = lilycc_strdup(name->name);
-            enumvar.ordinal = cur;
-            array_lencap_insert_strong(
-                &comp->variants.arr,
-                sizeof(c_enumvar_t),
-                &comp->variants.len,
-                &cap,
-                &enumvar,
-                comp->variants.len
-            );
+            enumvar.ordinal = i128(cur);
+            vec_push(&comp->variants, enumvar);
         }
     }
+}
 
-    comp->align = comp->size = ctx->options.int32 ? 4 : 2;
+// Field adding helper for `c_compile2_struct_body`.
+// Returns true on error.
+static bool c_compile2_struct_field(
+    c_compiler_t *cc, c_struct_type_t *comp, pos_t pos, char const *name, c_type_t type, uint64_t target_size_max
+) {
+    uint64_t size, align;
+    if (!c_type_get_size(cc, type, &size, &align)) {
+        cctx_diagnostic(cc->cctx, pos, DIAG_ERR, "Use of incomplete type");
+        c_type_delete(type);
+        return true;
+    }
+
+    c_struct_field_t field;
+    field.name     = lilycc_strdup(name);
+    field.name_pos = pos;
+    field.type     = type;
+    if (comp->tag == C_COMP_TYPE_UNION) {
+        field.offset = 0;
+        if (comp->size < size) {
+            comp->size = size;
+        }
+        if (comp->align < align) {
+            comp->align = align;
+        }
+    } else {
+        if (comp->size % comp->align) {
+            comp->size += comp->align - comp->size % comp->align;
+        }
+        field.offset = comp->size;
+        if (comp->align < align) {
+            comp->align = align;
+        }
+        if (comp->size > target_size_max - size) {
+            cctx_diagnostic(cc->cctx, pos, DIAG_ERR, "Type size would exceed SIZE_MAX due to this field");
+            c_type_delete(type);
+            lilycc_free(field.name);
+            return true;
+        }
+        comp->size += size;
+    }
+
+    vec_push(&comp->fields, field);
+
+    return false;
 }
 
 // Compile the body of a struct/union definition.
-static void
-    c_compile2_struct_body(c_compiler_t *ctx, c_ast_struct_spec_t const *spec, cir_scope_t *scope, c_comp_t *comp) {
+static void c_compile2_struct_body(
+    c_compiler_t *ctx, c_ast_struct_spec_t const *spec, cir_scope_t *scope, c_struct_type_t *comp
+) {
     vec_c_ast_def_t const *body = &spec->definition->items;
 
-    size_t   cap    = 0;
-    uint64_t offset = 0;
-    uint64_t size   = 0;
-    uint64_t align  = 1;
-    bool     errors = false;
+    uint64_t target_size_max = c_target_size_max_64(ctx);
+
+    comp->size  = 0;
+    comp->align = 1;
+    bool errors = false;
 
     for (size_t i = 0; i < body->len; i++) {
         if (body->arr[i]->tag != C_AST_TAG_DEFS) {
             continue;
         }
-        c_ast_defs_t const          *def      = body->arr[i]->def_defs;
-        vec_c_ast_init_decl_t const *decls    = &def->decls->items;
-        rc_t                         inner_rc = c_compile2_spec_qual_list(ctx, def->spec_qual, scope);
-        if (!inner_rc) {
+        c_ast_defs_t const          *def   = body->arr[i]->def_defs;
+        vec_c_ast_init_decl_t const *decls = &def->decls->items;
+
+        c_type_opt_t inner = c_compile2_spec_qual_list(ctx, def->spec_qual, scope);
+        if (!c_type_is_valid(inner)) {
+            errors = true;
+            continue;
+        } else if (inner.qual.s_typedef) {
+            cctx_diagnostic(ctx->cctx, def->spec_qual->pos, DIAG_ERR, "typedef not allowed here");
+            c_type_delete(inner);
             errors = true;
             continue;
         }
 
-        c_type_t const *inner_type = inner_rc->data;
-        // TODO: This check does not exclude `struct a` in `struct { struct a; }`.
-        if (decls->len == 0 && (inner_type->primitive == C_COMP_STRUCT || inner_type->primitive == C_COMP_UNION)) {
-            c_comp_t const *inner_comp = inner_type->comp->data;
-
-            // Pad to alignment of inner type.
-            if (offset % inner_comp->align) {
-                offset += inner_comp->align - offset % inner_comp->align;
-            }
-
-            c_field_t field;
-            field.type_rc = rc_share(inner_rc);
-            field.name    = NULL;
-            field.offset  = offset;
-            array_lencap_insert_strong(
-                &comp->fields.arr,
-                sizeof(c_field_t),
-                &comp->fields.len,
-                &cap,
-                &field,
-                comp->fields.len
-            );
-
-            // Adjust size and alignment accordingly.
-            if (align < inner_comp->align) {
-                align = inner_comp->align;
-            }
-            if (comp->type == C_COMP_TYPE_STRUCT) {
-                offset += inner_comp->size;
-                size    = offset;
-            } else if (size < inner_comp->size) {
-                size = inner_comp->size;
-            }
+        if (
+            decls->len == 0 && (inner.prim == C_COMP_STRUCT || inner.prim == C_COMP_UNION)
+            && inner.extra->comp_type->name == NULL
+            && inner.extra->comp_type->refcount == 1 // Refcount check excludes typedef'd names.
+        ) {
+            errors |= c_compile2_struct_field(ctx, comp, (pos_t){0}, NULL, inner, target_size_max);
 
         } else {
             // Normal field.
             for (size_t x = 0; x < decls->len; x++) {
                 c_ast_ident_t const *name_ast = NULL;
-                rc_t field_type = c_compile2_type(ctx, scope, rc_share(inner_rc), decls->arr[x]->decl, &name_ast);
-                if (!field_type) {
+                c_type_opt_t         field_type
+                    = c_compile2_type(ctx, scope, c_type_clone(inner), decls->arr[x]->decl, &name_ast);
+                if (!c_type_is_valid(field_type)) {
                     errors = true;
                     continue;
                 }
-                uint64_t field_size, field_align;
-                if (c_type_get_size(ctx, field_type->data, &field_size, &field_align)) {
-                    if (offset % field_align) {
-                        offset += field_align - offset % field_align;
-                    }
-                    c_field_t field;
-                    field.type_rc  = field_type;
-                    field.name     = lilycc_strdup(name_ast->name);
-                    field.name_pos = name_ast->pos;
-                    field.offset   = offset;
-                    array_lencap_insert_strong(
-                        &comp->fields.arr,
-                        sizeof(c_field_t),
-                        &comp->fields.len,
-                        &cap,
-                        &field,
-                        comp->fields.len
-                    );
-                } else {
-                    cctx_diagnostic(ctx->cctx, name_ast->pos, DIAG_ERR, "Use of incomplete type");
-                    rc_delete(field_type);
-                    errors = true;
-                }
-
-                if (align < field_align) {
-                    align = field_align;
-                }
-                if (comp->type == C_COMP_TYPE_STRUCT) {
-                    offset += field_size;
-                    size    = offset;
-                } else if (size < field_size) {
-                    size = field_size;
-                }
+                errors |= c_compile2_struct_field(
+                    ctx,
+                    comp,
+                    decls->arr[x]->decl->pos,
+                    name_ast->name,
+                    field_type,
+                    target_size_max
+                );
             }
+            c_type_delete(inner);
         }
-
-        rc_delete(inner_rc);
     }
 
-    if (size % align) {
-        size += align - size % align;
-    }
-    if (!errors) {
-        comp->size  = size;
-        comp->align = align;
+    if (errors) {
+        comp->size  = 0;
+        comp->align = 0;
+    } else if (comp->size % comp->align) {
+        comp->size += comp->align - comp->size % comp->align;
     }
 }
 
 // Compile a C enum/struct/union specification.
-// Returns a refcount pointer of `c_comp_t`.
-static rc_t c_compile2_comp_spec(c_compiler_t *ctx, c_ast_spec_qual_t const *comp_spec, cir_scope_t *scope) {
+static c_comp_type_t *c_compile2_comp_spec(c_compiler_t *ctx, c_ast_spec_qual_t const *comp_spec, cir_scope_t *scope) {
     // What tag type this specifier has.
-    c_comp_type_t        comp_type;
+    c_comp_type_tag_t    tag;
     c_ast_ident_t const *name;
     if (comp_spec->tag == C_AST_TAG_SPEC_QUAL_ENUM) {
-        name      = comp_spec->spec_qual_enum->name;
-        comp_type = C_COMP_TYPE_ENUM;
+        name = comp_spec->spec_qual_enum->name;
+        tag  = C_COMP_TYPE_ENUM;
     } else {
         assert(comp_spec->tag == C_AST_TAG_SPEC_QUAL_STRUCT);
-        name      = comp_spec->spec_qual_struct->name;
-        comp_type = comp_spec->spec_qual_struct->is_union ? C_COMP_TYPE_UNION : C_COMP_TYPE_STRUCT;
+        name = comp_spec->spec_qual_struct->name;
+        tag  = comp_spec->spec_qual_struct->is_union ? C_COMP_TYPE_UNION : C_COMP_TYPE_STRUCT;
     }
 
     // Get or create the compound type.
-    rc_t      comp_rc = NULL;
-    c_comp_t *comp;
+    c_comp_type_t *comp = NULL;
     if (name) {
-        comp_rc = cir_scope_lookup_tag(scope, name->name);
+        comp = cir_scope_lookup_tag(scope, name->name);
     }
-    if (!comp_rc) {
-        comp       = lilycc_calloc(1, sizeof(c_comp_t));
-        comp_rc    = rc_new_strong(comp, (void (*)(void *))c_comp_free);
+    if (!comp) {
+        comp       = lilycc_calloc(1, sizeof(c_comp_type_t));
         comp->name = name ? lilycc_strdup(name->name) : NULL;
-        comp->type = comp_type;
+        comp->tag  = tag;
         if (name) {
-            cir_scope_add_tag(scope, name->name, rc_share(comp_rc));
+            cir_scope_add_tag(scope, name->name, comp);
+            comp->refcount++;
         }
-    } else {
-        comp = comp_rc->data;
     }
 
     // Assert that the tag type matches.
-    if (comp->type != comp_type) {
+    if (comp->tag != tag) {
         static char const *const names[] = {
             [C_COMP_TYPE_ENUM]   = "an enum",
             [C_COMP_TYPE_STRUCT] = "a struct",
@@ -254,32 +243,32 @@ static rc_t c_compile2_comp_spec(c_compiler_t *ctx, c_ast_spec_qual_t const *com
             DIAG_ERR,
             "Use of %s (which is %s) as %s",
             name->name,
-            names[comp->type],
-            names[comp_type]
+            names[comp->tag],
+            names[tag]
         );
-        rc_delete(comp_rc);
+        c_comp_type_delete(comp);
         return NULL;
     }
 
     // Finally compile the body with the appropriate type.
-    if (comp_type == C_COMP_TYPE_ENUM) {
+    if (tag == C_COMP_TYPE_ENUM) {
         c_ast_enum_spec_t const *enum_spec = comp_spec->spec_qual_enum;
         if (enum_spec->definition) {
-            c_compile2_enum_body(ctx, enum_spec, scope, comp);
+            c_compile2_enum_body(ctx, enum_spec, scope, &comp->enum_type);
         }
     } else {
         c_ast_struct_spec_t const *struct_spec = comp_spec->spec_qual_struct;
         if (struct_spec->definition) {
-            c_compile2_struct_body(ctx, struct_spec, scope, comp);
+            c_compile2_struct_body(ctx, struct_spec, scope, &comp->struct_type);
         }
     }
 
-    return comp_rc;
+    return comp;
 }
 
 // Create a C type from a specifier-qualifer list.
 // Returns a refcount pointer of `c_type_t`.
-rc_t c_compile2_spec_qual_list(c_compiler_t *ctx, c_ast_spec_qual_list_t const *list, cir_scope_t *scope) {
+c_type_opt_t c_compile2_spec_qual_list(c_compiler_t *ctx, c_ast_spec_qual_list_t const *list, cir_scope_t *scope) {
     // A typedef'd name.
     c_ast_ident_t const     *typedef_name = NULL;
     // An enum/struct/union spec.
@@ -297,8 +286,7 @@ rc_t c_compile2_spec_qual_list(c_compiler_t *ctx, c_ast_spec_qual_list_t const *
     bool has_signed   = false;
     bool has_int128   = false;
 
-    rc_t      type_rc = rc_new_strong(lilycc_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
-    c_type_t *type    = type_rc->data;
+    c_type_t type = C_TYPE_INVALID;
 
     // Turn the list into a more manageable format.
     for (size_t i = 0; i < list->items.len; i++) {
@@ -306,9 +294,9 @@ rc_t c_compile2_spec_qual_list(c_compiler_t *ctx, c_ast_spec_qual_list_t const *
         if (param->tag == C_AST_TAG_SPEC_QUAL_KEYW) {
             c_keyw_t keyw = param->spec_qual_keyw;
             switch (keyw) {
-                case C_KEYW__Atomic: type->is_atomic = true; break;
-                case C_KEYW_volatile: type->is_volatile = true; break;
-                case C_KEYW_const: type->is_const = true; break;
+                case C_KEYW__Atomic: type.qual.q_atomic = true; break;
+                case C_KEYW_volatile: type.qual.q_volatile = true; break;
+                case C_KEYW_const: type.qual.q_const = true; break;
                 case C_KEYW_int: has_int = true; break;
                 case C_KEYW_short: has_short = true; break;
                 case C_KEYW_long: n_long++; break;
@@ -355,18 +343,21 @@ rc_t c_compile2_spec_qual_list(c_compiler_t *ctx, c_ast_spec_qual_list_t const *
 
     // C type parsing is messy, can't do much about that.
     if (comp) {
-        rc_t comp_rc = c_compile2_comp_spec(ctx, comp, scope);
-        if (!comp_rc) {
-            rc_delete(type_rc);
-            return NULL;
+        c_comp_type_t *inner = c_compile2_comp_spec(ctx, comp, scope);
+        if (!inner) {
+            return C_TYPE_INVALID;
         }
-        c_comp_t *comp = comp_rc->data;
-        type->comp     = comp_rc;
-        switch (comp->type) {
-            case C_COMP_TYPE_ENUM: type->primitive = C_COMP_ENUM; break;
-            case C_COMP_TYPE_STRUCT: type->primitive = C_COMP_STRUCT; break;
-            case C_COMP_TYPE_UNION: type->primitive = C_COMP_UNION; break;
+        switch (comp->tag) {
+            case C_AST_TAG_SPEC_QUAL_ENUM: type.prim = C_COMP_ENUM; break;
+            case C_AST_TAG_SPEC_QUAL_STRUCT:
+                type.prim = comp->spec_qual_struct->is_union ? C_COMP_UNION : C_COMP_STRUCT;
+                break;
+            case C_AST_TAG_SPEC_QUAL_KEYW:
+            case C_AST_TAG_SPEC_QUAL_TYPEDEF: UNREACHABLE();
         }
+        type.extra            = lilycc_calloc(1, sizeof(c_bigtype_t));
+        type.extra->refcount  = 1;
+        type.extra->comp_type = inner;
 
     } else if (typedef_name) {
         fprintf(stderr, "TODO: c_compile2_spec_qual_list with typedef'd name\n");
@@ -374,77 +365,79 @@ rc_t c_compile2_spec_qual_list(c_compiler_t *ctx, c_ast_spec_qual_list_t const *
 
     } else if (has_char) {
         if (has_unsigned) {
-            type->primitive = C_PRIM_UCHAR;
+            type.prim = C_PRIM_UCHAR;
         } else if (has_signed) {
-            type->primitive = C_PRIM_SCHAR;
+            type.prim = C_PRIM_SCHAR;
         } else {
-            type->primitive = C_PRIM_CHAR;
+            type.prim = C_PRIM_CHAR;
         }
         has_char     = false;
         has_signed   = false;
         has_unsigned = false;
     } else if (has_short) {
         if (has_unsigned) {
-            type->primitive = C_PRIM_USHORT;
+            type.prim = C_PRIM_USHORT;
         } else {
-            type->primitive = C_PRIM_SSHORT;
+            type.prim = C_PRIM_SSHORT;
         }
         has_short    = false;
         has_signed   = false;
         has_unsigned = false;
     } else if (has_int128) {
         if (has_unsigned) {
-            type->primitive = C_PRIM_U128;
+            type.prim = C_PRIM_U128;
         } else {
-            type->primitive = C_PRIM_S128;
+            type.prim = C_PRIM_S128;
         }
         has_int128   = false;
         has_signed   = false;
         has_unsigned = false;
     } else if (n_long == 2) {
         if (has_unsigned) {
-            type->primitive = C_PRIM_ULLONG;
+            type.prim = C_PRIM_ULLONG;
         } else {
-            type->primitive = C_PRIM_SLLONG;
+            type.prim = C_PRIM_SLLONG;
         }
         n_long       = 0;
         has_signed   = false;
         has_unsigned = false;
     } else if (n_long == 1) {
         if (has_unsigned) {
-            type->primitive = C_PRIM_ULONG;
+            type.prim = C_PRIM_ULONG;
         } else {
-            type->primitive = C_PRIM_SLONG;
+            type.prim = C_PRIM_SLONG;
         }
         n_long       = 0;
         has_signed   = false;
         has_unsigned = false;
     } else if (has_int || has_unsigned || has_signed) {
         if (has_unsigned) {
-            type->primitive = C_PRIM_UINT;
+            type.prim = C_PRIM_UINT;
         } else {
-            type->primitive = C_PRIM_SINT;
+            type.prim = C_PRIM_SINT;
         }
         has_int      = false;
         has_signed   = false;
         has_unsigned = false;
     } else if (has_float) {
-        type->primitive = C_PRIM_FLOAT;
-        has_float       = false;
+        type.prim = C_PRIM_FLOAT;
+        has_float = false;
     } else if (has_double) {
         if (n_long) {
-            type->primitive = C_PRIM_LDOUBLE;
+            type.prim = C_PRIM_LDOUBLE;
         } else {
-            type->primitive = C_PRIM_DOUBLE;
+            type.prim = C_PRIM_DOUBLE;
         }
         has_double = false;
         n_long--;
     } else if (has_bool) {
-        type->primitive = C_PRIM_BOOL;
-        has_bool        = false;
+        type.prim = C_PRIM_BOOL;
+        has_bool  = false;
     } else if (has_void) {
-        type->primitive = C_PRIM_VOID;
-        has_void        = false;
+        type.prim = C_PRIM_VOID;
+        has_void  = false;
+    } else {
+        type.prim = C_PRIM_SINT;
     }
 
     if (n_long || has_int || has_short || has_char || has_float || has_double || has_void || has_bool || has_unsigned
@@ -452,15 +445,19 @@ rc_t c_compile2_spec_qual_list(c_compiler_t *ctx, c_ast_spec_qual_list_t const *
         cctx_diagnostic(ctx->cctx, list->pos, DIAG_ERR, "Invalid combination of type specifiers");
     }
 
-    return type_rc;
+    return type;
 }
 
 // Compile the type encoded by a declaration or type name.
 // Returns a refcount ptr of `c_type_t` if successful.
-rc_t c_compile2_type(
-    c_compiler_t *ctx, cir_scope_t *scope, rc_t spec_qual_type, c_ast_decl_t const *decl, c_ast_ident_t const **name_out
+c_type_opt_t c_compile2_type(
+    c_compiler_t         *ctx,
+    cir_scope_t          *scope,
+    c_type_t              spec_qual_type,
+    c_ast_decl_t const   *decl,
+    c_ast_ident_t const **name_out
 ) {
-    rc_t cur = spec_qual_type;
+    c_type_t cur = spec_qual_type;
     if (name_out) {
         *name_out = NULL;
     }
@@ -476,132 +473,98 @@ rc_t c_compile2_type(
             return cur;
 
         } else if (decl->tag == C_AST_TAG_DECL_FUNC) {
-            rc_t      func       = rc_new_strong(lilycc_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
-            c_type_t *func_type  = func->data;
-            func_type->primitive = C_COMP_FUNCTION;
-            func_type->func.return_type = cur;
-            func_type->func.args_len    = decl->decl_func->params->items.len;
-            if (func_type->func.args_len > 0) {
-                func_type->func.args          = lilycc_calloc(func_type->func.args_len, sizeof(rc_t));
-                func_type->func.arg_names     = lilycc_calloc(func_type->func.args_len, sizeof(void *));
-                // TODO: This will be removed later!
-                func_type->func.arg_name_tkns = lilycc_calloc(func_type->func.args_len, sizeof(void *));
+            c_func_type_t *func = lilycc_calloc(1, sizeof(c_func_type_t));
+            func->returns       = cur;
+            c_bigtype_t *extra  = lilycc_calloc(1, sizeof(c_bigtype_t));
+            extra->refcount     = 1;
+            extra->inner        = cur;
+            c_type_t next       = {
+                .extra = extra,
+                .prim  = C_COMP_POINTER,
+                .qual  = {0},
+            };
+
+            bool errors = false;
+            for (size_t i = 0; i < decl->decl_func->params->items.len; i++) {
+                c_ast_arg_def_t const *def  = decl->decl_func->params->items.arr[i];
+                c_ast_ident_t const   *name = NULL;
+                c_type_opt_t           type = c_compile2_spec_qual_list(ctx, def->spec_qual, scope);
+                if (!c_type_is_valid(type)) {
+                    errors = true;
+                    continue;
+                }
+                if (def->decl) {
+                    type = c_compile2_type(ctx, scope, type, def->decl, &name);
+                    if (!c_type_is_valid(type)) {
+                        errors = true;
+                        continue;
+                    }
+                }
+                c_func_arg_t arg = {0};
+                arg.type         = type;
+                if (name) {
+                    arg.name     = name->name;
+                    arg.name_pos = name->pos;
+                }
+                vec_push(&func->args, arg);
             }
 
-            for (size_t i = 0; i < func_type->func.args_len; i++) {
-                c_ast_arg_def_t const *param = decl->decl_func->params->items.arr[i];
-                func_type->func.args[i]      = c_compile2_spec_qual_list(ctx, param->spec_qual, scope);
-                if (param->decl) {
-                    c_ast_ident_t const *name_tmp;
-                    func_type->func.args[i]
-                        = c_compile2_type(ctx, scope, func_type->func.args[i], param->decl, &name_tmp);
-                    func_type->func.arg_names[i] = lilycc_strdup(name_tmp->name); // NOLINT.
-                }
+            if (errors) {
+                c_type_delete(cur);
+                return C_TYPE_INVALID;
             }
 
             decl = decl->decl_func->inner;
-            cur  = func;
+            cur  = next;
 
         } else if (decl->tag == C_AST_TAG_DECL_ARRAY) {
-            rc_t      next       = rc_new_strong(lilycc_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
-            c_type_t *next_type  = next->data;
-            next_type->primitive = C_COMP_ARRAY;
-            next_type->inner     = cur;
-            next_type->length    = -1;
-
             uint64_t inner_size, inner_align;
-            if (!c_type_get_size(ctx, cur->data, &inner_size, &inner_align)) {
+            if (!c_type_get_size(ctx, cur, &inner_size, &inner_align)) {
                 cctx_diagnostic(ctx->cctx, decl->pos, DIAG_ERR, "Array has incomplete element type");
-            } else if (decl->decl_array->size) {
+                c_type_delete(cur);
+                return C_TYPE_INVALID;
+            }
+
+            c_bigtype_t *extra = lilycc_calloc(1, sizeof(c_bigtype_t));
+            extra->refcount    = 1;
+            extra->inner       = cur;
+            c_type_t next      = {
+                .extra = extra,
+                .prim  = C_COMP_ARRAY,
+                .qual  = {0},
+            };
+
+            if (decl->decl_array->size) {
                 // Has size expression.
                 fprintf(stderr, "TODO: Sized arrays\n");
                 abort();
-                /*
-                c_compile_expr_t res = c_compile_expr(ctx, NULL, NULL, scope, &decl->params[1]);
-                if (c_value_is_const(&res.res)) {
-                    if (!c_type_is_scalar(res.res.c_type->data)) {
-                        cctx_diagnostic(
-                            ctx->cctx,
-                            decl->params[1].pos,
-                            DIAG_ERR,
-                            "Expected scalar type for array bound"
-                        );
-                    } else {
-                        // Check that the evaluated array length is within bounds.
-                        ir_const_t iconst       = c_value_read(ctx, NULL, &res.res).iconst;
-                        i128_t     len          = ir_cast(IR_PRIM_u128, iconst).const128;
-                        int        sizeof_usize = ir_prim_sizes[c_prim_to_ir_type(ctx, ctx->options.size_type)];
-                        uint64_t   usize_max;
-                        if (sizeof_usize == 8) {
-                            usize_max = UINT64_MAX;
-                        } else {
-                            usize_max = (1llu << (sizeof_usize * 8)) - 1;
-                        }
-
-                        if (ir_prim_is_signed(iconst.prim_type) && cmp128s(len, I128_ZERO) < 0) {
-                            char buf[40];
-                            itoa128(neg128(len), 0, buf);
-                            cctx_diagnostic(
-                                ctx->cctx,
-                                decl->params[1].pos,
-                                DIAG_ERR,
-                                "Negative array length of -%s is not allowed",
-                                buf
-                            );
-                        } else if (cmp128u(len, ui128(INT64_MAX / 2)) > 0) {
-                            char buf[40];
-                            itoa128(len, 0, buf);
-                            cctx_diagnostic(
-                                ctx->cctx,
-                                decl->params[1].pos,
-                                DIAG_ERR,
-                                "Array length of %s is not supported by Lily-CC",
-                                buf
-                            );
-                        } else if (cmp128u(mul128(len, ui128(inner_size)), ui128(usize_max)) > 0) {
-                            char buf[40];
-                            itoa128(mul128(len, ui128(inner_size)), 0, buf);
-                            cctx_diagnostic(
-                                ctx->cctx,
-                                decl->params[1].pos,
-                                DIAG_ERR,
-                                "Array length of %" PRIu64 " would cause its size (%s) exceed __SIZE_MAX__ (%" PRIu64
-                                ")",
-                                lo64(len),
-                                buf,
-                                usize_max
-                            );
-                        } else {
-                            // All checks passed, the array length is valid.
-                            next_type->length = (int64_t)lo64(len);
-                        }
-                    }
-                }
-                c_value_destroy(res.res);
-                */
             }
 
             decl = decl->decl_array->inner;
             cur  = next;
 
         } else if (decl->tag == C_AST_TAG_DECL_PTR) {
-            rc_t      next       = rc_new_strong(lilycc_calloc(1, sizeof(c_type_t)), (void (*)(void *))c_type_free);
-            c_type_t *next_type  = next->data;
-            next_type->primitive = C_COMP_POINTER;
-            next_type->inner     = cur;
+            c_bigtype_t *extra = lilycc_calloc(1, sizeof(c_bigtype_t));
+            extra->refcount    = 1;
+            extra->inner       = cur;
+            c_type_t next      = {
+                .extra = extra,
+                .prim  = C_COMP_POINTER,
+                .qual  = {0},
+            };
 
             // Add specifiers to pointer.
             vec_c_ast_spec_qual_t const *list = &decl->decl_ptr->spec_qual->items;
             for (size_t i = 0; i < list->len; i++) {
                 assert(list->arr[i]->tag == C_AST_TAG_SPEC_QUAL_KEYW);
                 if (list->arr[i]->spec_qual_keyw == C_KEYW_volatile) {
-                    next_type->is_volatile = true;
+                    next.qual.q_volatile = true;
                 } else if (list->arr[i]->spec_qual_keyw == C_KEYW_const) {
-                    next_type->is_const = true;
+                    next.qual.q_const = true;
                 } else if (list->arr[i]->spec_qual_keyw == C_KEYW__Atomic) {
-                    next_type->is_atomic = true;
+                    next.qual.q_atomic = true;
                 } else if (list->arr[i]->spec_qual_keyw == C_KEYW_restrict) {
-                    next_type->is_restrict = true;
+                    next.qual.q_restrict = true;
                 } else {
                     fprintf(stderr, "BUG: Unhandled pointer qualifier %s\n", c_keyw_name[list->arr[i]->spec_qual_keyw]);
                     abort();
@@ -612,8 +575,8 @@ rc_t c_compile2_type(
             cur  = next;
 
         } else if (decl->tag == C_AST_TAG_DECL_GARBAGE) {
-            rc_delete(cur);
-            return NULL;
+            c_type_delete(cur);
+            return C_TYPE_INVALID;
 
         } else {
             abort();

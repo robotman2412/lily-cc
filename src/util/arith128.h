@@ -14,10 +14,12 @@
 
 #define INLINE_MATH128 static inline __attribute__((always_inline)) __attribute__((const))
 
-#define I128_ZERO i128_pack(0, 0)
-#define UI128_MAX i128_pack(UINT64_MAX, UINT64_MAX)
-#define I128_MIN  i128_pack(INT64_MIN, 0)
-#define I128_MAX  i128_pack(INT64_MAX, UINT64_MAX)
+#define I128_ZERO  i128_pack(0, 0)
+#define UI128_ZERO i128_pack(0, 0)
+#define UI128_MIN  i128_pack(0, 0)
+#define UI128_MAX  i128_pack(UINT64_MAX, UINT64_MAX)
+#define I128_MIN   i128_pack(INT64_MIN, 0)
+#define I128_MAX   i128_pack(INT64_MAX, UINT64_MAX)
 
 #if defined(__SIZEOF_INT128__) && !defined(LILY_SOFT_INT128)
 // Structure that stores 128 bits of data.

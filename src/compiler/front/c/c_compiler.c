@@ -11,7 +11,7 @@
 #include "c_prepass.h"
 #include "c_preproc.h"
 #include "c_tokenizer.h"
-#include "c_types.h"
+#include "c_types1.h"
 #include "c_values.h"
 #include "compiler.h"
 #include "ir.h"
@@ -231,7 +231,7 @@ ir_op1_type_t c_op1_to_ir_op1(c_tokentype_t subtype) {
 c_var_t *c_var_create(
     c_compiler_t *ctx, c_prepass_t *prepass, ir_func_t *func, rc_t type_rc, token_t const *name_tkn, c_scope_t *scope
 ) {
-    c_type_t *type = type_rc->data;
+    c_type1_t *type = type_rc->data;
 
     if (type->primitive == C_COMP_FUNCTION) {
         fprintf(stderr, "TODO: c_var_create C_COMP_FUNCTION\n");
@@ -241,13 +241,13 @@ c_var_t *c_var_create(
 
     // Enforce that it is a complete type.
     uint64_t size, align;
-    if (!c_type_get_size(ctx, type, &size, &align)) {
-        c_comp_t   *comp = type->comp->data;
+    if (!c_type1_get_size(ctx, type, &size, &align)) {
+        c_comp1_t  *comp = type->comp->data;
         char const *comp_var;
         switch (comp->type) {
-            case C_COMP_TYPE_ENUM: comp_var = "enum"; break;
-            case C_COMP_TYPE_STRUCT: comp_var = "struct"; break;
-            case C_COMP_TYPE_UNION: comp_var = "union"; break;
+            case C_COMP_TYPE1_ENUM: comp_var = "enum"; break;
+            case C_COMP_TYPE1_STRUCT: comp_var = "struct"; break;
+            case C_COMP_TYPE1_UNION: comp_var = "union"; break;
             default: UNREACHABLE();
         }
         cctx_diagnostic(ctx->cctx, name_tkn->pos, DIAG_ERR, "Use of incomplete type %s %s", comp_var, comp->name);
@@ -272,7 +272,7 @@ c_var_t *c_var_create(
             var->frame   = ir_frame_create(func, size, align, NULL);
         } else {
             var->storage = C_VAR_STORAGE_REG;
-            var->ir_var  = ir_var_create(func, c_type_to_ir_type(ctx, type), NULL);
+            var->ir_var  = ir_var_create(func, c_type1_to_ir_type(ctx, type), NULL);
         }
     } else {
         fprintf(stderr, "TODO: c_var_create in global scope\n");
@@ -314,19 +314,19 @@ typedef struct {
 // Step into the first field of the current (compound-typed) field.
 // Returns whether there is such a field (the compound type is not zero-sized).
 static bool c_init_cursor_step_in(c_init_cursor_t *cursor) {
-    c_type_t const *cur = cursor->type_rc->data;
+    c_type1_t const *cur = cursor->type_rc->data;
     for (size_t i = 0;; i++) {
         size_t field = (i < cursor->stack_len) ? cursor->stack[i] : 0;
 
         if (cur->primitive == C_COMP_STRUCT) {
-            c_comp_t const *comp = cur->comp->data;
+            c_comp1_t const *comp = cur->comp->data;
             if (comp->fields.len == 0) {
                 return false;
             }
             cur = comp->fields.arr[field].type_rc->data;
 
         } else if (cur->primitive == C_COMP_UNION) {
-            c_comp_t const *comp = cur->comp->data;
+            c_comp1_t const *comp = cur->comp->data;
             if (comp->fields.len == 0) {
                 return false;
             }
@@ -360,16 +360,16 @@ static bool c_init_cursor_step_in(c_init_cursor_t *cursor) {
 // Returns whether the field exists.
 static inline bool
     c_init_cursor_select_named(c_compiler_t *ctx, c_init_cursor_t *cursor, token_t const *name, bool err_notfound) {
-    c_type_t const *field_type = cursor->field_type_rc->data;
+    c_type1_t const *field_type = cursor->field_type_rc->data;
     if (field_type->primitive != C_COMP_STRUCT && field_type->primitive != C_COMP_UNION) {
         cctx_diagnostic(ctx->cctx, name->pos, DIAG_ERR, "Unexpected named initializer field for non-struct/union type");
         return false;
     }
 
-    c_comp_t const *comp = field_type->comp->data;
+    c_comp1_t const *comp = field_type->comp->data;
     for (size_t i = 0; i < comp->fields.len; i++) {
-        c_field_t const *field      = &comp->fields.arr[i];
-        c_type_t const  *field_type = field->type_rc->data;
+        c_field1_t const *field      = &comp->fields.arr[i];
+        c_type1_t const  *field_type = field->type_rc->data;
 
         if (field->name && !strcmp(field->name, name->strval)) {
             // Matching field name found.
@@ -425,7 +425,7 @@ static inline bool
 // Returns whether the field exists.
 static inline bool
     c_init_cursor_select_indexed(c_compiler_t *ctx, c_init_cursor_t *cursor, c_value_t index, pos_t index_pos) {
-    c_type_t const *field_type = cursor->field_type_rc->data;
+    c_type1_t const *field_type = cursor->field_type_rc->data;
     if (field_type->primitive != C_COMP_ARRAY) {
         cctx_diagnostic(ctx->cctx, index_pos, DIAG_ERR, "Unexpected indexed initializer field for non-array type");
         c_value_destroy(index);
@@ -462,7 +462,7 @@ static inline bool
     }
 
     uint64_t inner_size, inner_align;
-    if (!c_type_get_size(ctx, field_type->inner->data, &inner_size, &inner_align)) {
+    if (!c_type1_get_size(ctx, field_type->inner->data, &inner_size, &inner_align)) {
         UNREACHABLE();
     }
 
@@ -485,13 +485,13 @@ static inline bool
 // Helper for `c_init_field` that moves the cursor to the next field.
 static void c_init_cursor_next(c_init_cursor_t *cursor) {
     while (cursor->stack_len) {
-        bool            has_next = false;
-        c_type_t const *cur      = cursor->type_rc->data;
+        bool             has_next = false;
+        c_type1_t const *cur      = cursor->type_rc->data;
         for (size_t depth = 0; depth < cursor->stack_len; depth++) {
             size_t index = cursor->stack[depth];
             if (cur->primitive == C_COMP_STRUCT) {
-                c_comp_t const  *comp  = cur->comp->data;
-                c_field_t const *field = &comp->fields.arr[index];
+                c_comp1_t const  *comp  = cur->comp->data;
+                c_field1_t const *field = &comp->fields.arr[index];
                 rc_delete(cursor->field_type_rc);
                 cursor->field_type_rc = rc_share(field->type_rc);
                 cur                   = field->type_rc->data;
@@ -499,8 +499,8 @@ static void c_init_cursor_next(c_init_cursor_t *cursor) {
                 has_next              = index + 1 < comp->fields.len;
 
             } else if (cur->primitive == C_COMP_UNION) {
-                c_comp_t const  *comp  = cur->comp->data;
-                c_field_t const *field = &comp->fields.arr[index];
+                c_comp1_t const  *comp  = cur->comp->data;
+                c_field1_t const *field = &comp->fields.arr[index];
                 rc_delete(cursor->field_type_rc);
                 cursor->field_type_rc = rc_share(field->type_rc);
                 cur                   = field->type_rc->data;
@@ -577,7 +577,7 @@ static c_compile_expr_t c_compile_scalar_init(
     }
 
     ir_operand_t cast_operand;
-    ir_prim_t    dest_prim = c_type_to_ir_type(ctx, type_rc->data);
+    ir_prim_t    dest_prim = c_type1_to_ir_type(ctx, type_rc->data);
     if (is_const) {
         cast_operand = IR_OPERAND_CONST(ir_cast(dest_prim, res.res.rvalue.operand.iconst));
     } else {
@@ -629,11 +629,11 @@ c_compile_expr_t c_compile_comp_init(
     rc_t           type_rc,
     pos_t          type_pos
 ) {
-    c_type_t const *type = type_rc->data;
+    c_type1_t const *type = type_rc->data;
 
     // Check type completeness.
     uint64_t size, align;
-    if (!c_type_get_size(ctx, type, &size, &align)) {
+    if (!c_type1_get_size(ctx, type, &size, &align)) {
         cctx_diagnostic(ctx->cctx, type_pos, DIAG_ERR, "Usage of incomplete type");
         return (c_compile_expr_t){
             .code = code,
@@ -642,7 +642,7 @@ c_compile_expr_t c_compile_comp_init(
     }
 
     // Compile-time optimization for zero-initializations.
-    ir_prim_t prim = c_type_to_ir_type(ctx, type);
+    ir_prim_t prim = c_type1_to_ir_type(ctx, type);
     if (init->params_len == 0
         || (init->params_len == 1 && init->params[0].type == TOKENTYPE_ICONST && init->params[0].ival == 0
             && init->params[0].ivalh == 0)) {
@@ -687,7 +687,7 @@ c_compile_expr_t c_compile_comp_init(
     if (type->primitive == C_COMP_ARRAY) {
         cursor.field_type_rc = rc_share(type->inner);
     } else {
-        c_comp_t const *comp = type->comp->data;
+        c_comp1_t const *comp = type->comp->data;
         if (comp->fields.len > 0) {
             cursor.field_type_rc = rc_share(comp->fields.arr[0].type_rc);
         }
@@ -742,7 +742,7 @@ c_compile_expr_t c_compile_comp_init(
         } else if (field->type == TOKENTYPE_AST && field->subtype == C_AST_COMPINIT) {
             // Nested initializer.
             c_compile_expr_t res;
-            if (c_type_is_scalar(cursor.field_type_rc->data)) {
+            if (c_type1_is_scalar(cursor.field_type_rc->data)) {
                 // Directly compile scalar initializer.
                 res = c_compile_scalar_init(ctx, prepass, code, scope, field, cursor.field_type_rc);
 
@@ -782,11 +782,11 @@ c_compile_expr_t c_compile_comp_init(
                 c_value_destroy(res.res);
                 error = true;
             } else {
-                if (can_step_in && !c_type_is_compatible(ctx, cursor.field_type_rc->data, res.res.c_type->data)) {
+                if (can_step_in && !c_type1_is_compatible(ctx, cursor.field_type_rc->data, res.res.c_type->data)) {
                     c_init_cursor_step_in(&cursor);
                 }
 
-                if (!c_type_is_compatible(ctx, cursor.field_type_rc->data, res.res.c_type->data)) {
+                if (!c_type1_is_compatible(ctx, cursor.field_type_rc->data, res.res.c_type->data)) {
                     cctx_diagnostic(ctx->cctx, field->pos, DIAG_ERR, "Initializer with value of incompatible type");
                     c_value_destroy(res.res);
                     error = true;
@@ -819,7 +819,7 @@ c_compile_expr_t c_compile_comp_init(
     for (size_t i = 0; i < cursor.stores_len; i++) {
         c_comp_store_t const *store = &cursor.stores[i];
         uint64_t              write_size, write_align;
-        if (!c_type_get_size(ctx, store->value.c_type->data, &write_size, &write_align)) {
+        if (!c_type1_get_size(ctx, store->value.c_type->data, &write_size, &write_align)) {
             UNREACHABLE();
         }
 
@@ -849,7 +849,7 @@ c_compile_expr_t c_compile_comp_init(
             } else {
                 assert(store->value.value_type == C_RVALUE_BINARY);
                 uint64_t write_size, write_align;
-                if (!c_type_get_size(ctx, store->value.c_type->data, &write_size, &write_align)) {
+                if (!c_type1_get_size(ctx, store->value.c_type->data, &write_size, &write_align)) {
                     UNREACHABLE();
                 }
                 memcpy(blob + store->offset, store->value.rvalue.blob, write_size);
@@ -901,30 +901,30 @@ out:
 
 // Decay an array value into its pointer.
 static c_value_t c_array_decay(c_compiler_t *ctx, ir_code_t *code, c_value_t value) {
-    c_type_t const *type = value.c_type->data;
+    c_type1_t const *type = value.c_type->data;
     if (type->primitive != C_COMP_ARRAY) {
         return value;
     }
     ir_prim_t ptr_prim = c_prim_to_ir_type(ctx, ctx->options.size_type);
-    rc_t      ptr_rc   = c_type_to_pointer(ctx, rc_share(type->inner));
+    rc_t      ptr_rc   = c_type1_to_pointer(ctx, rc_share(type->inner));
 
     ir_memref_t memref;
     if (c_is_rvalue(&value)) {
         // R-values.
         if (value.value_type == C_RVALUE_STACK) {
-            memref = IR_MEMREF(c_type_to_ir_type(ctx, type->inner->data), IR_BADDR_FRAME(value.rvalue.frame));
+            memref = IR_MEMREF(c_type1_to_ir_type(ctx, type->inner->data), IR_BADDR_FRAME(value.rvalue.frame));
         } else {
             assert(value.value_type == C_RVALUE_BINARY);
             // TODO: This could (and should) be put into `.rodata` instead.
             uint64_t size, align;
-            if (!c_type_get_size(ctx, type, &size, &align)) {
+            if (!c_type1_get_size(ctx, type, &size, &align)) {
                 UNREACHABLE();
             }
             ir_prim_t usize_prim    = c_prim_to_ir_type(ctx, ctx->options.size_type);
             ir_prim_t copy_max_prim = IR_PRIM_u8 + 2 * __builtin_ctzll(ir_prim_sizes[usize_prim] | align);
 
             ir_frame_t *frame = ir_frame_create(code->func, size, align, NULL);
-            memref            = IR_MEMREF(c_type_to_ir_type(ctx, type->inner->data), IR_BADDR_FRAME(frame));
+            memref            = IR_MEMREF(c_type1_to_ir_type(ctx, type->inner->data), IR_BADDR_FRAME(frame));
             ir_gen_memcpy_const(
                 IR_APPEND(code),
                 value.rvalue.blob,
@@ -970,9 +970,9 @@ static c_value_t c_array_decay(c_compiler_t *ctx, ir_code_t *code, c_value_t val
 // Compile an infix arithmetic expression into IR.
 static inline c_compile_expr_t
     c_compile_expr2_arith(c_compiler_t *ctx, ir_code_t *code, token_t const *expr, c_value_t lhs, c_value_t rhs) {
-    bool            is_assign = expr->params[0].subtype >= C_TKN_ADD_S && expr->params[0].subtype <= C_TKN_XOR_S;
-    c_type_t const *lhs_type  = lhs.c_type->data;
-    c_type_t const *rhs_type  = rhs.c_type->data;
+    bool             is_assign = expr->params[0].subtype >= C_TKN_ADD_S && expr->params[0].subtype <= C_TKN_XOR_S;
+    c_type1_t const *lhs_type  = lhs.c_type->data;
+    c_type1_t const *rhs_type  = rhs.c_type->data;
 
     // Determine promotion.
     c_tokentype_t op2     = is_assign ? expr->params[0].subtype + C_TKN_ADD - C_TKN_ADD_S : expr->params[0].subtype;
@@ -1060,16 +1060,16 @@ static inline c_compile_expr_t
     lhs = c_array_decay(ctx, code, lhs);
     rhs = c_array_decay(ctx, code, rhs);
 
-    c_type_t const *lhs_type = lhs.c_type->data;
-    c_type_t const *rhs_type = rhs.c_type->data;
-    bool const      lhs_ptr  = lhs_type->primitive == C_COMP_POINTER;
-    bool const      rhs_ptr  = rhs_type->primitive == C_COMP_POINTER;
+    c_type1_t const *lhs_type = lhs.c_type->data;
+    c_type1_t const *rhs_type = rhs.c_type->data;
+    bool const       lhs_ptr  = lhs_type->primitive == C_COMP_POINTER;
+    bool const       rhs_ptr  = rhs_type->primitive == C_COMP_POINTER;
 
     uint64_t size = 0, align = 0;
     if (op2 == IR_OP2_sub || op2 == IR_OP2_add) {
         // Assert that pointers are complete types with nonzero size.
         if (lhs_ptr) {
-            if (!c_type_get_size(ctx, lhs_type->inner->data, &size, &align)) {
+            if (!c_type1_get_size(ctx, lhs_type->inner->data, &size, &align)) {
                 cctx_diagnostic(ctx->cctx, expr->pos, DIAG_ERR, "Pointer arithmetic with incomplete type");
                 c_value_destroy(lhs);
                 c_value_destroy(rhs);
@@ -1088,7 +1088,7 @@ static inline c_compile_expr_t
             }
         }
         if (rhs_ptr) {
-            if (!c_type_get_size(ctx, rhs_type->inner->data, &size, &align)) {
+            if (!c_type1_get_size(ctx, rhs_type->inner->data, &size, &align)) {
                 cctx_diagnostic(ctx->cctx, expr->pos, DIAG_ERR, "Pointer arithmetic with incomplete type");
                 c_value_destroy(lhs);
                 c_value_destroy(rhs);
@@ -1258,16 +1258,16 @@ static inline c_compile_expr_t c_compile_expr_call(
     c_value_t retval = {0};
     if (!errors) {
         // Emit IR function call.
-        c_type_t const *func_type = func.c_type->data;
+        c_type1_t const *func_type = func.c_type->data;
 
         // Collect arguments into form IR can use.
         ir_operand_t *operands = lilycc_calloc(params_ast->params_len, sizeof(ir_operand_t));
         for (size_t i = 0; i < params_ast->params_len; i++) {
-            c_type_t const *value_type = params[i].c_type->data;
+            c_type1_t const *value_type = params[i].c_type->data;
             if (value_type->primitive == C_COMP_STRUCT || value_type->primitive == C_COMP_UNION) {
                 // Structs/unions passed by stack frame.
                 uint64_t size, align;
-                if (!c_type_get_size(ctx, value_type, &size, &align)) {
+                if (!c_type1_get_size(ctx, value_type, &size, &align)) {
                     UNREACHABLE();
                 }
                 ir_frame_t *frame = ir_frame_create(code->func, size, align, NULL);
@@ -1280,15 +1280,16 @@ static inline c_compile_expr_t c_compile_expr_call(
             }
         }
 
-        c_type_t const *signature = NULL;
-        ir_memref_t     call_memref;
+        c_type1_t const *signature = NULL;
+        ir_memref_t      call_memref;
         if (func_type->primitive == C_COMP_FUNCTION) {
             // Call by symbol.
             signature   = func_type;
             call_memref = func.lvalue.memref;
 
         } else if (
-            func_type->primitive == C_COMP_POINTER && ((c_type_t *)func_type->inner->data)->primitive == C_COMP_FUNCTION
+            func_type->primitive == C_COMP_POINTER
+            && ((c_type1_t *)func_type->inner->data)->primitive == C_COMP_FUNCTION
         ) {
             // Call by function pointer.
             signature        = func_type->inner->data;
@@ -1308,8 +1309,8 @@ static inline c_compile_expr_t c_compile_expr_call(
 
         if (signature) {
             // Set up return value.
-            c_type_t const *returns = signature->func.return_type->data;
-            retval.c_type           = rc_share(signature->func.return_type);
+            c_type1_t const *returns = signature->func.return_type->data;
+            retval.c_type            = rc_share(signature->func.return_type);
             size_t      has_ir_ret;
             ir_retval_t ir_ret = {0};
             if (returns->primitive == C_PRIM_VOID) {
@@ -1318,7 +1319,7 @@ static inline c_compile_expr_t c_compile_expr_call(
                 has_ir_ret = true;
 
                 uint64_t size, align;
-                if (!c_type_get_size(ctx, returns, &size, &align)) {
+                if (!c_type1_get_size(ctx, returns, &size, &align)) {
                     UNREACHABLE();
                 }
 
@@ -1330,7 +1331,7 @@ static inline c_compile_expr_t c_compile_expr_call(
                 has_ir_ret = true;
 
                 ir_ret.type           = IR_RETVAL_TYPE_VAR;
-                ir_ret.dest_var       = ir_var_create(code->func, c_type_to_ir_type(ctx, returns), NULL);
+                ir_ret.dest_var       = ir_var_create(code->func, c_type1_to_ir_type(ctx, returns), NULL);
                 retval.value_type     = C_RVALUE_OPERAND;
                 retval.rvalue.operand = IR_OPERAND_VAR(ir_ret.dest_var);
             }
@@ -1397,12 +1398,12 @@ c_compile_expr_t
                 break;
             case C_VAR_STORAGE_FRAME:
                 res.value_type    = C_LVALUE_MEM;
-                res.lvalue.memref = IR_MEMREF(c_type_to_ir_type(ctx, c_var->type->data), IR_BADDR_FRAME(c_var->frame));
+                res.lvalue.memref = IR_MEMREF(c_type1_to_ir_type(ctx, c_var->type->data), IR_BADDR_FRAME(c_var->frame));
                 break;
             case C_VAR_STORAGE_GLOBAL:
                 res.value_type = C_LVALUE_MEM;
                 res.lvalue.memref
-                    = IR_MEMREF(c_type_to_ir_type(ctx, c_var->type->data), IR_BADDR_SYM(lilycc_strdup(c_var->sym)));
+                    = IR_MEMREF(c_type1_to_ir_type(ctx, c_var->type->data), IR_BADDR_SYM(lilycc_strdup(c_var->sym)));
                 break;
             case C_VAR_STORAGE_ENUM_VARIANT: UNREACHABLE();
         }
@@ -1502,15 +1503,15 @@ c_compile_expr_t
         // Compile cast source expression.
         c_compile_expr_t res = c_compile_expr(ctx, prepass, code, scope, &expr->params[1]);
         if (res.res.value_type == C_VALUE_ERROR
-            || c_type_is_identical(ctx, cast_rc->data, res.res.c_type->data, false)) {
+            || c_type1_is_identical(ctx, cast_rc->data, res.res.c_type->data, false)) {
             rc_delete(cast_rc);
             return res;
         }
 
         // Determine castability.
-        c_type_t const *new_type = cast_rc->data;
-        c_type_t const *old_type = res.res.c_type->data;
-        if (!c_type_is_castable(ctx, new_type, old_type)) {
+        c_type1_t const *new_type = cast_rc->data;
+        c_type1_t const *old_type = res.res.c_type->data;
+        if (!c_type1_is_castable(ctx, new_type, old_type)) {
             cctx_diagnostic(ctx->cctx, expr->params[1].pos, DIAG_ERR, "Cannot cast between these types");
             return (c_compile_expr_t){
                 .res  = (c_value_t){0},
@@ -1534,7 +1535,7 @@ c_compile_expr_t
         // Anything that gets here can be represented as a cast with IR primitives.
         if (res.res.value_type == C_RVALUE_OPERAND && res.res.rvalue.operand.type == IR_OPERAND_TYPE_CONST) {
             // Can be evaluated at compile time.
-            ir_const_t new_const = ir_cast(c_type_to_ir_type(ctx, new_type), res.res.rvalue.operand.iconst);
+            ir_const_t new_const = ir_cast(c_type1_to_ir_type(ctx, new_type), res.res.rvalue.operand.iconst);
             c_value_t  rvalue    = {
                 .value_type     = C_RVALUE_OPERAND,
                 .c_type         = cast_rc,
@@ -1548,7 +1549,7 @@ c_compile_expr_t
         }
 
         // Otherwise emit a mov instruction.
-        ir_var_t *tmpvar = ir_var_create(code->func, c_type_to_ir_type(ctx, new_type), NULL);
+        ir_var_t *tmpvar = ir_var_create(code->func, c_type1_to_ir_type(ctx, new_type), NULL);
         ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(tmpvar), IR_OP1_mov, c_value_read(ctx, code, &res.res));
         c_value_t rvalue = {
             .value_type     = C_RVALUE_OPERAND,
@@ -1586,8 +1587,8 @@ c_compile_expr_t
         code          = res.code;
 
         // Validate expression types.
-        if (c_type_is_pointer(lhs.c_type->data) == c_type_is_pointer(rhs.c_type->data)
-            || (!c_type_is_scalar(lhs.c_type->data) && !c_type_is_scalar(rhs.c_type->data))) {
+        if (c_type1_is_pointer(lhs.c_type->data) == c_type1_is_pointer(rhs.c_type->data)
+            || (!c_type1_is_scalar(lhs.c_type->data) && !c_type1_is_scalar(rhs.c_type->data))) {
             cctx_diagnostic(
                 ctx->cctx,
                 expr->pos,
@@ -1614,10 +1615,10 @@ c_compile_expr_t
         c_value_t pointer = res.res;
         code              = res.code;
 
-        c_type_t const *pointer_type = pointer.c_type->data;
-        ir_operand_t    ir_ptr       = c_value_read(ctx, code, &pointer);
+        c_type1_t const *pointer_type = pointer.c_type->data;
+        ir_operand_t     ir_ptr       = c_value_read(ctx, code, &pointer);
 
-        ir_memref_t memref = IR_MEMREF(c_type_to_ir_type(ctx, pointer_type->inner->data));
+        ir_memref_t memref = IR_MEMREF(c_type1_to_ir_type(ctx, pointer_type->inner->data));
         switch (ir_ptr.type) {
             case IR_OPERAND_TYPE_CONST:
                 memref.base_type = IR_MEMBASE_ABS;
@@ -1660,7 +1661,7 @@ c_compile_expr_t
         ir_operand_t ptr = c_value_read(ctx, code, &res.res);
 
         // Get the target struct/union field.
-        c_type_t const *ptr_type = res.res.c_type->data;
+        c_type1_t const *ptr_type = res.res.c_type->data;
         if (ptr_type->primitive != C_COMP_POINTER) {
             cctx_diagnostic(
                 ctx->cctx,
@@ -1677,7 +1678,7 @@ c_compile_expr_t
                 .res  = {0},
             };
         }
-        c_type_t const *inner_type = ptr_type->inner->data;
+        c_type1_t const *inner_type = ptr_type->inner->data;
         if (inner_type->primitive != C_COMP_STRUCT && inner_type->primitive != C_COMP_UNION) {
             cctx_diagnostic(
                 ctx->cctx,
@@ -1691,8 +1692,8 @@ c_compile_expr_t
                 .res  = {0},
             };
         }
-        uint64_t         field_offset;
-        c_field_t const *field = c_type_get_field(ctx, inner_type, expr->params[2].strval, &field_offset);
+        uint64_t          field_offset;
+        c_field1_t const *field = c_type1_get_field(ctx, inner_type, expr->params[2].strval, &field_offset);
         if (!field) {
             cctx_diagnostic(ctx->cctx, expr->params[2].pos, DIAG_ERR, "Unknown field %s", expr->params[2].strval);
             c_value_destroy(res.res);
@@ -1707,7 +1708,7 @@ c_compile_expr_t
             .value_type    = C_LVALUE_MEM,
             .c_type        = rc_share(field->type_rc),
             .lvalue.memref = {
-                .data_type = c_type_to_ir_type(ctx, field->type_rc->data),
+                .data_type = c_type1_to_ir_type(ctx, field->type_rc->data),
                 .offset    = (int64_t)field_offset,
             },
         };
@@ -1744,11 +1745,11 @@ c_compile_expr_t
         code = res.code;
 
         // Get the target struct/union field.
-        c_type_t const *struct_type = res.res.c_type->data;
+        c_type1_t const *struct_type = res.res.c_type->data;
         if (struct_type->primitive != C_COMP_STRUCT && struct_type->primitive != C_COMP_UNION) {
             cctx_diagnostic(ctx->cctx, expr->params[1].pos, DIAG_ERR, "Expression is not a struct/union type");
             if (struct_type->primitive == C_COMP_POINTER) {
-                c_type_t const *inner_type = struct_type->inner->data;
+                c_type1_t const *inner_type = struct_type->inner->data;
                 if (inner_type->primitive == C_COMP_UNION || inner_type->primitive == C_COMP_STRUCT) {
                     cctx_diagnostic(
                         ctx->cctx,
@@ -1804,7 +1805,7 @@ c_compile_expr_t
         c_value_t rhs = res.res;
 
         // Determine compatibility with this operator.
-        if (!c_type_arith_compatible(
+        if (!c_type1_arith_compatible(
                 ctx,
                 lhs.c_type->data,
                 rhs.c_type->data,
@@ -1919,7 +1920,7 @@ c_compile_expr_t
             }
 
             // Determine compatibility with this operator.
-            if (!c_type_is_compatible(ctx, lhs.c_type->data, rhs.c_type->data)) {
+            if (!c_type1_is_compatible(ctx, lhs.c_type->data, rhs.c_type->data)) {
                 cctx_diagnostic(ctx->cctx, expr->params[0].pos, DIAG_ERR, "Cannot assign incompatible type");
                 c_value_destroy(lhs);
                 c_value_destroy(rhs);
@@ -1965,7 +1966,7 @@ c_compile_expr_t
             code          = res.code;
 
             // Determine compatibility with this operator.
-            if (!c_type_arith_compatible(
+            if (!c_type1_arith_compatible(
                     ctx,
                     lhs.c_type->data,
                     rhs.c_type->data,
@@ -1980,8 +1981,8 @@ c_compile_expr_t
                 };
             }
 
-            c_type_t const *lhs_type = lhs.c_type->data;
-            c_type_t const *rhs_type = rhs.c_type->data;
+            c_type1_t const *lhs_type = lhs.c_type->data;
+            c_type1_t const *rhs_type = rhs.c_type->data;
             if (c_prim_is_ptr(lhs_type->primitive) || c_prim_is_ptr(rhs_type->primitive)) {
                 // Pointer arithmetic is more restricted and has special handling.
                 return c_compile_expr2_ptrarith(ctx, code, expr, lhs, rhs);
@@ -2003,8 +2004,8 @@ c_compile_expr_t
                     .res  = (c_value_t){0},
                 };
             }
-            code                     = res.code;
-            c_type_t const *res_type = res.res.c_type->data;
+            code                      = res.code;
+            c_type1_t const *res_type = res.res.c_type->data;
 
             // Assert that it's writeable.
             if (!c_prim_is_scalar(res_type->primitive)) {
@@ -2025,7 +2026,7 @@ c_compile_expr_t
             // Determine increment, which is 1 for non-pointer types.
             uint64_t increment = 1, dummy;
             if (c_prim_is_ptr(res_type->primitive)) {
-                if (!c_type_get_size(ctx, res_type->inner->data, &increment, &dummy)) {
+                if (!c_type1_get_size(ctx, res_type->inner->data, &increment, &dummy)) {
                     c_value_destroy(res.res);
                     return (c_compile_expr_t){
                         .code = code,
@@ -2035,7 +2036,7 @@ c_compile_expr_t
             }
 
             // Add or subtract the increment.
-            ir_var_t *tmpvar = ir_var_create(code->func, c_type_to_ir_type(ctx, res_type), NULL);
+            ir_var_t *tmpvar = ir_var_create(code->func, c_type1_to_ir_type(ctx, res_type), NULL);
             ir_add_expr2(
                 IR_APPEND(code),
                 IR_RETVAL_VAR(tmpvar),
@@ -2083,7 +2084,7 @@ c_compile_expr_t
             }
 
             // Create pointer type.
-            rc_t ptr_rc = c_type_to_pointer(ctx, rc_share(res.res.c_type));
+            rc_t ptr_rc = c_type1_to_pointer(ctx, rc_share(res.res.c_type));
 
             // Get address into an rvalue.
             ir_var_t *ir_ptr = ir_var_create(code->func, c_prim_to_ir_type(ctx, ctx->options.size_type), NULL);
@@ -2109,8 +2110,8 @@ c_compile_expr_t
                     .res  = (c_value_t){0},
                 };
             }
-            code           = res.code;
-            c_type_t *type = res.res.c_type->data;
+            code            = res.code;
+            c_type1_t *type = res.res.c_type->data;
 
             // Enforce inner expression to be a pointer type.
             if (type->primitive != C_COMP_POINTER && type->primitive != C_COMP_ARRAY) {
@@ -2125,7 +2126,7 @@ c_compile_expr_t
             // Create pointer lvalue.
             ir_operand_t ptrval = c_value_read(ctx, code, &res.res);
             ir_memref_t  memref = {0};
-            memref.data_type    = c_type_to_ir_type(ctx, type->inner->data);
+            memref.data_type    = c_type1_to_ir_type(ctx, type->inner->data);
             switch (ptrval.type) {
                 case IR_OPERAND_TYPE_CONST:
                     memref.base_type = IR_MEMBASE_ABS;
@@ -2185,7 +2186,7 @@ c_compile_expr_t
             if (expr->params[0].subtype == C_TKN_LNOT) {
                 ir_prim = IR_PRIM_bool;
             } else {
-                ir_prim = c_type_to_ir_type(ctx, res.res.c_type->data);
+                ir_prim = c_type1_to_ir_type(ctx, res.res.c_type->data);
             }
             ir_var_t *tmpvar = ir_var_create(code->func, ir_prim, NULL);
             ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(tmpvar), c_op1_to_ir_op1(expr->params[0].subtype), ir_value);
@@ -2214,8 +2215,8 @@ c_compile_expr_t
                 .res  = (c_value_t){0},
             };
         }
-        code                     = res.code;
-        c_type_t const *res_type = res.res.c_type->data;
+        code                      = res.code;
+        c_type1_t const *res_type = res.res.c_type->data;
 
         // Assert that it's actually a writable lvalue.
         if (!c_prim_is_scalar(res_type->primitive)) {
@@ -2234,7 +2235,7 @@ c_compile_expr_t
         }
 
         // Save value for later use.
-        ir_prim_t    ir_prim    = c_type_to_ir_type(ctx, res.res.c_type->data);
+        ir_prim_t    ir_prim    = c_type1_to_ir_type(ctx, res.res.c_type->data);
         ir_operand_t read_value = c_value_read(ctx, code, &res.res);
         ir_var_t    *oldvar     = ir_var_create(code->func, ir_prim, NULL);
         ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(oldvar), IR_OP1_mov, read_value);
@@ -2242,7 +2243,7 @@ c_compile_expr_t
         // Determine increment, which is 1 for non-pointer types.
         uint64_t increment = 1, dummy;
         if (c_prim_is_ptr(res_type->primitive)) {
-            if (!c_type_get_size(ctx, res_type->inner->data, &increment, &dummy)) {
+            if (!c_type1_get_size(ctx, res_type->inner->data, &increment, &dummy)) {
                 c_value_destroy(res.res);
                 return (c_compile_expr_t){
                     .code = code,
@@ -2252,7 +2253,7 @@ c_compile_expr_t
         }
 
         // Add or subtract the increment.
-        ir_var_t *tmpvar = ir_var_create(code->func, c_type_to_ir_type(ctx, res_type), NULL);
+        ir_var_t *tmpvar = ir_var_create(code->func, c_type1_to_ir_type(ctx, res_type), NULL);
         ir_add_expr2(
             IR_APPEND(code),
             IR_RETVAL_VAR(tmpvar),
@@ -2455,12 +2456,12 @@ ir_code_t *
             return code;
         }
 
-        c_value_t       retval  = expr.res;
-        c_type_t const *rettype = retval.c_type->data;
+        c_value_t        retval  = expr.res;
+        c_type1_t const *rettype = retval.c_type->data;
 
         if (rettype->primitive == C_COMP_STRUCT || rettype->primitive == C_COMP_UNION) {
             uint64_t size, align;
-            if (!c_type_get_size(ctx, rettype, &size, &align)) {
+            if (!c_type1_get_size(ctx, rettype, &size, &align)) {
                 UNREACHABLE();
             }
             ir_frame_t *frame = ir_frame_create(code->func, size, align, NULL);
@@ -2489,24 +2490,24 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
         rc_delete(func_type_rc);
         return NULL;
     }
-    c_type_t const *func_type = func_type_rc->data;
+    c_type1_t const *func_type = func_type_rc->data;
 
     // Create function and scope.
     ir_func_t *func  = ir_func_create(name->strval, NULL, func_type->func.args_len);
     c_scope_t  scope = c_scope_create(&ctx->global_scope);
 
     // Set return type.
-    c_type_t const *rettype = func_type->func.return_type->data;
+    c_type1_t const *rettype = func_type->func.return_type->data;
     if (rettype->primitive == C_PRIM_VOID) {
         func->rettype.type = IR_FUNCRET_NONE;
     } else if (rettype->primitive == C_COMP_STRUCT || rettype->primitive == C_COMP_UNION) {
         func->rettype.type = IR_FUNCRET_STRUCT;
-        if (!c_type_get_size(ctx, rettype, &func->rettype.struct_type.size, &func->rettype.struct_type.align)) {
+        if (!c_type1_get_size(ctx, rettype, &func->rettype.struct_type.size, &func->rettype.struct_type.align)) {
             UNREACHABLE();
         }
     } else {
         func->rettype.type      = IR_FUNCRET_PRIM;
-        func->rettype.prim_type = c_type_to_ir_type(ctx, rettype);
+        func->rettype.prim_type = c_type1_to_ir_type(ctx, rettype);
     }
 
     // Bring parameters into scope.
@@ -2533,7 +2534,7 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
                     break;
                 case C_VAR_STORAGE_FRAME: {
                     uint64_t size, align;
-                    if (!c_type_get_size(ctx, var->type->data, &size, &align)) {
+                    if (!c_type1_get_size(ctx, var->type->data, &size, &align)) {
                         UNREACHABLE();
                     }
                     func->args[i].arg_type     = IR_ARG_TYPE_STRUCT;
@@ -2543,7 +2544,7 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
                 case C_VAR_STORAGE_ENUM_VARIANT: UNREACHABLE();
             }
         } else {
-            c_type_t const *arg_type = func_type->func.args[i]->data;
+            c_type1_t const *arg_type = func_type->func.args[i]->data;
             switch (arg_type->primitive) {
                 case C_PRIM_BOOL:
                 case C_PRIM_CHAR:
@@ -2572,7 +2573,7 @@ ir_func_t *c_compile_func_def(c_compiler_t *ctx, token_t const *def, c_prepass_t
                 case C_COMP_STRUCT:
                 case C_COMP_UNION: {
                     uint64_t size, align;
-                    if (!c_type_get_size(ctx, arg_type, &size, &align)) {
+                    if (!c_type1_get_size(ctx, arg_type, &size, &align)) {
                         UNREACHABLE();
                     }
                     func->args[i].arg_type     = IR_ARG_TYPE_STRUCT;
@@ -2687,7 +2688,7 @@ ir_code_t *
 
 
 // Explain a C type.
-static void c_type_explain_impl(c_type_t const *type, FILE *to) {
+static void c_type_explain_impl(c_type1_t const *type, FILE *to) {
 start:
     if (type->primitive == C_COMP_FUNCTION) {
         fputs("function(", to);
@@ -2698,7 +2699,7 @@ start:
             c_type_explain_impl(type->func.args[i]->data, to);
         }
         fputs(") returning ", to);
-        type = (c_type_t *)type->func.return_type->data;
+        type = (c_type1_t *)type->func.return_type->data;
         goto start;
     } else if (type->primitive == C_COMP_ARRAY) {
         if (type->length < 0) {
@@ -2706,7 +2707,7 @@ start:
         } else {
             fprintf(to, "array (length %" PRId64 ") of ", type->length);
         }
-        type = (c_type_t *)type->inner->data;
+        type = (c_type1_t *)type->inner->data;
         goto start;
     } else if (type->primitive == C_COMP_POINTER) {
         if (type->is_atomic) {
@@ -2722,7 +2723,7 @@ start:
             fputs("restrict ", to);
         }
         fputs("pointer to ", to);
-        type = (c_type_t *)type->inner->data;
+        type = (c_type1_t *)type->inner->data;
         goto start;
     }
 
@@ -2746,13 +2747,13 @@ start:
         case C_PRIM_LDOUBLE: fputs("long double", to); break;
         case C_PRIM_VOID: fputs("void", to); break;
         case C_COMP_STRUCT:
-            fprintf(to, "struct %s", ((c_comp_t const *)type->comp->data)->name ?: "<anonymous>");
+            fprintf(to, "struct %s", ((c_comp1_t const *)type->comp->data)->name ?: "<anonymous>");
             goto print_members;
         case C_COMP_UNION:
-            fprintf(to, "union %s", ((c_comp_t const *)type->comp->data)->name ?: "<anonymous>");
+            fprintf(to, "union %s", ((c_comp1_t const *)type->comp->data)->name ?: "<anonymous>");
             goto print_members;
         print_members: {
-            c_comp_t const *comp = type->comp->data;
+            c_comp1_t const *comp = type->comp->data;
             if (comp->align != 0) {
                 fputs(" { ", to);
                 for (size_t i = 0; i < comp->fields.len; i++) {
@@ -2767,7 +2768,7 @@ start:
                 fputs(" }", to);
             }
         } break;
-        case C_COMP_ENUM: fprintf(to, "enum %s", ((c_comp_t const *)type->comp->data)->name ?: "<anonymous>"); break;
+        case C_COMP_ENUM: fprintf(to, "enum %s", ((c_comp1_t const *)type->comp->data)->name ?: "<anonymous>"); break;
         default: break;
     }
     if (type->is_const) {
@@ -2779,7 +2780,7 @@ start:
 }
 
 // Explain a C type.
-void c_type_explain(c_type_t const *type, FILE *to) {
+void c_type_explain(c_type1_t const *type, FILE *to) {
     c_type_explain_impl(type, to);
     fputc('\n', to);
 }

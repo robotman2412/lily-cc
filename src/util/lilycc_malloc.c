@@ -99,6 +99,9 @@ void *lilycc_realloc(void *ptr, size_t size) {
 
 // Strong stdup; abort if out of memory.
 char *lilycc_strdup(char const *str) {
+    if (!str) {
+        return NULL;
+    }
     char *mem = strdup(str);
     if (!mem) {
         size_t size = strlen(str) + 1;

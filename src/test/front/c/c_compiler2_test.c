@@ -9,7 +9,7 @@
 #include "c_ir.h"
 #include "c_parser2.h"
 #include "c_std.h"
-#include "c_types.h"
+#include "c_types1.h"
 #include "compiler.h"
 #include "list.h"
 #include "testcase.h"

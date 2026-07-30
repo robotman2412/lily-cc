@@ -5,8 +5,9 @@
 
 #include "c_ir.h"
 
+#include "c_prim.h"
+#include "c_types.h"
 #include "lilycc_malloc.h"
-#include "refcount.h"
 #include "vec.h"
 
 #include <stdio.h>
@@ -14,12 +15,13 @@
 
 
 static inline void cir_expr_common_delete(cir_expr_common_t common) {
-    rc_delete(common.type_rc);
+    c_type_delete(common.type);
 }
 
 cir_expr_common_t cir_expr_common_clone(cir_expr_common_t const *common) {
-    rc_share(common->type_rc);
-    return *common;
+    cir_expr_common_t new = *common;
+    new.type              = c_type_clone(common->type);
+    return new;
 }
 
 
@@ -36,31 +38,31 @@ void cir_const_delete(cir_const_t *node) {
 }
 
 
-cir_comp_const_t *cir_comp_const_create(pos_t pos, rc_t type_rc, uint8_t *blob) {
+cir_comp_const_t *cir_comp_const_create(pos_t pos, c_type_t type, uint8_t *blob) {
     cir_comp_const_t *node = lilycc_malloc(sizeof(cir_comp_const_t));
     node->pos              = pos;
-    node->type_rc          = type_rc;
+    node->type             = type;
     node->blob             = blob;
     return node;
 }
 
 void cir_comp_const_delete(cir_comp_const_t *node) {
-    rc_delete(node->type_rc);
+    c_type_delete(node->type);
     lilycc_free(node->blob);
     lilycc_free(node);
 }
 
 
-cir_comp_value_t *cir_comp_value_create(pos_t pos, rc_t type_rc, vec_cir_comp_store_t stores) {
+cir_comp_value_t *cir_comp_value_create(pos_t pos, c_type_t type, vec_cir_comp_store_t stores) {
     cir_comp_value_t *node = lilycc_malloc(sizeof(cir_comp_value_t));
     node->pos              = pos;
-    node->type_rc          = type_rc;
+    node->type             = type;
     node->stores           = stores;
     return node;
 }
 
 void cir_comp_value_delete(cir_comp_value_t *node) {
-    rc_delete(node->type_rc);
+    c_type_delete(node->type);
     for (size_t i = 0; i < node->stores.len; i++) {
         cir_expr_delete(node->stores.arr[i].value);
     }
@@ -85,7 +87,7 @@ cir_value_t *cir_value_create_scope_val(cir_scope_val_t const *scope_val) {
                 .pos          = scope_val->decl->pos,
                 .is_lvalue    = true,
                 .allow_addrof = true,
-                .type_rc      = rc_share(scope_val->decl->type_rc),
+                .type         = c_type_clone(scope_val->decl->type),
             };
             break;
         case CIR_SCOPE_VAL_FUNC:
@@ -93,7 +95,7 @@ cir_value_t *cir_value_create_scope_val(cir_scope_val_t const *scope_val) {
                 .pos          = scope_val->func->pos,
                 .is_lvalue    = true,
                 .allow_addrof = true,
-                .type_rc      = rc_share(scope_val->func->type_rc),
+                .type         = c_type_clone(scope_val->func->type),
             };
             break;
         case CIR_SCOPE_VAL_ENUM_CONST:
@@ -101,10 +103,8 @@ cir_value_t *cir_value_create_scope_val(cir_scope_val_t const *scope_val) {
                 .pos          = scope_val->enum_const->pos,
                 .is_lvalue    = false,
                 .allow_addrof = false,
-                .type_rc      = NULL, // TODO.
+                .type         = C_TYPE_FROM_PRIM(C_PRIM_SINT), // TODO: Packed enums.
             };
-            fprintf(stderr, "TODO: Enum constant values\n");
-            abort();
             break;
     }
     node->tag       = CIR_VALUE_TMPVAL;
@@ -180,7 +180,7 @@ cir_cast_t *cir_cast_create(cir_expr_common_t common, cir_expr_t *value) {
 
 void cir_cast_delete(cir_cast_t *node) {
     cir_expr_common_delete(node->common);
-    rc_delete(node->type_rc);
+    c_type_delete(node->type);
     cir_expr_delete(node->value);
     lilycc_free(node);
 }
@@ -338,7 +338,7 @@ cir_expr_t *cir_expr_create_stmt(cir_stmt_t *stmt) {
     cir_expr_t *node = lilycc_malloc(sizeof(cir_expr_t));
     node->common     = (cir_expr_common_t){
         .pos          = stmt->pos,
-        .type_rc      = NULL, // TODO.
+        .type         = C_TYPE_FROM_PRIM(C_PRIM_VOID),
         .is_lvalue    = false,
         .allow_addrof = false,
     };
@@ -553,17 +553,17 @@ void cir_stmt_delete(cir_stmt_t *node) {
 }
 
 
-cir_decl_t *cir_decl_create(pos_t pos, rc_t type_rc, char *name, cir_expr_t *init) {
+cir_decl_t *cir_decl_create(pos_t pos, c_type_t type, char *name, cir_expr_t *init) {
     cir_decl_t *node = lilycc_malloc(sizeof(cir_decl_t));
     node->pos        = pos;
-    node->type_rc    = type_rc;
+    node->type       = type;
     node->name       = name;
     node->init       = init;
     return node;
 }
 
 void cir_decl_delete(cir_decl_t *node) {
-    rc_delete(node->type_rc);
+    c_type_delete(node->type);
     lilycc_free(node->name);
     if (node->init) {
         cir_expr_delete(node->init);
@@ -572,10 +572,10 @@ void cir_decl_delete(cir_decl_t *node) {
 }
 
 
-cir_func_t *cir_func_create(pos_t pos, rc_t type_rc, char *name, vec_cstr_t param_names, cir_stmt_t *body) {
+cir_func_t *cir_func_create(pos_t pos, c_type_t type, char *name, vec_cstr_t param_names, cir_stmt_t *body) {
     cir_func_t *node  = lilycc_malloc(sizeof(cir_func_t));
     node->pos         = pos;
-    node->type_rc     = type_rc;
+    node->type        = type;
     node->name        = name;
     node->param_names = param_names;
     node->body        = body;
@@ -583,7 +583,7 @@ cir_func_t *cir_func_create(pos_t pos, rc_t type_rc, char *name, vec_cstr_t para
 }
 
 void cir_func_delete(cir_func_t *node) {
-    rc_delete(node->type_rc);
+    c_type_delete(node->type);
     lilycc_free(node->name);
     for (size_t i = 0; i < node->param_names.len; i++) {
         lilycc_free(node->param_names.arr[i]);
@@ -649,19 +649,17 @@ cir_scope_t *cir_scope_create(cir_scope_kind_t kind, cir_scope_t *parent) {
 }
 
 void cir_scope_delete(cir_scope_t *scope) {
-    // Free the owned value-entry wrappers.
     map_foreach(ent, &scope->values) {
         lilycc_free(ent->value);
     }
     map_clear(&scope->values);
-    // Release the typedef rc_t shares.
     map_foreach(ent, &scope->typedefs) {
-        rc_delete((rc_t)ent->value);
+        c_type_delete(*(c_type_t const *)ent->value);
+        lilycc_free(ent->value);
     }
     map_clear(&scope->typedefs);
-    // Release the tag rc_t shares.
     map_foreach(ent, &scope->tags) {
-        rc_delete((rc_t)ent->value);
+        c_comp_type_delete(ent->value);
     }
     map_clear(&scope->tags);
     // Labels are non-owning; just drop the map.
@@ -704,21 +702,23 @@ bool cir_scope_add_enum_const(cir_scope_t *scope, char const *name, cir_const_t 
     );
 }
 
-bool cir_scope_add_typedef(cir_scope_t *scope, char const *name, rc_t type_rc) {
+bool cir_scope_add_typedef(cir_scope_t *scope, char const *name, c_type_t type) {
     if (map_get(&scope->typedefs, name)) {
-        rc_delete(type_rc);
+        c_type_delete(type);
         return false;
     }
-    map_set(&scope->typedefs, name, type_rc);
+    c_type_t *box = lilycc_malloc(sizeof(c_type_t));
+    *box          = type;
+    map_set(&scope->typedefs, name, box);
     return true;
 }
 
-bool cir_scope_add_tag(cir_scope_t *scope, char const *name, rc_t type_rc) {
+bool cir_scope_add_tag(cir_scope_t *scope, char const *name, c_comp_type_t *type) {
     if (map_get(&scope->tags, name)) {
-        rc_delete(type_rc);
+        c_comp_type_delete(type);
         return false;
     }
-    map_set(&scope->tags, name, type_rc);
+    map_set(&scope->tags, name, type);
     return true;
 }
 
@@ -741,21 +741,21 @@ cir_scope_val_t *cir_scope_lookup_value(cir_scope_t const *scope, char const *na
     return NULL;
 }
 
-rc_t cir_scope_lookup_typedef(cir_scope_t const *scope, char const *name) {
+c_type_t const *cir_scope_lookup_typedef(cir_scope_t const *scope, char const *name) {
     for (; scope; scope = scope->parent) {
-        rc_t type_rc = map_get(&scope->typedefs, name);
-        if (type_rc) {
-            return type_rc;
+        c_type_t const *type = map_get(&scope->typedefs, name);
+        if (type) {
+            return type;
         }
     }
     return NULL;
 }
 
-rc_t cir_scope_lookup_tag(cir_scope_t const *scope, char const *name) {
+c_comp_type_t *cir_scope_lookup_tag(cir_scope_t const *scope, char const *name) {
     for (; scope; scope = scope->parent) {
-        rc_t type_rc = map_get(&scope->tags, name);
-        if (type_rc) {
-            return type_rc;
+        c_comp_type_t *type = map_get(&scope->tags, name);
+        if (type) {
+            return type;
         }
     }
     return NULL;

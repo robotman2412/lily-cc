@@ -260,6 +260,9 @@ static void c_preproc_builtin_macros(c_preproc_t *pre) {
     // __has_attribute
     // c_preproc_fmt_builtin_macro(pre, "__has_attribute=__has_attribute");
 
+    // __LILYC__
+    c_preproc_fmt_builtin_macro(pre, "__LILYC__=1");
+
     // __COUNTER__
     c_macro_t *counter_macro  = c_proc_macro_create(false, c_proc_macro_counter, NULL);
     counter_macro->is_builtin = true;

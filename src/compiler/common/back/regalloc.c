@@ -181,25 +181,6 @@ ra_nodes_t ra_liveness(ir_func_t const *func) {
     size_t      dirty_len = lt_nodes_len;
     lt_node_t **dirty     = lilycc_calloc(lt_nodes_len, sizeof(lt_node_t *));
     for (size_t i = 0; i < lt_nodes_len; i++) {
-        // printf("%%%s insn @ %p:\n", lt_nodes[i].insn->code->name, lt_nodes[i].insn);
-        // printf("  in:");
-        // set_foreach(ir_var_t, var, &lt_nodes[i].in) {
-        //     printf(" %%%s", var->name);
-        // }
-        // printf("\n  out:");
-        // set_foreach(ir_var_t, var, &lt_nodes[i].out) {
-        //     printf(" %%%s", var->name);
-        // }
-        // printf("\n  use:");
-        // set_foreach(ir_var_t, var, &lt_nodes[i].use) {
-        //     printf(" %%%s", var->name);
-        // }
-        // printf("\n  def:");
-        // set_foreach(ir_var_t, var, &lt_nodes[i].def) {
-        //     printf(" %%%s", var->name);
-        // }
-        // printf("\n");
-
         dirty[i]          = &lt_nodes[i];
         lt_nodes[i].dirty = true;
     }
@@ -284,6 +265,9 @@ ra_nodes_t ra_liveness(ir_func_t const *func) {
         set_clear(&node->def);
         lilycc_free(node->pred);
     }
+    map_clear(&ra_regs);
+    map_clear(&insn_to_node);
+    lilycc_free(lt_nodes);
     lilycc_free(dirty);
 
     return (ra_nodes_t){

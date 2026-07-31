@@ -438,17 +438,14 @@ needs_clamp:;
     if (ir_prim_is_signed(orig->orig_prim_type)) {
         if (cmp128s(prim_min, orig->range_min) <= 0 && cmp128s(prim_max, orig->range_max) >= 0) {
             // Already in range.
-            printf("%%%s: Already in range\n", orig->name);
             return;
         }
     } else {
         if (cmp128u(prim_min, orig->range_min) <= 0 && cmp128u(prim_max, orig->range_max) >= 0) {
             // Already in range.
-            printf("%%%s: Already in range\n", orig->name);
             return;
         }
     }
-    printf("%%%s: Clamping now\n", orig->name);
 
     int       bits  = ir_prim_bits(orig->orig_prim_type);
     ir_var_t *dirty = ir_var_create(orig->func, orig->prim_type, NULL);

@@ -125,29 +125,13 @@ static void compile2(char const *path) {
     backend_profile_t *profile = backend->create_profile();
     backend->init_codegen(profile);
 
-    cir_scope_t *global_scope = cir_scope_create(CIR_SCOPE_GLOBAL, NULL);
-
     printf("// Compiling %s\n", path);
 
     // While not EOF, keep parsing and compiling stuff.
-    while (tkn_peek(tctx).type != TOKENTYPE_EOF) {
-        c_ast_def_t *def = c_parse2_def(pctx, true);
-        switch (def->tag) {
-            case C_AST_TAG_DEFS: {
-                // TODO.
-            } break;
-            case C_AST_TAG_DEF_FUNC: {
-                cir_func_t *func = c_compile2_func(cc, global_scope, def->def_func);
-                cir_func_delete(func);
-            } break;
-            case C_AST_TAG_DEF_STATIC_ASSERT: {
-                cir_unit_t *unit = c_compile2_static_assert(cc, global_scope, def->def_static_assert);
-                cir_unit_delete(unit);
-            } break;
-            case C_AST_TAG_DEF_GARBAGE: break;
-        }
-        c_ast_def_delete(def);
-    }
+    c_ast_def_list_t *ast = c_parse2(pctx);
+    cir_trans_unit_t *tu  = c_compile2(cc, ast);
+    c_ast_def_list_delete(ast);
+    cir_trans_unit_delete(tu);
 
     // Print diagnostics.
     if (cctx->diagnostics.len) {

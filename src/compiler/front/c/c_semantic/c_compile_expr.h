@@ -9,7 +9,6 @@
 #include "c_ast.h"
 #include "c_compiler.h"
 #include "c_ir.h"
-#include "c_types1.h"
 
 
 
@@ -43,6 +42,6 @@ cir_expr_t *
 // Compile an expression list.
 cir_expr_t  *c_compile2_expr_exprs(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_list_t const *exprs);
 // Compile a compound literal/initializer given a known target type.
-cir_value_t *c_compile2_compinit(c_compiler_t *cc, cir_scope_t *scope, c_ast_init_list_t const *init);
+cir_value_t *c_compile2_compinit(c_compiler_t *cc, cir_scope_t *scope, c_type_t type, c_ast_init_list_t const *init);
 // Helper that creates a synthetic integer constant.
 cir_expr_t  *c_compile2_synth_iconst(c_compiler_t *cc, pos_t pos, c_prim_t prim, i128_t value);

@@ -46,14 +46,14 @@
 
 
 #define C_AST_STRUCT_DEF_expr_ternary(C_AST_STRUCT_DEF, C_AST_STRUCT_FIELD, C_AST_STRUCT_CHILD) \
-/* Infix expression (e.g. `1 + 2`). */ \
+/* Ternary expression (e.g. `a < b ? a : b`). */ \
 C_AST_STRUCT_DEF(expr_ternary, \
     /* Condition. */ \
     C_AST_STRUCT_CHILD(expr_ternary, expr, cond) \
-    /* Left-hand side. */ \
-    C_AST_STRUCT_CHILD(expr_ternary, expr, lhs) \
+    /* Left-hand side (optional). */ \
+    C_AST_STRUCT_CHILD(expr_ternary, expr, if_expr) \
     /* Right-hand side. */ \
-    C_AST_STRUCT_CHILD(expr_ternary, expr, rhs) \
+    C_AST_STRUCT_CHILD(expr_ternary, expr, else_expr) \
 )
 C_AST_META_STRUCT_DEF(expr_ternary)
 
@@ -446,7 +446,7 @@ C_AST_STRUCT_DEF(stmt_if, \
     /* Condition. */ \
     C_AST_STRUCT_CHILD(stmt_if, expr, cond) \
     /* If body. */ \
-    C_AST_STRUCT_CHILD(stmt_if, stmt, body) \
+    C_AST_STRUCT_CHILD(stmt_if, stmt, if_body) \
     /* Else body (nullable). */ \
     C_AST_STRUCT_CHILD(stmt_if, stmt, else_body) \
 )

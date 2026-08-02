@@ -659,16 +659,16 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
             is_expr(4) && is_punct(3, C_TKN_QUESTION) && is_expr(2) && is_punct(1, C_TKN_COLON) && is_expr(0)
             && oper_precedence(stack.arr[stack.len - 2].token, true) >= oper_precedence(peek, false)
         ) { // Reduce ternary.
-            c_ast_expr_t *rhs      = pop_expr();
-            token_t       colon    = pop_token();
-            c_ast_expr_t *lhs      = pop_expr();
-            token_t       question = pop_token();
-            c_ast_expr_t *cond     = pop_expr();
+            c_ast_expr_t *else_expr = pop_expr();
+            token_t       colon     = pop_token();
+            c_ast_expr_t *if_expr   = is_expr(0) ? pop_expr() : NULL;
+            token_t       question  = pop_token();
+            c_ast_expr_t *cond      = pop_expr();
             tkn_delete(colon);
             tkn_delete(question);
-            push_expr(
-                c_ast_expr_create_ternary(c_ast_expr_ternary_create(pos_including(cond->pos, rhs->pos), cond, lhs, rhs))
-            );
+            push_expr(c_ast_expr_create_ternary(
+                c_ast_expr_ternary_create(pos_including(cond->pos, else_expr->pos), cond, if_expr, else_expr)
+            ));
 
         } else if (is_token(0, TOKENTYPE_ICONST) || is_token(0, TOKENTYPE_CCONST)) { // Reduce iconst / cconst to expr.
             token_t  tkn  = pop_token();

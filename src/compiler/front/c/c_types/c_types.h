@@ -216,12 +216,12 @@ c_type_t           c_type_clone_pointer(c_type_ref_t type);
 // Get the size and alignment of a type, or 0 if it is incomplete.
 bool               c_type_get_size(c_compiler_t *cc, c_type_ref_t type, uint64_t *size_out, uint64_t *align_out);
 // Whether two types are compatible.
-bool               c_type_is_compatible(c_compiler_t *cc, c_type_ref_t lhs, c_type_ref_t rhs);
+bool               c_type_is_compatible(c_type_ref_t lhs, c_type_ref_t rhs);
 // Whether type `rhs` can be cast to type `lhs`.
-bool               c_type_is_castable(c_compiler_t *cc, c_type_ref_t lhs, c_type_ref_t rhs);
+bool               c_type_is_castable(c_type_ref_t lhs, c_type_ref_t rhs);
 // Determine whether two types are the same.
 // If `strict`, then modifiers like `_Atomic` and `volatile` also apply.
-bool               c_type_is_identical(c_compiler_t *cc, c_type_ref_t lhs, c_type_ref_t rhs, bool strict);
+bool               c_type_is_identical(c_type_ref_t lhs, c_type_ref_t rhs, bool strict);
 // Whether a type is a pointer or array type.
 static inline bool c_type_is_pointer(c_type_ref_t type) {
     return type.prim == C_COMP_POINTER || type.prim == C_COMP_ARRAY;

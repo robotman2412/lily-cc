@@ -7,6 +7,8 @@
 
 #include "arith128.h"
 #include "c_ast.h"
+#include "c_compile_expr.h"
+#include "c_compile_stmt.h"
 #include "c_ir.h"
 #include "c_prim.h"
 #include "c_tokenizer.h"
@@ -16,11 +18,11 @@
 #include "ir_interpreter.h"
 #include "ir_types.h"
 #include "lilycc_malloc.h"
-#include "refcount.h"
 #include "unreachable.h"
 #include "vec.h"
 
 #include <assert.h>
+#include <inttypes.h>
 #include <stdio.h>
 
 
@@ -28,37 +30,141 @@
 // Compile one entire C translation unit into C IR.
 // Returns `NULL` if a a semantic error occurred (`-Werror` excluded).
 cir_trans_unit_t *c_compile2(c_compiler_t *cc, c_ast_def_list_t const *ast) {
-    fprintf(stderr, "TODO: c_compile2\n");
-    abort();
+    cir_scope_t   *global_scope = cir_scope_create(CIR_SCOPE_GLOBAL, NULL);
+    vec_cir_unit_t units        = {0};
+
+    for (size_t i = 0; i < ast->items.len; i++) {
+        c_ast_def_t const *def = ast->items.arr[i];
+        switch (def->tag) {
+            case C_AST_TAG_DEFS: {
+                c_type_t spec_qual_type = c_compile2_spec_qual_list(cc, def->def_defs->spec_qual, global_scope);
+                if (!c_type_is_valid(spec_qual_type)) {
+                    break;
+                }
+                for (size_t i = 0; i < def->def_defs->decls->items.len; i++) {
+                    c_ast_init_decl_t const *decl = def->def_defs->decls->items.arr[i];
+                    c_ast_ident_t const     *name;
+                    c_type_t type = c_compile2_type(cc, global_scope, c_type_clone(spec_qual_type), decl->decl, &name);
+                    if (!c_type_is_valid(type)) {
+                        continue;
+                    }
+                    if (spec_qual_type.qual.s_typedef) {
+                        if (decl->init) {
+                            cctx_diagnostic(cc->cctx, decl->init->pos, DIAG_ERR, "Cannot have initializer for typedef");
+                        }
+                        cir_scope_add_typedef(cc->cctx, global_scope, name->name, name->pos, type);
+                    } else {
+                        cir_unit_t *unit = c_compile2_decl(cc, global_scope, c_type_clone(spec_qual_type), decl);
+                        if (unit) {
+                            vec_push(&units, unit);
+                        }
+                    }
+                }
+                c_type_delete(spec_qual_type);
+            } break;
+
+            case C_AST_TAG_DEF_FUNC: {
+                cir_unit_t *unit = c_compile2_func(cc, global_scope, def->def_func);
+                if (unit) {
+                    vec_push(&units, unit);
+                }
+            } break;
+
+            case C_AST_TAG_DEF_STATIC_ASSERT: c_compile2_static_assert(cc, global_scope, def->def_static_assert); break;
+
+            case C_AST_TAG_DEF_GARBAGE: break;
+        }
+    }
+
+    return cir_trans_unit_create(global_scope, units);
 }
 
 
 // Compile a static assertion unit.
-cir_unit_t *c_compile2_static_assert(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_static_assert_t *s_assert) {
+void c_compile2_static_assert(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_static_assert_t *s_assert) {
     fprintf(stderr, "TODO: c_compile2_static_assert\n");
     abort();
 }
 
 // Compile a declaration unit.
 // Produces a function definition or variable definition depending on the type encoded.
-cir_unit_t *c_compile2_decl(c_compiler_t *cc, cir_scope_t *scope, rc_t spec_qual_type, c_ast_decl_t const *decl) {
-    fprintf(stderr, "TODO: c_compile2_decl\n");
-    abort();
+cir_unit_t *
+    c_compile2_decl(c_compiler_t *cc, cir_scope_t *scope, c_type_t spec_qual_type, c_ast_init_decl_t const *ast) {
+    // Compile decl type.
+    c_ast_ident_t const *name;
+    c_type_t             type = c_compile2_type(cc, scope, spec_qual_type, ast->decl, &name);
+    if (!c_type_is_valid(type)) {
+        return NULL;
+    }
+    assert(name != NULL);
+
+    // Compile initializer, if present.
+    cir_expr_t *init = NULL;
+    if (ast->init) {
+        if (ast->init->tag == C_AST_TAG_INITVAL_COMPOUND) {
+            cir_value_t *val = c_compile2_compinit(cc, scope, c_type_clone(type), ast->init->initval_compound);
+            if (!val) {
+                c_type_delete(type);
+                return NULL;
+            }
+            init = cir_expr_create_value(val);
+        } else {
+            assert(ast->init->tag == C_AST_TAG_INITVAL_EXPR);
+            init = c_compile2_expr(cc, scope, ast->init->initval_expr);
+            if (!init) {
+                c_type_delete(type);
+                return NULL;
+            }
+        }
+    }
+
+    cir_decl_t *decl = cir_decl_create(name->pos, type, lilycc_strdup(name->name), init);
+
+    if (!cir_scope_add_decl(cc->cctx, scope, decl)) {
+        cir_decl_delete(decl);
+        return NULL;
+    }
+
+    return cir_unit_create_decl(decl);
 }
 
 // Compile a function definition unit.
-cir_func_t *c_compile2_func(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_func_t const *def) {
-    fprintf(stderr, "TODO: c_compile2_func\n");
-    abort();
+cir_unit_t *c_compile2_func(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_func_t const *def) {
+    bool errors;
+
+    // Compile decl type.
+    c_type_t             type = c_compile2_spec_qual_list(cc, def->spec_qual, scope);
+    c_ast_ident_t const *name = NULL;
+    if (c_type_is_valid(type)) {
+        type   = c_compile2_type(cc, scope, type, def->declarator, &name);
+        errors = !c_type_is_valid(type);
+    } else {
+        errors = true;
+    }
+
+    cir_stmt_t *body = c_compile2_stmt_stmts(cc, scope, def->body);
+    if (!body) {
+        errors = true;
+    }
+
+    if (errors) {
+        c_type_delete(type);
+        if (body) {
+            cir_stmt_delete(body);
+        }
+        return NULL;
+    }
+
+    return cir_unit_create_func(cir_func_create(name->pos, type, lilycc_strdup(name->name), body));
 }
 
 
 
 // Compile the body of an enum definition.
 static void
-    c_compile2_enum_body(c_compiler_t *ctx, c_ast_enum_spec_t const *spec, cir_scope_t *scope, c_enum_type_t *comp) {
+    c_compile2_enum_body(c_compiler_t *cc, c_ast_enum_spec_t const *spec, cir_scope_t *scope, c_enum_type_t *comp) {
     vec_c_ast_enumvar_t const *body    = &spec->definition->items;
-    ir_prim_t const            ir_prim = ctx->options.int32 ? IR_PRIM_s32 : IR_PRIM_s16;
+    ir_prim_t const            ir_prim = cc->options.int32 ? IR_PRIM_s32 : IR_PRIM_s16;
 
     // TODO: Packed enums support.
     comp->prim = C_PRIM_SINT;
@@ -72,12 +178,12 @@ static void
             abort();
         }
         if (map_get(&scope->values, name->name)) {
-            cctx_diagnostic(ctx->cctx, name->pos, DIAG_ERR, "Redefinition of %s", name->name);
+            cctx_diagnostic(cc->cctx, name->pos, DIAG_ERR, "Redefinition of %s", name->name);
             continue;
         } else {
             ir_const_t   ir_const = ir_cast(ir_prim, IR_CONST_S32(cur));
             cir_const_t *iconst   = cir_const_create(name->pos, C_PRIM_SINT, ir_const);
-            cir_scope_add_enum_const(scope, name->name, iconst);
+            cir_scope_add_enum_const(cc->cctx, scope, name->name, iconst);
 
             c_enumvar_t enumvar;
             enumvar.name    = lilycc_strdup(name->name);
@@ -119,8 +225,14 @@ static bool c_compile2_struct_field(
         if (comp->align < align) {
             comp->align = align;
         }
-        if (comp->size > target_size_max - size) {
-            cctx_diagnostic(cc->cctx, pos, DIAG_ERR, "Type size would exceed SIZE_MAX due to this field");
+        if (comp->size > target_size_max / 2 - size) {
+            cctx_diagnostic(
+                cc->cctx,
+                pos,
+                DIAG_ERR,
+                "Type size would exceed the size limit (%" PRIu64 ") due to this field",
+                target_size_max / 2
+            );
             c_type_delete(type);
             lilycc_free(field.name);
             return true;
@@ -135,11 +247,11 @@ static bool c_compile2_struct_field(
 
 // Compile the body of a struct/union definition.
 static void c_compile2_struct_body(
-    c_compiler_t *ctx, c_ast_struct_spec_t const *spec, cir_scope_t *scope, c_struct_type_t *comp
+    c_compiler_t *cc, c_ast_struct_spec_t const *spec, cir_scope_t *scope, c_struct_type_t *comp
 ) {
     vec_c_ast_def_t const *body = &spec->definition->items;
 
-    uint64_t target_size_max = c_target_size_max_64(ctx);
+    uint64_t target_size_max = c_target_size_max_64(cc);
 
     comp->size  = 0;
     comp->align = 1;
@@ -152,12 +264,12 @@ static void c_compile2_struct_body(
         c_ast_defs_t const          *def   = body->arr[i]->def_defs;
         vec_c_ast_init_decl_t const *decls = &def->decls->items;
 
-        c_type_opt_t inner = c_compile2_spec_qual_list(ctx, def->spec_qual, scope);
+        c_type_opt_t inner = c_compile2_spec_qual_list(cc, def->spec_qual, scope);
         if (!c_type_is_valid(inner)) {
             errors = true;
             continue;
         } else if (inner.qual.s_typedef) {
-            cctx_diagnostic(ctx->cctx, def->spec_qual->pos, DIAG_ERR, "typedef not allowed here");
+            cctx_diagnostic(cc->cctx, def->spec_qual->pos, DIAG_ERR, "typedef not allowed here");
             c_type_delete(inner);
             errors = true;
             continue;
@@ -168,20 +280,20 @@ static void c_compile2_struct_body(
             && inner.extra->comp_type->name == NULL
             && inner.extra->comp_type->refcount == 1 // Refcount check excludes typedef'd names.
         ) {
-            errors |= c_compile2_struct_field(ctx, comp, (pos_t){0}, NULL, inner, target_size_max);
+            errors |= c_compile2_struct_field(cc, comp, (pos_t){0}, NULL, inner, target_size_max);
 
         } else {
             // Normal field.
             for (size_t x = 0; x < decls->len; x++) {
                 c_ast_ident_t const *name_ast = NULL;
                 c_type_opt_t         field_type
-                    = c_compile2_type(ctx, scope, c_type_clone(inner), decls->arr[x]->decl, &name_ast);
+                    = c_compile2_type(cc, scope, c_type_clone(inner), decls->arr[x]->decl, &name_ast);
                 if (!c_type_is_valid(field_type)) {
                     errors = true;
                     continue;
                 }
                 errors |= c_compile2_struct_field(
-                    ctx,
+                    cc,
                     comp,
                     decls->arr[x]->decl->pos,
                     name_ast->name,
@@ -202,7 +314,7 @@ static void c_compile2_struct_body(
 }
 
 // Compile a C enum/struct/union specification.
-static c_comp_type_t *c_compile2_comp_spec(c_compiler_t *ctx, c_ast_spec_qual_t const *comp_spec, cir_scope_t *scope) {
+static c_comp_type_t *c_compile2_comp_spec(c_compiler_t *cc, c_ast_spec_qual_t const *comp_spec, cir_scope_t *scope) {
     // What tag type this specifier has.
     c_comp_type_tag_t    tag;
     c_ast_ident_t const *name;
@@ -225,7 +337,7 @@ static c_comp_type_t *c_compile2_comp_spec(c_compiler_t *ctx, c_ast_spec_qual_t 
         comp->name = name ? lilycc_strdup(name->name) : NULL;
         comp->tag  = tag;
         if (name) {
-            cir_scope_add_tag(scope, name->name, comp);
+            cir_scope_add_tag(cc->cctx, scope, comp);
             comp->refcount++;
         }
     }
@@ -238,7 +350,7 @@ static c_comp_type_t *c_compile2_comp_spec(c_compiler_t *ctx, c_ast_spec_qual_t 
             [C_COMP_TYPE_UNION]  = "a union",
         };
         cctx_diagnostic(
-            ctx->cctx,
+            cc->cctx,
             name->pos, // Non-NULL because it's impossible to get this error with anonymous structs
             DIAG_ERR,
             "Use of %s (which is %s) as %s",
@@ -254,12 +366,12 @@ static c_comp_type_t *c_compile2_comp_spec(c_compiler_t *ctx, c_ast_spec_qual_t 
     if (tag == C_COMP_TYPE_ENUM) {
         c_ast_enum_spec_t const *enum_spec = comp_spec->spec_qual_enum;
         if (enum_spec->definition) {
-            c_compile2_enum_body(ctx, enum_spec, scope, &comp->enum_type);
+            c_compile2_enum_body(cc, enum_spec, scope, &comp->enum_type);
         }
     } else {
         c_ast_struct_spec_t const *struct_spec = comp_spec->spec_qual_struct;
         if (struct_spec->definition) {
-            c_compile2_struct_body(ctx, struct_spec, scope, &comp->struct_type);
+            c_compile2_struct_body(cc, struct_spec, scope, &comp->struct_type);
         }
     }
 
@@ -268,7 +380,7 @@ static c_comp_type_t *c_compile2_comp_spec(c_compiler_t *ctx, c_ast_spec_qual_t 
 
 // Create a C type from a specifier-qualifer list.
 // Returns a refcount pointer of `c_type_t`.
-c_type_opt_t c_compile2_spec_qual_list(c_compiler_t *ctx, c_ast_spec_qual_list_t const *list, cir_scope_t *scope) {
+c_type_opt_t c_compile2_spec_qual_list(c_compiler_t *cc, c_ast_spec_qual_list_t const *list, cir_scope_t *scope) {
     // A typedef'd name.
     c_ast_ident_t const     *typedef_name = NULL;
     // An enum/struct/union spec.
@@ -327,8 +439,8 @@ c_type_opt_t c_compile2_spec_qual_list(c_compiler_t *ctx, c_ast_spec_qual_list_t
                     pos = comp->spec_qual_struct->keyw_pos;
                 }
             }
-            cctx_diagnostic(ctx->cctx, param->pos, DIAG_ERR, "Multiple types in specifier-qualifier list");
-            cctx_diagnostic(ctx->cctx, pos, DIAG_INFO, "Previous type in this list");
+            cctx_diagnostic(cc->cctx, param->pos, DIAG_ERR, "Multiple types in specifier-qualifier list");
+            cctx_diagnostic(cc->cctx, pos, DIAG_INFO, "Previous type in this list");
         } else if (param->tag == C_AST_TAG_SPEC_QUAL_ENUM || param->tag == C_AST_TAG_SPEC_QUAL_STRUCT) {
             comp = param;
         } else {
@@ -338,12 +450,12 @@ c_type_opt_t c_compile2_spec_qual_list(c_compiler_t *ctx, c_ast_spec_qual_list_t
     }
 
     if (has_signed && has_unsigned) {
-        cctx_diagnostic(ctx->cctx, list->pos, DIAG_ERR, "Type cannot be both signed and unsigned");
+        cctx_diagnostic(cc->cctx, list->pos, DIAG_ERR, "Type cannot be both signed and unsigned");
     }
 
     // C type parsing is messy, can't do much about that.
     if (comp) {
-        c_comp_type_t *inner = c_compile2_comp_spec(ctx, comp, scope);
+        c_comp_type_t *inner = c_compile2_comp_spec(cc, comp, scope);
         if (!inner) {
             return C_TYPE_INVALID;
         }
@@ -442,7 +554,7 @@ c_type_opt_t c_compile2_spec_qual_list(c_compiler_t *ctx, c_ast_spec_qual_list_t
 
     if (n_long || has_int || has_short || has_char || has_float || has_double || has_void || has_bool || has_unsigned
         || has_signed || has_int128) {
-        cctx_diagnostic(ctx->cctx, list->pos, DIAG_ERR, "Invalid combination of type specifiers");
+        cctx_diagnostic(cc->cctx, list->pos, DIAG_ERR, "Invalid combination of type specifiers");
     }
 
     return type;

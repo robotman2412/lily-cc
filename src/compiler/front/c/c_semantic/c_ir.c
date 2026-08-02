@@ -7,9 +7,12 @@
 
 #include "c_prim.h"
 #include "c_types.h"
+#include "compiler.h"
 #include "lilycc_malloc.h"
+#include "map.h"
 #include "vec.h"
 
+#include <assert.h>
 #include <stdio.h>
 
 
@@ -180,8 +183,28 @@ cir_cast_t *cir_cast_create(cir_expr_common_t common, cir_expr_t *value) {
 
 void cir_cast_delete(cir_cast_t *node) {
     cir_expr_common_delete(node->common);
-    c_type_delete(node->type);
     cir_expr_delete(node->value);
+    lilycc_free(node);
+}
+
+
+cir_ternary_t *
+    cir_ternary_create(cir_expr_common_t common, cir_expr_t *cond, cir_expr_t *if_expr, cir_expr_t *else_expr) {
+    cir_ternary_t *node = lilycc_malloc(sizeof(cir_ternary_t));
+    node->common        = common;
+    node->cond          = cond;
+    node->if_expr       = if_expr;
+    node->else_expr     = else_expr;
+    return node;
+}
+
+void cir_ternary_delete(cir_ternary_t *node) {
+    cir_expr_common_delete(node->common);
+    cir_expr_delete(node->cond);
+    if (node->if_expr) {
+        cir_expr_delete(node->if_expr);
+    }
+    cir_expr_delete(node->else_expr);
     lilycc_free(node);
 }
 
@@ -231,6 +254,20 @@ void cir_deref_delete(cir_deref_t *node) {
 }
 
 
+cir_tmpval_t *cir_tmpval_create(cir_expr_t *inner) {
+    cir_tmpval_t *node = lilycc_malloc(sizeof(cir_tmpval_t));
+    node->common       = cir_expr_common_clone(&inner->common);
+    node->inner        = inner;
+    return node;
+}
+
+void cir_tmpval_delete(cir_tmpval_t *node) {
+    cir_expr_delete(node->inner);
+    cir_expr_common_delete(node->common);
+    lilycc_free(node);
+}
+
+
 cir_exprs_t *cir_exprs_create(cir_expr_common_t common, vec_cir_expr_t exprs) {
     return cir_exprs_create2(common, (vec_cir_tmpval_t){0}, exprs);
 }
@@ -254,11 +291,14 @@ void cir_exprs_delete(cir_exprs_t *node) {
 }
 
 
-cir_assign_t *cir_assign_create(cir_expr_common_t common, cir_expr_t *lhs, cir_expr_t *rhs) {
-    cir_assign_t *node = lilycc_malloc(sizeof(cir_assign_t));
-    node->common       = common;
-    node->lhs          = lhs;
-    node->rhs          = rhs;
+cir_assign_t *cir_assign_create(cir_expr_t *lhs, cir_expr_t *rhs) {
+    cir_assign_t *node        = lilycc_malloc(sizeof(cir_assign_t));
+    node->common              = cir_expr_common_clone(&lhs->common);
+    node->common.allow_addrof = false;
+    node->common.is_lvalue    = false;
+    node->common.type.qual    = (c_qual_t){0};
+    node->lhs                 = lhs;
+    node->rhs                 = rhs;
     return node;
 }
 
@@ -291,6 +331,14 @@ cir_expr_t *cir_expr_create_cast(cir_cast_t *cast) {
     node->common     = cir_expr_common_clone(&cast->common);
     node->tag        = CIR_EXPR_CAST;
     node->cast       = cast;
+    return node;
+}
+
+cir_expr_t *cir_expr_create_ternary(cir_ternary_t *ternary) {
+    cir_expr_t *node = lilycc_malloc(sizeof(cir_expr_t));
+    node->common     = cir_expr_common_clone(&ternary->common);
+    node->tag        = CIR_EXPR_TERNARY;
+    node->ternary    = ternary;
     return node;
 }
 
@@ -353,6 +401,7 @@ void cir_expr_delete(cir_expr_t *node) {
         case CIR_EXPR_VALUE: cir_value_delete(node->value); break;
         case CIR_EXPR_CALL: cir_call_delete(node->call); break;
         case CIR_EXPR_CAST: cir_cast_delete(node->cast); break;
+        case CIR_EXPR_TERNARY: cir_ternary_delete(node->ternary); break;
         case CIR_EXPR_CALC: cir_calc_delete(node->calc); break;
         case CIR_EXPR_ADDROF: cir_addrof_delete(node->addrof); break;
         case CIR_EXPR_DEREF: cir_deref_delete(node->deref); break;
@@ -364,9 +413,12 @@ void cir_expr_delete(cir_expr_t *node) {
 }
 
 
-cir_for_t *cir_for_create(pos_t pos, cir_stmt_t *init, cir_expr_t *cond, cir_expr_t *inc, cir_stmt_t *body) {
+cir_for_t *cir_for_create(
+    pos_t pos, cir_scope_t *scope, cir_stmt_t *init, cir_expr_t *cond, cir_expr_t *inc, cir_stmt_t *body
+) {
     cir_for_t *node = lilycc_malloc(sizeof(cir_for_t));
     node->pos       = pos;
+    node->scope     = scope;
     node->init      = init;
     node->cond      = cond;
     node->inc       = inc;
@@ -375,16 +427,17 @@ cir_for_t *cir_for_create(pos_t pos, cir_stmt_t *init, cir_expr_t *cond, cir_exp
 }
 
 void cir_for_delete(cir_for_t *node) {
-    if (node->init) {
-        cir_stmt_delete(node->init);
+    cir_stmt_delete(node->body);
+    if (node->inc) {
+        cir_expr_delete(node->inc);
     }
     if (node->cond) {
         cir_expr_delete(node->cond);
     }
-    if (node->inc) {
-        cir_expr_delete(node->inc);
+    if (node->init) {
+        cir_stmt_delete(node->init);
     }
-    cir_stmt_delete(node->body);
+    cir_scope_delete(node->scope);
     lilycc_free(node);
 }
 
@@ -405,9 +458,10 @@ void cir_while_delete(cir_while_t *node) {
 }
 
 
-cir_stmts_t *cir_stmts_create(pos_t pos, vec_cir_stmt_t stmts) {
+cir_stmts_t *cir_stmts_create(pos_t pos, cir_scope_t *scope, vec_cir_stmt_t stmts) {
     cir_stmts_t *node = lilycc_malloc(sizeof(cir_stmts_t));
     node->pos         = pos;
+    node->scope       = scope;
     node->stmts       = stmts;
     return node;
 }
@@ -416,6 +470,7 @@ void cir_stmts_delete(cir_stmts_t *node) {
     for (size_t i = 0; i < node->stmts.len; i++) {
         cir_stmt_delete(node->stmts.arr[i]);
     }
+    cir_scope_delete(node->scope);
     vec_clear(&node->stmts);
     lilycc_free(node);
 }
@@ -470,19 +525,6 @@ void cir_return_delete(cir_return_t *node) {
 }
 
 
-cir_stmt_expr_t *cir_stmt_expr_create(pos_t pos, cir_expr_t *expr) {
-    cir_stmt_expr_t *node = lilycc_malloc(sizeof(cir_stmt_expr_t));
-    node->pos             = pos;
-    node->expr            = expr;
-    return node;
-}
-
-void cir_stmt_expr_delete(cir_stmt_expr_t *node) {
-    cir_expr_delete(node->expr);
-    lilycc_free(node);
-}
-
-
 cir_stmt_t *cir_stmt_create_stmts(cir_stmts_t *stmts) {
     cir_stmt_t *node = lilycc_malloc(sizeof(cir_stmt_t));
     node->pos        = stmts->pos;
@@ -531,11 +573,19 @@ cir_stmt_t *cir_stmt_create_return(cir_return_t *return_stmt) {
     return node;
 }
 
-cir_stmt_t *cir_stmt_create_expr(cir_stmt_expr_t *expr_stmt) {
+cir_stmt_t *cir_stmt_create_expr(cir_expr_t *expr) {
     cir_stmt_t *node = lilycc_malloc(sizeof(cir_stmt_t));
-    node->pos        = expr_stmt->pos;
+    node->pos        = expr->common.pos;
     node->tag        = CIR_STMT_EXPR;
-    node->expr_stmt  = expr_stmt;
+    node->expr       = expr;
+    return node;
+}
+
+cir_stmt_t *cir_stmt_create_units(cir_unit_list_t *units) {
+    cir_stmt_t *node = lilycc_malloc(sizeof(cir_stmt_t));
+    node->pos        = units->pos;
+    node->tag        = CIR_STMT_UNITS;
+    node->units      = units;
     return node;
 }
 
@@ -547,7 +597,8 @@ void cir_stmt_delete(cir_stmt_t *node) {
         case CIR_STMT_IF: cir_if_delete(node->if_stmt); break;
         case CIR_STMT_LABEL: cir_label_delete(node->label); break;
         case CIR_STMT_RETURN: cir_return_delete(node->return_stmt); break;
-        case CIR_STMT_EXPR: cir_stmt_expr_delete(node->expr_stmt); break;
+        case CIR_STMT_EXPR: cir_expr_delete(node->expr); break;
+        case CIR_STMT_UNITS: cir_unit_list_delete(node->units); break;
     }
     lilycc_free(node);
 }
@@ -572,23 +623,18 @@ void cir_decl_delete(cir_decl_t *node) {
 }
 
 
-cir_func_t *cir_func_create(pos_t pos, c_type_t type, char *name, vec_cstr_t param_names, cir_stmt_t *body) {
-    cir_func_t *node  = lilycc_malloc(sizeof(cir_func_t));
-    node->pos         = pos;
-    node->type        = type;
-    node->name        = name;
-    node->param_names = param_names;
-    node->body        = body;
+cir_func_t *cir_func_create(pos_t pos, c_type_t type, char *name, cir_stmt_t *body) {
+    cir_func_t *node = lilycc_malloc(sizeof(cir_func_t));
+    node->pos        = pos;
+    node->type       = type;
+    node->name       = name;
+    node->body       = body;
     return node;
 }
 
 void cir_func_delete(cir_func_t *node) {
     c_type_delete(node->type);
     lilycc_free(node->name);
-    for (size_t i = 0; i < node->param_names.len; i++) {
-        lilycc_free(node->param_names.arr[i]);
-    }
-    vec_clear(&node->param_names);
     if (node->body) {
         cir_stmt_delete(node->body);
     }
@@ -621,9 +667,25 @@ void cir_unit_delete(cir_unit_t *node) {
 }
 
 
-cir_trans_unit_t *cir_trans_unit_create(pos_t pos, vec_cir_unit_t units) {
+cir_unit_list_t *cir_unit_list_create(pos_t pos, vec_cir_unit_t units) {
+    cir_unit_list_t *node = lilycc_malloc(sizeof(cir_unit_list_t));
+    node->pos             = pos;
+    node->units           = units;
+    return node;
+}
+
+void cir_unit_list_delete(cir_unit_list_t *node) {
+    for (size_t i = 0; i < node->units.len; i++) {
+        cir_unit_delete(node->units.arr[i]);
+    }
+    vec_clear(&node->units);
+    lilycc_free(node);
+}
+
+
+cir_trans_unit_t *cir_trans_unit_create(cir_scope_t *scope, vec_cir_unit_t units) {
     cir_trans_unit_t *node = lilycc_malloc(sizeof(cir_trans_unit_t));
-    node->pos              = pos;
+    node->scope            = scope;
     node->units            = units;
     return node;
 }
@@ -632,6 +694,7 @@ void cir_trans_unit_delete(cir_trans_unit_t *node) {
     for (size_t i = 0; i < node->units.len; i++) {
         cir_unit_delete(node->units.arr[i]);
     }
+    cir_scope_delete(node->scope);
     vec_clear(&node->units);
     lilycc_free(node);
 }
@@ -675,59 +738,100 @@ static cir_scope_t *cir_scope_func(cir_scope_t *scope) {
     return scope;
 }
 
+static void redef_diag(cctx_t *ctx, char const *name, pos_t redef, pos_t orig) {
+    cctx_diagnostic(ctx, redef, DIAG_ERR, "Redefinition of %s", name);
+    cctx_diagnostic(ctx, orig, DIAG_HINT, "Original definition of %s", name);
+}
+
 // Allocate and insert a value entry. Returns `false` if `name` already exists.
-static bool cir_scope_add_value(cir_scope_t *scope, char const *name, cir_scope_val_t val) {
-    if (map_get(&scope->values, name)) {
-        return false;
+static bool cir_scope_add_value(cctx_t *ctx, cir_scope_t *scope, char const *name, cir_scope_val_t val) {
+    while (scope->kind == CIR_SCOPE_WHILE) {
+        scope = scope->parent;
     }
+    assert(scope != NULL);
+
+    cir_scope_val_t const *exist = map_get(&scope->values, name);
+    if (exist) {
+        redef_diag(ctx, name, *val.pos, *exist->pos);
+        goto error;
+    }
+
+    cir_typedef_t const *conflict = map_get(&scope->typedefs, name);
+    if (conflict) {
+        redef_diag(ctx, name, *val.pos, conflict->pos);
+        goto error;
+    }
+
     cir_scope_val_t *entry = lilycc_malloc(sizeof(cir_scope_val_t));
     *entry                 = val;
     map_set(&scope->values, name, entry);
     return true;
+
+error:
+    switch (val.tag) {
+        case CIR_SCOPE_VAL_DECL: cir_decl_delete(val.decl); break;
+        case CIR_SCOPE_VAL_FUNC: cir_func_delete(val.func); break;
+        case CIR_SCOPE_VAL_ENUM_CONST: cir_const_delete(val.enum_const); break;
+    }
+    return false;
 }
 
-bool cir_scope_add_decl(cir_scope_t *scope, char const *name, cir_decl_t *decl) {
-    return cir_scope_add_value(scope, name, (cir_scope_val_t){.tag = CIR_SCOPE_VAL_DECL, .decl = decl});
+bool cir_scope_add_decl(cctx_t *ctx, cir_scope_t *scope, cir_decl_t *decl) {
+    return cir_scope_add_value(ctx, scope, decl->name, (cir_scope_val_t){.tag = CIR_SCOPE_VAL_DECL, .decl = decl});
 }
 
-bool cir_scope_add_func(cir_scope_t *scope, char const *name, cir_func_t *func) {
-    return cir_scope_add_value(scope, name, (cir_scope_val_t){.tag = CIR_SCOPE_VAL_FUNC, .func = func});
+bool cir_scope_add_func(cctx_t *ctx, cir_scope_t *scope, cir_func_t *func) {
+    return cir_scope_add_value(ctx, scope, func->name, (cir_scope_val_t){.tag = CIR_SCOPE_VAL_FUNC, .func = func});
 }
 
-bool cir_scope_add_enum_const(cir_scope_t *scope, char const *name, cir_const_t *enum_const) {
+bool cir_scope_add_enum_const(cctx_t *ctx, cir_scope_t *scope, char const *name, cir_const_t *enum_const) {
     return cir_scope_add_value(
+        ctx,
         scope,
         name,
         (cir_scope_val_t){.tag = CIR_SCOPE_VAL_ENUM_CONST, .enum_const = enum_const}
     );
 }
 
-bool cir_scope_add_typedef(cir_scope_t *scope, char const *name, c_type_t type) {
-    if (map_get(&scope->typedefs, name)) {
+bool cir_scope_add_typedef(cctx_t *ctx, cir_scope_t *scope, char const *name, pos_t pos, c_type_t type) {
+    cir_typedef_t const *exist = map_get(&scope->typedefs, name);
+    if (exist) {
         c_type_delete(type);
+        if (c_type_is_identical(exist->type, type, true)) {
+            return true;
+        }
+        redef_diag(ctx, name, pos, exist->pos);
         return false;
     }
+
+    cir_scope_val_t const *conflict = map_get(&scope->values, name);
+    if (conflict) {
+        c_type_delete(type);
+        redef_diag(ctx, name, pos, *conflict->pos);
+        return false;
+    }
+
     c_type_t *box = lilycc_malloc(sizeof(c_type_t));
     *box          = type;
     map_set(&scope->typedefs, name, box);
     return true;
 }
 
-bool cir_scope_add_tag(cir_scope_t *scope, char const *name, c_comp_type_t *type) {
-    if (map_get(&scope->tags, name)) {
+bool cir_scope_add_tag(cctx_t *ctx, cir_scope_t *scope, c_comp_type_t *type) {
+    if (map_get(&scope->tags, type->name)) {
         c_comp_type_delete(type);
         return false;
     }
-    map_set(&scope->tags, name, type);
+    map_set(&scope->tags, type->name, type);
     return true;
 }
 
-bool cir_scope_add_label(cir_scope_t *scope, char const *name, cir_label_t *label) {
+bool cir_scope_add_label(cctx_t *ctx, cir_scope_t *scope, cir_label_t *label) {
     cir_scope_t *func_scope = cir_scope_func(scope);
-    if (!func_scope || map_get(&func_scope->labels, name)) {
+    if (!func_scope || map_get(&func_scope->labels, label->name)) {
         return false;
     }
-    map_set(&func_scope->labels, name, label);
+    map_set(&func_scope->labels, label->name, label);
     return true;
 }
 
@@ -741,9 +845,9 @@ cir_scope_val_t *cir_scope_lookup_value(cir_scope_t const *scope, char const *na
     return NULL;
 }
 
-c_type_t const *cir_scope_lookup_typedef(cir_scope_t const *scope, char const *name) {
+cir_typedef_t const *cir_scope_lookup_typedef(cir_scope_t const *scope, char const *name) {
     for (; scope; scope = scope->parent) {
-        c_type_t const *type = map_get(&scope->typedefs, name);
+        cir_typedef_t const *type = map_get(&scope->typedefs, name);
         if (type) {
             return type;
         }

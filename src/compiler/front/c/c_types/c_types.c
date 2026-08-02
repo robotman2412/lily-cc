@@ -14,6 +14,7 @@
 #include "vec.h"
 
 #include <assert.h>
+#include <inttypes.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -347,6 +348,191 @@ void c_type_delete(c_type_t type) {
 
     lilycc_free(type.extra);
 }
+
+static bool c_type_print_decl_pre(c_type_ref_t type, FILE *to);
+static void c_type_print_decl_post(c_type_ref_t type, FILE *to);
+
+static bool c_type_print_ptr_pre(c_type_ref_t type, FILE *to) {
+    bool wrap = type.extra->inner.prim == C_COMP_ARRAY || type.extra->inner.prim == C_COMP_FUNCTION;
+
+    if (c_type_print_decl_pre(type.extra->inner, to)) {
+        fputc(' ', to);
+    }
+
+    if (wrap) {
+        fputc('(', to);
+    }
+    fputc('*', to);
+
+    bool delim = false;
+
+    // clang-format off
+    if (type.qual.q_const)    {                                      delim = true; fputs("const", to); }
+    if (type.qual.q_atomic)   { if (delim) fputc(' ', to); delim = true; fputs("atomic", to); }
+    if (type.qual.q_restrict) { if (delim) fputc(' ', to); delim = true; fputs("restrict", to); }
+    if (type.qual.q_volatile) { if (delim) fputc(' ', to);               fputs("volatile", to); }
+    // clang-format on
+
+    return delim;
+}
+
+static void c_type_print_ptr_post(c_type_ref_t type, FILE *to) {
+    bool wrap = type.extra->inner.prim == C_COMP_ARRAY || type.extra->inner.prim == C_COMP_FUNCTION;
+
+    if (wrap) {
+        fputc(')', to);
+    }
+
+    c_type_print_decl_post(type.extra->inner, to);
+}
+
+static bool c_type_print_arr_pre(c_type_ref_t type, FILE *to) {
+    return c_type_print_decl_pre(type.extra->inner, to);
+}
+
+static void c_type_print_arr_post(c_type_ref_t type, FILE *to) {
+    fputc('[', to);
+    if (type.extra->length >= 0) {
+        fprintf(to, "%" PRId32, type.extra->length);
+    }
+    fputc(']', to);
+    c_type_print_decl_post(type.extra->inner, to);
+}
+
+static bool c_type_print_func_pre(c_type_ref_t type, FILE *to) {
+    return c_type_print_decl_pre(type.extra->func_type->returns, to);
+}
+
+static void c_type_print_func_post(c_type_ref_t type, FILE *to) {
+    fputc('(', to);
+    vec_c_func_arg_t const *args = &type.extra->func_type->args;
+    for (size_t i = 0; i < args->len; i++) {
+        if (i) {
+            fputs(", ", to);
+        }
+        c_type_print(args->arr[i].type, to);
+    }
+    fputc(')', to);
+    c_type_print_decl_post(type.extra->func_type->returns, to);
+}
+
+static bool c_type_print_decl_pre(c_type_ref_t type, FILE *to) {
+    if (type.prim == C_COMP_POINTER) {
+        return c_type_print_ptr_pre(type, to);
+    } else if (type.prim == C_COMP_ARRAY) {
+        return c_type_print_arr_pre(type, to);
+    } else if (type.prim == C_COMP_FUNCTION) {
+        return c_type_print_func_pre(type, to);
+    } else {
+        return true;
+    }
+}
+
+static void c_type_print_decl_post(c_type_ref_t type, FILE *to) {
+    if (type.prim == C_COMP_POINTER) {
+        c_type_print_ptr_post(type, to);
+    } else if (type.prim == C_COMP_ARRAY) {
+        c_type_print_arr_post(type, to);
+    } else if (type.prim == C_COMP_FUNCTION) {
+        c_type_print_func_post(type, to);
+    }
+}
+
+static void c_type_print_spec_qual(c_type_ref_t type, FILE *to) {
+    if (type.prim == C_COMP_POINTER || type.prim == C_COMP_ARRAY) {
+        c_type_print_spec_qual(type.extra->inner, to);
+        return;
+    } else if (type.prim == C_COMP_FUNCTION) {
+        c_type_print_spec_qual(type.extra->func_type->returns, to);
+        return;
+    } else if (type.prim == C_N_PRIM) {
+        fputs("/* Invalid type */", to);
+        return;
+    }
+
+    // clang-format off
+    if (type.qual.s_auto)         fputs("auto ", to);
+    if (type.qual.s_constexpr)    fputs("constexpr ", to);
+    if (type.qual.s_extern)       fputs("extern ", to);
+    if (type.qual.s_register)     fputs("register ", to);
+    if (type.qual.s_static)       fputs("static ", to);
+    if (type.qual.s_thread_local) fputs("thread_local ", to);
+    if (type.qual.s_typedef)      fputs("typedef ", to);
+    if (type.qual.q_volatile)     fputs("volatile ", to);
+    if (type.qual.q_atomic)       fputs("atomic ", to);
+    if (type.qual.q_const)        fputs("const ", to);
+    if (type.qual.q_restrict)     fputs("restrict ", to);
+    // clang-format on
+
+    switch (type.prim) {
+        case C_PRIM_BOOL: fputs("bool", to); return;
+        case C_PRIM_CHAR: fputs("char", to); return;
+        case C_PRIM_SCHAR: fputs("signed char", to); return;
+        case C_PRIM_UCHAR: fputs("unsigned char", to); return;
+        case C_PRIM_SSHORT: fputs("short", to); return;
+        case C_PRIM_USHORT: fputs("unsigned short", to); return;
+        case C_PRIM_SINT: fputs("int", to); return;
+        case C_PRIM_UINT: fputs("unsigned int", to); return;
+        case C_PRIM_SLONG: fputs("long", to); return;
+        case C_PRIM_ULONG: fputs("unsigned long", to); return;
+        case C_PRIM_SLLONG: fputs("long long", to); return;
+        case C_PRIM_ULLONG: fputs("unsigned long long", to); return;
+        case C_PRIM_S128: fputs("__int128", to); return;
+        case C_PRIM_U128: fputs("unsigned __int128", to); return;
+        case C_PRIM_FLOAT: fputs("float", to); return;
+        case C_PRIM_DOUBLE: fputs("double", to); return;
+        case C_PRIM_LDOUBLE: fputs("long double", to); return;
+        case C_PRIM_VOID: fputs("void", to); return;
+        case C_N_PRIM: UNREACHABLE();
+        case C_COMP_STRUCT: fprintf(to, "struct %s", type.extra->struct_type->name); return;
+        case C_COMP_UNION: fprintf(to, "union %s", type.extra->struct_type->name); return;
+        case C_COMP_ENUM: fprintf(to, "enum %s", type.extra->struct_type->name); return;
+        case C_COMP_POINTER:
+        case C_COMP_ARRAY:
+        case C_COMP_FUNCTION: UNREACHABLE();
+    }
+    UNREACHABLE();
+}
+
+// Print the type in simplified source form.
+void c_type_print(c_type_ref_t type, FILE *to) {
+    c_type_print_spec_qual(type, to);
+    c_type_print_decl_pre(type, to);
+    c_type_print_decl_post(type, to);
+}
+
+// Print the primitive type in simplified source form.
+void c_prim_print(c_prim_t prim, FILE *to) {
+    switch (prim) {
+        case C_PRIM_BOOL: fputs("bool", to); return;
+        case C_PRIM_CHAR: fputs("char", to); return;
+        case C_PRIM_SCHAR: fputs("signed char", to); return;
+        case C_PRIM_UCHAR: fputs("unsigned char", to); return;
+        case C_PRIM_SSHORT: fputs("short", to); return;
+        case C_PRIM_USHORT: fputs("unsigned short", to); return;
+        case C_PRIM_SINT: fputs("int", to); return;
+        case C_PRIM_UINT: fputs("unsigned int", to); return;
+        case C_PRIM_SLONG: fputs("long", to); return;
+        case C_PRIM_ULONG: fputs("unsigned long", to); return;
+        case C_PRIM_SLLONG: fputs("long long", to); return;
+        case C_PRIM_ULLONG: fputs("unsigned long long", to); return;
+        case C_PRIM_S128: fputs("__int128", to); return;
+        case C_PRIM_U128: fputs("unsigned __int128", to); return;
+        case C_PRIM_FLOAT: fputs("float", to); return;
+        case C_PRIM_DOUBLE: fputs("double", to); return;
+        case C_PRIM_LDOUBLE: fputs("long double", to); return;
+        case C_PRIM_VOID: fputs("void", to); return;
+        case C_N_PRIM: fputs("/* Invalid type */", to); return;
+        case C_COMP_STRUCT:
+        case C_COMP_UNION:
+        case C_COMP_ENUM:
+        case C_COMP_POINTER:
+        case C_COMP_ARRAY:
+        case C_COMP_FUNCTION: UNREACHABLE();
+    }
+    UNREACHABLE();
+}
+
 
 // Delete a enum type definition.
 void c_struct_type_delete(c_struct_type_t *type) {

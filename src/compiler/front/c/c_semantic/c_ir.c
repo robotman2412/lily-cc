@@ -8,11 +8,13 @@
 #include "c_prim.h"
 #include "c_types.h"
 #include "compiler.h"
+#include "ir_serialization.h"
 #include "lilycc_malloc.h"
 #include "map.h"
 #include "vec.h"
 
 #include <assert.h>
+#include <inttypes.h>
 #include <stdio.h>
 
 
@@ -367,6 +369,14 @@ cir_expr_t *cir_expr_create_deref(cir_deref_t *deref) {
 }
 
 cir_expr_t *cir_expr_create_exprs(cir_exprs_t *exprs) {
+    if (exprs->exprs.len == 1 && exprs->tmpvals.len == 0) {
+        cir_expr_t *expr = exprs->exprs.arr[0];
+        vec_clear(&exprs->exprs);
+        cir_expr_common_delete(exprs->common);
+        lilycc_free(exprs);
+        return expr;
+    }
+
     cir_expr_t *node = lilycc_malloc(sizeof(cir_expr_t));
     node->common     = cir_expr_common_clone(&exprs->common);
     node->tag        = CIR_EXPR_EXPRS;
@@ -623,7 +633,7 @@ void cir_decl_delete(cir_decl_t *node) {
 }
 
 
-cir_func_t *cir_func_create(pos_t pos, c_type_t type, char *name, cir_stmt_t *body) {
+cir_func_t *cir_func_create(pos_t pos, c_type_t type, char *name, vec_cir_stmt_t body) {
     cir_func_t *node = lilycc_malloc(sizeof(cir_func_t));
     node->pos        = pos;
     node->type       = type;
@@ -635,9 +645,10 @@ cir_func_t *cir_func_create(pos_t pos, c_type_t type, char *name, cir_stmt_t *bo
 void cir_func_delete(cir_func_t *node) {
     c_type_delete(node->type);
     lilycc_free(node->name);
-    if (node->body) {
-        cir_stmt_delete(node->body);
+    for (size_t i = 0; i < node->body.len; i++) {
+        cir_stmt_delete(node->body.arr[i]);
     }
+    vec_clear(&node->body);
     lilycc_free(node);
 }
 
@@ -818,7 +829,9 @@ bool cir_scope_add_typedef(cctx_t *ctx, cir_scope_t *scope, char const *name, po
 }
 
 bool cir_scope_add_tag(cctx_t *ctx, cir_scope_t *scope, c_comp_type_t *type) {
-    if (map_get(&scope->tags, type->name)) {
+    c_comp_type_t const *exist = map_get(&scope->tags, type->name);
+    if (exist) {
+        redef_diag(ctx, type->name, type->pos, exist->pos);
         c_comp_type_delete(type);
         return false;
     }
@@ -828,7 +841,13 @@ bool cir_scope_add_tag(cctx_t *ctx, cir_scope_t *scope, c_comp_type_t *type) {
 
 bool cir_scope_add_label(cctx_t *ctx, cir_scope_t *scope, cir_label_t *label) {
     cir_scope_t *func_scope = cir_scope_func(scope);
-    if (!func_scope || map_get(&func_scope->labels, label->name)) {
+    if (!func_scope) {
+        cctx_diagnostic(ctx, label->pos, DIAG_ERR, "Cannot add label outside a function");
+        return false;
+    }
+    cir_label_t const *exist = map_get(&func_scope->labels, label->name);
+    if (exist) {
+        redef_diag(ctx, label->name, label->pos, exist->pos);
         return false;
     }
     map_set(&func_scope->labels, label->name, label);
@@ -871,4 +890,577 @@ cir_label_t *cir_scope_lookup_label(cir_scope_t const *scope, char const *name) 
         return NULL;
     }
     return map_get(&func_scope->labels, name);
+}
+
+
+
+static void pindent(int indent, FILE *to) {
+    while (indent > 0) {
+        fputs("  ", to);
+        indent--;
+    }
+}
+
+
+void cir_const_dbg(cir_const_t const *iconst, int indent, FILE *to) {
+    indent++;
+    fprintf(to, "const @ %s:%d:%d\n", iconst->pos.srcfile->name, iconst->pos.line + 1, iconst->pos.col + 1);
+
+    pindent(indent, to);
+    fputs("type: ", to);
+    c_prim_print(iconst->prim, to);
+    fputc('\n', to);
+
+    pindent(indent, to);
+    fputs("iconst: ", to);
+    ir_const_serialize(iconst->iconst, to);
+    fputc('\n', to);
+}
+
+void cir_comp_const_dbg(cir_comp_const_t const *comp_const, int indent, FILE *to) {
+    indent++;
+    fprintf(
+        to,
+        "comp_const @ %s:%d:%d\n",
+        comp_const->pos.srcfile->name,
+        comp_const->pos.line + 1,
+        comp_const->pos.col + 1
+    );
+
+    pindent(indent, to);
+    fputs("type: ", to);
+    c_type_print(comp_const->type, to);
+    fputc('\n', to);
+}
+
+void cir_comp_store_dbg(cir_comp_store_t const *comp_store, int indent, FILE *to) {
+    indent++;
+    fprintf(to, "comp_store\n");
+
+    pindent(indent, to);
+    fprintf(to, "offset: %" PRIu64 "\n", comp_store->offset);
+
+    pindent(indent, to);
+    fputs("value: ", to);
+    cir_expr_dbg(comp_store->value, indent, to);
+}
+
+void cir_comp_value_dbg(cir_comp_value_t const *comp_value, int indent, FILE *to) {
+    indent++;
+    fprintf(
+        to,
+        "comp_value @ %s:%d:%d\n",
+        comp_value->pos.srcfile->name,
+        comp_value->pos.line + 1,
+        comp_value->pos.col + 1
+    );
+
+    pindent(indent, to);
+    fputs("type: ", to);
+    c_type_print(comp_value->type, to);
+    fputc('\n', to);
+}
+
+void cir_value_dbg(cir_value_t const *value, int indent, FILE *to) {
+    fprintf(to, "value:");
+    switch (value->tag) {
+        case CIR_VALUE_TMPVAL: fprintf(to, "tmpval %p\n", value->tmpval); break;
+        case CIR_VALUE_SCOPE_VAL:
+            switch (value->scope_val->tag) {
+                case CIR_SCOPE_VAL_DECL: fprintf(to, "scope_val:decl \"%s\"\n", value->scope_val->decl->name); break;
+                case CIR_SCOPE_VAL_FUNC: fprintf(to, "scope_val:func \"%s\"\n", value->scope_val->func->name); break;
+                case CIR_SCOPE_VAL_ENUM_CONST:
+                    fputs("scope_val:enum_const\n", to);
+
+                    pindent(indent + 1, to);
+                    fputs("type: ", to);
+                    c_prim_print(value->scope_val->enum_const->prim, to);
+                    fputc('\n', to);
+
+                    pindent(indent + 1, to);
+                    fputs("iconst: ", to);
+                    ir_const_serialize(value->scope_val->enum_const->iconst, to);
+                    fputc('\n', to);
+                    break;
+            }
+            break;
+        case CIR_VALUE_CONST: cir_const_dbg(value->iconst, indent, to); break;
+        case CIR_VALUE_COMP_CONST: cir_comp_const_dbg(value->comp_const, indent, to); break;
+        case CIR_VALUE_COMP_VALUE: cir_comp_value_dbg(value->comp_value, indent, to); break;
+    }
+}
+
+
+void cir_call_dbg(cir_call_t const *call, int indent, FILE *to) {
+    indent++;
+    fprintf(
+        to,
+        "call @ %s:%d:%d\n",
+        call->common.pos.srcfile->name,
+        call->common.pos.line + 1,
+        call->common.pos.col + 1
+    );
+
+    pindent(indent, to);
+    fputs("type: ", to);
+    c_type_print(call->common.type, to);
+    fputc('\n', to);
+
+    pindent(indent, to);
+    fputs(call->common.allow_addrof ? "addrof, " : "", to);
+    fputs(call->common.is_lvalue ? "lvalue\n" : "rvalue\n", to);
+
+    pindent(indent, to);
+    fputs("func: ", to);
+    cir_expr_dbg(call->func, indent, to);
+
+    for (size_t i = 0; i < call->args.len; i++) {
+        pindent(indent, to);
+        fprintf(to, "args[%zu]: ", i);
+        cir_expr_dbg(call->args.arr[i], indent, to);
+    }
+}
+
+void cir_cast_dbg(cir_cast_t const *cast, int indent, FILE *to) {
+    indent++;
+    fprintf(
+        to,
+        "cast @ %s:%d:%d\n",
+        cast->common.pos.srcfile->name,
+        cast->common.pos.line + 1,
+        cast->common.pos.col + 1
+    );
+
+    pindent(indent, to);
+    fputs("type: ", to);
+    c_type_print(cast->common.type, to);
+    fputc('\n', to);
+
+    pindent(indent, to);
+    fputs(cast->common.allow_addrof ? "addrof, " : "", to);
+    fputs(cast->common.is_lvalue ? "lvalue\n" : "rvalue\n", to);
+
+    pindent(indent, to);
+    fputs("value: ", to);
+    cir_expr_dbg(cast->value, indent, to);
+}
+
+void cir_ternary_dbg(cir_ternary_t const *ternary, int indent, FILE *to) {
+    indent++;
+    fprintf(
+        to,
+        "ternary @ %s:%d:%d\n",
+        ternary->common.pos.srcfile->name,
+        ternary->common.pos.line + 1,
+        ternary->common.pos.col + 1
+    );
+
+    pindent(indent, to);
+    fputs("type: ", to);
+    c_type_print(ternary->common.type, to);
+    fputc('\n', to);
+
+    pindent(indent, to);
+    fputs(ternary->common.allow_addrof ? "addrof, " : "", to);
+    fputs(ternary->common.is_lvalue ? "lvalue\n" : "rvalue\n", to);
+
+    pindent(indent, to);
+    fputs("cond: ", to);
+    cir_expr_dbg(ternary->cond, indent, to);
+
+    pindent(indent, to);
+    fputs("if_expr: ", to);
+    cir_expr_dbg(ternary->if_expr, indent, to);
+
+    pindent(indent, to);
+    fputs("else_expr: ", to);
+    cir_expr_dbg(ternary->else_expr, indent, to);
+}
+
+void cir_calc_dbg(cir_calc_t const *calc, int indent, FILE *to) {
+    indent++;
+    fprintf(
+        to,
+        "calc @ %s:%d:%d\n",
+        calc->common.pos.srcfile->name,
+        calc->common.pos.line + 1,
+        calc->common.pos.col + 1
+    );
+
+    pindent(indent, to);
+    fputs("type: ", to);
+    c_type_print(calc->common.type, to);
+    fputc('\n', to);
+
+    pindent(indent, to);
+    fputs(calc->common.allow_addrof ? "addrof, " : "", to);
+    fputs(calc->common.is_lvalue ? "lvalue\n" : "rvalue\n", to);
+
+    pindent(indent, to);
+    fputs("op: ", to);
+    switch (calc->op) {
+        case CIR_CALC_ADD: fputs("add", to); break;
+        case CIR_CALC_SUB: fputs("sub", to); break;
+        case CIR_CALC_MUL: fputs("mul", to); break;
+        case CIR_CALC_DIV: fputs("div", to); break;
+        case CIR_CALC_MOD: fputs("mod", to); break;
+        case CIR_CALC_SHL: fputs("shl", to); break;
+        case CIR_CALC_SHR: fputs("shr", to); break;
+        case CIR_CALC_BAND: fputs("band", to); break;
+        case CIR_CALC_BOR: fputs("bor", to); break;
+        case CIR_CALC_BXOR: fputs("bxor", to); break;
+        case CIR_CALC_LAND: fputs("land", to); break;
+        case CIR_CALC_LOR: fputs("lor", to); break;
+        case CIR_CALC_EQ: fputs("eq", to); break;
+        case CIR_CALC_NE: fputs("ne", to); break;
+        case CIR_CALC_LT: fputs("lt", to); break;
+        case CIR_CALC_LE: fputs("le", to); break;
+        case CIR_CALC_GT: fputs("gt", to); break;
+        case CIR_CALC_GE: fputs("ge", to); break;
+    }
+    fputc('\n', to);
+
+    pindent(indent, to);
+    fputs("lhs: ", to);
+    cir_expr_dbg(calc->lhs, indent, to);
+
+    pindent(indent, to);
+    fputs("rhs: ", to);
+    cir_expr_dbg(calc->rhs, indent, to);
+}
+
+void cir_addrof_dbg(cir_addrof_t const *addrof, int indent, FILE *to) {
+    indent++;
+    fprintf(
+        to,
+        "addrof @ %s:%d:%d\n",
+        addrof->common.pos.srcfile->name,
+        addrof->common.pos.line + 1,
+        addrof->common.pos.col + 1
+    );
+
+    pindent(indent, to);
+    fputs("type: ", to);
+    c_type_print(addrof->common.type, to);
+    fputc('\n', to);
+
+    pindent(indent, to);
+    fputs(addrof->common.allow_addrof ? "addrof, " : "", to);
+    fputs(addrof->common.is_lvalue ? "lvalue\n" : "rvalue\n", to);
+
+    pindent(indent, to);
+    fputs("expr: ", to);
+    cir_expr_dbg(addrof->expr, indent, to);
+}
+
+void cir_deref_dbg(cir_deref_t const *deref, int indent, FILE *to) {
+    indent++;
+    fprintf(
+        to,
+        "deref @ %s:%d:%d\n",
+        deref->common.pos.srcfile->name,
+        deref->common.pos.line + 1,
+        deref->common.pos.col + 1
+    );
+
+    pindent(indent, to);
+    fputs("type: ", to);
+    c_type_print(deref->common.type, to);
+    fputc('\n', to);
+
+    pindent(indent, to);
+    fputs(deref->common.allow_addrof ? "addrof, " : "", to);
+    fputs(deref->common.is_lvalue ? "lvalue\n" : "rvalue\n", to);
+
+    pindent(indent, to);
+    fputs("expr: ", to);
+    cir_expr_dbg(deref->expr, indent, to);
+}
+
+void cir_tmpval_dbg(cir_tmpval_t const *tmpval, int indent, FILE *to) {
+    indent++;
+    fprintf(
+        to,
+        "tmpval %p @ %s:%d:%d\n",
+        tmpval,
+        tmpval->common.pos.srcfile->name,
+        tmpval->common.pos.line + 1,
+        tmpval->common.pos.col + 1
+    );
+
+    pindent(indent, to);
+    fputs("type: ", to);
+    c_type_print(tmpval->common.type, to);
+    fputc('\n', to);
+
+    pindent(indent, to);
+    fputs(tmpval->common.allow_addrof ? "addrof, " : "", to);
+    fputs(tmpval->common.is_lvalue ? "lvalue\n" : "rvalue\n", to);
+
+    pindent(indent, to);
+    fputs("inner: ", to);
+    cir_expr_dbg(tmpval->inner, indent, to);
+}
+
+void cir_exprs_dbg(cir_exprs_t const *exprs, int indent, FILE *to) {
+    indent++;
+    fprintf(
+        to,
+        "exprs @ %s:%d:%d\n",
+        exprs->common.pos.srcfile->name,
+        exprs->common.pos.line + 1,
+        exprs->common.pos.col + 1
+    );
+
+    pindent(indent, to);
+    fputs("type: ", to);
+    c_type_print(exprs->common.type, to);
+    fputc('\n', to);
+
+    pindent(indent, to);
+    fputs(exprs->common.allow_addrof ? "addrof, " : "", to);
+    fputs(exprs->common.is_lvalue ? "lvalue\n" : "rvalue\n", to);
+
+    for (size_t i = 0; i < exprs->tmpvals.len; i++) {
+        pindent(indent, to);
+        fprintf(to, "tmpvals[%zu]: ", i);
+        cir_tmpval_dbg(exprs->tmpvals.arr[i], indent, to);
+    }
+
+    for (size_t i = 0; i < exprs->exprs.len; i++) {
+        pindent(indent, to);
+        fprintf(to, "exprs[%zu]: ", i);
+        cir_expr_dbg(exprs->exprs.arr[i], indent, to);
+    }
+}
+
+void cir_assign_dbg(cir_assign_t const *assign, int indent, FILE *to) {
+    indent++;
+    fprintf(
+        to,
+        "assign @ %s:%d:%d\n",
+        assign->common.pos.srcfile->name,
+        assign->common.pos.line + 1,
+        assign->common.pos.col + 1
+    );
+
+    pindent(indent, to);
+    fputs("type: ", to);
+    c_type_print(assign->common.type, to);
+    fputc('\n', to);
+
+    pindent(indent, to);
+    fputs(assign->common.allow_addrof ? "addrof, " : "", to);
+    fputs(assign->common.is_lvalue ? "lvalue\n" : "rvalue\n", to);
+
+    pindent(indent, to);
+    fputs("lhs: ", to);
+    cir_expr_dbg(assign->lhs, indent, to);
+
+    pindent(indent, to);
+    fputs("rhs: ", to);
+    cir_expr_dbg(assign->rhs, indent, to);
+}
+
+void cir_expr_dbg(cir_expr_t const *expr, int indent, FILE *to) {
+    fputs("expr:", to);
+    switch (expr->tag) {
+        case CIR_EXPR_VALUE: cir_value_dbg(expr->value, indent, to); break;
+        case CIR_EXPR_CALL: cir_call_dbg(expr->call, indent, to); break;
+        case CIR_EXPR_CAST: cir_cast_dbg(expr->cast, indent, to); break;
+        case CIR_EXPR_TERNARY: cir_ternary_dbg(expr->ternary, indent, to); break;
+        case CIR_EXPR_CALC: cir_calc_dbg(expr->calc, indent, to); break;
+        case CIR_EXPR_ADDROF: cir_addrof_dbg(expr->addrof, indent, to); break;
+        case CIR_EXPR_DEREF: cir_deref_dbg(expr->deref, indent, to); break;
+        case CIR_EXPR_EXPRS: cir_exprs_dbg(expr->exprs, indent, to); break;
+        case CIR_EXPR_ASSIGN: cir_assign_dbg(expr->assign, indent, to); break;
+        case CIR_EXPR_STMT: cir_stmt_dbg(expr->stmt, indent, to); break;
+    }
+}
+
+
+void cir_stmts_dbg(cir_stmts_t const *stmts, int indent, FILE *to) {
+    indent++;
+    fprintf(to, "stmts @ %s:%d:%d\n", stmts->pos.srcfile->name, stmts->pos.line + 1, stmts->pos.col + 1);
+
+    for (size_t i = 0; i < stmts->stmts.len; i++) {
+        pindent(indent, to);
+        fprintf(to, "stmts[%zu]: ", i);
+        cir_stmt_dbg(stmts->stmts.arr[i], indent, to);
+    }
+}
+
+void cir_for_dbg(cir_for_t const *cir_for, int indent, FILE *to) {
+    indent++;
+    fprintf(to, "for @ %s:%d:%d\n", cir_for->pos.srcfile->name, cir_for->pos.line + 1, cir_for->pos.col + 1);
+
+    if (cir_for->init) {
+        pindent(indent, to);
+        fputs("init: ", to);
+        cir_stmt_dbg(cir_for->init, indent, to);
+    }
+
+    if (cir_for->cond) {
+        pindent(indent, to);
+        fputs("cond: ", to);
+        cir_expr_dbg(cir_for->cond, indent, to);
+    }
+
+    if (cir_for->inc) {
+        pindent(indent, to);
+        fputs("inc: ", to);
+        cir_expr_dbg(cir_for->inc, indent, to);
+    }
+
+    pindent(indent, to);
+    fputs("body: ", to);
+    cir_stmt_dbg(cir_for->body, indent, to);
+}
+
+void cir_while_dbg(cir_while_t const *cir_while, int indent, FILE *to) {
+    indent++;
+    fprintf(to, "while @ %s:%d:%d\n", cir_while->pos.srcfile->name, cir_while->pos.line + 1, cir_while->pos.col + 1);
+
+    pindent(indent, to);
+    fputs("cond: ", to);
+    cir_expr_dbg(cir_while->cond, indent, to);
+
+    pindent(indent, to);
+    fputs("body: ", to);
+    cir_stmt_dbg(cir_while->body, indent, to);
+}
+
+void cir_if_dbg(cir_if_t const *cir_if, int indent, FILE *to) {
+    indent++;
+    fprintf(to, "if @ %s:%d:%d\n", cir_if->pos.srcfile->name, cir_if->pos.line + 1, cir_if->pos.col + 1);
+
+    pindent(indent, to);
+    fputs("cond: ", to);
+    cir_expr_dbg(cir_if->cond, indent, to);
+
+    pindent(indent, to);
+    fputs("if_body: ", to);
+    cir_stmt_dbg(cir_if->if_body, indent, to);
+
+    if (cir_if->else_body) {
+        pindent(indent, to);
+        fputs("else_body: ", to);
+        cir_stmt_dbg(cir_if->else_body, indent, to);
+    }
+}
+
+void cir_label_dbg(cir_label_t const *label, int indent, FILE *to) {
+    indent++;
+    fprintf(to, "label @ %s:%d:%d\n", label->pos.srcfile->name, label->pos.line + 1, label->pos.col + 1);
+
+    pindent(indent, to);
+    fprintf(to, "name: \"%s\"\n", label->name);
+
+    pindent(indent, to);
+    fputs("body: ", to);
+    cir_stmt_dbg(label->body, indent, to);
+}
+
+void cir_return_dbg(cir_return_t const *cir_return, int indent, FILE *to) {
+    indent++;
+    fprintf(
+        to,
+        "return @ %s:%d:%d\n",
+        cir_return->pos.srcfile->name,
+        cir_return->pos.line + 1,
+        cir_return->pos.col + 1
+    );
+
+    pindent(indent, to);
+    fputs("value: ", to);
+    cir_expr_dbg(cir_return->value, indent, to);
+}
+
+void cir_stmt_dbg(cir_stmt_t const *stmt, int indent, FILE *to) {
+    fputs("stmt:", to);
+    switch (stmt->tag) {
+        case CIR_STMT_STMTS: cir_stmts_dbg(stmt->stmts, indent, to); break;
+        case CIR_STMT_FOR: cir_for_dbg(stmt->for_loop, indent, to); break;
+        case CIR_STMT_WHILE: cir_while_dbg(stmt->while_loop, indent, to); break;
+        case CIR_STMT_IF: cir_if_dbg(stmt->if_stmt, indent, to); break;
+        case CIR_STMT_LABEL: cir_label_dbg(stmt->label, indent, to); break;
+        case CIR_STMT_RETURN: cir_return_dbg(stmt->return_stmt, indent, to); break;
+        case CIR_STMT_EXPR: cir_expr_dbg(stmt->expr, indent, to); break;
+        case CIR_STMT_UNITS: cir_unit_list_dbg(stmt->units, indent, to); break;
+    }
+}
+
+
+void cir_decl_dbg(cir_decl_t const *decl, int indent, FILE *to) {
+    indent++;
+    fprintf(to, "decl @ %s:%d:%d\n", decl->pos.srcfile->name, decl->pos.line + 1, decl->pos.col + 1);
+
+    pindent(indent, to);
+    fprintf(to, "name: \"%s\"\n", decl->name);
+
+    pindent(indent, to);
+    fputs("type: ", to);
+    c_type_print(decl->type, to);
+    fputc('\n', to);
+
+    if (decl->init) {
+        pindent(indent, to);
+        fputs("init: ", to);
+        cir_expr_dbg(decl->init, indent, to);
+    }
+}
+
+void cir_func_dbg(cir_func_t const *func, int indent, FILE *to) {
+    indent++;
+    fprintf(to, "func @ %s:%d:%d\n", func->pos.srcfile->name, func->pos.line + 1, func->pos.col + 1);
+
+    pindent(indent, to);
+    fprintf(to, "name: \"%s\"\n", func->name);
+
+    pindent(indent, to);
+    fputs("type: ", to);
+    c_type_print(func->type, to);
+    fputc('\n', to);
+
+    for (size_t i = 0; i < func->body.len; i++) {
+        pindent(indent, to);
+        fprintf(to, "body[%zu]: ", i);
+        cir_stmt_dbg(func->body.arr[i], indent, to);
+    }
+}
+
+void cir_unit_dbg(cir_unit_t const *unit, int indent, FILE *to) {
+    fputs("unit:", to);
+    switch (unit->tag) {
+        case CIR_UNIT_DECL: cir_decl_dbg(unit->decl, indent, to); break;
+        case CIR_UNIT_FUNC: cir_func_dbg(unit->func, indent, to); break;
+    }
+}
+
+void cir_unit_list_dbg(cir_unit_list_t const *unit_list, int indent, FILE *to) {
+    indent++;
+    fprintf(
+        to,
+        "unit_list @ %s:%d:%d\n",
+        unit_list->pos.srcfile->name,
+        unit_list->pos.line + 1,
+        unit_list->pos.col + 1
+    );
+
+    for (size_t i = 0; i < unit_list->units.len; i++) {
+        pindent(indent, to);
+        fprintf(to, "units[%zu]: ", i);
+        cir_unit_dbg(unit_list->units.arr[i], indent, to);
+    }
+}
+
+void cir_trans_unit_dbg(cir_trans_unit_t const *trans_unit, int indent, FILE *to) {
+    indent++;
+    fprintf(to, "trans_unit\n");
+
+    for (size_t i = 0; i < trans_unit->units.len; i++) {
+        pindent(indent, to);
+        fprintf(to, "units[%zu]: ", i);
+        cir_unit_dbg(trans_unit->units.arr[i], indent, to);
+    }
 }

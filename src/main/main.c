@@ -130,6 +130,7 @@ static void compile2(char const *path) {
     // While not EOF, keep parsing and compiling stuff.
     c_ast_def_list_t *ast = c_parse2(pctx);
     cir_trans_unit_t *tu  = c_compile2(cc, ast);
+    cir_trans_unit_dbg(tu, 0, stdout);
     c_ast_def_list_delete(ast);
     cir_trans_unit_delete(tu);
 
@@ -154,7 +155,7 @@ static void compile2(char const *path) {
 
 int main(int argc, char **argv) {
     for (int i = 1; i < argc; i++) {
-        compile(argv[i]);
+        // compile(argv[i]);
         compile2(argv[i]);
     }
 }

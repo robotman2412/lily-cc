@@ -499,16 +499,17 @@ struct cir_decl {
     cir_expr_t *init;
 };
 
-// A function definition or declaration.
+// A function definition.
 struct cir_func {
     // Source location this was compiled from.
-    pos_t       pos;
+    pos_t          pos;
     // Function type (also encodes parameters and their names).
-    c_type_t    type;
+    c_type_t       type;
     // Function name.
-    char       *name;
-    // Function body (nullable; absent for forward declarations).
-    cir_stmt_t *body;
+    char          *name;
+    // Function body.
+    // Includes copies of the parameter type decls at the start.
+    vec_cir_stmt_t body;
 };
 
 // Tagged union of a declaration or function definition.
@@ -567,11 +568,11 @@ struct cir_scope {
     cir_scope_kind_t kind;
     // Parent scope, or `NULL` for global scope.
     cir_scope_t     *parent;
-    // Values namespace: `char *` -> `cir_scope_val_t *` (owned wrapper, non-owning inner ptr).
+    // Values namespace: `char *` -> `cir_scope_val_t *` (owned share).
     map_t            values;
-    // Typedefs namespace: `char *` -> `c_type_t` (owned share, released on delete).
+    // Typedefs namespace: `char *` -> `cir_typedef_t *` (owned).
     map_t            typedefs;
-    // Tag namespace (struct/union/enum types): `char *` -> `cir_typedef_t` (owned share).
+    // Tag namespace (struct/union/enum types): `char *` -> `c_comp_type_t` (owned share).
     map_t            tags;
     // Labels namespace: `char *` -> `cir_label_t *` (non-owning). Only populated on function scope.
     map_t            labels;
@@ -740,7 +741,7 @@ cir_decl_t *cir_decl_create(pos_t pos, c_type_t type, char *name, cir_expr_t *in
 void        cir_decl_delete(cir_decl_t *node);
 
 // Construct a `cir_func` node.
-cir_func_t *cir_func_create(pos_t pos, c_type_t type, char *name, cir_stmt_t *body);
+cir_func_t *cir_func_create(pos_t pos, c_type_t type, char *name, vec_cir_stmt_t body);
 // Destroy a `cir_func` node and any owned children.
 void        cir_func_delete(cir_func_t *node);
 
@@ -797,3 +798,63 @@ c_comp_type_t       *cir_scope_lookup_tag(cir_scope_t const *scope, char const *
 // Look up a label by `name` in the enclosing function scope only (no parent walk past it).
 // Returns `NULL` if no function scope is found or the label is not defined there.
 cir_label_t         *cir_scope_lookup_label(cir_scope_t const *scope, char const *name);
+
+
+
+// Debug-print a `cir_const_t` C IR node.
+void cir_const_dbg(cir_const_t const *iconst, int indent, FILE *to);
+// Debug-print a `cir_comp_const_t` C IR node.
+void cir_comp_const_dbg(cir_comp_const_t const *comp_const, int indent, FILE *to);
+// Debug-print a `cir_comp_store_t` C IR node.
+void cir_comp_store_dbg(cir_comp_store_t const *comp_store, int indent, FILE *to);
+// Debug-print a `cir_comp_value_t` C IR node.
+void cir_comp_value_dbg(cir_comp_value_t const *comp_value, int indent, FILE *to);
+// Debug-print a `cir_value_t` C IR node.
+void cir_value_dbg(cir_value_t const *value, int indent, FILE *to);
+
+// Debug-print a `cir_call_t` C IR node.
+void cir_call_dbg(cir_call_t const *call, int indent, FILE *to);
+// Debug-print a `cir_cast_t` C IR node.
+void cir_cast_dbg(cir_cast_t const *cast, int indent, FILE *to);
+// Debug-print a `cir_ternary_t` C IR node.
+void cir_ternary_dbg(cir_ternary_t const *ternary, int indent, FILE *to);
+// Debug-print a `cir_calc_t` C IR node.
+void cir_calc_dbg(cir_calc_t const *calc, int indent, FILE *to);
+// Debug-print a `cir_addrof_t` C IR node.
+void cir_addrof_dbg(cir_addrof_t const *addrof, int indent, FILE *to);
+// Debug-print a `cir_deref_t` C IR node.
+void cir_deref_dbg(cir_deref_t const *deref, int indent, FILE *to);
+// Debug-print a `cir_tmpval_t` C IR node.
+void cir_tmpval_dbg(cir_tmpval_t const *tmpval, int indent, FILE *to);
+// Debug-print a `cir_exprs_t` C IR node.
+void cir_exprs_dbg(cir_exprs_t const *exprs, int indent, FILE *to);
+// Debug-print a `cir_assign_t` C IR node.
+void cir_assign_dbg(cir_assign_t const *assign, int indent, FILE *to);
+// Debug-print a `cir_expr_t` C IR node.
+void cir_expr_dbg(cir_expr_t const *expr, int indent, FILE *to);
+
+// Debug-print a `cir_stmts_t` C IR node.
+void cir_stmts_dbg(cir_stmts_t const *stmts, int indent, FILE *to);
+// Debug-print a `(cir_f_t` C IR node.
+void cir_for_dbg(cir_for_t const *cir_for, int indent, FILE *to);
+// Debug-print a `cir_while_t` C IR node.
+void cir_while_dbg(cir_while_t const *cir_while, int indent, FILE *to);
+// Debug-print a `cir__t` C IR node.
+void cir_if_dbg(cir_if_t const *cir_if, int indent, FILE *to);
+// Debug-print a `cir_label_t` C IR node.
+void cir_label_dbg(cir_label_t const *label, int indent, FILE *to);
+// Debug-print a `cir_return_t` C IR node.
+void cir_return_dbg(cir_return_t const *cir_return, int indent, FILE *to);
+// Debug-print a `cir_stmt_t` C IR node.
+void cir_stmt_dbg(cir_stmt_t const *stmt, int indent, FILE *to);
+
+// Debug-print a `cir_decl_t` C IR node.
+void cir_decl_dbg(cir_decl_t const *decl, int indent, FILE *to);
+// Debug-print a `cir_func_t` C IR node.
+void cir_func_dbg(cir_func_t const *func, int indent, FILE *to);
+// Debug-print a `cir_unit_t` C IR node.
+void cir_unit_dbg(cir_unit_t const *unit, int indent, FILE *to);
+// Debug-print a `cir_unit_list_t` C IR node.
+void cir_unit_list_dbg(cir_unit_list_t const *unit_list, int indent, FILE *to);
+// Debug-print a `cir_trans_unit_t` C IR node.
+void cir_trans_unit_dbg(cir_trans_unit_t const *trans_unit, int indent, FILE *to);

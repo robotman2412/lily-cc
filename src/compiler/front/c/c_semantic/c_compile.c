@@ -142,16 +142,44 @@ cir_unit_t *c_compile2_func(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_func
         errors = true;
     }
 
-    cir_stmt_t *body = c_compile2_stmt_stmts(cc, scope, def->body);
-    if (!body) {
-        errors = true;
+    cir_scope_t   *func_scope = cir_scope_create(CIR_SCOPE_FUNC, scope);
+    vec_cir_stmt_t body       = {0};
+
+    // Parameter decls are prepended to the function body to bring them in scope.
+    vec_cir_unit_t          units     = {0};
+    vec_c_func_arg_t const *type_args = &type.extra->func_type->args;
+    for (size_t i = 0; i < type_args->len; i++) {
+        c_func_arg_t const *arg = &type_args->arr[i];
+        if (!arg->name) {
+            continue;
+        }
+        cir_decl_t *decl = cir_decl_create(arg->name_pos, c_type_clone(arg->type), lilycc_strdup(arg->name), NULL);
+        if (cir_scope_add_decl(cc->cctx, func_scope, decl)) {
+            vec_push(&units, cir_unit_create_decl(decl));
+        } else {
+            errors = true;
+        }
+    }
+    vec_push(&body, cir_stmt_create_units(cir_unit_list_create(def->pos, units)));
+
+    // Compile the body proper.
+    vec_c_ast_stmt_t const *body_ast = &def->body->items;
+    for (size_t i = 0; i < body_ast->len; i++) {
+        cir_stmt_t *stmt = c_compile2_stmt(cc, func_scope, body_ast->arr[i]);
+        if (stmt) {
+            vec_push(&body, stmt);
+        } else {
+            errors = true;
+        }
     }
 
     if (errors) {
-        c_type_delete(type);
-        if (body) {
-            cir_stmt_delete(body);
+        for (size_t i = 0; i < body.len; i++) {
+            cir_stmt_delete(body.arr[i]);
         }
+        cir_scope_delete(func_scope);
+        vec_clear(&body);
+        c_type_delete(type);
         return NULL;
     }
 
@@ -335,7 +363,15 @@ static c_comp_type_t *c_compile2_comp_spec(c_compiler_t *cc, c_ast_spec_qual_t c
     if (!comp) {
         comp       = lilycc_calloc(1, sizeof(c_comp_type_t));
         comp->name = name ? lilycc_strdup(name->name) : NULL;
-        comp->tag  = tag;
+        if (name) {
+            comp->pos = name->pos;
+        } else if (comp_spec->tag == C_AST_TAG_SPEC_QUAL_ENUM) {
+            assert(comp_spec->tag == C_AST_TAG_SPEC_QUAL_STRUCT);
+            comp->pos = comp_spec->spec_qual_struct->keyw_pos;
+        } else {
+            comp->pos = comp_spec->spec_qual_enum->keyw_pos;
+        }
+        comp->tag = tag;
         if (name) {
             cir_scope_add_tag(cc->cctx, scope, comp);
             comp->refcount++;
@@ -589,10 +625,10 @@ c_type_opt_t c_compile2_type(
             func->returns       = cur;
             c_bigtype_t *extra  = lilycc_calloc(1, sizeof(c_bigtype_t));
             extra->refcount     = 1;
-            extra->inner        = cur;
+            extra->func_type    = func;
             c_type_t next       = {
                 .extra = extra,
-                .prim  = C_COMP_POINTER,
+                .prim  = C_COMP_FUNCTION,
                 .qual  = {0},
             };
 
@@ -606,6 +642,10 @@ c_type_opt_t c_compile2_type(
                     continue;
                 }
                 if (def->decl) {
+                    // TODO: Parameter types declared this way actually need their own scope, as in standard C,
+                    // declaring a struct or enum type in here will make it visible only inside a function.
+                    // This quirk will be left in for the time being as standard C cannot meaningfully use such
+                    // functions, as the type declared there cannot meaningfully be named.
                     type = c_compile2_type(ctx, scope, type, def->decl, &name);
                     if (!c_type_is_valid(type)) {
                         errors = true;
@@ -650,6 +690,8 @@ c_type_opt_t c_compile2_type(
                 // Has size expression.
                 fprintf(stderr, "TODO: Sized arrays\n");
                 abort();
+            } else {
+                extra->length = -1;
             }
 
             decl = decl->decl_array->inner;

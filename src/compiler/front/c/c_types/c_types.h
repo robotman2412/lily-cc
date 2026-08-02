@@ -102,9 +102,10 @@ struct c_struct_field {
 
 // Struct/union definition.
 struct c_struct_type {
-    // Must be C_COMP_TYPE_STRUCT or C_COMP_TYPE_UNION.
     char                *name;
+    pos_t                pos;
     atomic_size_t        refcount;
+    // Must be C_COMP_TYPE_STRUCT or C_COMP_TYPE_UNION.
     c_comp_type_tag_t    tag;
     uint64_t             size;
     // Set to 0 if an incomplete type.
@@ -123,9 +124,10 @@ struct c_enumvar {
 
 // Enum definition.
 struct c_enum_type {
-    // Must be C_COMP_TYPE_ENUM.
     char             *name;
+    pos_t             pos;
     atomic_size_t     refcount;
+    // Must be C_COMP_TYPE_ENUM.
     c_comp_type_tag_t tag;
     // Set to C_N_PRIM if an incomplete type.
     c_prim_t          prim;
@@ -136,6 +138,7 @@ struct c_enum_type {
 union c_comp_type {
     struct {
         char             *name;
+        pos_t             pos;
         atomic_size_t     refcount;
         c_comp_type_tag_t tag;
     };
@@ -232,6 +235,10 @@ ir_prim_t      c_type_to_ir_type(c_compiler_t *cc, c_type_ref_t type);
 c_field_info_t c_type_get_field(c_compiler_t *cc, c_type_ref_t type, char const *name);
 // Delete a C type.
 void           c_type_delete(c_type_t type);
+// Print the type in simplified source form.
+void           c_type_print(c_type_ref_t type, FILE *to);
+// Print the primitive type in simplified source form.
+void           c_prim_print(c_prim_t prim, FILE *to);
 
 // Clone a struct type definition.
 static inline c_struct_type_t *c_struct_type_clone(c_struct_type_t *type) {

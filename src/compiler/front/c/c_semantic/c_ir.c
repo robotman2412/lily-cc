@@ -822,8 +822,9 @@ bool cir_scope_add_typedef(cctx_t *ctx, cir_scope_t *scope, char const *name, po
         return false;
     }
 
-    c_type_t *box = lilycc_malloc(sizeof(c_type_t));
-    *box          = type;
+    cir_typedef_t *box = lilycc_malloc(sizeof(cir_typedef_t));
+    box->type          = type;
+    box->pos           = pos;
     map_set(&scope->typedefs, name, box);
     return true;
 }

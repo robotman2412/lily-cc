@@ -41,8 +41,14 @@ cir_trans_unit_t *c_compile2(c_compiler_t *cc, c_ast_def_list_t const *ast) {
                 if (!c_type_is_valid(spec_qual_type)) {
                     break;
                 }
-                for (size_t i = 0; i < def->def_defs->decls->items.len; i++) {
-                    c_ast_init_decl_t const *decl = def->def_defs->decls->items.arr[i];
+
+                vec_c_ast_init_decl_t const *decls = &def->def_defs->decls->items;
+                if (decls->len == 0 && spec_qual_type.prim < C_N_PRIM) {
+                    cctx_diagnostic(cc->cctx, def->def_defs->pos, DIAG_WARN, "This statement declares nothing");
+                }
+
+                for (size_t i = 0; i < decls->len; i++) {
+                    c_ast_init_decl_t const *decl = decls->arr[i];
                     c_ast_ident_t const     *name;
                     c_type_t type = c_compile2_type(cc, global_scope, c_type_clone(spec_qual_type), decl->decl, &name);
                     if (!c_type_is_valid(type)) {
@@ -136,6 +142,10 @@ cir_unit_t *c_compile2_func(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_func
     c_type_t             type = c_compile2_spec_qual_list(cc, def->spec_qual, scope);
     c_ast_ident_t const *name = NULL;
     if (c_type_is_valid(type)) {
+        if (type.qual.s_typedef) {
+            cctx_diagnostic(cc->cctx, def->spec_qual->pos, DIAG_ERR, "typedef not allowed here");
+            errors = true;
+        }
         type   = c_compile2_type(cc, scope, type, def->declarator, &name);
         errors = !c_type_is_valid(type);
     } else {
@@ -442,6 +452,15 @@ c_type_opt_t c_compile2_spec_qual_list(c_compiler_t *cc, c_ast_spec_qual_list_t 
         if (param->tag == C_AST_TAG_SPEC_QUAL_KEYW) {
             c_keyw_t keyw = param->spec_qual_keyw;
             switch (keyw) {
+                case C_KEYW_typedef: type.qual.s_typedef = true; break;
+                case C_KEYW_auto: type.qual.s_auto = true; break;
+                case C_KEYW_constexpr: type.qual.s_constexpr = true; break;
+                case C_KEYW_extern: type.qual.s_extern = true; break;
+                case C_KEYW_register: type.qual.s_register = true; break;
+                case C_KEYW_static: type.qual.s_static = true; break;
+                case C_KEYW__Thread_local:
+                case C_KEYW_thread_local: type.qual.s_thread_local = true; break;
+                case C_KEYW_restrict: type.qual.q_restrict = true; break;
                 case C_KEYW__Atomic: type.qual.q_atomic = true; break;
                 case C_KEYW_volatile: type.qual.q_volatile = true; break;
                 case C_KEYW_const: type.qual.q_const = true; break;
@@ -508,8 +527,25 @@ c_type_opt_t c_compile2_spec_qual_list(c_compiler_t *cc, c_ast_spec_qual_list_t 
         type.extra->comp_type = inner;
 
     } else if (typedef_name) {
-        fprintf(stderr, "TODO: c_compile2_spec_qual_list with typedef'd name\n");
-        abort();
+        cir_typedef_t const *inner = cir_scope_lookup_typedef(scope, typedef_name->name);
+        if (!inner) {
+            if (cir_scope_lookup_value(scope, typedef_name->name)) {
+                cctx_diagnostic(cc->cctx, typedef_name->pos, DIAG_ERR, "expected a typedef name");
+            } else {
+                cctx_diagnostic(cc->cctx, typedef_name->pos, DIAG_ERR, "use of undeclared identifier");
+            }
+            return C_TYPE_INVALID;
+        }
+        if (type.qual.val & inner->type.qual.val) {
+            cctx_diagnostic(cc->cctx, list->pos, DIAG_WARN, "redundant items in specifier-qualifier list");
+        }
+        type.qual.val |= inner->type.qual.val;
+
+        if (inner->type.extra) {
+            atomic_fetch_add_explicit(&inner->type.extra->refcount, 1, memory_order_release);
+        }
+        type.extra = inner->type.extra;
+        type.prim  = inner->type.prim;
 
     } else if (has_char) {
         if (has_unsigned) {
@@ -605,6 +641,8 @@ c_type_opt_t c_compile2_type(
     c_ast_decl_t const   *decl,
     c_ast_ident_t const **name_out
 ) {
+    spec_qual_type.qual.s_typedef = 0;
+
     c_type_t cur = spec_qual_type;
     if (name_out) {
         *name_out = NULL;
@@ -629,7 +667,7 @@ c_type_opt_t c_compile2_type(
             c_type_t next       = {
                 .extra = extra,
                 .prim  = C_COMP_FUNCTION,
-                .qual  = {0},
+                .qual  = {.val = 0},
             };
 
             bool errors = false;
@@ -640,6 +678,10 @@ c_type_opt_t c_compile2_type(
                 if (!c_type_is_valid(type)) {
                     errors = true;
                     continue;
+                }
+                if (type.qual.s_typedef) {
+                    cctx_diagnostic(ctx->cctx, def->spec_qual->pos, DIAG_ERR, "typedef not allowed here");
+                    errors = true;
                 }
                 if (def->decl) {
                     // TODO: Parameter types declared this way actually need their own scope, as in standard C,
@@ -683,7 +725,7 @@ c_type_opt_t c_compile2_type(
             c_type_t next      = {
                 .extra = extra,
                 .prim  = C_COMP_ARRAY,
-                .qual  = {0},
+                .qual  = {.val = 0},
             };
 
             if (decl->decl_array->size) {
@@ -704,7 +746,7 @@ c_type_opt_t c_compile2_type(
             c_type_t next      = {
                 .extra = extra,
                 .prim  = C_COMP_POINTER,
-                .qual  = {0},
+                .qual  = {.val = 0},
             };
 
             // Add specifiers to pointer.

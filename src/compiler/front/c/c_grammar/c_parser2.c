@@ -1011,10 +1011,7 @@ c_ast_spec_qual_list_t *c_parse2_spec_qual_list(c_parser_t *ctx, bool *is_typede
     pos_t   pos  = peek.pos;
     pos.len      = 0;
     while (1) {
-        if (is_type_specifier(peek) || is_type_qualifier(peek)
-            || (peek.type == TOKENTYPE_IDENT
-                && (set_contains(&ctx->type_names, peek.strval)
-                    || (ctx->func_body && set_contains(&ctx->local_type_names, peek.strval))))) {
+        if (is_type_specifier(peek) || is_type_qualifier(peek)) {
             if (peek.type == TOKENTYPE_KEYWORD && peek.subtype == C_KEYW_typedef && is_typedef_out) {
                 *is_typedef_out = true;
             }
@@ -1022,6 +1019,16 @@ c_ast_spec_qual_list_t *c_parse2_spec_qual_list(c_parser_t *ctx, bool *is_typede
             // Token added verbatim.
             token_t tkn = tkn_next(ctx->tkn_ctx);
             vec_push(&args, c_ast_spec_qual_create_keyw(tkn.pos, tkn.subtype));
+            tkn_delete(tkn);
+
+        } else if (
+            peek.type == TOKENTYPE_IDENT
+            && (set_contains(&ctx->type_names, peek.strval)
+                || (ctx->func_body && set_contains(&ctx->local_type_names, peek.strval)))
+        ) {
+            // Identifier added verbatim.
+            token_t tkn = tkn_next(ctx->tkn_ctx);
+            vec_push(&args, c_ast_spec_qual_create_typedef(c_ast_ident_create(tkn.pos, lilycc_strdup(tkn.strval))));
             tkn_delete(tkn);
 
         } else if (peek.type == TOKENTYPE_KEYWORD && (peek.subtype == C_KEYW_struct || peek.subtype == C_KEYW_union)) {

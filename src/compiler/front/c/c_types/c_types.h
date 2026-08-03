@@ -24,7 +24,7 @@ typedef enum {
 } c_comp_type_tag_t;
 
 // Type qualifiers.
-typedef struct c_qual c_qual_t;
+typedef union c_qual  c_qual_t;
 // Type ascribed to a variable or function.
 typedef struct c_type c_type_t, c_type_opt_t;
 #define c_type_ref_t c_type_t const
@@ -56,20 +56,23 @@ VEC_TYPE_DEF(vec_c_func_arg_t, c_func_arg_t);
 
 
 // Type qualifiers.
-struct c_qual {
-    // Storage class specifiers.
-    uint16_t s_auto         : 1;
-    uint16_t s_constexpr    : 1;
-    uint16_t s_extern       : 1;
-    uint16_t s_register     : 1;
-    uint16_t s_static       : 1;
-    uint16_t s_thread_local : 1;
-    uint16_t s_typedef      : 1;
-    // Type qualifiers.
-    uint16_t q_volatile     : 1;
-    uint16_t q_atomic       : 1;
-    uint16_t q_const        : 1;
-    uint16_t q_restrict     : 1;
+union c_qual {
+    struct {
+        // Storage class specifiers.
+        uint16_t s_auto         : 1;
+        uint16_t s_constexpr    : 1;
+        uint16_t s_extern       : 1;
+        uint16_t s_register     : 1;
+        uint16_t s_static       : 1;
+        uint16_t s_thread_local : 1;
+        uint16_t s_typedef      : 1;
+        // Type qualifiers.
+        uint16_t q_volatile     : 1;
+        uint16_t q_atomic       : 1;
+        uint16_t q_const        : 1;
+        uint16_t q_restrict     : 1;
+    };
+    uint16_t val;
 };
 
 // Type ascribed to a variable or function.
@@ -183,7 +186,7 @@ struct c_bigtype {
 
 
 
-#define C_TYPE_FROM_PRIM(prim_) ((c_type_t){.extra = NULL, .prim = (prim_), .qual = {0}})
+#define C_TYPE_FROM_PRIM(prim_) ((c_type_t){.extra = NULL, .prim = (prim_), .qual = {.val = 0}})
 #define C_TYPE_INVALID          C_TYPE_FROM_PRIM(C_N_PRIM)
 
 // Get the size of a primitive type.

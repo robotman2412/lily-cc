@@ -38,7 +38,7 @@ static char *test_c_expr_prefix() {
             print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
-        c_ast_expr_print(expr, stdout, 0);
+        c_ast_expr_dbg(expr, 0, stdout);
         return TEST_FAIL;
     }
 
@@ -66,7 +66,7 @@ static char *test_c_expr_basic() {
             print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
-        c_ast_expr_print(expr, stdout, 0);
+        c_ast_expr_dbg(expr, 0, stdout);
         return TEST_FAIL;
     }
 
@@ -94,7 +94,7 @@ static char *test_c_expr_call() {
             print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
-        c_ast_expr_print(expr, stdout, 0);
+        c_ast_expr_dbg(expr, 0, stdout);
         return TEST_FAIL;
     }
 
@@ -122,7 +122,7 @@ static char *test_c_expr_deref() {
             print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
-        c_ast_expr_print(expr, stdout, 0);
+        c_ast_expr_dbg(expr, 0, stdout);
         return TEST_FAIL;
     }
 
@@ -151,7 +151,7 @@ static char *test_c_expr_cast() {
             print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
-        c_ast_expr_print(expr, stdout, 0);
+        c_ast_expr_dbg(expr, 0, stdout);
         return TEST_FAIL;
     }
 
@@ -182,7 +182,7 @@ static char *test_c_type_funcptr() {
             print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
-        c_ast_type_name_print(type, stdout, 0);
+        c_ast_type_name_dbg(type, 0, stdout);
         return TEST_FAIL;
     }
 
@@ -218,7 +218,7 @@ static char *test_c_type_struct() {
             print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
-        c_ast_type_name_print(type, stdout, 0);
+        c_ast_type_name_dbg(type, 0, stdout);
         return TEST_FAIL;
     }
 
@@ -255,7 +255,7 @@ static char *test_c_type_enum() {
             print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
-        c_ast_type_name_print(type, stdout, 0);
+        c_ast_type_name_dbg(type, 0, stdout);
         return TEST_FAIL;
     }
 
@@ -286,7 +286,7 @@ static char *test_c_stmt_decl() {
             print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
-        c_ast_def_print(def, stdout, 0);
+        c_ast_def_dbg(def, 0, stdout);
         return TEST_FAIL;
     }
 
@@ -330,7 +330,7 @@ static char *test_c_stmt_ctrl() {
             print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
-        c_ast_stmt_list_print(stmts, stdout, 0);
+        c_ast_stmt_list_dbg(stmts, 0, stdout);
         return TEST_FAIL;
     }
 
@@ -366,7 +366,7 @@ static char *test_c_function() {
             print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
-        c_ast_def_print(def, stdout, 0);
+        c_ast_def_dbg(def, 0, stdout);
         return TEST_FAIL;
     }
 
@@ -407,7 +407,7 @@ static char *test_c_compliteral() {
             print_diagnostic(diag, stderr);
             diag = (diagnostic_t const *)diag->node.next;
         }
-        c_ast_expr_print(expr, stdout, 0);
+        c_ast_expr_dbg(expr, 0, stdout);
         return TEST_FAIL;
     }
 

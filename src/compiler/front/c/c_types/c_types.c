@@ -140,7 +140,7 @@ c_type_t c_type_clone_pointer(c_type_ref_t inner) {
     c_type_t type = {
         .extra = lilycc_calloc(1, sizeof(c_bigtype_t)),
         .prim  = C_COMP_POINTER,
-        .qual  = {0},
+        .qual  = {.val = 0},
     };
     type.extra->inner = c_type_clone(inner);
     return type;

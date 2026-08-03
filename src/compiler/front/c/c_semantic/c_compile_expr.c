@@ -768,6 +768,11 @@ cir_expr_t *c_compile2_expr_cast(c_compiler_t *cc, cir_scope_t *scope, c_ast_exp
     if (!c_type_is_valid(spec_qual)) {
         return NULL;
     }
+    if (spec_qual.qual.s_typedef) {
+        cctx_diagnostic(cc->cctx, cast->type->spec_qual->pos, DIAG_ERR, "typedef not allowed here");
+        c_type_delete(spec_qual);
+        return NULL;
+    }
     c_ast_ident_t const *name;
 
     c_type_t type = c_compile2_type(cc, scope, spec_qual, cast->type->decl, &name);

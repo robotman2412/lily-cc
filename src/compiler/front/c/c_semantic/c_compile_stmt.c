@@ -5,15 +5,18 @@
 
 #include "c_compile_stmt.h"
 
+#include "c_ast.h"
 #include "c_compile.h"
 #include "c_compile_expr.h"
 #include "c_ir.h"
+#include "c_prim.h"
 #include "c_types.h"
 #include "compiler.h"
 #include "lilycc_malloc.h"
 #include "unreachable.h"
 #include "vec.h"
 
+#include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
 
@@ -226,12 +229,32 @@ cir_stmt_t *c_compile2_stmt_def(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_
             if (!c_type_is_valid(spec_qual_type)) {
                 return NULL;
             }
-            vec_cir_unit_t units = {0};
-            for (size_t i = 0; i < def->def_defs->decls->items.len; i++) {
-                cir_unit_t *unit
-                    = c_compile2_decl(cc, scope, c_type_clone(spec_qual_type), def->def_defs->decls->items.arr[i]);
-                if (unit) {
-                    vec_push(&units, unit);
+            vec_cir_unit_t               units = {0};
+            vec_c_ast_init_decl_t const *decls = &def->def_defs->decls->items;
+
+            if (decls->len == 0 && spec_qual_type.prim < C_N_PRIM) {
+                cctx_diagnostic(cc->cctx, def->def_defs->pos, DIAG_WARN, "This statement declares nothing");
+            }
+
+            for (size_t i = 0; i < decls->len; i++) {
+                c_ast_init_decl_t const *decl = decls->arr[i];
+                if (spec_qual_type.qual.s_typedef) {
+                    c_ast_ident_t const *name;
+                    c_type_t             type = c_compile2_type(cc, scope, spec_qual_type, decl->decl, &name);
+                    if (!c_type_is_valid(type)) {
+                        continue;
+                    }
+                    assert(name != NULL);
+                    if (decl->init) {
+                        cctx_diagnostic(cc->cctx, decl->init->pos, DIAG_ERR, "Cannot have initializer for typedef");
+                    }
+                    cir_scope_add_typedef(cc->cctx, scope, name->name, name->pos, type);
+
+                } else {
+                    cir_unit_t *unit = c_compile2_decl(cc, scope, c_type_clone(spec_qual_type), decl);
+                    if (unit) {
+                        vec_push(&units, unit);
+                    }
                 }
             }
             return cir_stmt_create_units(cir_unit_list_create(def->pos, units));

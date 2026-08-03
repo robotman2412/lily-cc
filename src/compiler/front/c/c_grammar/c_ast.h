@@ -94,7 +94,7 @@ typedef char *c_ast_cstr_t;
 // Common function declarations.
 #define C_AST_DEF(name)                                                                                                \
     /* Debug-print the given AST node. */                                                                              \
-    void c_ast_##name##_print(c_ast_##name##_t const *ast, FILE *to, int indent);                                      \
+    void c_ast_##name##_dbg(c_ast_##name##_t const *ast, int indent, FILE *to);                                        \
     /* Destroy an AST node. */                                                                                         \
     void c_ast_##name##_delete(c_ast_##name##_t *ast);
 #include "c_ast.inc"

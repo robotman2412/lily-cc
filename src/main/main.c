@@ -129,7 +129,8 @@ static void compile2(char const *path) {
 
     // While not EOF, keep parsing and compiling stuff.
     c_ast_def_list_t *ast = c_parse2(pctx);
-    cir_trans_unit_t *tu  = c_compile2(cc, ast);
+    c_ast_def_list_dbg(ast, 0, stdout);
+    cir_trans_unit_t *tu = c_compile2(cc, ast);
     cir_trans_unit_dbg(tu, 0, stdout);
     c_ast_def_list_delete(ast);
     cir_trans_unit_delete(tu);

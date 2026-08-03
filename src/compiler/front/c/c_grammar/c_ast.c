@@ -70,7 +70,7 @@
 
 
 // Indentation printing helper.
-static void pindent(FILE *to, int indent) {
+static void pindent(int indent, FILE *to) {
     while (indent) {
         fputs("  ", to);
         indent--;
@@ -78,14 +78,14 @@ static void pindent(FILE *to, int indent) {
 }
 
 // String printing helper.
-static void pc_ast_cstr_t(c_ast_cstr_t const *value, FILE *to, int indent) {
+static void pc_ast_cstr_t(c_ast_cstr_t const *value, int indent, FILE *to) {
     (void)indent;
     fputs(*value, to);
     fputc('\n', to);
 }
 
 // C string constant printing helper.
-static void pvec_char_t(vec_char_t const *value, FILE *to, int indent) {
+static void pvec_char_t(vec_char_t const *value, int indent, FILE *to) {
     (void)indent;
     fputc('\"', to);
     print_cstr_repr(value->arr, value->len, to);
@@ -94,7 +94,7 @@ static void pvec_char_t(vec_char_t const *value, FILE *to, int indent) {
 }
 
 // Position printing helper.
-static void ppos_t(pos_t const *pos, FILE *to, int indent) {
+static void ppos_t(pos_t const *pos, int indent, FILE *to) {
     (void)indent;
     if (pos->srcfile) {
         fputs(pos->srcfile->path, to);
@@ -105,34 +105,34 @@ static void ppos_t(pos_t const *pos, FILE *to, int indent) {
 }
 
 // C token type printing helper.
-static void pc_tokentype_t(c_tokentype_t const *value, FILE *to, int indent) {
+static void pc_tokentype_t(c_tokentype_t const *value, int indent, FILE *to) {
     (void)indent;
     fputs(c_token_id[*value], to);
     fputc('\n', to);
 }
 
 // C primitive type printing helper.
-static void pc_prim_t(c_prim_t const *value, FILE *to, int indent) {
+static void pc_prim_t(c_prim_t const *value, int indent, FILE *to) {
     (void)indent;
     fputs(c_prim_name[*value], to);
     fputc('\n', to);
 }
 
 // C primitive type printing helper.
-static void pc_keyw_t(c_keyw_t const *value, FILE *to, int indent) {
+static void pc_keyw_t(c_keyw_t const *value, int indent, FILE *to) {
     (void)indent;
     fputs(c_keyw_name[*value], to);
     fputc('\n', to);
 }
 
 // Bool printing helper.
-static void pbool(bool const *value, FILE *to, int indent) {
+static void pbool(bool const *value, int indent, FILE *to) {
     (void)indent;
     fputs(*value ? "true\n" : "false\n", to);
 }
 
 // IR constant printing helper.
-static void pi128_t(i128_t const *value, FILE *to, int indent) {
+static void pi128_t(i128_t const *value, int indent, FILE *to) {
     (void)indent;
     char buf[40];
     itoa128(*value, 0, buf);
@@ -143,30 +143,30 @@ static void pi128_t(i128_t const *value, FILE *to, int indent) {
 // Struct printing functions.
 #define C_AST_STRUCT_DEF(name, ...)                                                                                    \
     /* Debug-print the given AST node. */                                                                              \
-    void c_ast_##name##_print(c_ast_##name##_t const *ast, FILE *to, int indent) {                                     \
+    void c_ast_##name##_dbg(c_ast_##name##_t const *ast, int indent, FILE *to) {                                       \
         indent++;                                                                                                      \
         fputs(#name "\n", to);                                                                                         \
-        pindent(to, indent);                                                                                           \
+        pindent(indent, to);                                                                                           \
         fputs("pos: ", to);                                                                                            \
-        ppos_t(&ast->pos, to, indent);                                                                                 \
+        ppos_t(&ast->pos, indent, to);                                                                                 \
         __VA_ARGS__                                                                                                    \
     }
 #define C_AST_STRUCT_FIELD(parent, type, name)                                                                         \
-    pindent(to, indent);                                                                                               \
+    pindent(indent, to);                                                                                               \
     fputs(#name ": ", to);                                                                                             \
-    p##type(&ast->name, to, indent);
+    p##type(&ast->name, indent, to);
 #define C_AST_STRUCT_CHILD(parent, type, name)                                                                         \
     if (ast->name) {                                                                                                   \
-        pindent(to, indent);                                                                                           \
+        pindent(indent, to);                                                                                           \
         fputs(#name ": ", to);                                                                                         \
-        c_ast_##type##_print(ast->name, to, indent);                                                                   \
+        c_ast_##type##_dbg(ast->name, indent, to);                                                                     \
     }
 #include "c_ast.inc"
 
 // Union printing helpers.
 #define C_AST_UNION_DEF(name, ...)                                                                                     \
     /* Debug-print the given AST node. */                                                                              \
-    void c_ast_##name##_print(c_ast_##name##_t const *ast, FILE *to, int indent) {                                     \
+    void c_ast_##name##_dbg(c_ast_##name##_t const *ast, int indent, FILE *to) {                                       \
         fputs(#name, to);                                                                                              \
         switch (ast->tag) { __VA_ARGS__ }                                                                              \
     }
@@ -174,33 +174,33 @@ static void pi128_t(i128_t const *value, FILE *to, int indent) {
     case C_AST_TAG_##union_tag:                                                                                        \
         indent++;                                                                                                      \
         fputc('\n', to);                                                                                               \
-        pindent(to, indent);                                                                                           \
+        pindent(indent, to);                                                                                           \
         fputs("pos: ", to);                                                                                            \
-        ppos_t(&ast->pos, to, indent);                                                                                 \
-        pindent(to, indent);                                                                                           \
+        ppos_t(&ast->pos, indent, to);                                                                                 \
+        pindent(indent, to);                                                                                           \
         fputs(#parent "_" #name ": ", to);                                                                             \
-        p##type(&ast->parent##_##name, to, indent);                                                                    \
+        p##type(&ast->parent##_##name, indent, to);                                                                    \
         break;
 #define C_AST_UNION_CHILD(parent, type, name, union_tag)                                                               \
     case C_AST_TAG_##union_tag:                                                                                        \
         fputc(' ', to);                                                                                                \
-        c_ast_##type##_print(ast->parent##_##name, to, indent);                                                        \
+        c_ast_##type##_dbg(ast->parent##_##name, indent, to);                                                          \
         break;
 #include "c_ast.inc"
 
 // List printing helpers.
 #define C_AST_LIST_DEF(name)                                                                                           \
     /* Debug-print the given AST node. */                                                                              \
-    void c_ast_##name##_list_print(c_ast_##name##_list_t const *ast, FILE *to, int indent) {                           \
+    void c_ast_##name##_list_dbg(c_ast_##name##_list_t const *ast, int indent, FILE *to) {                             \
         indent++;                                                                                                      \
         fputs(#name "_list\n", to);                                                                                    \
-        pindent(to, indent);                                                                                           \
+        pindent(indent, to);                                                                                           \
         fputs("pos: ", to);                                                                                            \
-        ppos_t(&ast->pos, to, indent);                                                                                 \
+        ppos_t(&ast->pos, indent, to);                                                                                 \
         for (size_t i = 0; i < ast->items.len; i++) {                                                                  \
-            pindent(to, indent);                                                                                       \
+            pindent(indent, to);                                                                                       \
             fprintf(to, "%zu: ", i);                                                                                   \
-            c_ast_##name##_print(ast->items.arr[i], to, indent);                                                       \
+            c_ast_##name##_dbg(ast->items.arr[i], indent, to);                                                         \
         }                                                                                                              \
     }
 #include "c_ast.inc"

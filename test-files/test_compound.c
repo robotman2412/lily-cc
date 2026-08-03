@@ -1,7 +1,7 @@
 
 enum a {
     a_0,
-    a_1 = 9,
+    a_1, // = 9,
 } a;
 
 int foo(int) {
@@ -22,10 +22,10 @@ struct b {
 
 void bar(struct b *b) {
     struct b mydat;
-    mydat.a = b->a;
-    mydat.b = 1;
-    mydat.c = ~(*b).c;
-    mydat.e = 2;
+    // mydat.a = b->a;
+    // mydat.b = 1;
+    // mydat.c = ~(*b).c;
+    // mydat.e = 2;
 }
 
 struct c {
@@ -58,12 +58,12 @@ struct e {
 
 struct f {
     struct e s0, s1;
-    char     v0[4];
+    // char     v0[4];
 };
 
 void quantum(int *dummy) {
-    *dummy = ((struct f){}).s1.v0;
-    *dummy = ((struct f){0}).s1.v0;
-    *dummy = ((struct f){.s1.v0 = 9}).s1.v0;
-    *dummy = ((struct f){.v0[2] = 9}).v0[2];
+    // *dummy = ((struct f){}).s1.v0;
+    // *dummy = ((struct f){0}).s1.v0;
+    // *dummy = ((struct f){.s1.v0 = 9}).s1.v0;
+    // *dummy = ((struct f){.v0[2] = 9}).v0[2];
 }

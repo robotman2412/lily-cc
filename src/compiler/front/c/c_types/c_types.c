@@ -242,8 +242,8 @@ bool c_type_is_castable(c_type_ref_t new_type, c_type_ref_t old_type) {
     if (new_type.prim == C_PRIM_VOID) {
         return true;
     }
-    return old_type.prim < C_N_PRIM && new_type.prim < C_N_PRIM && old_type.prim != C_PRIM_VOID
-           && new_type.prim != C_PRIM_VOID;
+    return ((old_type.prim < C_N_PRIM && old_type.prim != C_PRIM_VOID) || old_type.prim == C_COMP_POINTER)
+           && ((new_type.prim < C_N_PRIM && new_type.prim != C_PRIM_VOID) || new_type.prim == C_COMP_POINTER);
 }
 
 // Determine whether two types are the same.

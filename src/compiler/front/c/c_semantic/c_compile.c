@@ -108,19 +108,14 @@ cir_unit_t *
     cir_expr_t *init = NULL;
     if (ast->init) {
         if (ast->init->tag == C_AST_TAG_INITVAL_COMPOUND) {
-            cir_value_t *val = c_compile2_compinit(cc, scope, c_type_clone(type), ast->init->initval_compound);
-            if (!val) {
-                c_type_delete(type);
-                return NULL;
-            }
-            init = cir_expr_create_value(val);
+            init = c_compile2_compinit(cc, scope, c_type_clone(type), ast->decl->pos, ast->init->initval_compound);
         } else {
             assert(ast->init->tag == C_AST_TAG_INITVAL_EXPR);
             init = c_compile2_expr(cc, scope, ast->init->initval_expr);
-            if (!init) {
-                c_type_delete(type);
-                return NULL;
-            }
+        }
+        if (!init) {
+            c_type_delete(type);
+            return NULL;
         }
     }
 
@@ -376,9 +371,9 @@ static c_comp_type_t *c_compile2_comp_spec(c_compiler_t *cc, c_ast_spec_qual_t c
         if (name) {
             comp->pos = name->pos;
         } else if (comp_spec->tag == C_AST_TAG_SPEC_QUAL_ENUM) {
-            assert(comp_spec->tag == C_AST_TAG_SPEC_QUAL_STRUCT);
             comp->pos = comp_spec->spec_qual_struct->keyw_pos;
         } else {
+            assert(comp_spec->tag == C_AST_TAG_SPEC_QUAL_STRUCT);
             comp->pos = comp_spec->spec_qual_enum->keyw_pos;
         }
         comp->tag = tag;

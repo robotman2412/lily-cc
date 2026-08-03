@@ -5,6 +5,7 @@
 
 #include "c_compile_expr.h"
 
+#include "arith128.h"
 #include "c_ast.h"
 #include "c_compile.h"
 #include "c_ir.h"
@@ -16,9 +17,11 @@
 #include "ir_interpreter.h"
 #include "ir_types.h"
 #include "lilycc_malloc.h"
+#include "unreachable.h"
 #include "vec.h"
 
 #include <assert.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -275,13 +278,14 @@ static cir_expr_t *
             goto error;
         }
 
-        rhs = raw_cast(cc, pos, C_TYPE_FROM_PRIM(cc->options.size_type), rhs);
-        assert(rhs != NULL);
-        rhs = raw_calc(cc, pos, op, rhs, c_compile2_synth_iconst(cc, pos, cc->options.size_type, ui128(size)));
-        assert(rhs != NULL);
-        rhs = raw_cast(cc, pos, c_type_clone(ltyp), rhs);
-        assert(rhs != NULL);
-        return raw_calc(cc, pos, op, lhs, rhs);
+        cir_expr_t *cast1 = raw_cast(cc, pos, C_TYPE_FROM_PRIM(cc->options.size_type), rhs);
+        assert(cast1 != NULL);
+        cir_expr_t *offset
+            = raw_calc(cc, pos, op, cast1, c_compile2_synth_iconst(cc, pos, cc->options.size_type, ui128(size)));
+        assert(offset != NULL);
+        cir_expr_t *cast2 = raw_cast(cc, pos, c_type_clone(ltyp), offset);
+        assert(cast2 != NULL);
+        return raw_calc(cc, pos, op, lhs, cast2);
     }
 
     if (ltyp.prim == C_PRIM_VOID || ltyp.prim >= C_N_PRIM) {
@@ -922,8 +926,23 @@ cir_expr_t *c_compile2_expr_sconst(c_compiler_t *cc, cir_scope_t *scope, c_ast_e
 // Compile a compound literal as part of an expression.
 cir_expr_t *
     c_compile2_expr_compliteral(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_compliteral_t const *compliteral) {
-    fprintf(stderr, "TODO: c_compile2_expr_compliteral\n");
-    abort();
+    c_type_t spec_qual_type = c_compile2_spec_qual_list(cc, compliteral->type->spec_qual, scope);
+    if (!c_type_is_valid(spec_qual_type)) {
+        return NULL;
+    } else if (spec_qual_type.qual.s_typedef) {
+        cctx_diagnostic(cc->cctx, compliteral->type->spec_qual->pos, DIAG_ERR, "typedef not allowed here");
+        c_type_delete(spec_qual_type);
+        return NULL;
+    }
+    c_ast_ident_t const *name;
+    c_type_t             type = c_compile2_type(cc, scope, spec_qual_type, compliteral->type->decl, &name);
+    if (!c_type_is_valid(type)) {
+        return NULL;
+    } else if (name) {
+        cctx_diagnostic(cc->cctx, name->pos, DIAG_ERR, "name not allowed here");
+    }
+
+    return c_compile2_compinit(cc, scope, type, compliteral->type->pos, compliteral->init);
 }
 
 // Compile an expression list.
@@ -964,10 +983,588 @@ cir_expr_t *c_compile2_expr_exprs(c_compiler_t *cc, cir_scope_t *scope, c_ast_ex
     return cir_expr_create_exprs(cir_exprs_create(common, out));
 }
 
+// Helper for `c_compile2_compinit` that keeps track of the field being written.
+typedef struct {
+    // Stack that indicates field being accessed.
+    vec_size_t           stack;
+    // Stores needed to initialize without optimization.
+    vec_cir_comp_store_t stores;
+    // Type being initialized.
+    c_type_ref_t         type;
+    // Current field offset.
+    uint64_t             field_offset;
+    // Current field type.
+    c_type_t             field_type;
+} c_init_cursor_t;
+
+// Step into the first field of the current (compound-typed) field.
+// Returns whether there is such a field (the compound type is not zero-sized).
+static bool c_init_cursor_step_in(c_init_cursor_t *cursor) {
+    // Non-owning.
+    c_type_t cur = cursor->type;
+    for (size_t i = 0;; i++) {
+        size_t field = (i < cursor->stack.len) ? cursor->stack.arr[i] : 0;
+
+        if (cur.prim == C_COMP_STRUCT || cur.prim == C_COMP_UNION) {
+            c_struct_type_t const *comp = cur.extra->struct_type;
+            if (comp->fields.len == 0) {
+                return false;
+            }
+            cur = comp->fields.arr[field].type;
+
+        } else if (cur.prim == C_COMP_ARRAY) {
+            fprintf(stderr, "TODO: c_init_cursor_step_in with C_COMP_ARRAY\n");
+            abort();
+
+        } else {
+            // Pointers, enums and primitive types.
+            break;
+        }
+
+        if (i >= cursor->stack.len) {
+            vec_push(&cursor->stack, 0);
+        }
+    }
+
+    return true;
+}
+
+// Helper for `c_compile_comp_init` that selects a named field.
+// Returns whether the field exists.
+static inline bool c_init_cursor_select_named(
+    c_compiler_t *cc, c_init_cursor_t *cursor, c_ast_ident_t const *name, bool err_notfound
+) {
+    c_type_ref_t field_type = cursor->field_type;
+    if (field_type.prim != C_COMP_STRUCT && field_type.prim != C_COMP_UNION) {
+        cctx_diagnostic(cc->cctx, name->pos, DIAG_ERR, "Unexpected named initializer field for non-struct/union type");
+        return false;
+    }
+
+    c_struct_type_t const *comp = field_type.extra->struct_type;
+    for (size_t i = 0; i < comp->fields.len; i++) {
+        c_struct_field_t const *field = &comp->fields.arr[i];
+
+        if (field->name && !strcmp(field->name, name->name)) {
+            // Matching field name found.
+            vec_push(&cursor->stack, i);
+            c_type_t new_type     = c_type_clone(field->type);
+            cursor->field_offset += field->offset;
+            c_type_delete(cursor->field_type);
+            cursor->field_type = new_type;
+            return true;
+
+        } else if (!field->name && (field_type.prim == C_COMP_STRUCT || field_type.prim == C_COMP_UNION)) {
+            // Recursively search in anonymous nested structs/unions.
+            c_type_t prev_type = c_type_clone(cursor->field_type);
+            vec_push(&cursor->stack, i);
+            uint64_t field_offset  = field->offset;
+            cursor->field_offset  += field_offset;
+            c_type_t new_type      = c_type_clone(field->type);
+            c_type_delete(cursor->field_type);
+            cursor->field_type = new_type;
+
+            if (c_init_cursor_select_named(cc, cursor, name, false)) {
+                c_type_delete(prev_type);
+                return true;
+            } else {
+                // Restore cursor to original value if search fails.
+                c_type_delete(cursor->field_type);
+                cursor->field_type = prev_type;
+                vec_pop(&cursor->stack);
+                cursor->field_offset -= field_offset;
+            }
+        }
+    }
+
+    if (err_notfound) {
+        cctx_diagnostic(cc->cctx, name->pos, DIAG_ERR, "No such struct/union field");
+    }
+
+    return false;
+}
+
+// Helper for `c_compile_comp_init` that selects an indexed field.
+// Returns whether the field exists.
+static inline bool
+    c_init_cursor_select_indexed(c_compiler_t *cc, c_init_cursor_t *cursor, cir_expr_t *index, pos_t index_pos) {
+    c_type_ref_t field_type = cursor->field_type;
+    if (field_type.prim != C_COMP_ARRAY) {
+        cctx_diagnostic(cc->cctx, index_pos, DIAG_ERR, "Unexpected indexed initializer field for non-array type");
+        cir_expr_delete(index);
+        return false;
+    }
+
+    assert(index->tag == CIR_EXPR_VALUE);
+    assert(index->value->tag == CIR_VALUE_CONST);
+
+    ir_const_t ir_index = index->value->iconst->iconst;
+    if (ir_prim_is_signed(ir_index.prim_type)) {
+        i128_t s_index = ir_cast(IR_PRIM_s128, ir_index).const128;
+        if (cmp128s(s_index, I128_ZERO) < 0) {
+            char buf[40];
+            itoa128(neg128(s_index), 0, buf);
+            cctx_diagnostic(cc->cctx, index_pos, DIAG_ERR, "Negative initializer index -%s is not allowed", buf);
+            cir_expr_delete(index);
+            return false;
+        }
+    }
+    i128_t u_index = ir_cast(IR_PRIM_u128, ir_index).const128;
+    if (cmp128u(u_index, ui128(field_type.extra->length)) > 0) {
+        char buf[40];
+        itoa128(u_index, 0, buf);
+        cctx_diagnostic(
+            cc->cctx,
+            index_pos,
+            DIAG_ERR,
+            "Initializer index %s exceeds array bounds (length %" PRId32 ")",
+            buf,
+            field_type.extra->length
+        );
+        cir_expr_delete(index);
+        return false;
+    }
+
+    uint64_t inner_size, inner_align;
+    if (!c_type_get_size(cc, field_type.extra->inner, &inner_size, &inner_align)) {
+        UNREACHABLE();
+    }
+
+    uint64_t index_64 = lo64(u_index);
+    vec_push(&cursor->stack, lo64(u_index));
+    cursor->field_offset += index_64 * inner_size;
+    c_type_t new_type     = c_type_clone(field_type.extra->inner);
+    c_type_delete(cursor->field_type);
+    cursor->field_type = new_type;
+    cir_expr_delete(index);
+    return true;
+}
+
+// Helper for `c_init_field` that moves the cursor to the next field.
+static void c_init_cursor_next(c_init_cursor_t *cursor) {
+    while (cursor->stack.len) {
+        bool     has_next = false;
+        // Non-owning.
+        c_type_t cur      = cursor->type;
+        for (size_t depth = 0; depth < cursor->stack.len; depth++) {
+            size_t index = cursor->stack.arr[depth];
+            if (cur.prim == C_COMP_STRUCT) {
+                c_struct_type_t const  *comp  = cur.extra->struct_type;
+                c_struct_field_t const *field = &comp->fields.arr[index];
+                cur                           = field->type;
+                cursor->field_offset          = field->offset;
+                has_next                      = index + 1 < comp->fields.len;
+                c_type_delete(cursor->field_type);
+                cursor->field_type = c_type_clone(field->type);
+
+            } else if (cur.prim == C_COMP_UNION) {
+                c_struct_type_t const  *comp  = cur.extra->struct_type;
+                c_struct_field_t const *field = &comp->fields.arr[index];
+                cur                           = field->type;
+                cursor->field_offset          = field->offset;
+                has_next                      = false;
+                c_type_delete(cursor->field_type);
+                cursor->field_type = c_type_clone(field->type);
+
+            } else if (cur.prim == C_COMP_ARRAY) {
+                fprintf(stderr, "TODO: c_init_cursor_next with C_COMP_ARRAY\n");
+                abort();
+
+            } else {
+                // Pointers, enums and primitive types.
+                has_next = false;
+            }
+            if (!has_next) {
+                break;
+            }
+        }
+        if (has_next) {
+            break;
+        }
+
+        vec_pop(&cursor->stack);
+    }
+
+    if (cursor->stack.len) {
+        cursor->stack.arr[cursor->stack.len - 1]++;
+    }
+}
+
+// Compile a compound initializer for a scalar type.
+static cir_expr_t *
+    c_compile_scalar_init(c_compiler_t *cc, cir_scope_t *scope, c_ast_initval_t const *val, c_prim_t prim) {
+    // Handle nested compound initializers.
+    bool warn_excess = true;
+    int  warn_braces = 0;
+    while (val->tag == C_AST_TAG_INITVAL_COMPOUND) {
+        c_ast_init_list_t const *list = val->initval_compound;
+
+        if (list->items.len == 0) {
+            // Empty list; zero it.
+            return cir_expr_create_value(cir_value_create_const(
+                (cir_expr_common_t){
+                    .is_lvalue    = false,
+                    .allow_addrof = false,
+                    .pos          = list->pos,
+                    .type         = C_TYPE_FROM_PRIM(prim),
+                },
+                cir_const_create(
+                    list->pos,
+                    prim,
+                    (ir_const_t){
+                        .prim_type = c_type_to_ir_type(cc, C_TYPE_FROM_PRIM(prim)),
+                        .const128  = I128_ZERO,
+                    }
+                )
+            ));
+        } else if (list->items.len > 1) {
+            if (warn_excess) {
+                cctx_diagnostic(cc->cctx, list->items.arr[1]->pos, DIAG_WARN, "Excess elements in scalar initializer");
+            }
+            warn_excess = false;
+        }
+
+        c_ast_init_t const *init = list->items.arr[0];
+        switch (init->tag) {
+            case C_AST_TAG_INIT_NAMED:
+                cctx_diagnostic(
+                    cc->cctx,
+                    init->init_named->name->pos,
+                    DIAG_ERR,
+                    "Designated initializer used with a scalar type"
+                );
+                return NULL;
+            case C_AST_TAG_INIT_INDEXED:
+                cctx_diagnostic(
+                    cc->cctx,
+                    init->init_indexed->index->pos,
+                    DIAG_ERR,
+                    "Designated initializer used with a scalar type"
+                );
+                return NULL;
+            case C_AST_TAG_INIT_VAL:
+                if (warn_braces == 1) {
+                    cctx_diagnostic(
+                        cc->cctx,
+                        list->items.arr[1]->pos,
+                        DIAG_WARN,
+                        "Excess braces around scalar initializer"
+                    );
+                }
+                if (warn_braces < 2) {
+                    warn_braces++;
+                }
+                val = init->init_val;
+                break;
+            case C_AST_TAG_INIT_GARBAGE: return NULL; // Diagnostic already emitted.
+        }
+    }
+
+    cir_expr_t *value = c_compile2_expr(cc, scope, val->initval_expr);
+    if (!value) {
+        return NULL;
+    }
+
+    if (value->common.type.prim == prim) {
+        return value;
+    }
+
+    return raw_cast(cc, val->pos, C_TYPE_FROM_PRIM(prim), value);
+}
+
+// Compile excess nested initializers.
+// Used to check for errors, but the code will effectively run.
+// Returns true if a compile error occurred.
+static bool c_compile_excess_init(c_compiler_t *cc, cir_scope_t *scope, c_ast_initval_t const *init) {
+    if (init->tag == C_AST_TAG_INITVAL_COMPOUND) {
+        bool err = false;
+        for (size_t i = 0; i < init->initval_compound->items.len; i++) {
+            c_ast_init_t const *cur = init->initval_compound->items.arr[i];
+            while (true) {
+                switch (cur->tag) {
+                    case C_AST_TAG_INIT_NAMED: cur = cur->init_named->value; break;
+                    case C_AST_TAG_INIT_INDEXED: cur = cur->init_indexed->value; break;
+                    case C_AST_TAG_INIT_VAL: err |= c_compile_excess_init(cc, scope, cur->init_val); goto for_continue;
+                    case C_AST_TAG_INIT_GARBAGE: err = true; goto for_continue;
+                }
+            }
+        for_continue:;
+        }
+        return err;
+    } else {
+        assert(init->tag == C_AST_TAG_INITVAL_EXPR);
+        // Detached code created here means that it will compile but never run.
+        cir_expr_t *res = c_compile2_expr(cc, scope, init->initval_expr);
+        if (res) {
+            cir_expr_delete(res);
+            return false;
+        } else {
+            return true;
+        }
+    }
+}
+
 // Compile a compound literal/initializer given a known target type.
-cir_value_t *c_compile2_compinit(c_compiler_t *cc, cir_scope_t *scope, c_type_t type, c_ast_init_list_t const *init) {
-    fprintf(stderr, "TODO: c_compile2_compinit\n");
-    abort();
+cir_expr_t *c_compile2_compinit(
+    c_compiler_t *cc, cir_scope_t *scope, c_type_t type, pos_t type_pos, c_ast_init_list_t const *init
+) {
+    // Check type completeness.
+    uint64_t size, align;
+    if (!c_type_get_size(cc, type, &size, &align)) {
+        cctx_diagnostic(cc->cctx, type_pos, DIAG_ERR, "Usage of incomplete type");
+        return NULL;
+    }
+
+    // Compile-time optimization for zero-initializations.
+    ir_prim_t prim = c_type_to_ir_type(cc, type);
+    if (init->items.len == 0) {
+        if (prim < IR_N_PRIM) {
+            ir_const_t zero = {
+                .prim_type = prim,
+                .const128  = I128_ZERO,
+            };
+            cir_const_t *iconst = cir_const_create(init->pos, type.prim, zero);
+            return cir_expr_create_value(cir_value_create_const(
+                (cir_expr_common_t){.is_lvalue = false, .allow_addrof = false, .pos = init->pos, .type = type},
+                iconst
+            ));
+
+        } else {
+            return cir_expr_create_value(cir_value_create_comp_const(
+                (cir_expr_common_t){
+                    .is_lvalue    = false,
+                    .allow_addrof = false,
+                    .pos          = init->pos,
+                    .type         = c_type_clone(type),
+                },
+                cir_comp_const_create(init->pos, type, calloc(size, 1))
+            ));
+        }
+    }
+
+    // Initializer of scalar types.
+    if (prim < IR_N_PRIM) {
+        c_prim_t c_prim = type.prim;
+        c_type_delete(type);
+        c_ast_initval_t dummy = {
+            .pos              = init->pos,
+            .tag              = C_AST_TAG_INITVAL_COMPOUND,
+            .initval_compound = (c_ast_init_list_t *)init,
+        };
+        return c_compile_scalar_init(cc, scope, &dummy, c_prim);
+    }
+
+    c_init_cursor_t cursor = {
+        .stack        = {0},
+        .stores       = {0},
+        .type         = type,
+        .field_offset = 0,
+        .field_type   = C_TYPE_INVALID,
+    };
+    if (type.prim == C_COMP_ARRAY) {
+        cursor.field_type = c_type_clone(type.extra->inner);
+    } else {
+        assert(type.prim == C_COMP_STRUCT || type.prim == C_COMP_UNION);
+        c_struct_type_t const *comp = type.extra->struct_type;
+        if (comp->fields.len > 0) {
+            cursor.field_type = c_type_clone(comp->fields.arr[0].type);
+        }
+    }
+
+    // Collect unoptimized stores from the initializer.
+    bool error    = false;
+    bool is_const = true;
+    for (size_t i = 0; i < init->items.len; i++) {
+        bool                field_error = false;
+        bool                can_step_in = true;
+        c_ast_init_t const *field       = init->items.arr[i];
+
+        if (field->tag == C_AST_TAG_INIT_NAMED || field->tag == C_AST_TAG_INIT_INDEXED) {
+            can_step_in = false;
+            vec_clear(&cursor.stack);
+            cursor.field_offset = 0;
+            c_type_delete(cursor.field_type);
+            cursor.field_type = c_type_clone(cursor.type);
+        }
+
+        while (1) {
+            if (field->tag == C_AST_TAG_INIT_NAMED) {
+                // Named initializer field, e.g. `.foo = bar`.
+                if (!c_init_cursor_select_named(cc, &cursor, field->init_named->name, true)) {
+                    field_error = true;
+                }
+                field = field->init_named->value;
+
+            } else if (field->tag == C_AST_TAG_INIT_INDEXED) {
+                // Indexed initializer field, e.g. `[foo] = bar`.
+                cir_expr_t *res = c_compile2_expr(cc, scope, field->init_indexed->index);
+                if (res == NULL || !c_init_cursor_select_indexed(cc, &cursor, res, field->init_indexed->index->pos)) {
+                    field_error = true;
+                }
+                field = field->init_indexed->value;
+
+            } else {
+                assert(field->tag == C_AST_TAG_INIT_VAL);
+                break;
+            }
+        }
+
+        c_ast_initval_t const *val = field->init_val;
+        if (field_error) {
+            error = true;
+            break;
+
+        } else if (cursor.stack.len == 0) {
+            // An excess initializer; the expressions are compiled but will not run.
+            error |= c_compile_excess_init(cc, scope, val);
+
+        } else if (val->tag == C_AST_TAG_INITVAL_COMPOUND) {
+            // Nested initializer.
+            cir_expr_t *res;
+            if (cursor.field_type.prim < C_PRIM_VOID) {
+                // Directly compile scalar initializer.
+                res = c_compile_scalar_init(cc, scope, val, cursor.field_type.prim);
+
+            } else {
+                // Recursively compile compound initializer.
+                res = c_compile2_compinit(
+                    cc,
+                    scope,
+                    c_type_clone(cursor.field_type),
+                    (pos_t){0},
+                    val->initval_compound
+                );
+            }
+
+            if (!res) {
+                error = true;
+            } else {
+                is_const &= res->tag == CIR_EXPR_VALUE
+                            && (res->value->tag == CIR_VALUE_CONST || res->value->tag == CIR_VALUE_COMP_CONST);
+
+                cir_comp_store_t store = {
+                    .offset = cursor.field_offset,
+                    .value  = res,
+                };
+                vec_push(&cursor.stores, store);
+            }
+
+            c_init_cursor_next(&cursor);
+
+        } else {
+            cir_expr_t *res = c_compile2_expr(cc, scope, val->initval_expr);
+            if (!res) {
+                error = true;
+            } else {
+                is_const &= res->tag == CIR_EXPR_VALUE
+                            && (res->value->tag == CIR_VALUE_CONST || res->value->tag == CIR_VALUE_COMP_CONST);
+
+                if (can_step_in && !c_type_is_compatible(cursor.field_type, res->common.type)) {
+                    c_init_cursor_step_in(&cursor);
+                }
+
+                if (!c_type_is_compatible(cursor.field_type, res->common.type)) {
+                    cctx_diagnostic(cc->cctx, field->pos, DIAG_ERR, "Initializer with value of incompatible type");
+                    error = true;
+
+                } else {
+                    cir_comp_store_t store = {
+                        .offset = cursor.field_offset,
+                        .value  = res,
+                    };
+                    vec_push(&cursor.stores, store);
+                }
+            }
+
+            c_init_cursor_next(&cursor);
+        }
+    }
+
+    if (error) {
+        goto out_del_stores;
+    }
+
+    // Emit warnings about reinitializations of fields.
+    uint32_t *bytes_init = lilycc_calloc((size + 3) / 4, sizeof(uint32_t));
+    for (size_t i = 0; i < cursor.stores.len; i++) {
+        cir_comp_store_t const *store = &cursor.stores.arr[i];
+        uint64_t                write_size, write_align;
+        if (!c_type_get_size(cc, store->value->common.type, &write_size, &write_align)) {
+            UNREACHABLE();
+        }
+
+        bool overlap = false;
+        for (size_t x = 0; x < write_size; x++) {
+            size_t byte            = x + store->offset;
+            overlap               |= (bytes_init[byte / 32] >> (byte % 32)) & 1;
+            bytes_init[byte / 32] |= 1 << (byte % 32);
+        }
+
+        if (overlap) {
+            cctx_diagnostic(cc->cctx, store->value->common.pos, DIAG_WARN, "Initializer overwrites previous value");
+        }
+    }
+    lilycc_free(bytes_init);
+
+    // Collect the writes.
+    cir_value_t *compinit;
+    if (is_const) {
+        uint8_t *blob = lilycc_calloc(size, 1);
+
+        for (size_t i = 0; i < cursor.stores.len; i++) {
+            cir_comp_store_t const *store = &cursor.stores.arr[i];
+            assert(store->value->tag == CIR_EXPR_VALUE);
+            cir_value_t const *value = store->value->value;
+
+            if (value->tag == CIR_VALUE_COMP_CONST) {
+                uint64_t size, align;
+                if (!c_type_get_size(cc, value->common.type, &size, &align)) {
+                    UNREACHABLE();
+                }
+                memcpy(blob + store->offset, value->comp_const->blob, size);
+
+            } else {
+                assert(value->tag == CIR_VALUE_CONST);
+                ir_const_to_blob(value->iconst->iconst, blob + store->offset, cc->options.big_endian);
+            }
+        }
+
+        compinit = cir_value_create_comp_const(
+            (cir_expr_common_t){
+                .type         = c_type_clone(type),
+                .pos          = init->pos,
+                .is_lvalue    = false,
+                .allow_addrof = false,
+            },
+            cir_comp_const_create(init->pos, type, blob)
+        );
+
+    out_del_stores:
+        for (size_t i = 0; i < cursor.stores.len; i++) {
+            cir_expr_delete(cursor.stores.arr[i].value);
+        }
+        vec_clear(&cursor.stores);
+    } else {
+        compinit = cir_value_create_comp_value(
+            (cir_expr_common_t){
+                .type         = c_type_clone(type),
+                .pos          = init->pos,
+                .is_lvalue    = false,
+                .allow_addrof = false,
+            },
+            cir_comp_value_create(init->pos, type, cursor.stores)
+        );
+    }
+
+    // Final cleanup.
+    c_type_delete(cursor.type);
+    c_type_delete(cursor.field_type);
+    vec_clear(&cursor.stack);
+
+    if (error) {
+        return NULL;
+    } else {
+        return cir_expr_create_value(compinit);
+    }
 }
 
 // Helper that creates a synthetic integer constant.

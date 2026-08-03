@@ -221,7 +221,6 @@ C_AST_META_STRUCT_DEF(init_indexed)
 
 // One initializer; tagged union of the variants above.
 C_AST_UNION_DEF(init,
-    C_AST_UNION_CHILD(init, init_list,     compound, INIT_COMPOUND)
     C_AST_UNION_CHILD(init, init_named,    named,    INIT_NAMED)
     C_AST_UNION_CHILD(init, init_indexed,  indexed,  INIT_INDEXED)
     C_AST_UNION_CHILD(init, initval,       val,      INIT_VAL)

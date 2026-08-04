@@ -429,13 +429,15 @@ struct cir_for {
 // A while or do...while loop.
 struct cir_while {
     // Source location this was compiled from.
-    pos_t       pos;
+    pos_t        pos;
+    // Nested scope created by this while statement.
+    cir_scope_t *scope;
     // Loop condition.
-    cir_expr_t *cond;
+    cir_expr_t  *cond;
     // Loop body.
-    cir_stmt_t *body;
+    cir_stmt_t  *body;
     // Is of `do...while` form.
-    bool        is_do_while;
+    bool         is_do_while;
 };
 
 // An if/else statement.
@@ -503,10 +505,12 @@ struct cir_decl {
 struct cir_func {
     // Source location this was compiled from.
     pos_t          pos;
-    // Function type (also encodes parameters and their names).
-    c_type_t       type;
     // Function name.
     char          *name;
+    // Function scope created by this block.
+    cir_scope_t   *scope;
+    // Function type (also encodes parameters and their names).
+    c_type_t       type;
     // Function body.
     // Includes copies of the parameter type decls at the start.
     vec_cir_stmt_t body;
@@ -691,7 +695,7 @@ cir_for_t *cir_for_create(
 void cir_for_delete(cir_for_t *node);
 
 // Construct a `cir_while` node.
-cir_while_t *cir_while_create(pos_t pos, cir_expr_t *cond, cir_stmt_t *body, bool is_do_while);
+cir_while_t *cir_while_create(pos_t pos, cir_scope_t *scope, cir_expr_t *cond, cir_stmt_t *body, bool is_do_while);
 // Destroy a `cir_while` node and any owned children.
 void         cir_while_delete(cir_while_t *node);
 
@@ -741,7 +745,7 @@ cir_decl_t *cir_decl_create(pos_t pos, c_type_t type, char *name, cir_expr_t *in
 void        cir_decl_delete(cir_decl_t *node);
 
 // Construct a `cir_func` node.
-cir_func_t *cir_func_create(pos_t pos, c_type_t type, char *name, vec_cir_stmt_t body);
+cir_func_t *cir_func_create(pos_t pos, cir_scope_t *scope, c_type_t type, char *name, vec_cir_stmt_t body);
 // Destroy a `cir_func` node and any owned children.
 void        cir_func_delete(cir_func_t *node);
 
@@ -800,6 +804,13 @@ c_comp_type_t       *cir_scope_lookup_tag(cir_scope_t const *scope, char const *
 cir_label_t         *cir_scope_lookup_label(cir_scope_t const *scope, char const *name);
 
 
+
+// Debug-print a `cir_scope_t` C IR node.
+void cir_scope_dbg(cir_scope_t const *scope, int indent, FILE *to);
+// Debug-print a `cir_scope_val_t` C IR node.
+void cir_scope_val_dbg(cir_scope_val_t const *scope_val, int indent, FILE *to);
+// Debug-print a `cir_typedef_t` C IR node.
+void cir_typedef_dbg(cir_typedef_t const *cir_typedef, int indent, FILE *to);
 
 // Debug-print a `cir_const_t` C IR node.
 void cir_const_dbg(cir_const_t const *iconst, int indent, FILE *to);

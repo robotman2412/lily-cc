@@ -142,7 +142,8 @@ c_type_t c_type_clone_pointer(c_type_ref_t inner) {
         .prim  = C_COMP_POINTER,
         .qual  = {.val = 0},
     };
-    type.extra->inner = c_type_clone(inner);
+    type.extra->refcount = 1;
+    type.extra->inner    = c_type_clone(inner);
     return type;
 }
 
@@ -329,10 +330,55 @@ ir_prim_t c_type_to_ir_type(c_compiler_t *cc, c_type_ref_t type) {
     UNREACHABLE();
 }
 
+static c_field_info_t
+    c_type_get_field_impl(c_compiler_t *cc, c_type_ref_t type, char const *name, uint64_t offset, uint64_t max_align) {
+    assert(type.prim == C_COMP_STRUCT || type.prim == C_COMP_UNION);
+    c_struct_type_t const *comp = type.extra->struct_type;
+
+    if (max_align > comp->align) {
+        max_align = comp->align;
+    }
+
+    for (size_t i = 0; i < comp->fields.len; i++) {
+        if (!comp->fields.arr[i].name) {
+            // Nested anonymous struct/union.
+            c_field_info_t res = c_type_get_field_impl(
+                cc,
+                comp->fields.arr[i].type,
+                name,
+                offset + comp->fields.arr[i].offset,
+                max_align
+            );
+            if (c_type_is_valid(res.type)) {
+                return res;
+            }
+
+        } else if (!strcmp(comp->fields.arr[i].name, name)) {
+            // Regular field.
+            return (c_field_info_t){
+                .type      = comp->fields.arr[i].type,
+                .name_pos  = comp->fields.arr[i].name_pos,
+                .max_align = max_align,
+                .offset    = offset + comp->fields.arr[i].offset,
+            };
+        }
+    }
+
+    return (c_field_info_t){.type = C_TYPE_INVALID};
+}
+
 // Get information about a field in a type.
-c_field_info_t c_type_get_field(c_compiler_t *cc, c_type_ref_t type, char const *name) {
-    fprintf(stderr, "TODO: c_type_get_field\n");
-    abort();
+c_field_info_t c_type_get_field(c_compiler_t *cc, c_type_ref_t type, char const *name, pos_t pos) {
+    uint64_t size, align;
+    if (!c_type_get_size(cc, type, &size, &align)) {
+        cctx_diagnostic(cc->cctx, pos, DIAG_ERR, "Use of incomplete type");
+        return (c_field_info_t){.type = C_TYPE_INVALID};
+    }
+    c_field_info_t info = c_type_get_field_impl(cc, type, name, 0, align);
+    if (!c_type_is_valid(info.type)) {
+        cctx_diagnostic(cc->cctx, pos, DIAG_ERR, "No such field %s", name);
+    }
+    return info;
 }
 
 // Delete a C type.
@@ -346,16 +392,31 @@ void c_type_delete(c_type_t type) {
         return;
     }
 
+    if (type.prim == C_COMP_STRUCT || type.prim == C_COMP_UNION) {
+        c_struct_type_delete(type.extra->struct_type);
+    } else if (type.prim == C_COMP_ENUM) {
+        c_enum_type_delete(type.extra->enum_type);
+    } else if (type.prim == C_COMP_FUNCTION) {
+        for (size_t i = 0; i < type.extra->func_type->args.len; i++) {
+            c_type_delete(type.extra->func_type->args.arr[i].type);
+        }
+        vec_clear(&type.extra->func_type->args);
+        c_type_delete(type.extra->func_type->returns);
+        lilycc_free(type.extra->func_type);
+    } else if (type.prim == C_COMP_POINTER || type.prim == C_COMP_ARRAY) {
+        c_type_delete(type.extra->inner);
+    }
+
     lilycc_free(type.extra);
 }
 
-static bool c_type_print_decl_pre(c_type_ref_t type, FILE *to);
-static void c_type_print_decl_post(c_type_ref_t type, FILE *to);
+static bool c_type_print_decl_pre(c_type_ref_t type, bool fields, FILE *to);
+static void c_type_print_decl_post(c_type_ref_t type, char const *ident, bool fields, FILE *to);
 
-static bool c_type_print_ptr_pre(c_type_ref_t type, FILE *to) {
+static bool c_type_print_ptr_pre(c_type_ref_t type, bool fields, FILE *to) {
     bool wrap = type.extra->inner.prim == C_COMP_ARRAY || type.extra->inner.prim == C_COMP_FUNCTION;
 
-    if (c_type_print_decl_pre(type.extra->inner, to)) {
+    if (c_type_print_decl_pre(type.extra->inner, fields, to)) {
         fputc(' ', to);
     }
 
@@ -376,74 +437,77 @@ static bool c_type_print_ptr_pre(c_type_ref_t type, FILE *to) {
     return delim;
 }
 
-static void c_type_print_ptr_post(c_type_ref_t type, FILE *to) {
+static void c_type_print_ptr_post(c_type_ref_t type, char const *ident, bool fields, FILE *to) {
     bool wrap = type.extra->inner.prim == C_COMP_ARRAY || type.extra->inner.prim == C_COMP_FUNCTION;
 
     if (wrap) {
         fputc(')', to);
     }
 
-    c_type_print_decl_post(type.extra->inner, to);
+    c_type_print_decl_post(type.extra->inner, ident, fields, to);
 }
 
-static bool c_type_print_arr_pre(c_type_ref_t type, FILE *to) {
-    return c_type_print_decl_pre(type.extra->inner, to);
+static bool c_type_print_arr_pre(c_type_ref_t type, bool fields, FILE *to) {
+    return c_type_print_decl_pre(type.extra->inner, fields, to);
 }
 
-static void c_type_print_arr_post(c_type_ref_t type, FILE *to) {
+static void c_type_print_arr_post(c_type_ref_t type, char const *ident, bool fields, FILE *to) {
     fputc('[', to);
     if (type.extra->length >= 0) {
         fprintf(to, "%" PRId32, type.extra->length);
     }
     fputc(']', to);
-    c_type_print_decl_post(type.extra->inner, to);
+    c_type_print_decl_post(type.extra->inner, ident, fields, to);
 }
 
-static bool c_type_print_func_pre(c_type_ref_t type, FILE *to) {
-    return c_type_print_decl_pre(type.extra->func_type->returns, to);
+static bool c_type_print_func_pre(c_type_ref_t type, bool fields, FILE *to) {
+    return c_type_print_decl_pre(type.extra->func_type->returns, fields, to);
 }
 
-static void c_type_print_func_post(c_type_ref_t type, FILE *to) {
+static void c_type_print_func_post(c_type_ref_t type, char const *ident, bool fields, FILE *to) {
     fputc('(', to);
     vec_c_func_arg_t const *args = &type.extra->func_type->args;
     for (size_t i = 0; i < args->len; i++) {
         if (i) {
             fputs(", ", to);
         }
-        c_type_print(args->arr[i].type, to);
+        c_type_print(args->arr[i].type, ident, fields, to);
     }
     fputc(')', to);
-    c_type_print_decl_post(type.extra->func_type->returns, to);
+    c_type_print_decl_post(type.extra->func_type->returns, ident, fields, to);
 }
 
-static bool c_type_print_decl_pre(c_type_ref_t type, FILE *to) {
+static bool c_type_print_decl_pre(c_type_ref_t type, bool fields, FILE *to) {
     if (type.prim == C_COMP_POINTER) {
-        return c_type_print_ptr_pre(type, to);
+        return c_type_print_ptr_pre(type, fields, to);
     } else if (type.prim == C_COMP_ARRAY) {
-        return c_type_print_arr_pre(type, to);
+        return c_type_print_arr_pre(type, fields, to);
     } else if (type.prim == C_COMP_FUNCTION) {
-        return c_type_print_func_pre(type, to);
+        return c_type_print_func_pre(type, fields, to);
     } else {
         return true;
     }
 }
 
-static void c_type_print_decl_post(c_type_ref_t type, FILE *to) {
+static void c_type_print_decl_post(c_type_ref_t type, char const *ident, bool fields, FILE *to) {
     if (type.prim == C_COMP_POINTER) {
-        c_type_print_ptr_post(type, to);
+        c_type_print_ptr_post(type, ident, fields, to);
     } else if (type.prim == C_COMP_ARRAY) {
-        c_type_print_arr_post(type, to);
+        c_type_print_arr_post(type, ident, fields, to);
     } else if (type.prim == C_COMP_FUNCTION) {
-        c_type_print_func_post(type, to);
+        c_type_print_func_post(type, ident, fields, to);
+    } else if (ident) {
+        fputc(' ', to);
+        fputs(ident, to);
     }
 }
 
-static void c_type_print_spec_qual(c_type_ref_t type, FILE *to) {
+static void c_type_print_spec_qual(c_type_ref_t type, bool fields, FILE *to) {
     if (type.prim == C_COMP_POINTER || type.prim == C_COMP_ARRAY) {
-        c_type_print_spec_qual(type.extra->inner, to);
+        c_type_print_spec_qual(type.extra->inner, false, to);
         return;
     } else if (type.prim == C_COMP_FUNCTION) {
-        c_type_print_spec_qual(type.extra->func_type->returns, to);
+        c_type_print_spec_qual(type.extra->func_type->returns, false, to);
         return;
     } else if (type.prim == C_N_PRIM) {
         fputs("/* Invalid type */", to);
@@ -484,9 +548,46 @@ static void c_type_print_spec_qual(c_type_ref_t type, FILE *to) {
         case C_PRIM_LDOUBLE: fputs("long double", to); return;
         case C_PRIM_VOID: fputs("void", to); return;
         case C_N_PRIM: UNREACHABLE();
-        case C_COMP_STRUCT: fprintf(to, "struct %s", type.extra->struct_type->name); return;
-        case C_COMP_UNION: fprintf(to, "union %s", type.extra->struct_type->name); return;
-        case C_COMP_ENUM: fprintf(to, "enum %s", type.extra->struct_type->name); return;
+
+        case C_COMP_STRUCT: fputs("struct", to); goto struct_union;
+        case C_COMP_UNION:
+            fputs("union", to);
+        struct_union:
+            if (type.extra->struct_type->name) {
+                fprintf(to, " %s", type.extra->struct_type->name);
+            } else {
+                fputs(" /* anonymous */", to);
+            }
+            if (fields) {
+                fputs(" { ", to);
+                c_struct_type_t const *comp = type.extra->struct_type;
+                for (size_t i = 0; i < comp->fields.len; i++) {
+                    c_type_print(comp->fields.arr[i].type, comp->fields.arr[i].name, true, to);
+                    fputs("; ", to);
+                }
+                fputs("}", to);
+            }
+            return;
+
+        case C_COMP_ENUM:
+            fprintf(to, "enum %s", type.extra->struct_type->name);
+            if (fields) {
+                fputs(" { ", to);
+                c_enum_type_t const *comp = type.extra->enum_type;
+                for (size_t i = 0; i < comp->variants.len; i++) {
+                    char const *sign = "";
+                    char        buf[40];
+                    i128_t      ordinal = comp->variants.arr[i].ordinal;
+                    if (c_prim_is_int(comp->prim) && cmp128s(ordinal, I128_ZERO) < 0) {
+                        ordinal = neg128(ordinal);
+                        sign    = "-";
+                    }
+                    itoa128(ordinal, 0, buf);
+                    fprintf(to, "%s = %s%s, ", comp->variants.arr[i].name, sign, buf);
+                }
+                fputs("}", to);
+            }
+            return;
         case C_COMP_POINTER:
         case C_COMP_ARRAY:
         case C_COMP_FUNCTION: UNREACHABLE();
@@ -495,10 +596,10 @@ static void c_type_print_spec_qual(c_type_ref_t type, FILE *to) {
 }
 
 // Print the type in simplified source form.
-void c_type_print(c_type_ref_t type, FILE *to) {
-    c_type_print_spec_qual(type, to);
-    c_type_print_decl_pre(type, to);
-    c_type_print_decl_post(type, to);
+void c_type_print(c_type_ref_t type, char const *ident, bool fields, FILE *to) {
+    c_type_print_spec_qual(type, fields, to);
+    c_type_print_decl_pre(type, fields, to);
+    c_type_print_decl_post(type, ident, fields, to);
 }
 
 // Print the primitive type in simplified source form.
@@ -548,6 +649,7 @@ void c_struct_type_delete(c_struct_type_t *type) {
     }
 
     vec_clear(&type->fields);
+    lilycc_free(type->name);
     lilycc_free(type);
 }
 
@@ -564,6 +666,7 @@ void c_enum_type_delete(c_enum_type_t *type) {
     }
 
     vec_clear(&type->variants);
+    lilycc_free(type->name);
     lilycc_free(type);
 }
 

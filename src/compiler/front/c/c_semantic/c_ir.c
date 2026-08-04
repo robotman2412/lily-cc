@@ -452,9 +452,10 @@ void cir_for_delete(cir_for_t *node) {
 }
 
 
-cir_while_t *cir_while_create(pos_t pos, cir_expr_t *cond, cir_stmt_t *body, bool is_do_while) {
+cir_while_t *cir_while_create(pos_t pos, cir_scope_t *scope, cir_expr_t *cond, cir_stmt_t *body, bool is_do_while) {
     cir_while_t *node = lilycc_malloc(sizeof(cir_while_t));
     node->pos         = pos;
+    node->scope       = scope;
     node->cond        = cond;
     node->body        = body;
     node->is_do_while = is_do_while;
@@ -464,6 +465,7 @@ cir_while_t *cir_while_create(pos_t pos, cir_expr_t *cond, cir_stmt_t *body, boo
 void cir_while_delete(cir_while_t *node) {
     cir_expr_delete(node->cond);
     cir_stmt_delete(node->body);
+    cir_scope_delete(node->scope);
     lilycc_free(node);
 }
 
@@ -633,9 +635,10 @@ void cir_decl_delete(cir_decl_t *node) {
 }
 
 
-cir_func_t *cir_func_create(pos_t pos, c_type_t type, char *name, vec_cir_stmt_t body) {
+cir_func_t *cir_func_create(pos_t pos, cir_scope_t *scope, c_type_t type, char *name, vec_cir_stmt_t body) {
     cir_func_t *node = lilycc_malloc(sizeof(cir_func_t));
     node->pos        = pos;
+    node->scope      = scope;
     node->type       = type;
     node->name       = name;
     node->body       = body;
@@ -649,6 +652,7 @@ void cir_func_delete(cir_func_t *node) {
         cir_stmt_delete(node->body.arr[i]);
     }
     vec_clear(&node->body);
+    cir_scope_delete(node->scope);
     lilycc_free(node);
 }
 
@@ -723,8 +727,11 @@ cir_scope_t *cir_scope_create(cir_scope_kind_t kind, cir_scope_t *parent) {
 }
 
 void cir_scope_delete(cir_scope_t *scope) {
-    map_foreach(ent, &scope->values) {
-        lilycc_free(ent->value);
+    map_foreach_value(cir_scope_val_t, val, &scope->values) {
+        if (val->tag == CIR_SCOPE_VAL_ENUM_CONST) {
+            lilycc_free(val->enum_const);
+        }
+        lilycc_free(val);
     }
     map_clear(&scope->values);
     map_foreach(ent, &scope->typedefs) {
@@ -903,6 +910,79 @@ static void pindent(int indent, FILE *to) {
 }
 
 
+void cir_scope_dbg(cir_scope_t const *scope, int indent, FILE *to) {
+    indent++;
+    fprintf(to, "scope %p\n", scope);
+
+    pindent(indent, to);
+    fputs("kind: ", to);
+    switch (scope->kind) {
+        case CIR_SCOPE_GLOBAL: fputs("global\n", to); break;
+        case CIR_SCOPE_FUNC: fputs("func\n", to); break;
+        case CIR_SCOPE_STMTS: fputs("stmts\n", to); break;
+        case CIR_SCOPE_SWITCH: fputs("switch\n", to); break;
+        case CIR_SCOPE_WHILE: fputs("while\n", to); break;
+        case CIR_SCOPE_FOR: fputs("for\n", to); break;
+    }
+
+    if (scope->parent) {
+        pindent(indent, to);
+        fprintf(to, "parent: %p\n", scope->parent);
+    }
+
+    map_foreach_kv(char const *, name, cir_scope_val_t, val, &scope->values) {
+        pindent(indent, to);
+        fprintf(to, "values[\"%s\"]: ", name);
+        cir_scope_val_dbg(val, indent, to);
+    }
+}
+
+void cir_scope_val_dbg(cir_scope_val_t const *scope_val, int indent, FILE *to) {
+    indent++;
+    fputs("scope_val:", to);
+    switch (scope_val->tag) {
+        case CIR_SCOPE_VAL_DECL: fprintf(to, "decl %p\n", scope_val->decl); break;
+        case CIR_SCOPE_VAL_FUNC: fprintf(to, "func %p\n", scope_val->func); break;
+
+        case CIR_SCOPE_VAL_ENUM_CONST:
+            fprintf(
+                to,
+                "enum_const @ %s:%d:%d\n",
+                scope_val->enum_const->pos.srcfile->name,
+                scope_val->enum_const->pos.line + 1,
+                scope_val->enum_const->pos.col + 1
+            );
+
+            pindent(indent, to);
+            fputs("prim: ", to);
+            c_prim_print(scope_val->enum_const->prim, to);
+            fputc('\n', to);
+
+            pindent(indent, to);
+            fputs("iconst: ", to);
+            ir_const_serialize(scope_val->enum_const->iconst, to);
+            fputc('\n', to);
+            break;
+    }
+}
+
+void cir_typedef_dbg(cir_typedef_t const *cir_typedef, int indent, FILE *to) {
+    indent++;
+    fprintf(
+        to,
+        "decl @ %s:%d:%d\n",
+        cir_typedef->pos.srcfile->name,
+        cir_typedef->pos.line + 1,
+        cir_typedef->pos.col + 1
+    );
+
+    pindent(indent, to);
+    fputs("type: ", to);
+    c_type_print(cir_typedef->type, NULL, true, to);
+    fputc('\n', to);
+}
+
+
 void cir_const_dbg(cir_const_t const *iconst, int indent, FILE *to) {
     indent++;
     fprintf(to, "const @ %s:%d:%d\n", iconst->pos.srcfile->name, iconst->pos.line + 1, iconst->pos.col + 1);
@@ -930,7 +1010,7 @@ void cir_comp_const_dbg(cir_comp_const_t const *comp_const, int indent, FILE *to
 
     pindent(indent, to);
     fputs("type: ", to);
-    c_type_print(comp_const->type, to);
+    c_type_print(comp_const->type, NULL, true, to);
     fputc('\n', to);
 }
 
@@ -958,12 +1038,12 @@ void cir_comp_value_dbg(cir_comp_value_t const *comp_value, int indent, FILE *to
 
     pindent(indent, to);
     fputs("type: ", to);
-    c_type_print(comp_value->type, to);
+    c_type_print(comp_value->type, NULL, true, to);
     fputc('\n', to);
 }
 
 void cir_value_dbg(cir_value_t const *value, int indent, FILE *to) {
-    fprintf(to, "value:");
+    fputs("value:", to);
     switch (value->tag) {
         case CIR_VALUE_TMPVAL: fprintf(to, "tmpval %p\n", value->tmpval); break;
         case CIR_VALUE_SCOPE_VAL:
@@ -1004,7 +1084,7 @@ void cir_call_dbg(cir_call_t const *call, int indent, FILE *to) {
 
     pindent(indent, to);
     fputs("type: ", to);
-    c_type_print(call->common.type, to);
+    c_type_print(call->common.type, NULL, true, to);
     fputc('\n', to);
 
     pindent(indent, to);
@@ -1034,7 +1114,7 @@ void cir_cast_dbg(cir_cast_t const *cast, int indent, FILE *to) {
 
     pindent(indent, to);
     fputs("type: ", to);
-    c_type_print(cast->common.type, to);
+    c_type_print(cast->common.type, NULL, true, to);
     fputc('\n', to);
 
     pindent(indent, to);
@@ -1058,7 +1138,7 @@ void cir_ternary_dbg(cir_ternary_t const *ternary, int indent, FILE *to) {
 
     pindent(indent, to);
     fputs("type: ", to);
-    c_type_print(ternary->common.type, to);
+    c_type_print(ternary->common.type, NULL, true, to);
     fputc('\n', to);
 
     pindent(indent, to);
@@ -1090,7 +1170,7 @@ void cir_calc_dbg(cir_calc_t const *calc, int indent, FILE *to) {
 
     pindent(indent, to);
     fputs("type: ", to);
-    c_type_print(calc->common.type, to);
+    c_type_print(calc->common.type, NULL, true, to);
     fputc('\n', to);
 
     pindent(indent, to);
@@ -1142,7 +1222,7 @@ void cir_addrof_dbg(cir_addrof_t const *addrof, int indent, FILE *to) {
 
     pindent(indent, to);
     fputs("type: ", to);
-    c_type_print(addrof->common.type, to);
+    c_type_print(addrof->common.type, NULL, true, to);
     fputc('\n', to);
 
     pindent(indent, to);
@@ -1166,7 +1246,7 @@ void cir_deref_dbg(cir_deref_t const *deref, int indent, FILE *to) {
 
     pindent(indent, to);
     fputs("type: ", to);
-    c_type_print(deref->common.type, to);
+    c_type_print(deref->common.type, NULL, true, to);
     fputc('\n', to);
 
     pindent(indent, to);
@@ -1191,7 +1271,7 @@ void cir_tmpval_dbg(cir_tmpval_t const *tmpval, int indent, FILE *to) {
 
     pindent(indent, to);
     fputs("type: ", to);
-    c_type_print(tmpval->common.type, to);
+    c_type_print(tmpval->common.type, NULL, true, to);
     fputc('\n', to);
 
     pindent(indent, to);
@@ -1215,7 +1295,7 @@ void cir_exprs_dbg(cir_exprs_t const *exprs, int indent, FILE *to) {
 
     pindent(indent, to);
     fputs("type: ", to);
-    c_type_print(exprs->common.type, to);
+    c_type_print(exprs->common.type, NULL, true, to);
     fputc('\n', to);
 
     pindent(indent, to);
@@ -1247,7 +1327,7 @@ void cir_assign_dbg(cir_assign_t const *assign, int indent, FILE *to) {
 
     pindent(indent, to);
     fputs("type: ", to);
-    c_type_print(assign->common.type, to);
+    c_type_print(assign->common.type, NULL, true, to);
     fputc('\n', to);
 
     pindent(indent, to);
@@ -1284,6 +1364,10 @@ void cir_stmts_dbg(cir_stmts_t const *stmts, int indent, FILE *to) {
     indent++;
     fprintf(to, "stmts @ %s:%d:%d\n", stmts->pos.srcfile->name, stmts->pos.line + 1, stmts->pos.col + 1);
 
+    pindent(indent, to);
+    fputs("scope: ", to);
+    cir_scope_dbg(stmts->scope, indent, to);
+
     for (size_t i = 0; i < stmts->stmts.len; i++) {
         pindent(indent, to);
         fprintf(to, "stmts[%zu]: ", i);
@@ -1294,6 +1378,10 @@ void cir_stmts_dbg(cir_stmts_t const *stmts, int indent, FILE *to) {
 void cir_for_dbg(cir_for_t const *cir_for, int indent, FILE *to) {
     indent++;
     fprintf(to, "for @ %s:%d:%d\n", cir_for->pos.srcfile->name, cir_for->pos.line + 1, cir_for->pos.col + 1);
+
+    pindent(indent, to);
+    fputs("scope: ", to);
+    cir_scope_dbg(cir_for->scope, indent, to);
 
     if (cir_for->init) {
         pindent(indent, to);
@@ -1321,6 +1409,10 @@ void cir_for_dbg(cir_for_t const *cir_for, int indent, FILE *to) {
 void cir_while_dbg(cir_while_t const *cir_while, int indent, FILE *to) {
     indent++;
     fprintf(to, "while @ %s:%d:%d\n", cir_while->pos.srcfile->name, cir_while->pos.line + 1, cir_while->pos.col + 1);
+
+    pindent(indent, to);
+    fputs("scope: ", to);
+    cir_scope_dbg(cir_while->scope, indent, to);
 
     pindent(indent, to);
     fputs("cond: ", to);
@@ -1394,14 +1486,14 @@ void cir_stmt_dbg(cir_stmt_t const *stmt, int indent, FILE *to) {
 
 void cir_decl_dbg(cir_decl_t const *decl, int indent, FILE *to) {
     indent++;
-    fprintf(to, "decl @ %s:%d:%d\n", decl->pos.srcfile->name, decl->pos.line + 1, decl->pos.col + 1);
+    fprintf(to, "decl %p @ %s:%d:%d\n", decl, decl->pos.srcfile->name, decl->pos.line + 1, decl->pos.col + 1);
 
     pindent(indent, to);
     fprintf(to, "name: \"%s\"\n", decl->name);
 
     pindent(indent, to);
     fputs("type: ", to);
-    c_type_print(decl->type, to);
+    c_type_print(decl->type, NULL, true, to);
     fputc('\n', to);
 
     if (decl->init) {
@@ -1413,14 +1505,18 @@ void cir_decl_dbg(cir_decl_t const *decl, int indent, FILE *to) {
 
 void cir_func_dbg(cir_func_t const *func, int indent, FILE *to) {
     indent++;
-    fprintf(to, "func @ %s:%d:%d\n", func->pos.srcfile->name, func->pos.line + 1, func->pos.col + 1);
+    fprintf(to, "func %p @ %s:%d:%d\n", func, func->pos.srcfile->name, func->pos.line + 1, func->pos.col + 1);
 
     pindent(indent, to);
     fprintf(to, "name: \"%s\"\n", func->name);
 
     pindent(indent, to);
+    fputs("scope: ", to);
+    cir_scope_dbg(func->scope, indent, to);
+
+    pindent(indent, to);
     fputs("type: ", to);
-    c_type_print(func->type, to);
+    c_type_print(func->type, NULL, true, to);
     fputc('\n', to);
 
     for (size_t i = 0; i < func->body.len; i++) {
@@ -1458,6 +1554,10 @@ void cir_unit_list_dbg(cir_unit_list_t const *unit_list, int indent, FILE *to) {
 void cir_trans_unit_dbg(cir_trans_unit_t const *trans_unit, int indent, FILE *to) {
     indent++;
     fprintf(to, "trans_unit\n");
+
+    pindent(indent, to);
+    fputs("scope: ", to);
+    cir_scope_dbg(trans_unit->scope, indent, to);
 
     for (size_t i = 0; i < trans_unit->units.len; i++) {
         pindent(indent, to);

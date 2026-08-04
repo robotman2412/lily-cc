@@ -137,7 +137,7 @@ cir_stmt_t *c_compile2_stmt_while(c_compiler_t *cc, cir_scope_t *scope, c_ast_st
         return NULL;
     }
 
-    return cir_stmt_create_while(cir_while_create(stmt->pos, cond, body, stmt->is_do_while));
+    return cir_stmt_create_while(cir_while_create(stmt->pos, nested_scope, cond, body, stmt->is_do_while));
 }
 
 // Compile an if...else statement.
@@ -257,6 +257,8 @@ cir_stmt_t *c_compile2_stmt_def(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_
                     }
                 }
             }
+
+            c_type_delete(spec_qual_type);
             return cir_stmt_create_units(cir_unit_list_create(def->pos, units));
         }
         case C_AST_TAG_DEF_FUNC: fprintf(stderr, "TODO: Nested functions\n"); abort();

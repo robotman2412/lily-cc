@@ -185,14 +185,21 @@ static cir_expr_t *raw_calc(c_compiler_t *cc, pos_t pos, cir_calc_op_t op, cir_e
 }
 
 // Perform address-of operation.
-static cir_expr_t *raw_addrof(c_compiler_t *cc, cir_expr_t *val) {
-    if (!val->common.allow_addrof) {
+static cir_expr_t *raw_addrof(c_compiler_t *cc, pos_t pos, cir_expr_t *val) {
+    if (!val->common.allow_addrof && val->common.type.prim != C_COMP_STRUCT && val->common.type.prim != C_COMP_UNION
+        && val->common.type.prim != C_COMP_ARRAY) {
         cctx_diagnostic(cc->cctx, val->common.pos, DIAG_ERR, "Cannot take the address of this value");
         cir_expr_delete(val);
         return NULL;
     }
 
-    abort();
+    cir_expr_common_t common = {
+        .pos          = pos,
+        .type         = c_type_clone_pointer(val->common.type),
+        .is_lvalue    = false,
+        .allow_addrof = false,
+    };
+    return cir_expr_create_addrof(cir_addrof_create(common, val));
 }
 
 // Do array decay if needed.
@@ -203,10 +210,8 @@ static cir_expr_t *array_decay(c_compiler_t *cc, cir_expr_t *val) {
         return val;
     }
 
-    cir_expr_t *tmp = raw_addrof(cc, val);
-    if (!tmp) {
-        return NULL;
-    }
+    cir_expr_t *tmp = raw_addrof(cc, val->common.pos, val);
+    assert(tmp != NULL);
     c_type_t ptr_rc = c_type_clone_pointer(type.extra->inner);
     return raw_cast(cc, val->common.pos, ptr_rc, tmp);
 }
@@ -478,11 +483,6 @@ static cir_expr_t *
             cir_expr_delete(lhs);
             return NULL;
         }
-        if (!lhs->common.allow_addrof) {
-            cctx_diagnostic(cc->cctx, expr->oper_pos, DIAG_ERR, "Cannot access member of non-addressable value");
-            cir_expr_delete(lhs);
-            return NULL;
-        }
         struct_type     = type;
         c_type_t ptr_rc = c_type_clone_pointer(lhs->common.type);
         ptr_expr        = cir_expr_create_addrof(cir_addrof_create(
@@ -502,9 +502,8 @@ static cir_expr_t *
         return NULL;
     }
 
-    c_field_info_t field = c_type_get_field(cc, struct_type, name);
+    c_field_info_t field = c_type_get_field(cc, struct_type, name, expr->pos);
     if (!c_type_is_valid(field.type)) {
-        cctx_diagnostic(cc->cctx, expr->rhs->pos, DIAG_ERR, "No member named '%s'", name);
         cir_expr_delete(ptr_expr);
         return NULL;
     }
@@ -512,14 +511,14 @@ static cir_expr_t *
     // TODO: Const-prop field read.
 
     // Build a pointer-to-field type, then `ptr + offset` as that type, then deref.
-    c_type_t    field_ptr_rc = c_type_clone_pointer(field.type);
-    cir_expr_t *off_iconst   = c_compile2_synth_iconst(cc, expr->oper_pos, cc->options.size_type, ui128(field.offset));
-    cir_expr_t *add          = cir_expr_create_calc(cir_calc_create(
+    c_type_t    field_ptr_type = c_type_clone_pointer(field.type);
+    cir_expr_t *off_iconst = c_compile2_synth_iconst(cc, expr->oper_pos, cc->options.size_type, ui128(field.offset));
+    cir_expr_t *add        = cir_expr_create_calc(cir_calc_create(
         (cir_expr_common_t){
             .pos          = expr->pos,
             .is_lvalue    = false,
             .allow_addrof = false,
-            .type         = field_ptr_rc,
+            .type         = field_ptr_type,
         },
         CIR_CALC_ADD,
         ptr_expr,
@@ -699,18 +698,13 @@ cir_expr_t *c_compile2_expr_prefix(c_compiler_t *cc, cir_scope_t *scope, c_ast_e
             return cir_expr_create_calc(cir_calc_create(common, CIR_CALC_SUB, zero, val));
         }
         case C_TKN_AND: { // Address-of `&`
-            if (!val->common.allow_addrof) {
-                cctx_diagnostic(cc->cctx, expr->oper_pos, DIAG_ERR, "Cannot take the address of this rvalue");
-                goto err1;
-            }
             if (val->common.type.prim == C_COMP_FUNCTION) {
                 // Similar to their funny deref semantics, doing addrof on a function is a no-op.
                 // The function instead decays implicitly into a function pointer as needed.
                 return val;
             }
             c_type_delete(common.type);
-            common.type = c_type_clone_pointer(val->common.type);
-            return cir_expr_create_deref(cir_deref_create(common, val));
+            return raw_addrof(cc, expr->pos, val);
         }
         case C_TKN_MUL: { // Dereference `*expr`
             if (val->common.type.prim != C_COMP_POINTER) {
@@ -1047,8 +1041,8 @@ static inline bool c_init_cursor_select_named(
         if (field->name && !strcmp(field->name, name->name)) {
             // Matching field name found.
             vec_push(&cursor->stack, i);
-            c_type_t new_type     = c_type_clone(field->type);
             cursor->field_offset += field->offset;
+            c_type_t new_type     = c_type_clone(field->type);
             c_type_delete(cursor->field_type);
             cursor->field_type = new_type;
             return true;
@@ -1324,7 +1318,12 @@ cir_expr_t *c_compile2_compinit(
             };
             cir_const_t *iconst = cir_const_create(init->pos, type.prim, zero);
             return cir_expr_create_value(cir_value_create_const(
-                (cir_expr_common_t){.is_lvalue = false, .allow_addrof = false, .pos = init->pos, .type = type},
+                (cir_expr_common_t){
+                    .is_lvalue    = false,
+                    .allow_addrof = false,
+                    .pos          = init->pos,
+                    .type         = type,
+                },
                 iconst
             ));
 
@@ -1535,7 +1534,7 @@ cir_expr_t *c_compile2_compinit(
                 .is_lvalue    = false,
                 .allow_addrof = false,
             },
-            cir_comp_const_create(init->pos, type, blob)
+            cir_comp_const_create(init->pos, c_type_clone(type), blob)
         );
 
     out_del_stores:
@@ -1551,12 +1550,12 @@ cir_expr_t *c_compile2_compinit(
                 .is_lvalue    = false,
                 .allow_addrof = false,
             },
-            cir_comp_value_create(init->pos, type, cursor.stores)
+            cir_comp_value_create(init->pos, c_type_clone(type), cursor.stores)
         );
     }
 
     // Final cleanup.
-    c_type_delete(cursor.type);
+    c_type_delete(type);
     c_type_delete(cursor.field_type);
     vec_clear(&cursor.stack);
 

@@ -235,11 +235,11 @@ static inline bool c_type_is_pointer(c_type_ref_t type) {
 // Get the IR type corresponding to a C type, if one exists.
 ir_prim_t      c_type_to_ir_type(c_compiler_t *cc, c_type_ref_t type);
 // Get information about a field in a type.
-c_field_info_t c_type_get_field(c_compiler_t *cc, c_type_ref_t type, char const *name);
+c_field_info_t c_type_get_field(c_compiler_t *cc, c_type_ref_t type, char const *name, pos_t pos);
 // Delete a C type.
 void           c_type_delete(c_type_t type);
 // Print the type in simplified source form.
-void           c_type_print(c_type_ref_t type, FILE *to);
+void           c_type_print(c_type_ref_t type, char const *ident, bool fields, FILE *to);
 // Print the primitive type in simplified source form.
 void           c_prim_print(c_prim_t prim, FILE *to);
 

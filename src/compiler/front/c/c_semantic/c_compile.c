@@ -50,11 +50,12 @@ cir_trans_unit_t *c_compile2(c_compiler_t *cc, c_ast_def_list_t const *ast) {
                 for (size_t i = 0; i < decls->len; i++) {
                     c_ast_init_decl_t const *decl = decls->arr[i];
                     c_ast_ident_t const     *name;
-                    c_type_t type = c_compile2_type(cc, global_scope, c_type_clone(spec_qual_type), decl->decl, &name);
-                    if (!c_type_is_valid(type)) {
-                        continue;
-                    }
                     if (spec_qual_type.qual.s_typedef) {
+                        c_type_t type
+                            = c_compile2_type(cc, global_scope, c_type_clone(spec_qual_type), decl->decl, &name);
+                        if (!c_type_is_valid(type)) {
+                            continue;
+                        }
                         if (decl->init) {
                             cctx_diagnostic(cc->cctx, decl->init->pos, DIAG_ERR, "Cannot have initializer for typedef");
                         }
@@ -188,7 +189,7 @@ cir_unit_t *c_compile2_func(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_func
         return NULL;
     }
 
-    return cir_unit_create_func(cir_func_create(name->pos, type, lilycc_strdup(name->name), body));
+    return cir_unit_create_func(cir_func_create(name->pos, func_scope, type, lilycc_strdup(name->name), body));
 }
 
 
@@ -382,6 +383,7 @@ static c_comp_type_t *c_compile2_comp_spec(c_compiler_t *cc, c_ast_spec_qual_t c
             comp->refcount++;
         }
     }
+    comp->refcount++;
 
     // Assert that the tag type matches.
     if (comp->tag != tag) {

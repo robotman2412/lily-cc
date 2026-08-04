@@ -22,14 +22,14 @@
 
 // Iterate over all entries in the map.
 #define map_foreach_kv(ktype, kname, type, vname, map)                                                                 \
-    for (map_ent_t const *map_foreach = map_next(map, NULL); varname; varname = map_next(map, map_foreach))            \
-        for (__typeof__(ktype) const kname = map_foreach->key; kname; kname = (void *)0)                               \
+    for (map_ent_t const *map_foreach = map_next(map, NULL); map_foreach; map_foreach = map_next(map, map_foreach))    \
+        for (__typeof__(ktype) kname = (void const *)map_foreach->key; kname; kname = (void *)0)                       \
             for (__typeof__(type) *vname = (void *)map_foreach->value; vname; vname = (void *)0)
 
 // Iterate over all keys in the map.
 #define map_foreach_key(ktype, kname, map)                                                                             \
     for (map_ent_t const *map_foreach = map_next(map, NULL); map_foreach; map_foreach = map_next(map, map_foreach))    \
-        for (__typeof__(ktype) const kname = map_foreach->key; kname; kname = (void *)0)
+        for (__typeof__(ktype) kname = (void const *)map_foreach->key; kname; kname = (void *)0)
 
 // Iterate over all values in the map.
 #define map_foreach_value(type, vname, map)                                                                            \

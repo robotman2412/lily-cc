@@ -11,10 +11,12 @@
 
 
 
+#if !defined NDEBUG && defined __GNUC__
 // Total size allocated through Lily-CC's allocator.
 extern atomic_size_t lilycc_total_alloc;
 // Allocation debug printing output.
 extern FILE         *lilycc_alloc_debugfd;
+#endif
 
 // Lily-CC malloc; abort if out of memory.
 void *lilycc_malloc(size_t size) __attribute__((malloc, warn_unused_result));

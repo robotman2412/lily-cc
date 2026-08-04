@@ -40,18 +40,23 @@ static bool fork_testcase(testcase_t *testcase) {
         perror(" \033[31mFork failed\033[0m");
         return false;
     } else if (pid == 0) {
+#if !defined NDEBUG && defined __GNUC__
         mkdir("lilycc_malloc", 0755);
         char buf[128];
         snprintf(buf, sizeof(buf) - 1, "lilycc_malloc/%s.log", testcase->id);
         lilycc_alloc_debugfd = fopen(buf, "w");
 
-        size_t pre           = lilycc_total_alloc;
-        bool   res           = run_testcase_impl(testcase);
-        size_t post          = lilycc_total_alloc;
+        size_t pre = lilycc_total_alloc;
+#endif
+        bool res = run_testcase_impl(testcase);
+#if !defined NDEBUG && defined __GNUC__
+        size_t post = lilycc_total_alloc;
+        fclose(lilycc_alloc_debugfd);
         lilycc_alloc_debugfd = NULL;
         if (post > pre) {
             printf("\033[33mTest %s leaked %zu bytes of memory\033[0m\n", testcase->id, post - pre);
         }
+#endif
         exit(!res);
     } else {
         while (1) {
@@ -109,10 +114,12 @@ int main(int argc, char **argv) {
         do_fork = fork != 0;
     }
 
+#if !defined NDEBUG && defined __GNUC__
     size_t pre = lilycc_total_alloc;
     if (!do_fork) {
         lilycc_alloc_debugfd = fopen("lilycc_malloc.log", "w");
     }
+#endif
 
     size_t total   = 0;
     size_t success = 0;
@@ -140,13 +147,16 @@ int main(int argc, char **argv) {
         }
         free(found);
     }
+#if !defined NDEBUG && defined __GNUC__
     size_t post = lilycc_total_alloc;
     if (!do_fork) {
+        fclose(lilycc_alloc_debugfd);
         lilycc_alloc_debugfd = NULL;
     }
     if (!do_fork && post > pre) {
         printf("\033[33mLeaked %zu bytes of memory\033[0m\n", post - pre);
     }
+#endif
 
     if (total == 0) {
         printf("No test cases to run\n");

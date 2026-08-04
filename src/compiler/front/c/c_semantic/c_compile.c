@@ -208,8 +208,18 @@ static void
         c_ast_ident_t const *name  = body->arr[i]->name;
         c_ast_expr_t const  *value = body->arr[i]->value;
         if (value) {
-            fprintf(stderr, "TODO: Designated enum variants\n");
-            abort();
+            cir_expr_t *res = c_compile2_expr(cc, scope, value);
+            if (!res) {
+                continue;
+            }
+            if (res->tag != CIR_EXPR_VALUE || res->value->tag != CIR_VALUE_CONST
+                || res->common.type.prim >= C_PRIM_FLOAT) {
+                cctx_diagnostic(cc->cctx, value->pos, DIAG_ERR, "Expected integer constant expression");
+                cir_expr_delete(res);
+                continue;
+            }
+            cur = (int32_t)ir_cast(IR_PRIM_s32, res->value->iconst->iconst).constl;
+            cir_expr_delete(res);
         }
         if (map_get(&scope->values, name->name)) {
             cctx_diagnostic(cc->cctx, name->pos, DIAG_ERR, "Redefinition of %s", name->name);

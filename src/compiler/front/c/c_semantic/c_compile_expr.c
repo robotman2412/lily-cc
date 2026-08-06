@@ -32,7 +32,7 @@
 
 // Whether a primitive is an arithmetic type (integer or floating point).
 static bool c_prim_is_arith(c_prim_t prim) {
-    return prim < C_N_PRIM && prim != C_PRIM_VOID;
+    return prim < C_PRIM_VOID || prim == C_COMP_POINTER;
 }
 
 // Determine the common result type of a ternary expression's two value operands.
@@ -85,6 +85,82 @@ static c_type_opt_t c_compile2_ternary_result_type(c_compiler_t *cc, pos_t pos, 
     return C_TYPE_INVALID;
 }
 
+// Determine the resulting primitive type for usual arithmetic conversion, if applicable.
+// Returns `C_N_PRIM` if conversion cannot be performed (one of the operands is non-primitive and not an enum type).
+// All lesser integer types are promoted to at least the rank of `int`.
+// If `other_type` is a valid type, it is used to determine which integer type is the result of promotion.
+static c_prim_t usual_arith_conv(c_compiler_t *cc, c_type_ref_t type, c_type_ref_t other_type) {
+    // See: ISO/IEC 9899:2023 §6.3.2.8
+    c_prim_t prim = type.prim;
+    if (type.prim == C_COMP_ENUM) {
+        prim = type.extra->enum_type->prim;
+    }
+    // See: ISO/IEC 9899:2023 §6.3.2.1
+    if (prim == C_PRIM_USHORT && !cc->options.int32) {
+        prim = C_PRIM_UINT;
+    } else if (prim < C_PRIM_SINT) {
+        prim = C_PRIM_SINT;
+    }
+
+    if (c_type_is_valid(other_type)) {
+        // Same promotion for the other type.
+        c_prim_t other_prim = other_type.prim;
+        if (other_type.prim == C_COMP_ENUM) {
+            other_prim = other_type.extra->enum_type->prim;
+        }
+        if (other_prim == C_PRIM_USHORT && !cc->options.int32) {
+            other_prim = C_PRIM_UINT;
+        } else if (other_prim < C_PRIM_SINT) {
+            other_prim = C_PRIM_SINT;
+        }
+
+        if (prim >= C_N_PRIM || other_prim >= C_N_PRIM || prim == other_prim) {
+            // No conversion can be done.
+            return C_N_PRIM;
+        }
+
+        // See: ISO/IEC 9899:2023 §6.3.2.8
+        // TODO: _Decimal128, _Decimal64 and _Decimal32.
+        if (prim == C_PRIM_LDOUBLE || other_prim == C_PRIM_LDOUBLE) {
+            return C_PRIM_LDOUBLE;
+        } else if (prim == C_PRIM_DOUBLE || other_prim == C_PRIM_DOUBLE) {
+            return C_PRIM_DOUBLE;
+        } else if (prim == C_PRIM_FLOAT || other_prim == C_PRIM_FLOAT) {
+            return C_PRIM_FLOAT;
+        } else if ( // At this point, both types are either integer types or `bool`.
+            c_prim_is_uint(cc->options.char_is_signed, prim)
+            == c_prim_is_uint(cc->options.char_is_signed, other_prim)
+        ) {
+            // Conversion with the same sign uses the higher-ranked type.
+            return prim > other_prim ? prim : other_prim;
+        } else {
+            // We have an unsigned and a signed type now; this block handles the remaining three clauses.
+            c_prim_t u_prim, s_prim;
+            if (c_prim_is_uint(cc->options.char_is_signed, prim)) {
+                u_prim = prim;
+                s_prim = other_prim;
+            } else {
+                u_prim = other_prim;
+                s_prim = prim;
+            }
+            ir_prim_t u_ir_prim = c_type_to_ir_type(cc, C_TYPE_FROM_PRIM(u_prim));
+            ir_prim_t s_ir_prim = c_type_to_ir_type(cc, C_TYPE_FROM_PRIM(s_prim));
+
+            // Effectively, we must convert to whichever type can represent all values of the other.
+            // If not possible, (i.e. same rank in IR types), convert to the unsigned type.
+            if (u_ir_prim == s_ir_prim + 1) {
+                // Same rank in IR types; use the unsigned type.
+                return u_prim;
+            } else {
+                // Convert to the larger type.
+                return u_ir_prim > s_ir_prim ? u_prim : s_prim;
+            }
+        }
+    }
+
+    return prim;
+}
+
 
 // Perform or const-propagate a cast.
 // Transfers ownership of `type`.
@@ -123,12 +199,25 @@ static cir_expr_t *raw_calc(c_compiler_t *cc, pos_t pos, cir_calc_op_t op, cir_e
 
     if (!c_type_is_compatible(ltyp, rtyp)) {
         cctx_diagnostic(cc->cctx, pos, DIAG_ERR, "Incompatible types for expression");
+        cir_expr_delete(lhs);
+        cir_expr_delete(rhs);
         return NULL;
+    }
+
+    c_type_t type;
+    if (op >= CIR_CALC_LAND) {
+        type = C_TYPE_FROM_PRIM(C_PRIM_SINT);
+    } else {
+        c_prim_t prim = usual_arith_conv(cc, ltyp, rtyp);
+        if (prim == C_N_PRIM) {
+            type = c_type_clone(ltyp);
+        } else {
+            type = C_TYPE_FROM_PRIM(prim);
+        }
     }
 
     if ((lhs->tag == CIR_EXPR_VALUE && lhs->value->tag == CIR_VALUE_CONST && lhs->common.type.prim < C_PRIM_VOID)
         && (rhs->tag == CIR_EXPR_VALUE && rhs->value->tag == CIR_VALUE_CONST && rhs->common.type.prim < C_PRIM_VOID)) {
-        c_prim_t   res_type;
         ir_const_t iconst;
         if (op == CIR_CALC_LAND) {
             bool lhs_b       = ir_calc1(IR_OP1_snez, lhs->value->iconst->iconst).constl;
@@ -136,21 +225,19 @@ static cir_expr_t *raw_calc(c_compiler_t *cc, pos_t pos, cir_calc_op_t op, cir_e
             iconst.prim_type = c_prim_to_ir_type(cc, C_PRIM_SINT);
             iconst.constl    = lhs_b & rhs_b;
             iconst.consth    = 0;
-            res_type         = C_PRIM_SINT;
         } else if (op == CIR_CALC_LOR) {
             bool lhs_b       = ir_calc1(IR_OP1_snez, lhs->value->iconst->iconst).constl;
             bool rhs_b       = ir_calc1(IR_OP1_snez, lhs->value->iconst->iconst).constl;
             iconst.prim_type = c_prim_to_ir_type(cc, C_PRIM_SINT);
             iconst.constl    = lhs_b | rhs_b;
             iconst.consth    = 0;
-            res_type         = C_PRIM_SINT;
         } else {
             ir_op2_type_t ir_op = cir_calc_op_to_ir_op2(op);
             iconst              = ir_calc2(ir_op, lhs->value->iconst->iconst, rhs->value->iconst->iconst);
-            res_type            = lhs->common.type.prim;
         }
 
-        cir_expr_t *res = cir_expr_create_value(cir_value_create_const(cir_const_create(pos, res_type, iconst)));
+        cir_expr_t *res = cir_expr_create_value(cir_value_create_const(cir_const_create(pos, type.prim, iconst)));
+        c_type_delete(type);
         cir_expr_delete(lhs);
         cir_expr_delete(rhs);
         return res;
@@ -159,7 +246,7 @@ static cir_expr_t *raw_calc(c_compiler_t *cc, pos_t pos, cir_calc_op_t op, cir_e
     return cir_expr_create_calc(cir_calc_create(
         (cir_expr_common_t){
             .pos          = pos,
-            .type         = c_type_clone(lhs->common.type),
+            .type         = type,
             .allow_addrof = false,
             .is_lvalue    = false,
         },
@@ -203,6 +290,7 @@ static cir_expr_t *array_decay(c_compiler_t *cc, cir_expr_t *val) {
 
 // Emit a calculation operation as C IR.
 // Handles pointer arithmetic, promotion, etc.
+// Does not assign; `is_assign` is only used to check arithmetic rules.
 static cir_expr_t *
     expand_calc(c_compiler_t *cc, pos_t pos, cir_calc_op_t op, cir_expr_t *lhs, cir_expr_t *rhs, bool is_assign) {
     lhs = array_decay(cc, lhs);
@@ -243,7 +331,10 @@ static cir_expr_t *
         }
         cir_expr_t *cast = raw_cast(cc, pos, C_TYPE_FROM_PRIM(ptrdiff_prim), sub);
         assert(cast != NULL);
-        return raw_calc(cc, pos, CIR_CALC_DIV, sub, c_compile2_synth_iconst(cc, pos, ptrdiff_prim, ui128(size)));
+        cir_expr_t *div
+            = raw_calc(cc, pos, CIR_CALC_DIV, cast, c_compile2_synth_iconst(cc, pos, ptrdiff_prim, ui128(size)));
+        assert(div != NULL);
+        return div;
     }
 
     // Pointer offset.
@@ -270,19 +361,24 @@ static cir_expr_t *
 
         cir_expr_t *cast1 = raw_cast(cc, pos, C_TYPE_FROM_PRIM(cc->options.size_type), rhs);
         assert(cast1 != NULL);
-        cir_expr_t *offset
-            = raw_calc(cc, pos, op, cast1, c_compile2_synth_iconst(cc, pos, cc->options.size_type, ui128(size)));
+        cir_expr_t *offset = raw_calc(
+            cc,
+            pos,
+            CIR_CALC_MUL,
+            cast1,
+            c_compile2_synth_iconst(cc, pos, cc->options.size_type, ui128(size))
+        );
         assert(offset != NULL);
         cir_expr_t *cast2 = raw_cast(cc, pos, c_type_clone(ltyp), offset);
         assert(cast2 != NULL);
         return raw_calc(cc, pos, op, lhs, cast2);
     }
 
-    if (ltyp.prim == C_PRIM_VOID || ltyp.prim >= C_N_PRIM) {
+    if (!c_prim_is_arith(ltyp.prim)) {
         cctx_diagnostic(cc->cctx, lhs->common.pos, DIAG_ERR, "Expected arithmetic type");
         goto error;
     }
-    if (rtyp.prim == C_PRIM_VOID || rtyp.prim >= C_N_PRIM) {
+    if (!c_prim_is_arith(rtyp.prim)) {
         cctx_diagnostic(cc->cctx, rhs->common.pos, DIAG_ERR, "Expected arithmetic type");
         goto error;
     }
@@ -298,6 +394,36 @@ error:
         cir_expr_delete(rhs);
     }
     return NULL;
+}
+
+// Emit a calculation-assignment as C IR.
+// Handles pointer arithmetic, promotion, etc.
+static cir_expr_t *expand_calc_assign(c_compiler_t *cc, pos_t pos, cir_calc_op_t op, cir_expr_t *lhs, cir_expr_t *rhs) {
+    cir_tmpval_t *tmp = cir_tmpval_create(lhs);
+    lhs               = NULL;
+
+    // Compute using tmpval.
+    cir_expr_t *calc = expand_calc(cc, pos, op, cir_expr_create_value(cir_value_create_tmpval(tmp)), rhs, true);
+    if (!calc) {
+        cir_tmpval_delete(tmp);
+        return NULL;
+    }
+    if (!c_type_is_identical(calc->common.type, tmp->common.type, false)) {
+        // Cast should always succeed because of prior type checks in `expand_calc`.
+        calc = raw_cast(cc, pos, c_type_clone(tmp->common.type), calc);
+        assert(calc != NULL);
+    }
+
+    // Store result back to tmpval, thereby writing to lhs.
+    cir_expr_t *assign
+        = cir_expr_create_assign(cir_assign_create(cir_expr_create_value(cir_value_create_tmpval(tmp)), calc));
+
+    vec_cir_tmpval_t tmps = {0};
+    vec_push(&tmps, tmp);
+    vec_cir_expr_t exprs = {0};
+    vec_push(&exprs, assign);
+
+    return cir_expr_create_exprs(cir_exprs_create2(cir_expr_common_clone(&calc->common), tmps, exprs));
 }
 
 
@@ -636,33 +762,7 @@ cir_expr_t *c_compile2_expr_infix(c_compiler_t *cc, cir_scope_t *scope, c_ast_ex
     }
 
     if (compound) {
-        cir_tmpval_t *tmp = cir_tmpval_create(lhs);
-        lhs               = NULL;
-
-        // Compute using tmpval.
-        cir_expr_t *calc
-            = expand_calc(cc, expr->pos, op, cir_expr_create_value(cir_value_create_tmpval(tmp)), rhs, true);
-        if (!calc) {
-            cir_tmpval_delete(tmp);
-            return NULL;
-        }
-        if (!c_type_is_identical(calc->common.type, tmp->common.type, false)) {
-            // Cast should always succeed because of prior type checks in `expand_calc`.
-            calc = raw_cast(cc, expr->pos, c_type_clone(tmp->common.type), calc);
-            assert(calc != NULL);
-        }
-
-        // Store result back to tmpval, thereby writing to lhs.
-        cir_expr_t *assign
-            = cir_expr_create_assign(cir_assign_create(cir_expr_create_value(cir_value_create_tmpval(tmp)), calc));
-
-        vec_cir_tmpval_t tmps = {0};
-        vec_push(&tmps, tmp);
-        vec_cir_expr_t exprs = {0};
-        vec_push(&exprs, assign);
-
-        return cir_expr_create_exprs(cir_exprs_create2(cir_expr_common_clone(&calc->common), tmps, exprs));
-
+        return expand_calc_assign(cc, expr->pos, op, lhs, rhs);
     } else {
         return expand_calc(cc, expr->pos, op, lhs, rhs, false);
     }
@@ -708,32 +808,34 @@ cir_expr_t *c_compile2_expr_prefix(c_compiler_t *cc, cir_scope_t *scope, c_ast_e
 
     c_prim_t prim = val->common.type.prim < C_N_PRIM ? val->common.type.prim : cc->options.size_type;
 
-    cir_expr_common_t common = {
-        .pos          = expr->pos,
-        .is_lvalue    = false,
-        .allow_addrof = false,
-        .type         = c_type_clone(val->common.type),
-    };
-
     switch (expr->oper) {
         case C_TKN_LNOT: { // Logical NOT `!expr`
             cir_expr_t *zero = c_compile2_synth_iconst(cc, expr->pos, prim, I128_ZERO);
-            return cir_expr_create_calc(cir_calc_create(common, CIR_CALC_EQ, val, zero));
+            return expand_calc(cc, expr->pos, CIR_CALC_EQ, val, zero, false);
         }
         case C_TKN_NOT: { // Bitwise NOT `~expr`
             cir_expr_t *mask = c_compile2_synth_iconst(cc, expr->pos, prim, UI128_MAX);
-            return cir_expr_create_calc(cir_calc_create(common, CIR_CALC_BXOR, val, mask));
+            return expand_calc(cc, expr->pos, CIR_CALC_BXOR, val, mask, false);
         }
-        case C_TKN_INC: // Pre-increment `++expr`
-        case C_TKN_DEC: // Pre-decrement `--expr`
-            fprintf(stderr, "TODO: pre-increment/decrement\n");
-            abort();
-        case C_TKN_ADD: // Passthru `+`.
-            c_type_delete(common.type);
-            return val;
+        case C_TKN_INC:   // Pre-increment `++expr`
+        case C_TKN_DEC: { // Pre-decrement `--expr`
+            c_type_t    type = c_type_clone(val->common.type);
+            cir_expr_t *one  = c_compile2_synth_iconst(cc, expr->pos, cc->options.size_type, ui128(1));
+            cir_expr_t *calc
+                = expand_calc_assign(cc, expr->pos, expr->oper == C_TKN_INC ? CIR_CALC_ADD : CIR_CALC_SUB, val, one);
+            if (!calc) {
+                return NULL;
+            }
+            return raw_cast(cc, expr->pos, type, calc);
+        }
+        case C_TKN_ADD: { // Arithmetic promote `+`.
+            c_prim_t conv = usual_arith_conv(cc, val->common.type, C_TYPE_INVALID);
+            assert(conv != C_N_PRIM); // Should always be possible.
+            return raw_cast(cc, expr->pos, C_TYPE_FROM_PRIM(conv), val);
+        }
         case C_TKN_SUB: { // Arithmetic negate `-`.
             cir_expr_t *zero = c_compile2_synth_iconst(cc, expr->pos, prim, I128_ZERO);
-            return cir_expr_create_calc(cir_calc_create(common, CIR_CALC_SUB, zero, val));
+            return expand_calc(cc, expr->pos, CIR_CALC_SUB, zero, val, false);
         }
         case C_TKN_AND: { // Address-of `&`
             if (val->common.type.prim == C_COMP_FUNCTION) {
@@ -741,13 +843,18 @@ cir_expr_t *c_compile2_expr_prefix(c_compiler_t *cc, cir_scope_t *scope, c_ast_e
                 // The function instead decays implicitly into a function pointer as needed.
                 return val;
             }
-            c_type_delete(common.type);
             return raw_addrof(cc, expr->pos, val);
         }
         case C_TKN_MUL: { // Dereference `*expr`
             if (val->common.type.prim != C_COMP_POINTER) {
-                goto err1;
+                goto err0;
             }
+            cir_expr_common_t common = {
+                .pos          = expr->pos,
+                .is_lvalue    = false,
+                .allow_addrof = false,
+                .type         = c_type_clone(val->common.type),
+            };
             if (val->common.type.extra->inner.prim == C_COMP_FUNCTION) {
                 // Funcptr types have funny semantics that mean deref doesn't actually do anything.
                 return val;
@@ -761,8 +868,6 @@ cir_expr_t *c_compile2_expr_prefix(c_compiler_t *cc, cir_scope_t *scope, c_ast_e
         default: fprintf(stderr, "BUG: Unhandled prefix operator\n"); abort();
     }
 
-err1:
-    c_type_delete(common.type);
 err0:
     cir_expr_delete(val);
     return NULL;
@@ -792,8 +897,19 @@ cir_expr_t *c_compile2_expr_suffix(c_compiler_t *cc, cir_scope_t *scope, c_ast_e
         goto err0;
     }
 
-    fprintf(stderr, "TODO: post-increment/decrement\n");
-    abort();
+    c_type_t    type  = c_type_clone(val->common.type);
+    cir_expr_t *one_a = c_compile2_synth_iconst(cc, expr->pos, cc->options.size_type, ui128(1));
+    cir_expr_t *res
+        = expand_calc_assign(cc, expr->pos, expr->oper == C_TKN_INC ? CIR_CALC_ADD : CIR_CALC_SUB, val, one_a);
+    if (!res) {
+        return NULL;
+    }
+    // Simply offset by one in the opposite direction to effectively get the same result as post-increment/decrement.
+    cir_expr_t *one_b = c_compile2_synth_iconst(cc, expr->pos, cc->options.size_type, ui128(1));
+    cir_expr_t *undo
+        = expand_calc(cc, expr->pos, expr->oper == C_TKN_INC ? CIR_CALC_SUB : CIR_CALC_ADD, res, one_b, false);
+    assert(undo != NULL); // If the calc one worked, so should this one.
+    return raw_cast(cc, expr->pos, type, undo);
 
 err0:
     cir_expr_delete(val);
@@ -918,7 +1034,7 @@ cir_expr_t *c_compile2_expr_ident(c_compiler_t *cc, cir_scope_t *scope, c_ast_id
         cctx_diagnostic(cc->cctx, ident->pos, DIAG_ERR, "Use of undeclared identifier '%s'", ident->name);
         return NULL;
     }
-    return cir_expr_create_value(cir_value_create_scope_val(val));
+    return cir_expr_create_value(cir_value_create_scope_val(ident->pos, val));
 }
 
 // Compile an integer constant as part of an expression.
@@ -1041,8 +1157,10 @@ static bool c_init_cursor_step_in(c_init_cursor_t *cursor) {
             cur = comp->fields.arr[field].type;
 
         } else if (cur.prim == C_COMP_ARRAY) {
-            fprintf(stderr, "TODO: c_init_cursor_step_in with C_COMP_ARRAY\n");
-            abort();
+            if (cur.extra->length <= 0) {
+                return false;
+            }
+            cur = cur.extra->inner;
 
         } else {
             // Pointers, enums and primitive types.
@@ -1054,6 +1172,7 @@ static bool c_init_cursor_step_in(c_init_cursor_t *cursor) {
         }
     }
 
+    cursor->field_type = c_type_clone(cur);
     return true;
 }
 
@@ -1168,7 +1287,7 @@ static inline bool
 }
 
 // Helper for `c_init_field` that moves the cursor to the next field.
-static void c_init_cursor_next(c_init_cursor_t *cursor) {
+static void c_init_cursor_next(c_compiler_t *cc, c_init_cursor_t *cursor) {
     while (cursor->stack.len) {
         bool     has_next = false;
         // Non-owning.
@@ -1194,8 +1313,15 @@ static void c_init_cursor_next(c_init_cursor_t *cursor) {
                 cursor->field_type = c_type_clone(field->type);
 
             } else if (cur.prim == C_COMP_ARRAY) {
-                fprintf(stderr, "TODO: c_init_cursor_next with C_COMP_ARRAY\n");
-                abort();
+                uint64_t size, align;
+                if (!c_type_get_size(cc, cur.extra->inner, &size, &align)) {
+                    UNREACHABLE();
+                }
+                cursor->field_offset += size;
+                has_next              = index < (uint32_t)cur.extra->length;
+                cur                   = cur.extra->inner;
+                c_type_delete(cursor->field_type);
+                cursor->field_type = c_type_clone(cur);
 
             } else {
                 // Pointers, enums and primitive types.
@@ -1460,7 +1586,7 @@ cir_expr_t *c_compile2_compinit(
                 vec_push(&cursor.stores, store);
             }
 
-            c_init_cursor_next(&cursor);
+            c_init_cursor_next(cc, &cursor);
 
         } else {
             cir_expr_t *res = c_compile2_expr(cc, scope, val->initval_expr);
@@ -1489,7 +1615,7 @@ cir_expr_t *c_compile2_compinit(
                 }
             }
 
-            c_init_cursor_next(&cursor);
+            c_init_cursor_next(cc, &cursor);
         }
     }
 

@@ -603,7 +603,7 @@ void              cir_comp_value_delete(cir_comp_value_t *node);
 // Construct a `cir_value` node with non-owning refernce to a temporary value.
 cir_value_t *cir_value_create_tmpval(cir_tmpval_t const *tmpval);
 // Construct a `cir_value` node with non-owning refernce to a scoped value.
-cir_value_t *cir_value_create_scope_val(cir_scope_val_t const *scope_val);
+cir_value_t *cir_value_create_scope_val(pos_t pos, cir_scope_val_t const *scope_val);
 // Construct a `cir_value` node wrapping a primitive constant.
 cir_value_t *cir_value_create_const(cir_const_t *iconst);
 // Construct a `cir_value` node wrapping a compound constant.

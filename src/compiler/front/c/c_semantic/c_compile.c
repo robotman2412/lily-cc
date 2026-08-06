@@ -700,6 +700,10 @@ c_type_opt_t c_compile2_type(
                         errors = true;
                         continue;
                     }
+                    // In function parameter typess, arrays decay into pointers.
+                    if (type.prim == C_COMP_ARRAY) {
+                        type.prim = C_COMP_POINTER;
+                    }
                 }
                 c_func_arg_t arg = {0};
                 arg.type         = type;

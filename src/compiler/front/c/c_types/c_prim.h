@@ -51,11 +51,15 @@ typedef enum __attribute__((packed)) {
     // `long double`
     C_PRIM_LDOUBLE,
 
+    // TODO: _Decimal128, _Decimal64 and _Decimal32.
+
     // `void`
     C_PRIM_VOID,
 
     // Number of type primitives.
     C_N_PRIM,
+
+    // TODO: _BitInt
 
     // Type is a struct.
     C_COMP_STRUCT,
@@ -73,6 +77,30 @@ typedef enum __attribute__((packed)) {
 
 // Primitive types' names.
 extern char const *c_prim_name[];
+
+// Convert to corresponding unsigned type.
+static c_prim_t c_prim_to_uint(bool char_is_signed, c_prim_t prim) {
+    if (prim == C_PRIM_CHAR && !char_is_signed) {
+        return C_PRIM_CHAR;
+    } else if (prim >= C_PRIM_FLOAT) {
+        return C_N_PRIM;
+    } else if (prim == C_PRIM_BOOL) {
+        return C_PRIM_UINT;
+    }
+    return prim | 1;
+}
+
+// Convert to corresponding signed type.
+static c_prim_t c_prim_to_sint(bool char_is_signed, c_prim_t prim) {
+    if (prim == C_PRIM_CHAR && char_is_signed) {
+        return C_PRIM_CHAR;
+    } else if (prim >= C_PRIM_FLOAT) {
+        return C_N_PRIM;
+    } else if (prim == C_PRIM_BOOL) {
+        return C_PRIM_SINT;
+    }
+    return prim & ~1;
+}
 
 // Whether a primitive is an usigned integer type.
 static inline bool c_prim_is_uint(bool char_is_signed, c_prim_t prim) {

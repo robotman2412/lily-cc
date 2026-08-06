@@ -204,7 +204,11 @@ bool c_type_is_compatible(c_type_ref_t a, c_type_ref_t b) {
         return true;
     }
     if (a.prim != b.prim) {
-        return (a.prim < C_N_PRIM || a.prim == C_COMP_ENUM) && (b.prim < C_N_PRIM || b.prim == C_COMP_ENUM);
+        if ((c_prim_is_int(a.prim) && b.prim == C_COMP_POINTER)
+            || (c_prim_is_int(b.prim) && a.prim == C_COMP_POINTER)) {
+            return true;
+        }
+        return (a.prim < C_PRIM_VOID || a.prim == C_COMP_ENUM) && (b.prim < C_PRIM_VOID || b.prim == C_COMP_ENUM);
     }
     switch (a.prim) {
         case C_PRIM_BOOL:

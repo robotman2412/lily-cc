@@ -85,12 +85,12 @@ cir_value_t *cir_value_create_tmpval(cir_tmpval_t const *tmpval) {
     return node;
 }
 
-cir_value_t *cir_value_create_scope_val(cir_scope_val_t const *scope_val) {
+cir_value_t *cir_value_create_scope_val(pos_t pos, cir_scope_val_t const *scope_val) {
     cir_value_t *node = lilycc_malloc(sizeof(cir_value_t));
     switch (scope_val->tag) {
         case CIR_SCOPE_VAL_DECL:
             node->common = (cir_expr_common_t){
-                .pos          = scope_val->decl->pos,
+                .pos          = pos,
                 .is_lvalue    = true,
                 .allow_addrof = true,
                 .type         = c_type_clone(scope_val->decl->type),
@@ -98,7 +98,7 @@ cir_value_t *cir_value_create_scope_val(cir_scope_val_t const *scope_val) {
             break;
         case CIR_SCOPE_VAL_FUNC:
             node->common = (cir_expr_common_t){
-                .pos          = scope_val->func->pos,
+                .pos          = pos,
                 .is_lvalue    = true,
                 .allow_addrof = true,
                 .type         = c_type_clone(scope_val->func->type),
@@ -106,10 +106,10 @@ cir_value_t *cir_value_create_scope_val(cir_scope_val_t const *scope_val) {
             break;
         case CIR_SCOPE_VAL_ENUM_CONST:
             node->common = (cir_expr_common_t){
-                .pos          = scope_val->enum_const->pos,
+                .pos          = pos,
                 .is_lvalue    = false,
                 .allow_addrof = false,
-                .type         = C_TYPE_FROM_PRIM(C_PRIM_SINT), // TODO: Packed enums.
+                .type         = C_TYPE_FROM_PRIM(scope_val->enum_const->prim),
             };
             break;
     }
@@ -225,11 +225,12 @@ void cir_ternary_delete(cir_ternary_t *node) {
 
 
 cir_calc_t *cir_calc_create(cir_expr_common_t common, cir_calc_op_t op, cir_expr_t *lhs, cir_expr_t *rhs) {
-    cir_calc_t *node = lilycc_malloc(sizeof(cir_calc_t));
-    node->common     = common;
-    node->op         = op;
-    node->lhs        = lhs;
-    node->rhs        = rhs;
+    cir_calc_t *node           = lilycc_malloc(sizeof(cir_calc_t));
+    node->common               = common;
+    node->common.type.qual.val = 0;
+    node->op                   = op;
+    node->lhs                  = lhs;
+    node->rhs                  = rhs;
     return node;
 }
 

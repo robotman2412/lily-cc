@@ -99,15 +99,8 @@ static cir_expr_t *raw_cast(c_compiler_t *cc, pos_t pos, c_type_t type, cir_expr
     if (val->tag == CIR_EXPR_VALUE && val->value->tag == CIR_VALUE_CONST && type.prim < C_PRIM_VOID) {
         ir_prim_t   dest_prim = c_type_to_ir_type(cc, type);
         ir_const_t  iconst    = ir_cast(dest_prim, val->value->iconst->iconst);
-        cir_expr_t *res       = cir_expr_create_value(cir_value_create_const(
-            (cir_expr_common_t){
-                .pos          = pos,
-                .type         = type,
-                .is_lvalue    = false,
-                .allow_addrof = false,
-            },
-            cir_const_create(pos, type.prim, iconst)
-        ));
+        cir_expr_t *res       = cir_expr_create_value(cir_value_create_const(cir_const_create(pos, type.prim, iconst)));
+        c_type_delete(type);
         cir_expr_delete(val);
         return res;
     }
@@ -135,7 +128,7 @@ static cir_expr_t *raw_calc(c_compiler_t *cc, pos_t pos, cir_calc_op_t op, cir_e
 
     if ((lhs->tag == CIR_EXPR_VALUE && lhs->value->tag == CIR_VALUE_CONST && lhs->common.type.prim < C_PRIM_VOID)
         && (rhs->tag == CIR_EXPR_VALUE && rhs->value->tag == CIR_VALUE_CONST && rhs->common.type.prim < C_PRIM_VOID)) {
-        c_type_t   res_type;
+        c_prim_t   res_type;
         ir_const_t iconst;
         if (op == CIR_CALC_LAND) {
             bool lhs_b       = ir_calc1(IR_OP1_snez, lhs->value->iconst->iconst).constl;
@@ -143,29 +136,21 @@ static cir_expr_t *raw_calc(c_compiler_t *cc, pos_t pos, cir_calc_op_t op, cir_e
             iconst.prim_type = c_prim_to_ir_type(cc, C_PRIM_SINT);
             iconst.constl    = lhs_b & rhs_b;
             iconst.consth    = 0;
-            res_type         = C_TYPE_FROM_PRIM(C_PRIM_SINT);
+            res_type         = C_PRIM_SINT;
         } else if (op == CIR_CALC_LOR) {
             bool lhs_b       = ir_calc1(IR_OP1_snez, lhs->value->iconst->iconst).constl;
             bool rhs_b       = ir_calc1(IR_OP1_snez, lhs->value->iconst->iconst).constl;
             iconst.prim_type = c_prim_to_ir_type(cc, C_PRIM_SINT);
             iconst.constl    = lhs_b | rhs_b;
             iconst.consth    = 0;
-            res_type         = C_TYPE_FROM_PRIM(C_PRIM_SINT);
+            res_type         = C_PRIM_SINT;
         } else {
             ir_op2_type_t ir_op = cir_calc_op_to_ir_op2(op);
             iconst              = ir_calc2(ir_op, lhs->value->iconst->iconst, rhs->value->iconst->iconst);
-            res_type            = c_type_clone(lhs->common.type);
+            res_type            = lhs->common.type.prim;
         }
 
-        cir_expr_t *res = cir_expr_create_value(cir_value_create_const(
-            (cir_expr_common_t){
-                .pos          = pos,
-                .type         = res_type,
-                .is_lvalue    = false,
-                .allow_addrof = false,
-            },
-            cir_const_create(pos, res_type.prim, iconst)
-        ));
+        cir_expr_t *res = cir_expr_create_value(cir_value_create_const(cir_const_create(pos, res_type, iconst)));
         cir_expr_delete(lhs);
         cir_expr_delete(rhs);
         return res;
@@ -383,8 +368,46 @@ cir_expr_t *c_compile2_expr_index(c_compiler_t *cc, cir_scope_t *scope, c_ast_ex
         goto error;
     }
 
-    // TODO: Const prop.
+    if (lhs->tag == CIR_EXPR_VALUE && rhs->tag == CIR_EXPR_VALUE) {
+        if (lhs->value->tag == CIR_VALUE_CONST && rhs->value->tag == CIR_VALUE_COMP_CONST) {
+            cir_expr_t *tmp = lhs;
+            lhs             = rhs;
+            rhs             = tmp;
+            // Falls through into the next if statement below:
+        }
+        if (lhs->value->tag == CIR_VALUE_COMP_CONST && rhs->value->tag == CIR_VALUE_CONST) {
+            c_type_ref_t type      = lhs->common.type;
+            c_type_ref_t elem_type = type.extra->inner;
+            uint64_t     size, align;
+            if (!c_type_get_size(cc, elem_type, &size, &align)) {
+                UNREACHABLE(); // Array type shouldn't have been constructed if the inner type was incomplete.
+            }
 
+            ir_const_t ir_index = rhs->value->iconst->iconst;
+            ir_index.prim_type  = ir_prim_as_unsigned(ir_index.prim_type);
+            ir_const_t bound    = {
+                .prim_type = ir_index.prim_type,
+                .const128  = ui128(type.extra->length),
+            };
+            if (ir_calc2(IR_OP2_sge, ir_index, bound).constl) {
+                goto non_const_prop;
+            }
+
+            cir_expr_t *const_prop = c_compile2_const_from_bytes(
+                cc,
+                expr->pos,
+                elem_type,
+                lhs->value->comp_const->blob + size * ir_index.constl
+            );
+            if (const_prop) {
+                cir_expr_delete(lhs);
+                cir_expr_delete(rhs);
+                return const_prop;
+            }
+        }
+    }
+
+non_const_prop:;
     cir_expr_t *add = expand_calc(cc, expr->pos, CIR_CALC_ADD, lhs, rhs, false);
     if (!add) {
         return NULL;
@@ -473,51 +496,11 @@ static cir_expr_t *
             return NULL;
         }
 
-        if (field.type.prim == C_COMP_STRUCT || field.type.prim == C_COMP_UNION || field.type.prim == C_COMP_ARRAY) {
-            uint64_t size, align;
-            if (!c_type_get_size(cc, field.type, &size, &align)) {
-                UNREACHABLE(); // Must be a complete type because so is the struct we're reading from.
-            }
-
-            assert(size < SIZE_MAX); // Should be impossible because we're reading from a blob already.
-            uint8_t *blob = lilycc_malloc(size);
-            memcpy(blob, lhs->value->comp_const->blob + field.offset, size);
-
-            c_type_t type = c_type_clone(field.type);
-            type.qual     = (c_qual_t){.q_const = true};
+        cir_expr_t *const_prop
+            = c_compile2_const_from_bytes(cc, lhs->common.pos, field.type, lhs->value->comp_const->blob + field.offset);
+        if (const_prop != NULL) {
             cir_expr_delete(lhs);
-            cir_comp_const_t *comp_const = cir_comp_const_create(expr->lhs->pos, c_type_clone(type), blob);
-            return cir_expr_create_value(cir_value_create_comp_const(
-                (cir_expr_common_t){
-                    .type         = type,
-                    .pos          = expr->lhs->pos,
-                    .allow_addrof = false,
-                    .is_lvalue    = true,
-                },
-                comp_const
-            ));
-
-        } else if (field.type.prim < C_PRIM_VOID || field.type.prim == C_COMP_ENUM) {
-            c_prim_t prim = field.type.prim;
-            if (field.type.prim == C_COMP_ENUM) {
-                prim = field.type.extra->enum_type->prim;
-            }
-            ir_prim_t ir_prim = c_type_to_ir_type(cc, field.type);
-
-            ir_const_t iconst
-                = ir_const_from_blob(ir_prim, lhs->value->comp_const->blob + field.offset, cc->options.big_endian);
-            c_type_t type = c_type_clone(field.type);
-            type.qual     = (c_qual_t){.q_const = true};
-            cir_expr_delete(lhs);
-            return cir_expr_create_value(cir_value_create_const(
-                (cir_expr_common_t){
-                    .type         = type,
-                    .pos          = expr->lhs->pos,
-                    .allow_addrof = false,
-                    .is_lvalue    = true,
-                },
-                cir_const_create(expr->lhs->pos, prim, iconst)
-            ));
+            return const_prop;
         }
     }
 
@@ -950,7 +933,7 @@ cir_expr_t *c_compile2_expr_sconst(c_compiler_t *cc, cir_scope_t *scope, c_ast_e
 
     // String literals have type `char[N]`, NUL-terminated.
     size_t len = sconst->value.len;
-    if (len > INT32_MAX) {
+    if (len > INT32_MAX - 1) {
         cctx_diagnostic(cc->cctx, sconst->pos, DIAG_ERR, "String constant exceeds implementation limits");
         return NULL;
     }
@@ -961,17 +944,11 @@ cir_expr_t *c_compile2_expr_sconst(c_compiler_t *cc, cir_scope_t *scope, c_ast_e
     c_type_t type      = {0};
     type.extra         = lilycc_calloc(1, sizeof(c_bigtype_t));
     type.extra->inner  = C_TYPE_FROM_PRIM(C_PRIM_CHAR);
-    type.extra->length = (int32_t)len;
+    type.extra->length = (int32_t)len + 1;
     type.prim          = C_COMP_ARRAY;
     type.qual.q_const  = true;
 
-    cir_expr_common_t common = {
-        .pos          = sconst->pos,
-        .type         = c_type_clone(type),
-        .is_lvalue    = true,
-        .allow_addrof = true,
-    };
-    return cir_expr_create_value(cir_value_create_comp_const(common, cir_comp_const_create(sconst->pos, type, blob)));
+    return cir_expr_create_value(cir_value_create_comp_const(cir_comp_const_create(sconst->pos, type, blob)));
 }
 
 // Compile a compound literal as part of an expression.
@@ -1251,22 +1228,14 @@ static cir_expr_t *
 
         if (list->items.len == 0) {
             // Empty list; zero it.
-            return cir_expr_create_value(cir_value_create_const(
-                (cir_expr_common_t){
-                    .is_lvalue    = false,
-                    .allow_addrof = false,
-                    .pos          = list->pos,
-                    .type         = C_TYPE_FROM_PRIM(prim),
-                },
-                cir_const_create(
-                    list->pos,
-                    prim,
-                    (ir_const_t){
-                        .prim_type = c_type_to_ir_type(cc, C_TYPE_FROM_PRIM(prim)),
-                        .const128  = I128_ZERO,
-                    }
-                )
-            ));
+            return cir_expr_create_value(cir_value_create_const(cir_const_create(
+                list->pos,
+                prim,
+                (ir_const_t){
+                    .prim_type = c_type_to_ir_type(cc, C_TYPE_FROM_PRIM(prim)),
+                    .const128  = I128_ZERO,
+                }
+            )));
         } else if (list->items.len > 1) {
             if (warn_excess) {
                 cctx_diagnostic(cc->cctx, list->items.arr[1]->pos, DIAG_WARN, "Excess elements in scalar initializer");
@@ -1374,24 +1343,11 @@ cir_expr_t *c_compile2_compinit(
                 .const128  = I128_ZERO,
             };
             cir_const_t *iconst = cir_const_create(init->pos, type.prim, zero);
-            return cir_expr_create_value(cir_value_create_const(
-                (cir_expr_common_t){
-                    .is_lvalue    = false,
-                    .allow_addrof = false,
-                    .pos          = init->pos,
-                    .type         = type,
-                },
-                iconst
-            ));
+            c_type_delete(type);
+            return cir_expr_create_value(cir_value_create_const(iconst));
 
         } else {
             return cir_expr_create_value(cir_value_create_comp_const(
-                (cir_expr_common_t){
-                    .is_lvalue    = false,
-                    .allow_addrof = false,
-                    .pos          = init->pos,
-                    .type         = c_type_clone(type),
-                },
                 cir_comp_const_create(init->pos, c_type_clone(type), lilycc_calloc(size, 1))
             ));
         }
@@ -1586,15 +1542,7 @@ cir_expr_t *c_compile2_compinit(
             }
         }
 
-        compinit = cir_value_create_comp_const(
-            (cir_expr_common_t){
-                .type         = c_type_clone(type),
-                .pos          = init->pos,
-                .is_lvalue    = false,
-                .allow_addrof = false,
-            },
-            cir_comp_const_create(init->pos, c_type_clone(type), blob)
-        );
+        compinit = cir_value_create_comp_const(cir_comp_const_create(init->pos, c_type_clone(type), blob));
 
     out_del_stores:
         for (size_t i = 0; i < cursor.stores.len; i++) {
@@ -1602,15 +1550,7 @@ cir_expr_t *c_compile2_compinit(
         }
         vec_clear(&cursor.stores);
     } else {
-        compinit = cir_value_create_comp_value(
-            (cir_expr_common_t){
-                .type         = c_type_clone(type),
-                .pos          = init->pos,
-                .is_lvalue    = false,
-                .allow_addrof = false,
-            },
-            cir_comp_value_create(init->pos, c_type_clone(type), cursor.stores)
-        );
+        compinit = cir_value_create_comp_value(cir_comp_value_create(init->pos, c_type_clone(type), cursor.stores));
     }
 
     // Final cleanup.
@@ -1630,15 +1570,40 @@ cir_expr_t *c_compile2_synth_iconst(c_compiler_t *cc, pos_t pos, c_prim_t prim, 
     ir_prim_t  ir_prim  = c_prim_to_ir_type(cc, prim);
     ir_const_t ir_const = ir_cast(ir_prim, IR_CONST_S128(value));
 
-    cir_value_t *cir_value = cir_value_create_const(
-        (cir_expr_common_t){
-            .pos          = pos,
-            .is_lvalue    = false,
-            .allow_addrof = false,
-            .type         = C_TYPE_FROM_PRIM(prim),
-        },
-        cir_const_create(pos, prim, ir_const)
-    );
+    cir_value_t *cir_value = cir_value_create_const(cir_const_create(pos, prim, ir_const));
 
     return cir_expr_create_value(cir_value);
+}
+
+// Helper that converts bytes into a constant value.
+// Unlike other functions, returning NULL is not an error but indicates this const-propagation is not possible.
+// This function assumes that `type` is a complete type.
+cir_expr_t *c_compile2_const_from_bytes(c_compiler_t *cc, pos_t pos, c_type_ref_t type, uint8_t const *blob) {
+    if (type.prim == C_COMP_STRUCT || type.prim == C_COMP_UNION || type.prim == C_COMP_ARRAY) {
+        uint64_t size, align;
+        if (!c_type_get_size(cc, type, &size, &align)) {
+            UNREACHABLE(); // Must be a complete type because so is the struct we're reading from.
+        }
+
+        assert(size < SIZE_MAX); // Should be impossible because we're reading from a blob already.
+        uint8_t *new_blob = lilycc_malloc(size);
+        memcpy(new_blob, blob, size);
+
+        c_type_t type2               = c_type_clone(type);
+        type2.qual                   = (c_qual_t){.q_const = true};
+        cir_comp_const_t *comp_const = cir_comp_const_create(pos, type2, new_blob);
+        return cir_expr_create_value(cir_value_create_comp_const(comp_const));
+
+    } else if (type.prim < C_PRIM_VOID || type.prim == C_COMP_ENUM) {
+        c_prim_t prim = type.prim;
+        if (type.prim == C_COMP_ENUM) {
+            prim = type.extra->enum_type->prim;
+        }
+        ir_prim_t ir_prim = c_type_to_ir_type(cc, type);
+
+        ir_const_t iconst = ir_const_from_blob(ir_prim, blob, cc->options.big_endian);
+        return cir_expr_create_value(cir_value_create_const(cir_const_create(pos, prim, iconst)));
+    }
+
+    return NULL;
 }

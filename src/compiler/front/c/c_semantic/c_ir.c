@@ -118,30 +118,42 @@ cir_value_t *cir_value_create_scope_val(cir_scope_val_t const *scope_val) {
     return node;
 }
 
-cir_value_t *cir_value_create_const(cir_expr_common_t common, cir_const_t *iconst) {
+cir_value_t *cir_value_create_const(cir_const_t *iconst) {
     cir_value_t *node = lilycc_malloc(sizeof(cir_value_t));
-    node->common      = common;
-    node->common.pos  = iconst->pos;
-    node->tag         = CIR_VALUE_CONST;
-    node->iconst      = iconst;
+    node->common      = (cir_expr_common_t){
+        .pos          = iconst->pos,
+        .is_lvalue    = false,
+        .allow_addrof = false,
+        .type         = C_TYPE_FROM_PRIM(iconst->prim),
+    };
+    node->tag    = CIR_VALUE_CONST;
+    node->iconst = iconst;
     return node;
 }
 
-cir_value_t *cir_value_create_comp_const(cir_expr_common_t common, cir_comp_const_t *comp_const) {
+cir_value_t *cir_value_create_comp_const(cir_comp_const_t *comp_const) {
     cir_value_t *node = lilycc_malloc(sizeof(cir_value_t));
-    node->common      = common;
-    node->common.pos  = comp_const->pos;
-    node->tag         = CIR_VALUE_COMP_CONST;
-    node->comp_const  = comp_const;
+    node->common      = (cir_expr_common_t){
+        .pos          = comp_const->pos,
+        .is_lvalue    = false,
+        .allow_addrof = false,
+        .type         = c_type_clone(comp_const->type),
+    };
+    node->tag        = CIR_VALUE_COMP_CONST;
+    node->comp_const = comp_const;
     return node;
 }
 
-cir_value_t *cir_value_create_comp_value(cir_expr_common_t common, cir_comp_value_t *comp_value) {
+cir_value_t *cir_value_create_comp_value(cir_comp_value_t *comp_value) {
     cir_value_t *node = lilycc_malloc(sizeof(cir_value_t));
-    node->common      = common;
-    node->common.pos  = comp_value->pos;
-    node->tag         = CIR_VALUE_COMP_VALUE;
-    node->comp_value  = comp_value;
+    node->common      = (cir_expr_common_t){
+        .pos          = comp_value->pos,
+        .is_lvalue    = false,
+        .allow_addrof = false,
+        .type         = c_type_clone(comp_value->type),
+    };
+    node->tag        = CIR_VALUE_COMP_VALUE;
+    node->comp_value = comp_value;
     return node;
 }
 

@@ -605,11 +605,11 @@ cir_value_t *cir_value_create_tmpval(cir_tmpval_t const *tmpval);
 // Construct a `cir_value` node with non-owning refernce to a scoped value.
 cir_value_t *cir_value_create_scope_val(cir_scope_val_t const *scope_val);
 // Construct a `cir_value` node wrapping a primitive constant.
-cir_value_t *cir_value_create_const(cir_expr_common_t common, cir_const_t *iconst);
+cir_value_t *cir_value_create_const(cir_const_t *iconst);
 // Construct a `cir_value` node wrapping a compound constant.
-cir_value_t *cir_value_create_comp_const(cir_expr_common_t common, cir_comp_const_t *comp_const);
-// Construct a `cir_value` node wrapping a compound value.
-cir_value_t *cir_value_create_comp_value(cir_expr_common_t common, cir_comp_value_t *comp_value);
+cir_value_t *cir_value_create_comp_const(cir_comp_const_t *comp_const);
+// Construct a `cir_value` node wrapping a compound value (run-time constant).
+cir_value_t *cir_value_create_comp_value(cir_comp_value_t *comp_value);
 // Destroy a `cir_value` node and the child it owns.
 void         cir_value_delete(cir_value_t *node);
 

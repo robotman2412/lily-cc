@@ -47,3 +47,7 @@ cir_expr_t *c_compile2_compinit(
 );
 // Helper that creates a synthetic integer constant.
 cir_expr_t *c_compile2_synth_iconst(c_compiler_t *cc, pos_t pos, c_prim_t prim, i128_t value);
+// Helper that converts bytes into a constant value.
+// Unlike other functions, returning NULL is not an error but indicates this const-propagation is not possible.
+// This function assumes that `type` is a complete type.
+cir_expr_t *c_compile2_const_from_bytes(c_compiler_t *cc, pos_t pos, c_type_ref_t type, uint8_t const *blob);

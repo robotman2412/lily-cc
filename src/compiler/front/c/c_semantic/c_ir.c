@@ -32,9 +32,10 @@ cir_expr_common_t cir_expr_common_clone(cir_expr_common_t const *common) {
 
 cir_const_t *cir_const_create(pos_t pos, c_prim_t prim, ir_const_t iconst) {
     cir_const_t *node = lilycc_malloc(sizeof(cir_const_t));
-    node->pos         = pos;
-    node->prim        = prim;
-    node->iconst      = iconst;
+    assert(prim < C_N_PRIM);
+    node->pos    = pos;
+    node->prim   = prim;
+    node->iconst = iconst;
     return node;
 }
 
@@ -112,7 +113,7 @@ cir_value_t *cir_value_create_scope_val(cir_scope_val_t const *scope_val) {
             };
             break;
     }
-    node->tag       = CIR_VALUE_TMPVAL;
+    node->tag       = CIR_VALUE_SCOPE_VAL;
     node->scope_val = scope_val;
     return node;
 }

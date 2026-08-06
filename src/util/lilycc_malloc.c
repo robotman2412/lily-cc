@@ -3,6 +3,8 @@
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
+#define LILYCC_NO_CLOBBER_MALLOC
+
 #include "lilycc_malloc.h"
 
 #include <assert.h>

@@ -34,9 +34,9 @@ void testcase_failed() {
     asm("");
 }
 
-char *int_testcase_failed(char const *loc, long long value, char const *real) {
+char *int_testcase_failed(char const *loc, long long value, long long real, char const *real_str) {
     testcase_failed();
-    return heap_sprintf("%s = %lld; expected %s", loc, value, real);
+    return heap_sprintf("%s = %lld; expected %lld (%s)", loc, value, real, real_str);
 }
 
 char *char_testcase_failed(char const *loc, int value, char const *real) {

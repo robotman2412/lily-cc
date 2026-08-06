@@ -3,6 +3,8 @@
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
+#define LILYCC_NO_CLOBBER_MALLOC
+
 #include "lilycc_malloc.h"
 #include "testcase.h"
 
@@ -28,7 +30,7 @@ static bool run_testcase_impl(testcase_t *testcase) {
             printf("    %s\n", res + 1);
         } else {
             printf("    %s\n", res);
-            free(res);
+            lilycc_free(res);
         }
     }
     return !res;

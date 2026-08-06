@@ -45,7 +45,7 @@
         long long expr_tmp = (expr);                                                                                   \
         long long val_tmp  = (val);                                                                                    \
         if (expr_tmp != val_tmp) {                                                                                     \
-            return int_testcase_failed(__FILE_NAME__ ":" STR_OF(__LINE__) ": " #expr, expr_tmp, #val);                 \
+            return int_testcase_failed(__FILE_NAME__ ":" STR_OF(__LINE__) ": " #expr, expr_tmp, val_tmp, #val);        \
         }                                                                                                              \
     } while (0)
 
@@ -84,7 +84,7 @@
     } while (0)
 
 void  testcase_failed();
-char *int_testcase_failed(char const *loc, long long value, char const *real);
+char *int_testcase_failed(char const *loc, long long value, long long real, char const *real_str);
 char *char_testcase_failed(char const *loc, int value, char const *real);
 char *str_testcase_failed(char const *loc, char const *value, size_t value_len, char const *real);
 

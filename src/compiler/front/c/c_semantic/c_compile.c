@@ -642,7 +642,7 @@ c_type_opt_t c_compile2_spec_qual_list(c_compiler_t *cc, c_ast_spec_qual_list_t 
 // Compile the type encoded by a declaration or type name.
 // Returns a refcount ptr of `c_type_t` if successful.
 c_type_opt_t c_compile2_type(
-    c_compiler_t         *ctx,
+    c_compiler_t         *cc,
     cir_scope_t          *scope,
     c_type_t              spec_qual_type,
     c_ast_decl_t const   *decl,
@@ -681,13 +681,13 @@ c_type_opt_t c_compile2_type(
             for (size_t i = 0; i < decl->decl_func->params->items.len; i++) {
                 c_ast_arg_def_t const *def  = decl->decl_func->params->items.arr[i];
                 c_ast_ident_t const   *name = NULL;
-                c_type_opt_t           type = c_compile2_spec_qual_list(ctx, def->spec_qual, scope);
+                c_type_opt_t           type = c_compile2_spec_qual_list(cc, def->spec_qual, scope);
                 if (!c_type_is_valid(type)) {
                     errors = true;
                     continue;
                 }
                 if (type.qual.s_typedef) {
-                    cctx_diagnostic(ctx->cctx, def->spec_qual->pos, DIAG_ERR, "typedef not allowed here");
+                    cctx_diagnostic(cc->cctx, def->spec_qual->pos, DIAG_ERR, "typedef not allowed here");
                     errors = true;
                 }
                 if (def->decl) {
@@ -695,7 +695,7 @@ c_type_opt_t c_compile2_type(
                     // declaring a struct or enum type in here will make it visible only inside a function.
                     // This quirk will be left in for the time being as standard C cannot meaningfully use such
                     // functions, as the type declared there cannot meaningfully be named.
-                    type = c_compile2_type(ctx, scope, type, def->decl, &name);
+                    type = c_compile2_type(cc, scope, type, def->decl, &name);
                     if (!c_type_is_valid(type)) {
                         errors = true;
                         continue;
@@ -720,8 +720,8 @@ c_type_opt_t c_compile2_type(
 
         } else if (decl->tag == C_AST_TAG_DECL_ARRAY) {
             uint64_t inner_size, inner_align;
-            if (!c_type_get_size(ctx, cur, &inner_size, &inner_align)) {
-                cctx_diagnostic(ctx->cctx, decl->pos, DIAG_ERR, "Array has incomplete element type");
+            if (!c_type_get_size(cc, cur, &inner_size, &inner_align)) {
+                cctx_diagnostic(cc->cctx, decl->pos, DIAG_ERR, "Array has incomplete element type");
                 c_type_delete(cur);
                 return C_TYPE_INVALID;
             }
@@ -736,9 +736,60 @@ c_type_opt_t c_compile2_type(
             };
 
             if (decl->decl_array->size) {
-                // Has size expression.
-                fprintf(stderr, "TODO: Sized arrays\n");
-                abort();
+                // Compile constant expression.
+                cir_expr_t *res = c_compile2_expr(cc, scope, decl->decl_array->size);
+                if (!res) {
+                    c_type_delete(cur);
+                    return C_TYPE_INVALID;
+                }
+                if (res->tag != CIR_EXPR_VALUE || res->value->tag != CIR_VALUE_CONST
+                    || res->common.type.prim >= C_PRIM_FLOAT) {
+                    cctx_diagnostic(
+                        cc->cctx,
+                        decl->decl_array->size->pos,
+                        DIAG_ERR,
+                        "Expected integer constant expression"
+                    );
+                    cir_expr_delete(res);
+                    c_type_delete(cur);
+                    return C_TYPE_INVALID;
+                }
+
+                // Check length bounds.
+                ir_const_t length = ir_trim_const(res->value->iconst->iconst);
+                cir_expr_delete(res);
+                if (ir_calc2(IR_OP2_slt, length, (ir_const_t){.prim_type = length.prim_type, .constl = 0}).constl) {
+                    char buf[40];
+                    itoa128(neg128(length.const128), 0, buf);
+                    cctx_diagnostic(
+                        cc->cctx,
+                        decl->decl_array->size->pos,
+                        DIAG_ERR,
+                        "Array length -%s is negative",
+                        buf
+                    );
+                    c_type_delete(cur);
+                    return C_TYPE_INVALID;
+                } else if (
+                    length.prim_type >= IR_PRIM_u32
+                    && ir_calc2(IR_OP2_sgt, length, (ir_const_t){.prim_type = length.prim_type, .constl = INT32_MAX})
+                           .constl
+                ) {
+                    char buf[40];
+                    itoa128(length.const128, 0, buf);
+                    cctx_diagnostic(
+                        cc->cctx,
+                        decl->decl_array->size->pos,
+                        DIAG_ERR,
+                        "Array length %s exceeds implementation limits (%" PRId32 ")",
+                        buf,
+                        INT32_MAX
+                    );
+                    c_type_delete(cur);
+                    return C_TYPE_INVALID;
+                }
+
+                extra->length = (int32_t)ir_cast(IR_PRIM_s32, length).constl;
             } else {
                 extra->length = -1;
             }

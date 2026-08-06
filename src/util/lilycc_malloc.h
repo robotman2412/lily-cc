@@ -7,7 +7,6 @@
 
 #include <stdatomic.h>
 #include <stdio.h>
-#include <stdlib.h>
 
 
 
@@ -28,3 +27,10 @@ void *lilycc_realloc(void *ptr, size_t size) __attribute__((alloc_size(2), warn_
 char *lilycc_strdup(char const *str) __attribute__((warn_unused_result));
 // Lily-CC free.
 void  lilycc_free(void *mem);
+
+#ifndef LILYCC_NO_CLOBBER_MALLOC
+#define malloc  you_accidentally_used_stdlib_malloc
+#define calloc  you_accidentally_used_stdlib_calloc
+#define realloc you_accidentally_used_stdlib_realloc
+#define free    you_accidentally_used_stdlib_free
+#endif

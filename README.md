@@ -56,3 +56,9 @@ A work-in-progress C compiler for fun. It aims to one day be C23 (and some GNU e
 
 ## RISC-V backend
 - Instruction selection for all of RV32I
+
+# Reading list
+- Scalar Replacement Of Aggregates
+- Loop Invariant Code Motion
+- Scalar Evolution
+- Poison Values (for signed overflow)

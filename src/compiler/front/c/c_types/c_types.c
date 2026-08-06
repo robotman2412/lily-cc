@@ -148,49 +148,50 @@ c_type_t c_type_clone_pointer(c_type_ref_t inner) {
 }
 
 // Get the size and alignment of a type, or 0 if it is incomplete.
-bool c_type_get_size(c_compiler_t *cc, c_type_ref_t type, uint64_t *size_out, uint64_t *align_out) {
+bool c_type_get_size(c_compiler_t *cc, c_type_t type_ref, uint64_t *size_out, uint64_t *align_out) {
     uint64_t size_mul = 1;
     c_prim_t prim;
 again:
-    prim = type.prim;
+    prim = type_ref.prim;
     if (prim == C_COMP_POINTER) {
         prim = cc->options.size_type;
     } else if (prim == C_COMP_ENUM) {
-        prim = type.extra->comp_type->enum_type.prim;
+        prim = type_ref.extra->comp_type->enum_type.prim;
     }
     switch (prim) {
         case C_PRIM_BOOL:
         case C_PRIM_CHAR:
         case C_PRIM_SCHAR:
-        case C_PRIM_UCHAR: *size_out = *align_out = 1; return true;
+        case C_PRIM_UCHAR: *size_out = size_mul * (*align_out = 1); return true;
         case C_PRIM_SSHORT:
-        case C_PRIM_USHORT: *size_out = *align_out = 2; return true;
+        case C_PRIM_USHORT: *size_out = size_mul * (*align_out = 2); return true;
         case C_PRIM_SINT:
-        case C_PRIM_UINT: *size_out = *align_out = cc->options.int32 ? 4 : 2; return true;
+        case C_PRIM_UINT: *size_out = size_mul * (*align_out = cc->options.int32 ? 4 : 2); return true;
         case C_PRIM_SLONG:
-        case C_PRIM_ULONG: *size_out = *align_out = cc->options.long64 ? 8 : 4; return true;
+        case C_PRIM_ULONG: *size_out = size_mul * (*align_out = cc->options.long64 ? 8 : 4); return true;
         case C_PRIM_SLLONG:
-        case C_PRIM_ULLONG: *size_out = *align_out = 8; return true;
+        case C_PRIM_ULLONG: *size_out = size_mul * (*align_out = 8); return true;
         case C_PRIM_S128:
-        case C_PRIM_U128: *size_out = *align_out = 16; return true;
-        case C_PRIM_FLOAT: *size_out = *align_out = 4; return true;
+        case C_PRIM_U128: *size_out = size_mul * (*align_out = 16); return true;
+        case C_PRIM_FLOAT: *size_out = size_mul * (*align_out = 4); return true;
         case C_PRIM_DOUBLE:
-        case C_PRIM_LDOUBLE: *size_out = *align_out = 8; return true; // TODO: proper long double support.
+        case C_PRIM_LDOUBLE: *size_out = size_mul * (*align_out = 8); return true; // TODO: proper long double support.
         case C_PRIM_VOID:
         case C_N_PRIM: return false;
         case C_COMP_STRUCT:
         case C_COMP_UNION:
-            *size_out  = type.extra->comp_type->struct_type.size;
-            *align_out = type.extra->comp_type->struct_type.align;
-            return type.extra->comp_type->struct_type.align > 0;
+            *size_out  = size_mul * type_ref.extra->comp_type->struct_type.size;
+            *align_out = type_ref.extra->comp_type->struct_type.align;
+            return type_ref.extra->comp_type->struct_type.align > 0;
         case C_COMP_ENUM:
         case C_COMP_POINTER: UNREACHABLE();
         case C_COMP_ARRAY:
-            if (type.extra->length < 0) {
+            if (type_ref.extra->length < 0) {
                 return false;
             }
-            assert((uint64_t)type.extra->length <= UINT64_MAX / size_mul);
-            size_mul *= (uint64_t)type.extra->length;
+            assert((uint64_t)type_ref.extra->length <= INT64_MAX / size_mul);
+            size_mul *= (uint64_t)type_ref.extra->length;
+            type_ref  = type_ref.extra->inner;
             goto again;
         case C_COMP_FUNCTION: return false;
     }

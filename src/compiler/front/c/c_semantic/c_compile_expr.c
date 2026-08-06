@@ -96,7 +96,7 @@ static cir_expr_t *raw_cast(c_compiler_t *cc, pos_t pos, c_type_t type, cir_expr
         return NULL;
     }
 
-    if (val->tag == CIR_EXPR_VALUE && val->value->tag == CIR_VALUE_CONST) {
+    if (val->tag == CIR_EXPR_VALUE && val->value->tag == CIR_VALUE_CONST && type.prim < C_PRIM_VOID) {
         ir_prim_t   dest_prim = c_type_to_ir_type(cc, type);
         ir_const_t  iconst    = ir_cast(dest_prim, val->value->iconst->iconst);
         cir_expr_t *res       = cir_expr_create_value(cir_value_create_const(
@@ -133,8 +133,8 @@ static cir_expr_t *raw_calc(c_compiler_t *cc, pos_t pos, cir_calc_op_t op, cir_e
         return NULL;
     }
 
-    if ((lhs->tag == CIR_EXPR_VALUE && lhs->value->tag == CIR_VALUE_CONST)
-        && (rhs->tag == CIR_EXPR_VALUE && rhs->value->tag == CIR_VALUE_CONST)) {
+    if ((lhs->tag == CIR_EXPR_VALUE && lhs->value->tag == CIR_VALUE_CONST && lhs->common.type.prim < C_PRIM_VOID)
+        && (rhs->tag == CIR_EXPR_VALUE && rhs->value->tag == CIR_VALUE_CONST && rhs->common.type.prim < C_PRIM_VOID)) {
         c_type_t   res_type;
         ir_const_t iconst;
         if (op == CIR_CALC_LAND) {
@@ -451,7 +451,7 @@ static bool is_compound_assign(c_tokentype_t oper) {
 
 // Compile a struct/union member access (`.` or `->`).
 static cir_expr_t *
-    c_compile2_expr_member(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_infix_t const *expr, bool is_arrow) {
+    c_compile2_expr_field(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_infix_t const *expr, bool is_arrow) {
     // RHS must be a bare identifier denoting the member name.
     if (expr->rhs->tag != C_AST_TAG_EXPR_IDENT) {
         cctx_diagnostic(cc->cctx, expr->rhs->pos, DIAG_ERR, "Expected member name");
@@ -462,6 +462,63 @@ static cir_expr_t *
     cir_expr_t *lhs = c_compile2_expr(cc, scope, expr->lhs);
     if (!lhs) {
         return NULL;
+    }
+
+    // Const-propagation logic.
+    if (lhs->tag == CIR_EXPR_VALUE && lhs->value->tag == CIR_VALUE_COMP_CONST) {
+        c_type_ref_t   struct_type = lhs->value->comp_const->type;
+        c_field_info_t field       = c_type_get_field(cc, struct_type, name, expr->pos);
+        if (!c_type_is_valid(field.type)) {
+            cir_expr_delete(lhs);
+            return NULL;
+        }
+
+        if (field.type.prim == C_COMP_STRUCT || field.type.prim == C_COMP_UNION || field.type.prim == C_COMP_ARRAY) {
+            uint64_t size, align;
+            if (!c_type_get_size(cc, field.type, &size, &align)) {
+                UNREACHABLE(); // Must be a complete type because so is the struct we're reading from.
+            }
+
+            assert(size < SIZE_MAX); // Should be impossible because we're reading from a blob already.
+            uint8_t *blob = lilycc_malloc(size);
+            memcpy(blob, lhs->value->comp_const->blob + field.offset, size);
+
+            c_type_t type = c_type_clone(field.type);
+            type.qual     = (c_qual_t){.q_const = true};
+            cir_expr_delete(lhs);
+            cir_comp_const_t *comp_const = cir_comp_const_create(expr->lhs->pos, c_type_clone(type), blob);
+            return cir_expr_create_value(cir_value_create_comp_const(
+                (cir_expr_common_t){
+                    .type         = type,
+                    .pos          = expr->lhs->pos,
+                    .allow_addrof = false,
+                    .is_lvalue    = true,
+                },
+                comp_const
+            ));
+
+        } else if (field.type.prim < C_PRIM_VOID || field.type.prim == C_COMP_ENUM) {
+            c_prim_t prim = field.type.prim;
+            if (field.type.prim == C_COMP_ENUM) {
+                prim = field.type.extra->enum_type->prim;
+            }
+            ir_prim_t ir_prim = c_type_to_ir_type(cc, field.type);
+
+            ir_const_t iconst
+                = ir_const_from_blob(ir_prim, lhs->value->comp_const->blob + field.offset, cc->options.big_endian);
+            c_type_t type = c_type_clone(field.type);
+            type.qual     = (c_qual_t){.q_const = true};
+            cir_expr_delete(lhs);
+            return cir_expr_create_value(cir_value_create_const(
+                (cir_expr_common_t){
+                    .type         = type,
+                    .pos          = expr->lhs->pos,
+                    .allow_addrof = false,
+                    .is_lvalue    = true,
+                },
+                cir_const_create(expr->lhs->pos, prim, iconst)
+            ));
+        }
     }
 
     // For `->`, the LHS is a pointer; for `.`, take its address.
@@ -508,8 +565,6 @@ static cir_expr_t *
         return NULL;
     }
 
-    // TODO: Const-prop field read.
-
     // Build a pointer-to-field type, then `ptr + offset` as that type, then deref.
     c_type_t    field_ptr_type = c_type_clone_pointer(field.type);
     cir_expr_t *off_iconst = c_compile2_synth_iconst(cc, expr->oper_pos, cc->options.size_type, ui128(field.offset));
@@ -539,10 +594,10 @@ static cir_expr_t *
 cir_expr_t *c_compile2_expr_infix(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_infix_t const *expr) {
     // Member access has a special RHS (a bare identifier), handle it before evaluating either side normally.
     if (expr->oper == C_TKN_DOT) {
-        return c_compile2_expr_member(cc, scope, expr, false);
+        return c_compile2_expr_field(cc, scope, expr, false);
     }
     if (expr->oper == C_TKN_ARROW) {
-        return c_compile2_expr_member(cc, scope, expr, true);
+        return c_compile2_expr_field(cc, scope, expr, true);
     }
 
     cir_expr_t *lhs = c_compile2_expr(cc, scope, expr->lhs);
@@ -715,7 +770,9 @@ cir_expr_t *c_compile2_expr_prefix(c_compiler_t *cc, cir_scope_t *scope, c_ast_e
                 return val;
             }
             c_type_delete(common.type);
-            common.type = c_type_clone(val->common.type.extra->inner);
+            common.type         = c_type_clone(val->common.type.extra->inner);
+            common.allow_addrof = true;
+            common.is_lvalue    = true;
             return cir_expr_create_deref(cir_deref_create(common, val));
         }
         default: fprintf(stderr, "BUG: Unhandled prefix operator\n"); abort();
@@ -1335,7 +1392,7 @@ cir_expr_t *c_compile2_compinit(
                     .pos          = init->pos,
                     .type         = c_type_clone(type),
                 },
-                cir_comp_const_create(init->pos, type, calloc(size, 1))
+                cir_comp_const_create(init->pos, c_type_clone(type), lilycc_calloc(size, 1))
             ));
         }
     }
@@ -1466,9 +1523,11 @@ cir_expr_t *c_compile2_compinit(
                     error = true;
 
                 } else {
+                    cir_expr_t *cast = raw_cast(cc, res->common.pos, c_type_clone(cursor.field_type), res);
+                    assert(cast != NULL);
                     cir_comp_store_t store = {
                         .offset = cursor.field_offset,
-                        .value  = res,
+                        .value  = cast,
                     };
                     vec_push(&cursor.stores, store);
                 }

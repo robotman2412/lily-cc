@@ -486,6 +486,42 @@ void cir_while_delete(cir_while_t *node) {
 }
 
 
+cir_switch_t *cir_switch_create(pos_t pos, cir_scope_t *scope, cir_expr_t *value, cir_stmt_t *body) {
+    cir_switch_t *node = lilycc_malloc(sizeof(cir_switch_t));
+    node->pos          = pos;
+    node->scope        = scope;
+    node->value        = value;
+    node->body         = body;
+    return node;
+}
+
+void cir_switch_delete(cir_switch_t *node) {
+    cir_expr_delete(node->value);
+    cir_stmt_delete(node->body);
+    cir_scope_delete(node->scope);
+    lilycc_free(node);
+}
+
+
+cir_case_t *cir_case_create(pos_t pos, cir_expr_t *lo, cir_expr_t *hi, cir_stmt_t *body) {
+    cir_case_t *node = lilycc_malloc(sizeof(cir_case_t));
+    node->pos        = pos;
+    node->lo         = lo;
+    node->hi         = hi;
+    node->body       = body;
+    return node;
+}
+
+void cir_case_delete(cir_case_t *node) {
+    cir_expr_delete(node->lo);
+    if (node->hi) { // Only `hi` is optional.
+        cir_expr_delete(node->hi);
+    }
+    cir_stmt_delete(node->body);
+    lilycc_free(node);
+}
+
+
 cir_stmts_t *cir_stmts_create(pos_t pos, cir_scope_t *scope, vec_cir_stmt_t stmts) {
     cir_stmts_t *node = lilycc_malloc(sizeof(cir_stmts_t));
     node->pos         = pos;
@@ -602,11 +638,27 @@ cir_stmt_t *cir_stmt_create_while(cir_while_t *while_loop) {
     return node;
 }
 
+cir_stmt_t *cir_stmt_create_switch(cir_switch_t *switch_stmt) {
+    cir_stmt_t *node  = lilycc_malloc(sizeof(cir_stmt_t));
+    node->pos         = switch_stmt->pos;
+    node->tag         = CIR_STMT_SWITCH;
+    node->switch_stmt = switch_stmt;
+    return node;
+}
+
 cir_stmt_t *cir_stmt_create_if(cir_if_t *if_stmt) {
     cir_stmt_t *node = lilycc_malloc(sizeof(cir_stmt_t));
     node->pos        = if_stmt->pos;
     node->tag        = CIR_STMT_IF;
     node->if_stmt    = if_stmt;
+    return node;
+}
+
+cir_stmt_t *cir_stmt_create_case(cir_case_t *cir_case) {
+    cir_stmt_t *node = lilycc_malloc(sizeof(cir_stmt_t));
+    node->pos        = cir_case->pos;
+    node->tag        = CIR_STMT_CASE;
+    node->case_stmt  = cir_case;
     return node;
 }
 
@@ -670,7 +722,9 @@ void cir_stmt_delete(cir_stmt_t *node) {
         case CIR_STMT_STMTS: cir_stmts_delete(node->stmts); break;
         case CIR_STMT_FOR: cir_for_delete(node->for_loop); break;
         case CIR_STMT_WHILE: cir_while_delete(node->while_loop); break;
+        case CIR_STMT_SWITCH: cir_switch_delete(node->switch_stmt); break;
         case CIR_STMT_IF: cir_if_delete(node->if_stmt); break;
+        case CIR_STMT_CASE: cir_case_delete(node->case_stmt); break;
         case CIR_STMT_LABEL: cir_label_delete(node->label); break;
         case CIR_STMT_GOTO: cir_goto_delete(node->goto_stmt); break;
         case CIR_STMT_BREAK: cir_break_delete(node->break_stmt); break;
@@ -782,9 +836,9 @@ void cir_trans_unit_delete(cir_trans_unit_t *node) {
 }
 
 
-cir_scope_t *cir_scope_create(cir_scope_kind_t kind, cir_scope_t *parent) {
+cir_scope_t *cir_scope_create(cir_scope_type_t kind, cir_scope_t *parent) {
     cir_scope_t *scope = lilycc_malloc(sizeof(cir_scope_t));
-    scope->kind        = kind;
+    scope->type        = kind;
     scope->parent      = parent;
     scope->values      = STR_MAP_EMPTY;
     scope->typedefs    = STR_MAP_EMPTY;
@@ -819,7 +873,7 @@ void cir_scope_delete(cir_scope_t *scope) {
 }
 
 cir_scope_t *cir_scope_func(cir_scope_t *scope) {
-    while (scope && scope->kind != CIR_SCOPE_FUNC) {
+    while (scope && scope->type != CIR_SCOPE_FUNC) {
         scope = scope->parent;
     }
     return scope;
@@ -832,7 +886,7 @@ static void redef_diag(cctx_t *ctx, char const *name, pos_t redef, pos_t orig) {
 
 // Allocate and insert a value entry. Returns `false` if `name` already exists.
 static bool cir_scope_add_value(cctx_t *ctx, cir_scope_t *scope, char const *name, cir_scope_val_t val) {
-    while (scope->kind == CIR_SCOPE_WHILE) {
+    while (scope->type == CIR_SCOPE_WHILE) {
         scope = scope->parent;
     }
     assert(scope != NULL);
@@ -1006,7 +1060,7 @@ void cir_scope_dbg(cir_scope_t const *scope, int indent, FILE *to) {
 
     pindent(indent, to);
     fputs("kind: ", to);
-    switch (scope->kind) {
+    switch (scope->type) {
         case CIR_SCOPE_GLOBAL: fputs("global\n", to); break;
         case CIR_SCOPE_FUNC: fputs("func\n", to); break;
         case CIR_SCOPE_STMTS: fputs("stmts\n", to); break;
@@ -1513,6 +1567,53 @@ void cir_while_dbg(cir_while_t const *cir_while, int indent, FILE *to) {
     cir_stmt_dbg(cir_while->body, indent, to);
 }
 
+void cir_switch_dbg(cir_switch_t const *cir_switch, int indent, FILE *to) {
+    indent++;
+    fprintf(
+        to,
+        "switch @ %s:%d:%d\n",
+        cir_switch->pos.srcfile->name,
+        cir_switch->pos.line + 1,
+        cir_switch->pos.col + 1
+    );
+
+    pindent(indent, to);
+    fputs("scope: ", to);
+    cir_scope_dbg(cir_switch->scope, indent, to);
+
+    pindent(indent, to);
+    fputs("value: ", to);
+    cir_expr_dbg(cir_switch->value, indent, to);
+
+    pindent(indent, to);
+    fputs("body: ", to);
+    cir_stmt_dbg(cir_switch->body, indent, to);
+}
+
+void cir_case_dbg(cir_case_t const *cir_case, int indent, FILE *to) {
+    indent++;
+    fprintf(to, "case @ %s:%d:%d\n", cir_case->pos.srcfile->name, cir_case->pos.line + 1, cir_case->pos.col + 1);
+
+    if (cir_case->lo) {
+        pindent(indent, to);
+        fputs("lo: ", to);
+        cir_expr_dbg(cir_case->lo, indent, to);
+    } else {
+        pindent(indent, to);
+        fputs("default\n", to);
+    }
+
+    if (cir_case->hi) {
+        pindent(indent, to);
+        fputs("hi: ", to);
+        cir_expr_dbg(cir_case->hi, indent, to);
+    }
+
+    pindent(indent, to);
+    fputs("body: ", to);
+    cir_stmt_dbg(cir_case->body, indent, to);
+}
+
 void cir_if_dbg(cir_if_t const *cir_if, int indent, FILE *to) {
     indent++;
     fprintf(to, "if @ %s:%d:%d\n", cir_if->pos.srcfile->name, cir_if->pos.line + 1, cir_if->pos.col + 1);
@@ -1585,7 +1686,9 @@ void cir_stmt_dbg(cir_stmt_t const *stmt, int indent, FILE *to) {
         case CIR_STMT_STMTS: cir_stmts_dbg(stmt->stmts, indent, to); break;
         case CIR_STMT_FOR: cir_for_dbg(stmt->for_loop, indent, to); break;
         case CIR_STMT_WHILE: cir_while_dbg(stmt->while_loop, indent, to); break;
+        case CIR_STMT_SWITCH: cir_switch_dbg(stmt->switch_stmt, indent, to); break;
         case CIR_STMT_IF: cir_if_dbg(stmt->if_stmt, indent, to); break;
+        case CIR_STMT_CASE: cir_case_dbg(stmt->case_stmt, indent, to); break;
         case CIR_STMT_LABEL: cir_label_dbg(stmt->label, indent, to); break;
         case CIR_STMT_GOTO: cir_goto_dbg(stmt->goto_stmt, indent, to); break;
         case CIR_STMT_BREAK: cir_break_dbg(stmt->break_stmt, indent, to); break;

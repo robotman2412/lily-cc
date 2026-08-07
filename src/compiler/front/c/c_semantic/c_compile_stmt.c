@@ -170,14 +170,63 @@ cir_stmt_t *c_compile2_stmt_if(c_compiler_t *cc, cir_scope_t *scope, c_ast_stmt_
 
 // Compile a switch statement.
 cir_stmt_t *c_compile2_stmt_switch(c_compiler_t *cc, cir_scope_t *scope, c_ast_stmt_switch_t const *stmt) {
-    fprintf(stderr, "TODO: c_compile2_stmt_switch\n");
-    abort();
+    cir_expr_t  *value        = c_compile2_expr(cc, scope, stmt->value);
+    cir_scope_t *nested_scope = cir_scope_create(CIR_SCOPE_SWITCH, scope);
+    cir_stmt_t  *body         = c_compile2_stmt(cc, nested_scope, stmt->body);
+
+    if (!value || !body) {
+        if (value) {
+            cir_expr_delete(value);
+        }
+        if (body) {
+            cir_stmt_delete(body);
+        }
+        cir_scope_delete(nested_scope);
+        return NULL;
+    }
+
+    return cir_stmt_create_switch(cir_switch_create(stmt->pos, nested_scope, value, body));
 }
 
 // Compile a case statement.
 cir_stmt_t *c_compile2_stmt_case(c_compiler_t *cc, cir_scope_t *scope, c_ast_stmt_case_t const *stmt) {
-    fprintf(stderr, "TODO: c_compile2_stmt_case\n");
-    abort();
+    bool         found_switch = false;
+    cir_scope_t *cur          = scope;
+    while (cur) {
+        if (cur->type == CIR_SCOPE_SWITCH) {
+            found_switch = true;
+            break;
+        }
+        cur = cur->parent;
+    }
+    if (!found_switch) {
+        cctx_diagnostic(cc->cctx, stmt->pos, DIAG_ERR, "Case label outside of switch statement");
+    }
+
+    cir_expr_t *lo = NULL;
+    if (stmt->lo) {
+        lo = c_compile2_expr(cc, scope, stmt->lo);
+    }
+    cir_expr_t *hi = NULL;
+    if (stmt->lo && stmt->hi) {
+        hi = c_compile2_expr(cc, scope, stmt->hi);
+    }
+    cir_stmt_t *body = c_compile2_stmt(cc, scope, stmt->body);
+
+    if ((stmt->lo && !lo) || (stmt->lo && stmt->hi && !hi) || !body) {
+        if (lo) {
+            cir_expr_delete(lo);
+        }
+        if (hi) {
+            cir_expr_delete(hi);
+        }
+        if (body) {
+            cir_stmt_delete(body);
+        }
+        return NULL;
+    }
+
+    return cir_stmt_create_case(cir_case_create(stmt->pos, lo, hi, body));
 }
 
 // Compile a label statement.
@@ -280,8 +329,25 @@ cir_stmt_t *c_compile2_stmt_def(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_
 
 // Compile a break/continue in a statement.
 cir_stmt_t *c_compile2_stmt_break(c_compiler_t *cc, cir_scope_t *scope, c_ast_stmt_break_t const *stmt) {
-    (void)cc;
-    (void)scope;
+    bool         found = false;
+    cir_scope_t *cur   = scope;
+    while (cur) {
+        if ((!stmt->is_continue && cur->type == CIR_SCOPE_SWITCH) || cur->type == CIR_SCOPE_WHILE
+            || cur->type == CIR_SCOPE_FOR) {
+            found = true;
+            break;
+        }
+        cur = cur->parent;
+    }
+    if (!found) {
+        cctx_diagnostic(
+            cc->cctx,
+            stmt->pos,
+            DIAG_ERR,
+            stmt->is_continue ? "Continue outside of loop" : "Break outside of loop or switch"
+        );
+    }
+
     return cir_stmt_create_break(cir_break_create(stmt->pos, stmt->is_continue));
 }
 

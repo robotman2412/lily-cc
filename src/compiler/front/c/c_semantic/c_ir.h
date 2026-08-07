@@ -89,7 +89,9 @@ typedef enum {
     CIR_STMT_STMTS,
     CIR_STMT_FOR,
     CIR_STMT_WHILE,
+    CIR_STMT_SWITCH,
     CIR_STMT_IF,
+    CIR_STMT_CASE,
     CIR_STMT_LABEL,
     CIR_STMT_GOTO,
     CIR_STMT_BREAK,
@@ -123,7 +125,7 @@ typedef enum {
     // `for` loop initializer scope.
     // Allows non-conflicting declarations and sets the `break` and `continue` targets.
     CIR_SCOPE_FOR,
-} cir_scope_kind_t;
+} cir_scope_type_t;
 
 // Tag for `cir_scope_val_t`.
 typedef enum {
@@ -184,6 +186,10 @@ typedef struct cir_stmts  cir_stmts_t;
 typedef struct cir_for    cir_for_t;
 // A while or do...while loop.
 typedef struct cir_while  cir_while_t;
+// A switch statement.
+typedef struct cir_switch cir_switch_t;
+// A case label.
+typedef struct cir_case   cir_case_t;
 // An if/else statement.
 typedef struct cir_if     cir_if_t;
 // A labeled statement.
@@ -447,6 +453,30 @@ struct cir_while {
     bool         is_do_while;
 };
 
+// A switch statement.
+struct cir_switch {
+    // Source location this was compiled from.
+    pos_t        pos;
+    // Nested scope created by this switch statement.
+    cir_scope_t *scope;
+    // Switch value.
+    cir_expr_t  *value;
+    // Switch body.
+    cir_stmt_t  *body;
+};
+
+// A case label.
+struct cir_case {
+    // Source location this was compiled from.
+    pos_t       pos;
+    // Exact value or lower bound expression; NULL for a default label.
+    cir_expr_t *lo;
+    // Higher bound expression (optional).
+    cir_expr_t *hi;
+    // Labeled statement.
+    cir_stmt_t *body;
+};
+
 // An if/else statement.
 struct cir_if {
     // Source location this was compiled from.
@@ -503,7 +533,9 @@ struct cir_stmt {
         cir_stmts_t     *stmts;
         cir_for_t       *for_loop;
         cir_while_t     *while_loop;
+        cir_switch_t    *switch_stmt;
         cir_if_t        *if_stmt;
+        cir_case_t      *case_stmt;
         cir_label_t     *label;
         cir_goto_t      *goto_stmt;
         cir_break_t     *break_stmt;
@@ -594,7 +626,7 @@ struct cir_typedef {
 // labels, which only resolve against the enclosing function scope.
 struct cir_scope {
     // Scope kind.
-    cir_scope_kind_t kind;
+    cir_scope_type_t type;
     // Parent scope, or `NULL` for global scope.
     cir_scope_t     *parent;
     // Values namespace: `char *` -> `cir_scope_val_t *` (owned share).
@@ -725,6 +757,16 @@ cir_while_t *cir_while_create(pos_t pos, cir_scope_t *scope, cir_expr_t *cond, c
 // Destroy a `cir_while` node and any owned children.
 void         cir_while_delete(cir_while_t *node);
 
+// Construct a `cir_switch` node.
+cir_switch_t *cir_switch_create(pos_t pos, cir_scope_t *scope, cir_expr_t *value, cir_stmt_t *body);
+// Destroy a `cir_switch` node and any owned children.
+void          cir_switch_delete(cir_switch_t *node);
+
+// Construct a `cir_case` node.
+cir_case_t *cir_case_create(pos_t pos, cir_expr_t *lo, cir_expr_t *hi, cir_stmt_t *body);
+// Destroy a `cir_case` node and any owned children.
+void        cir_case_delete(cir_case_t *node);
+
 // Construct a `cir_if` node.
 cir_if_t *cir_if_create(pos_t pos, cir_expr_t *cond, cir_stmt_t *if_body, cir_stmt_t *else_body);
 // Destroy a `cir_if` node and any owned children.
@@ -762,8 +804,12 @@ cir_stmt_t *cir_stmt_create_stmts(cir_stmts_t *stmts);
 cir_stmt_t *cir_stmt_create_for(cir_for_t *for_loop);
 // Construct a `cir_stmt` node wrapping a while/do-while loop.
 cir_stmt_t *cir_stmt_create_while(cir_while_t *while_loop);
+// Construct a `cir_stmt` node wrapping a switch statement.
+cir_stmt_t *cir_stmt_create_switch(cir_switch_t *switch_stmt);
 // Construct a `cir_stmt` node wrapping an if/else.
 cir_stmt_t *cir_stmt_create_if(cir_if_t *if_stmt);
+// Construct a `cir_stmt` node wrapping a case-labeled statement.
+cir_stmt_t *cir_stmt_create_case(cir_case_t *cir_case);
 // Construct a `cir_stmt` node wrapping a labeled statement.
 cir_stmt_t *cir_stmt_create_label(cir_label_t *label);
 // Construct a `cir_stmt` node wrapping a goto.
@@ -810,7 +856,7 @@ void              cir_trans_unit_delete(cir_trans_unit_t *node);
 
 
 // Create a new scope. `parent` must be `NULL` iff `kind == CIR_SCOPE_GLOBAL`.
-cir_scope_t *cir_scope_create(cir_scope_kind_t kind, cir_scope_t *parent);
+cir_scope_t *cir_scope_create(cir_scope_type_t kind, cir_scope_t *parent);
 // Destroy a scope. Frees the owned value-entry wrappers and releases the typedef and tags;
 // the referenced nodes, the parent, and any child scopes are untouched.
 void         cir_scope_delete(cir_scope_t *scope);
@@ -894,6 +940,10 @@ void cir_stmts_dbg(cir_stmts_t const *stmts, int indent, FILE *to);
 void cir_for_dbg(cir_for_t const *cir_for, int indent, FILE *to);
 // Debug-print a `cir_while_t` C IR node.
 void cir_while_dbg(cir_while_t const *cir_while, int indent, FILE *to);
+// Debug-print a `cir_switch_t` C IR node.
+void cir_switch_dbg(cir_switch_t const *cir_switch, int indent, FILE *to);
+// Debug-print a `cir_case_t` C IR node.
+void cir_case_dbg(cir_case_t const *cir_case, int indent, FILE *to);
 // Debug-print a `cir__t` C IR node.
 void cir_if_dbg(cir_if_t const *cir_if, int indent, FILE *to);
 // Debug-print a `cir_label_t` C IR node.

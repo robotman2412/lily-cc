@@ -5,8 +5,10 @@
 
 #include "c_parser2.h"
 
+#include "arith128.h"
 #include "c_ast.h"
 #include "c_parser.h"
+#include "c_prim.h"
 #include "c_tokenizer.h"
 #include "compiler.h"
 #include "lilycc_malloc.h"
@@ -89,7 +91,9 @@ static bool is_first_expr_tkn(c_parser_t *ctx, token_t tkn) {
         case TOKENTYPE_IDENT:
             return !set_contains(&ctx->type_names, tkn.strval)
                    && (!ctx->func_body || !set_contains(&ctx->local_type_names, tkn.strval));
-        case TOKENTYPE_KEYWORD: return tkn.subtype == C_KEYW_alignof || tkn.subtype == C_KEYW_sizeof;
+        case TOKENTYPE_KEYWORD:
+            return tkn.subtype == C_KEYW_sizeof || tkn.subtype == C_KEYW_alignof || tkn.subtype == C_KEYW_true
+                   || tkn.subtype == C_KEYW_false;
         case TOKENTYPE_OTHER:
             switch (tkn.subtype) {
                 case C_TKN_AND:
@@ -107,7 +111,8 @@ static bool is_first_expr_tkn(c_parser_t *ctx, token_t tkn) {
 }
 
 // Is this a pushable token for `c_parse2_expr`?
-static inline bool is_pushable_expr_tkn(token_t tkn) {
+static inline bool is_pushable_expr_tkn(c_parser_t *ctx, token_t tkn) {
+    (void)ctx;
     switch (tkn.type) {
         case TOKENTYPE_SCONST:
         case TOKENTYPE_CCONST:
@@ -115,8 +120,8 @@ static inline bool is_pushable_expr_tkn(token_t tkn) {
         case TOKENTYPE_IDENT: return true;
         case TOKENTYPE_KEYWORD:
             switch (tkn.subtype) {
-                case C_KEYW_alignof:
                 case C_KEYW_sizeof:
+                case C_KEYW_alignof:
                 case C_KEYW_true:
                 case C_KEYW_false: return true;
                 default: return false;
@@ -518,6 +523,11 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
         assert(pop_temporary_value_2.tag == LR_ENTRY_TYPE);                                                            \
         pop_temporary_value_2.type;                                                                                    \
     })
+    // Is this a specific type of KEYWORD token?
+#define is_keyw(depth, subtype_)                                                                                       \
+    (stack.len > (depth) && stack.arr[stack.len - (depth) - 1].tag == LR_ENTRY_TOKEN                                   \
+     && stack.arr[stack.len - (depth) - 1].token.type == TOKENTYPE_KEYWORD                                             \
+     && stack.arr[stack.len - (depth) - 1].token.subtype == (subtype_))
     // Is this a specific type of OTHER token?
 #define is_punct(depth, subtype_)                                                                                      \
     (stack.len > (depth) && stack.arr[stack.len - (depth) - 1].tag == LR_ENTRY_TOKEN                                   \
@@ -528,15 +538,19 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
     (stack.len > (depth) && stack.arr[stack.len - (depth) - 1].tag == LR_ENTRY_TOKEN                                   \
      && stack.arr[stack.len - (depth) - 1].token.type == (type_))
     // Is this an expression node?
-#define is_expr(depth)    (stack.len > (depth) && stack.arr[stack.len - (depth) - 1].tag == LR_ENTRY_EXPR)
+#define is_expr(depth) (stack.len > (depth) && stack.arr[stack.len - (depth) - 1].tag == LR_ENTRY_EXPR)
     // Is this a type node?
-#define is_type(depth)    (stack.len > (depth) && stack.arr[stack.len - (depth) - 1].tag == LR_ENTRY_TYPE)
-    // Is this eligible as an operand?
-#define is_operand(depth) (stack.len > (depth) && is_operand_node(&stack.arr[stack.len - (depth) - 1]))
+#define is_type(depth) (stack.len > (depth) && stack.arr[stack.len - (depth) - 1].tag == LR_ENTRY_TYPE)
 
+    // How many `?` there are without matching `:`.
+    size_t tern_count = 0;
     while (1) {
         peek          = tkn_peek(ctx->tkn_ctx);
-        bool can_push = is_pushable_expr_tkn(peek);
+        bool can_push = is_pushable_expr_tkn(ctx, peek);
+
+        if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_COLON && tern_count == 0) {
+            can_push = false;
+        }
 
         if (is_punct(0, C_TKN_LBRAC)) { // Recursively parse indexing.
             c_ast_expr_t *rhs = c_parse2_expr(ctx);
@@ -684,6 +698,22 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
             tkn_delete(tkn);
             push_expr(c_ast_expr_create_iconst(c_ast_expr_iconst_create(pos, prim, val)));
 
+        } else if (is_keyw(0, C_KEYW_true)) { // Reduce true.
+            token_t  tkn  = pop_token();
+            pos_t    pos  = tkn.pos;
+            c_prim_t prim = C_PRIM_BOOL;
+            i128_t   val  = ui128(1);
+            tkn_delete(tkn);
+            push_expr(c_ast_expr_create_iconst(c_ast_expr_iconst_create(pos, prim, val)));
+
+        } else if (is_keyw(0, C_KEYW_false)) { // Reduce false.
+            token_t  tkn  = pop_token();
+            pos_t    pos  = tkn.pos;
+            c_prim_t prim = C_PRIM_BOOL;
+            i128_t   val  = UI128_ZERO;
+            tkn_delete(tkn);
+            push_expr(c_ast_expr_create_iconst(c_ast_expr_iconst_create(pos, prim, val)));
+
         } else if (is_token(0, TOKENTYPE_IDENT)) { // Reduce ident to expr.
             token_t tkn = pop_token();
             pos_t   pos = tkn.pos;
@@ -722,6 +752,11 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
 
         } else if (can_push) { // Push next token.
             token_t next = tkn_next(ctx->tkn_ctx);
+            if (next.type == TOKENTYPE_OTHER && next.subtype == C_TKN_QUESTION) {
+                tern_count++;
+            } else if (next.type == TOKENTYPE_OTHER && next.subtype == C_TKN_COLON) {
+                tern_count--; // Can't underflow because of a check before the if statement cascade.
+            }
             push_token(next);
 
         } else { // Can't reduce anything.
@@ -730,9 +765,18 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
     }
 
 #undef push
+#undef push_token
+#undef push_expr
+#undef push_type
 #undef pop
-#undef is_tkn
-#undef is_operand
+#undef pop_token
+#undef pop_expr
+#undef pop_type
+#undef is_keyw
+#undef is_punct
+#undef is_token
+#undef is_expr
+#undef is_type
 
     if (stack.len > 1) {
         // Invalid expression.
@@ -1349,9 +1393,62 @@ exit:
 
 // Parse a switch statement.
 static c_ast_stmt_t *c_parse2_switch(c_parser_t *ctx) {
-    (void)ctx;
-    fprintf(stderr, "TODO: Create C switch statement parser\n");
-    abort();
+    token_t keyw = tkn_next(ctx->tkn_ctx);
+    assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_switch);
+    pos_t keyw_pos = keyw.pos;
+    tkn_delete(keyw);
+
+    token_t peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_LPAR) {
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected (");
+        return c_ast_stmt_create_garbage(c_ast_garbage_create(keyw_pos));
+    }
+    tkn_delete(tkn_next(ctx->tkn_ctx));
+
+    c_ast_expr_list_t *cond = c_parse2_exprs(ctx);
+
+    peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RPAR) {
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected )");
+        pos_t pos = pos_including(keyw_pos, cond->pos);
+        c_ast_expr_list_delete(cond);
+        return c_ast_stmt_create_garbage(c_ast_garbage_create(pos));
+    }
+    tkn_delete(tkn_next(ctx->tkn_ctx));
+
+    c_ast_stmt_t *body = c_parse2_stmt(ctx);
+    return c_ast_stmt_create_switch(
+        c_ast_stmt_switch_create(pos_including(keyw_pos, body->pos), c_ast_expr_create_exprs(cond), body)
+    );
+}
+
+// Parse a case statement.
+static c_ast_stmt_t *c_parse2_case(c_parser_t *ctx) {
+    token_t keyw = tkn_next(ctx->tkn_ctx);
+    assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_case);
+    pos_t keyw_pos = keyw.pos;
+    tkn_delete(keyw);
+
+    c_ast_expr_t *lo = c_parse2_expr(ctx);
+    c_ast_expr_t *hi = NULL;
+
+    token_t peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_ELIPSIS) {
+        tkn_delete(tkn_next(ctx->tkn_ctx));
+        hi   = c_parse2_expr(ctx);
+        peek = tkn_peek(ctx->tkn_ctx);
+    }
+
+    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_COLON) {
+        tkn_delete(tkn_next(ctx->tkn_ctx));
+    } else {
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected :");
+    }
+
+    c_ast_stmt_t *inner = c_parse2_stmt(ctx);
+    c_ast_stmt_t *res
+        = c_ast_stmt_create_case(c_ast_stmt_case_create(pos_including(keyw_pos, inner->pos), lo, hi, inner));
+    return res;
 }
 
 // Parse a do...while statement.
@@ -1633,6 +1730,27 @@ static c_ast_stmt_t *c_parse2_return(c_parser_t *ctx) {
     return c_ast_stmt_create_return(c_ast_stmt_return_create(pos, expr));
 }
 
+// Parse a default-labelled statement.
+static c_ast_stmt_t *c_parse2_default(c_parser_t *ctx) {
+    token_t keyw = tkn_next(ctx->tkn_ctx);
+    assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_default);
+    pos_t keyw_pos = keyw.pos;
+    tkn_delete(keyw);
+
+    token_t peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_COLON) {
+        tkn_delete(tkn_next(ctx->tkn_ctx));
+    } else {
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected :");
+    }
+
+    c_ast_stmt_t *inner = c_parse2_stmt(ctx);
+    c_ast_stmt_t *res
+        = c_ast_stmt_create_case(c_ast_stmt_case_create(pos_including(keyw_pos, inner->pos), NULL, NULL, inner));
+
+    return res;
+}
+
 // Parse a labelled statement.
 static c_ast_stmt_t *c_parse2_label(c_parser_t *ctx) {
     token_t ident = tkn_next(ctx->tkn_ctx);
@@ -1697,6 +1815,8 @@ c_ast_stmt_t *c_parse2_stmt(c_parser_t *ctx) {
             case C_KEYW_break:
             case C_KEYW_continue: return c_parse2_break(ctx);
             case C_KEYW_switch: return c_parse2_switch(ctx);
+            case C_KEYW_case: return c_parse2_case(ctx);
+            case C_KEYW_default: return c_parse2_default(ctx);
             case C_KEYW_do: return c_parse2_do_while(ctx);
             case C_KEYW_while: return c_parse2_while(ctx);
             case C_KEYW_for: return c_parse2_for(ctx);

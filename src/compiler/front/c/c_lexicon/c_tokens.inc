@@ -67,7 +67,7 @@ C_TOKEN_DEF(GT       /* > */, ">")
 C_TOKEN_DEF(GE       /* >= */, ">=")
 
 C_TOKEN_DEF(DOT      /* . */, ".")
-C_TOKEN_DEF(VARARG   /* ... */, "...")
+C_TOKEN_DEF(ELIPSIS  /* ... */, "...")
 C_TOKEN_DEF(ARROW    /* -> */, "->")
 C_TOKEN_DEF(ASSIGN   /* = */, "=")
 

@@ -1010,7 +1010,7 @@ static void c_directive_define(c_preproc_t *pre, pos_t pos) {
                 // Empty parameter list.
                 tkn_delete(tkn);
                 break;
-            } else if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_VARARG) {
+            } else if (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_ELIPSIS) {
                 // Elipsis (`...`).
                 macro->regular.is_variadic = true;
                 must_close                 = true;

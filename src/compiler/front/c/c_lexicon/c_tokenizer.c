@@ -882,7 +882,7 @@ retry:
             int   c3   = c_srcfile_getc(ctx->file, &pos3);
             if (c3 == '.') {
                 ctx->pos = pos3;
-                return other_tkn(C_TKN_VARARG, pos0, pos3);
+                return other_tkn(C_TKN_ELIPSIS, pos0, pos3);
             } else {
                 return other_tkn(C_TKN_DOT, pos0, pos1);
             }

@@ -462,12 +462,14 @@ C_AST_STRUCT_DEF(stmt_switch, \
 C_AST_META_STRUCT_DEF(stmt_switch)
 
 #define C_AST_STRUCT_DEF_stmt_case(C_AST_STRUCT_DEF, C_AST_STRUCT_FIELD, C_AST_STRUCT_CHILD) \
-/* Case label (e.g. `case 1:` or `case 1 ... 5:`). */ \
+/* Case label (e.g. `case 1:`, `case 1 ... 5:`, or `default:`). */ \
 C_AST_STRUCT_DEF(stmt_case, \
-    /* Case value, or lower limit of a GCC case range. */ \
+    /* Case value, lower limit of a GCC case range, or NULL for `default`. */ \
     C_AST_STRUCT_CHILD(stmt_case, expr, lo) \
     /* Upper limit of a GCC case range (nullable). */ \
     C_AST_STRUCT_CHILD(stmt_case, expr, hi) \
+    /* Labeled statement. */ \
+    C_AST_STRUCT_CHILD(stmt_label, stmt, body) \
 )
 C_AST_META_STRUCT_DEF(stmt_case)
 

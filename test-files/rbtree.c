@@ -148,7 +148,6 @@ static rbtree_node_t* rbtree_search_greater(rbtree_t* tree, uint64_t query, bool
 }
 
 rbtree_node_t* rbtree_search(rbtree_t* tree, uint64_t query, rbtree_search_type_t type) {
-/*
     switch (type) {
         case RB_SEARCH_TYPE_EXACT:       return rbtree_search_exact(tree, query);
         case RB_SEARCH_TYPE_NEAREST:     return rbtree_search_nearest(tree, query);
@@ -156,9 +155,7 @@ rbtree_node_t* rbtree_search(rbtree_t* tree, uint64_t query, rbtree_search_type_
         case RB_SEARCH_TYPE_NEAREST_LTE: return rbtree_search_lesser(tree, query, true);
         case RB_SEARCH_TYPE_NEAREST_GT:  return rbtree_search_greater(tree, query, false);
         case RB_SEARCH_TYPE_NEAREST_GTE: return rbtree_search_greater(tree, query, true);
-        default: __builtin_unreachable();
     }
-*/
 }
 
 static void rbtree_insert_fixup(rbtree_t* tree, rbtree_node_t* node, rbtree_node_t* parent, rbtree_direction_t dir) {

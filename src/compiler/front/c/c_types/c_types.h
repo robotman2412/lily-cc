@@ -66,6 +66,7 @@ union c_qual {
         uint16_t s_static       : 1;
         uint16_t s_thread_local : 1;
         uint16_t s_typedef      : 1;
+        uint16_t s_inline       : 1;
         // Type qualifiers.
         uint16_t q_volatile     : 1;
         uint16_t q_atomic       : 1;

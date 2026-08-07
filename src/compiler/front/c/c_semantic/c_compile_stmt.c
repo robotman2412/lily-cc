@@ -13,6 +13,7 @@
 #include "c_types.h"
 #include "compiler.h"
 #include "lilycc_malloc.h"
+#include "set.h"
 #include "unreachable.h"
 #include "vec.h"
 
@@ -125,7 +126,6 @@ cir_stmt_t *c_compile2_stmt_while(c_compiler_t *cc, cir_scope_t *scope, c_ast_st
     cir_expr_t  *cond         = c_compile2_expr(cc, scope, stmt->cond);
     cir_scope_t *nested_scope = cir_scope_create(CIR_SCOPE_WHILE, scope);
     cir_stmt_t  *body         = c_compile2_stmt(cc, nested_scope, stmt->body);
-    cir_scope_delete(nested_scope);
 
     if (!cond || !body) {
         if (cond) {
@@ -134,6 +134,7 @@ cir_stmt_t *c_compile2_stmt_while(c_compiler_t *cc, cir_scope_t *scope, c_ast_st
         if (body) {
             cir_stmt_delete(body);
         }
+        cir_scope_delete(nested_scope);
         return NULL;
     }
 
@@ -208,8 +209,13 @@ cir_stmt_t *c_compile2_stmt_return(c_compiler_t *cc, cir_scope_t *scope, c_ast_s
 
 // Compile a goto statement.
 cir_stmt_t *c_compile2_stmt_goto(c_compiler_t *cc, cir_scope_t *scope, c_ast_stmt_goto_t const *stmt) {
-    fprintf(stderr, "TODO: c_compile2_stmt_goto\n");
-    abort();
+    (void)cc;
+    cir_scope_t *func_scope = cir_scope_func(scope);
+    cir_goto_t  *cir_goto   = cir_goto_create(stmt->pos, lilycc_strdup(stmt->target->name));
+    if (func_scope) {
+        set_add(&func_scope->gotos, cir_goto);
+    }
+    return cir_stmt_create_goto(cir_goto);
 }
 
 // Compile an expression in a statement.

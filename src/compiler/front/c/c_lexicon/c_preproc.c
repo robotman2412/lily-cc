@@ -366,6 +366,7 @@ static void c_preproc_destroy(tokenizer_t *tkn) {
             c_macro_destroy(ent->value);
         }
         map_clear(&pre->shared->macros);
+        set_clear(&pre->shared->once_files);
         lilycc_free(pre->shared);
     }
 }
@@ -444,6 +445,7 @@ static void c_incfile_push(c_preproc_t *pre, pos_t pos, char const *path, bool s
         .ifdir   = {0},
     };
     vec_push(&pre->stack, incfile);
+    pre->blank_line = true;
 }
 
 // Pop the top-most file off of the include stack.

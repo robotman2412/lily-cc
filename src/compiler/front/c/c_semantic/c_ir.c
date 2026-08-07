@@ -11,6 +11,7 @@
 #include "ir_serialization.h"
 #include "lilycc_malloc.h"
 #include "map.h"
+#include "set.h"
 #include "vec.h"
 
 #include <assert.h>
@@ -536,6 +537,31 @@ void cir_label_delete(cir_label_t *node) {
 }
 
 
+cir_goto_t *cir_goto_create(pos_t pos, char *label) {
+    cir_goto_t *node = lilycc_malloc(sizeof(cir_goto_t));
+    node->pos        = pos;
+    node->label      = label;
+    return node;
+}
+
+void cir_goto_delete(cir_goto_t *node) {
+    lilycc_free(node->label);
+    lilycc_free(node);
+}
+
+
+cir_break_t *cir_break_create(pos_t pos, bool is_continue) {
+    cir_break_t *node = lilycc_malloc(sizeof(cir_break_t));
+    node->pos         = pos;
+    node->is_continue = is_continue;
+    return node;
+}
+
+void cir_break_delete(cir_break_t *node) {
+    lilycc_free(node);
+}
+
+
 cir_return_t *cir_return_create(pos_t pos, cir_expr_t *value) {
     cir_return_t *node = lilycc_malloc(sizeof(cir_return_t));
     node->pos          = pos;
@@ -591,6 +617,22 @@ cir_stmt_t *cir_stmt_create_label(cir_label_t *label) {
     return node;
 }
 
+cir_stmt_t *cir_stmt_create_goto(cir_goto_t *goto_stmt) {
+    cir_stmt_t *node = lilycc_malloc(sizeof(cir_stmt_t));
+    node->pos        = goto_stmt->pos;
+    node->tag        = CIR_STMT_GOTO;
+    node->goto_stmt  = goto_stmt;
+    return node;
+}
+
+cir_stmt_t *cir_stmt_create_break(cir_break_t *break_stmt) {
+    cir_stmt_t *node = lilycc_malloc(sizeof(cir_stmt_t));
+    node->pos        = break_stmt->pos;
+    node->tag        = CIR_STMT_BREAK;
+    node->break_stmt = break_stmt;
+    return node;
+}
+
 cir_stmt_t *cir_stmt_create_return(cir_return_t *return_stmt) {
     cir_stmt_t *node  = lilycc_malloc(sizeof(cir_stmt_t));
     node->pos         = return_stmt->pos;
@@ -622,6 +664,8 @@ void cir_stmt_delete(cir_stmt_t *node) {
         case CIR_STMT_WHILE: cir_while_delete(node->while_loop); break;
         case CIR_STMT_IF: cir_if_delete(node->if_stmt); break;
         case CIR_STMT_LABEL: cir_label_delete(node->label); break;
+        case CIR_STMT_GOTO: cir_goto_delete(node->goto_stmt); break;
+        case CIR_STMT_BREAK: cir_break_delete(node->break_stmt); break;
         case CIR_STMT_RETURN: cir_return_delete(node->return_stmt); break;
         case CIR_STMT_EXPR: cir_expr_delete(node->expr); break;
         case CIR_STMT_UNITS: cir_unit_list_delete(node->units); break;
@@ -737,6 +781,7 @@ cir_scope_t *cir_scope_create(cir_scope_kind_t kind, cir_scope_t *parent) {
     scope->typedefs    = STR_MAP_EMPTY;
     scope->tags        = STR_MAP_EMPTY;
     scope->labels      = STR_MAP_EMPTY;
+    scope->gotos       = PTR_SET_EMPTY;
     return scope;
 }
 
@@ -749,7 +794,7 @@ void cir_scope_delete(cir_scope_t *scope) {
     }
     map_clear(&scope->values);
     map_foreach(ent, &scope->typedefs) {
-        c_type_delete(*(c_type_t const *)ent->value);
+        c_type_delete(((cir_typedef_t const *)ent->value)->type);
         lilycc_free(ent->value);
     }
     map_clear(&scope->typedefs);
@@ -759,11 +804,12 @@ void cir_scope_delete(cir_scope_t *scope) {
     map_clear(&scope->tags);
     // Labels are non-owning; just drop the map.
     map_clear(&scope->labels);
+    // As are gotos.
+    set_clear(&scope->gotos);
     lilycc_free(scope);
 }
 
-// Walk up to the enclosing function scope, or `NULL` if none.
-static cir_scope_t *cir_scope_func(cir_scope_t *scope) {
+cir_scope_t *cir_scope_func(cir_scope_t *scope) {
     while (scope && scope->kind != CIR_SCOPE_FUNC) {
         scope = scope->parent;
     }
@@ -785,27 +831,19 @@ static bool cir_scope_add_value(cctx_t *ctx, cir_scope_t *scope, char const *nam
     cir_scope_val_t const *exist = map_get(&scope->values, name);
     if (exist) {
         redef_diag(ctx, name, *val.pos, *exist->pos);
-        goto error;
+        return false;
     }
 
     cir_typedef_t const *conflict = map_get(&scope->typedefs, name);
     if (conflict) {
         redef_diag(ctx, name, *val.pos, conflict->pos);
-        goto error;
+        return false;
     }
 
     cir_scope_val_t *entry = lilycc_malloc(sizeof(cir_scope_val_t));
     *entry                 = val;
     map_set(&scope->values, name, entry);
     return true;
-
-error:
-    switch (val.tag) {
-        case CIR_SCOPE_VAL_DECL: cir_decl_delete(val.decl); break;
-        case CIR_SCOPE_VAL_FUNC: cir_func_delete(val.func); break;
-        case CIR_SCOPE_VAL_ENUM_CONST: cir_const_delete(val.enum_const); break;
-    }
-    return false;
 }
 
 bool cir_scope_add_decl(cctx_t *ctx, cir_scope_t *scope, cir_decl_t *decl) {
@@ -828,10 +866,10 @@ bool cir_scope_add_enum_const(cctx_t *ctx, cir_scope_t *scope, char const *name,
 bool cir_scope_add_typedef(cctx_t *ctx, cir_scope_t *scope, char const *name, pos_t pos, c_type_t type) {
     cir_typedef_t const *exist = map_get(&scope->typedefs, name);
     if (exist) {
-        c_type_delete(type);
         if (c_type_is_identical(exist->type, type, true)) {
             return true;
         }
+        c_type_delete(type);
         redef_diag(ctx, name, pos, exist->pos);
         return false;
     }
@@ -1468,6 +1506,26 @@ void cir_label_dbg(cir_label_t const *label, int indent, FILE *to) {
     cir_stmt_dbg(label->body, indent, to);
 }
 
+void cir_goto_dbg(cir_goto_t const *goto_stmt, int indent, FILE *to) {
+    indent++;
+    fprintf(to, "goto @ %s:%d:%d\n", goto_stmt->pos.srcfile->name, goto_stmt->pos.line + 1, goto_stmt->pos.col + 1);
+
+    pindent(indent, to);
+    fprintf(to, "label: \"%s\"\n", goto_stmt->label);
+}
+
+void cir_break_dbg(cir_break_t const *break_stmt, int indent, FILE *to) {
+    (void)indent;
+    fprintf(
+        to,
+        "%s @ %s:%d:%d\n",
+        break_stmt->is_continue ? "continue" : "break",
+        break_stmt->pos.srcfile->name,
+        break_stmt->pos.line + 1,
+        break_stmt->pos.col + 1
+    );
+}
+
 void cir_return_dbg(cir_return_t const *cir_return, int indent, FILE *to) {
     indent++;
     fprintf(
@@ -1491,6 +1549,8 @@ void cir_stmt_dbg(cir_stmt_t const *stmt, int indent, FILE *to) {
         case CIR_STMT_WHILE: cir_while_dbg(stmt->while_loop, indent, to); break;
         case CIR_STMT_IF: cir_if_dbg(stmt->if_stmt, indent, to); break;
         case CIR_STMT_LABEL: cir_label_dbg(stmt->label, indent, to); break;
+        case CIR_STMT_GOTO: cir_goto_dbg(stmt->goto_stmt, indent, to); break;
+        case CIR_STMT_BREAK: cir_break_dbg(stmt->break_stmt, indent, to); break;
         case CIR_STMT_RETURN: cir_return_dbg(stmt->return_stmt, indent, to); break;
         case CIR_STMT_EXPR: cir_expr_dbg(stmt->expr, indent, to); break;
         case CIR_STMT_UNITS: cir_unit_list_dbg(stmt->units, indent, to); break;

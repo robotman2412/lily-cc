@@ -18,6 +18,8 @@
 #include "ir_interpreter.h"
 #include "ir_types.h"
 #include "lilycc_malloc.h"
+#include "map.h"
+#include "set.h"
 #include "unreachable.h"
 #include "vec.h"
 
@@ -152,21 +154,23 @@ cir_unit_t *c_compile2_func(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_func
     vec_cir_stmt_t body       = {0};
 
     // Parameter decls are prepended to the function body to bring them in scope.
-    vec_cir_unit_t          units     = {0};
-    vec_c_func_arg_t const *type_args = &type.extra->func_type->args;
-    for (size_t i = 0; i < type_args->len; i++) {
-        c_func_arg_t const *arg = &type_args->arr[i];
-        if (!arg->name) {
-            continue;
+    if (c_type_is_valid(type)) {
+        vec_cir_unit_t          units     = {0};
+        vec_c_func_arg_t const *type_args = &type.extra->func_type->args;
+        for (size_t i = 0; i < type_args->len; i++) {
+            c_func_arg_t const *arg = &type_args->arr[i];
+            if (!arg->name) {
+                continue;
+            }
+            cir_decl_t *decl = cir_decl_create(arg->name_pos, c_type_clone(arg->type), lilycc_strdup(arg->name), NULL);
+            if (cir_scope_add_decl(cc->cctx, func_scope, decl)) {
+                vec_push(&units, cir_unit_create_decl(decl));
+            } else {
+                errors = true;
+            }
         }
-        cir_decl_t *decl = cir_decl_create(arg->name_pos, c_type_clone(arg->type), lilycc_strdup(arg->name), NULL);
-        if (cir_scope_add_decl(cc->cctx, func_scope, decl)) {
-            vec_push(&units, cir_unit_create_decl(decl));
-        } else {
-            errors = true;
-        }
+        vec_push(&body, cir_stmt_create_units(cir_unit_list_create(def->pos, units)));
     }
-    vec_push(&body, cir_stmt_create_units(cir_unit_list_create(def->pos, units)));
 
     // Compile the body proper.
     vec_c_ast_stmt_t const *body_ast = &def->body->items;
@@ -176,6 +180,16 @@ cir_unit_t *c_compile2_func(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_func
             vec_push(&body, stmt);
         } else {
             errors = true;
+        }
+    }
+
+    if (!errors) {
+        // We don't check if errors happened because if they did, a stale ref might have been added to scope.
+        set_foreach(cir_goto_t const, s_goto, &func_scope->gotos) {
+            if (map_get(&func_scope->labels, s_goto->label) == NULL) {
+                cctx_diagnostic(cc->cctx, s_goto->pos, DIAG_ERR, "Use of undeclared label");
+                errors = true;
+            }
         }
     }
 
@@ -387,13 +401,15 @@ static c_comp_type_t *c_compile2_comp_spec(c_compiler_t *cc, c_ast_spec_qual_t c
             assert(comp_spec->tag == C_AST_TAG_SPEC_QUAL_STRUCT);
             comp->pos = comp_spec->spec_qual_enum->keyw_pos;
         }
-        comp->tag = tag;
+        comp->tag      = tag;
+        comp->refcount = 1;
         if (name) {
+            comp->refcount = 2;
             cir_scope_add_tag(cc->cctx, scope, comp);
-            comp->refcount++;
         }
+    } else {
+        comp->refcount++;
     }
-    comp->refcount++;
 
     // Assert that the tag type matches.
     if (comp->tag != tag) {
@@ -459,6 +475,7 @@ c_type_opt_t c_compile2_spec_qual_list(c_compiler_t *cc, c_ast_spec_qual_list_t 
         if (param->tag == C_AST_TAG_SPEC_QUAL_KEYW) {
             c_keyw_t keyw = param->spec_qual_keyw;
             switch (keyw) {
+                case C_KEYW_inline: type.qual.s_inline = true; break;
                 case C_KEYW_typedef: type.qual.s_typedef = true; break;
                 case C_KEYW_auto: type.qual.s_auto = true; break;
                 case C_KEYW_constexpr: type.qual.s_constexpr = true; break;

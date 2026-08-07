@@ -30,6 +30,10 @@
 
 
 
+static c_prim_t usual_arith_conv(c_compiler_t *cc, c_type_ref_t type, c_type_ref_t other_type);
+
+
+
 // Whether a primitive is an arithmetic type (integer or floating point).
 static bool c_prim_is_arith(c_prim_t prim) {
     return prim < C_PRIM_VOID || prim == C_COMP_POINTER;
@@ -47,7 +51,7 @@ static c_type_opt_t c_compile2_ternary_result_type(c_compiler_t *cc, pos_t pos, 
 
     // Both arithmetic: apply the usual arithmetic conversions.
     if (c_prim_is_arith(ltyp.prim) && c_prim_is_arith(rtyp.prim)) {
-        c_prim_t prim = c_prim_promote(cc, ltyp.prim, rtyp.prim);
+        c_prim_t prim = usual_arith_conv(cc, ltyp, rtyp);
         c_type_delete(ltyp);
         c_type_delete(rtyp);
         return C_TYPE_FROM_PRIM(prim);

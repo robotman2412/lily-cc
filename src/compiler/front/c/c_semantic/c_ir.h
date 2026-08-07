@@ -91,6 +91,8 @@ typedef enum {
     CIR_STMT_WHILE,
     CIR_STMT_IF,
     CIR_STMT_LABEL,
+    CIR_STMT_GOTO,
+    CIR_STMT_BREAK,
     CIR_STMT_RETURN,
     CIR_STMT_EXPR,
     CIR_STMT_UNITS,
@@ -185,6 +187,10 @@ typedef struct cir_while  cir_while_t;
 typedef struct cir_if     cir_if_t;
 // A labeled statement.
 typedef struct cir_label  cir_label_t;
+// A goto label statement.
+typedef struct cir_goto   cir_goto_t;
+// A continue or break statement.
+typedef struct cir_break  cir_break_t;
 // A return statement.
 typedef struct cir_return cir_return_t;
 // Any type of statement; tagged union of structs above.
@@ -462,6 +468,22 @@ struct cir_label {
     cir_stmt_t *body;
 };
 
+// A goto label statement.
+struct cir_goto {
+    // Source location this was compiled from.
+    pos_t pos;
+    // Label name.
+    char *label;
+};
+
+// A continue or break statement.
+struct cir_break {
+    // Source location this was compiled from.
+    pos_t pos;
+    // Is a `continue` statement of the nearest `while` or `for` loop.
+    bool  is_continue;
+};
+
 // A return statement.
 struct cir_return {
     // Source location this was compiled from.
@@ -482,6 +504,8 @@ struct cir_stmt {
         cir_while_t     *while_loop;
         cir_if_t        *if_stmt;
         cir_label_t     *label;
+        cir_goto_t      *goto_stmt;
+        cir_break_t     *break_stmt;
         cir_return_t    *return_stmt;
         cir_expr_t      *expr;
         cir_unit_list_t *units;
@@ -576,11 +600,12 @@ struct cir_scope {
     map_t            values;
     // Typedefs namespace: `char *` -> `cir_typedef_t *` (owned).
     map_t            typedefs;
-    // Tag namespace (struct/union/enum types): `char *` -> `c_comp_type_t` (owned share).
+    // Tag namespace (struct/union/enum types): `char *` -> `c_comp_type_t *` (owned share).
     map_t            tags;
     // Labels namespace: `char *` -> `cir_label_t *` (non-owning). Only populated on function scope.
     map_t            labels;
-    // TODO: Add `break` and `continue` targets here, or only in the IR emission code?
+    // All goto statements: `cir_goto_t *` (non-owning). Only populated on function scope.
+    set_t            gotos;
 };
 
 
@@ -709,6 +734,16 @@ cir_label_t *cir_label_create(pos_t pos, char *name, cir_stmt_t *body);
 // Destroy a `cir_label` node and any owned children.
 void         cir_label_delete(cir_label_t *node);
 
+// Construct a `cir_goto` node.
+cir_goto_t *cir_goto_create(pos_t pos, char *label);
+// Destroy a `cir_goto` node and any owned children.
+void        cir_goto_delete(cir_goto_t *node);
+
+// Construct a `cir_break` node.
+cir_break_t *cir_break_create(pos_t pos, bool is_continue);
+// Destroy a `cir_break` node and any owned children.
+void         cir_break_delete(cir_break_t *node);
+
 // Construct a `cir_return` node.
 cir_return_t *cir_return_create(pos_t pos, cir_expr_t *value);
 // Destroy a `cir_return` node and any owned children.
@@ -730,6 +765,10 @@ cir_stmt_t *cir_stmt_create_while(cir_while_t *while_loop);
 cir_stmt_t *cir_stmt_create_if(cir_if_t *if_stmt);
 // Construct a `cir_stmt` node wrapping a labeled statement.
 cir_stmt_t *cir_stmt_create_label(cir_label_t *label);
+// Construct a `cir_stmt` node wrapping a goto.
+cir_stmt_t *cir_stmt_create_goto(cir_goto_t *goto_stmt);
+// Construct a `cir_stmt` node wrapping a break.
+cir_stmt_t *cir_stmt_create_break(cir_break_t *break_stmt);
 // Construct a `cir_stmt` node wrapping a return.
 cir_stmt_t *cir_stmt_create_return(cir_return_t *return_stmt);
 // Construct a `cir_stmt` node wrapping an expression statement.
@@ -772,6 +811,8 @@ cir_scope_t *cir_scope_create(cir_scope_kind_t kind, cir_scope_t *parent);
 // Destroy a scope. Frees the owned value-entry wrappers and releases the typedef and tags;
 // the referenced nodes, the parent, and any child scopes are untouched.
 void         cir_scope_delete(cir_scope_t *scope);
+// Walk up to the enclosing function scope, or `NULL` if none.
+cir_scope_t *cir_scope_func(cir_scope_t *scope);
 
 // Add a variable declaration to the value namespace of `scope`.
 // Returns `false` if `name` already exists in *this* scope (shadowing a parent is allowed).
@@ -854,6 +895,10 @@ void cir_while_dbg(cir_while_t const *cir_while, int indent, FILE *to);
 void cir_if_dbg(cir_if_t const *cir_if, int indent, FILE *to);
 // Debug-print a `cir_label_t` C IR node.
 void cir_label_dbg(cir_label_t const *label, int indent, FILE *to);
+// Debug-print a `cir_goto_t` C IR node.
+void cir_goto_dbg(cir_goto_t const *goto_stmt, int indent, FILE *to);
+// Debug-print a `cir_break_t` C IR node.
+void cir_break_dbg(cir_break_t const *break_stmt, int indent, FILE *to);
 // Debug-print a `cir_return_t` C IR node.
 void cir_return_dbg(cir_return_t const *cir_return, int indent, FILE *to);
 // Debug-print a `cir_stmt_t` C IR node.

@@ -6,6 +6,7 @@
 #include "c_parser2.h"
 
 #include "c_ast.h"
+#include "c_parser.h"
 #include "c_tokenizer.h"
 #include "compiler.h"
 #include "lilycc_malloc.h"
@@ -14,6 +15,7 @@
 
 #include <assert.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 
@@ -255,6 +257,11 @@ static bool is_type_qualifier(token_t token) {
         return false;
     }
     switch (token.subtype) {
+        case C_KEYW_inline:
+        case C_KEYW_static:
+        case C_KEYW_extern:
+        case C_KEYW_register:
+        case C_KEYW_typedef:
         case C_KEYW__Atomic:
         case C_KEYW_restrict:
         case C_KEYW_const:
@@ -269,7 +276,6 @@ static bool is_type_specifier(token_t token) {
         return false;
     }
     switch (token.subtype) {
-        case C_KEYW_typedef:
         case C_KEYW_void:
         case C_KEYW_char:
         case C_KEYW_short:
@@ -1218,7 +1224,6 @@ c_ast_struct_spec_t *c_parse2_struct_spec(c_parser_t *ctx) {
     if (!name && (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_LCURL)) {
         // There should be a decl here since it's anonymous.
         cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected {");
-        // TODO: There's no way to convey this is garbage.
         return c_ast_struct_spec_create(pos, is_union, keyw_pos, NULL, NULL);
     }
     tkn_delete(tkn_next(ctx->tkn_ctx));
@@ -1275,7 +1280,6 @@ c_ast_enum_spec_t *c_parse2_enum_spec(c_parser_t *ctx) {
     if (!name && (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_LCURL)) {
         // There should be a decl here since it's anonymous.
         cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected {");
-        // TODO: There's no way to convey this is garbage.
         return c_ast_enum_spec_create(pos, keyw_pos, NULL, NULL);
     }
     tkn_delete(tkn_next(ctx->tkn_ctx));
@@ -1341,15 +1345,66 @@ static c_ast_stmt_t *c_parse2_switch(c_parser_t *ctx) {
 
 // Parse a do...while statement.
 static c_ast_stmt_t *c_parse2_do_while(c_parser_t *ctx) {
-    (void)ctx;
-    fprintf(stderr, "TODO: Create do...while statement parser\n");
-    abort();
+    pos_t err_pos;
+
+    token_t keyw = tkn_next(ctx->tkn_ctx);
+    assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_do);
+    pos_t keyw_pos = keyw.pos;
+    tkn_delete(keyw);
+
+    c_ast_stmt_t *body = c_parse2_stmt(ctx);
+
+    token_t peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type != TOKENTYPE_KEYWORD || peek.subtype != C_KEYW_while) {
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected while");
+        err_pos = pos_including(keyw_pos, body->pos);
+        goto err1;
+    }
+    tkn_delete(tkn_next(ctx->tkn_ctx));
+
+    peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_LPAR) {
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected (");
+        err_pos = pos_including(keyw_pos, body->pos);
+        goto err1;
+    }
+    tkn_delete(tkn_next(ctx->tkn_ctx));
+
+    c_ast_expr_list_t *cond = c_parse2_exprs(ctx);
+
+    peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RPAR) {
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected )");
+        err_pos = pos_including(keyw_pos, cond->pos);
+        goto err2;
+    }
+    tkn_delete(tkn_next(ctx->tkn_ctx));
+
+    peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_SEMIC) {
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ;");
+        err_pos = pos_including(keyw_pos, cond->pos);
+        goto err2;
+    }
+    pos_t end_pos = peek.pos;
+    tkn_delete(tkn_next(ctx->tkn_ctx));
+
+    return c_ast_stmt_create_while(
+        c_ast_stmt_while_create(pos_including(keyw_pos, end_pos), c_ast_expr_create_exprs(cond), body, true)
+    );
+
+err2:
+    c_ast_expr_list_delete(cond);
+err1:
+    c_ast_stmt_delete(body);
+    return c_ast_stmt_create_garbage(c_ast_garbage_create(err_pos));
 }
 
 // Parse a while statement.
 static c_ast_stmt_t *c_parse2_while(c_parser_t *ctx) {
-    token_t keyw     = tkn_next(ctx->tkn_ctx);
-    pos_t   keyw_pos = keyw.pos;
+    token_t keyw = tkn_next(ctx->tkn_ctx);
+    assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_while);
+    pos_t keyw_pos = keyw.pos;
     tkn_delete(keyw);
 
     token_t peek = tkn_peek(ctx->tkn_ctx);
@@ -1378,8 +1433,9 @@ static c_ast_stmt_t *c_parse2_while(c_parser_t *ctx) {
 
 // Parse a for statement.
 static c_ast_stmt_t *c_parse2_for(c_parser_t *ctx) {
-    token_t keyw     = tkn_next(ctx->tkn_ctx);
-    pos_t   keyw_pos = keyw.pos;
+    token_t keyw = tkn_next(ctx->tkn_ctx);
+    assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_for);
+    pos_t keyw_pos = keyw.pos;
     tkn_delete(keyw);
 
     token_t peek = tkn_peek(ctx->tkn_ctx);
@@ -1468,8 +1524,9 @@ static c_ast_stmt_t *c_parse2_for(c_parser_t *ctx) {
 
 // Parse a if statement.
 static c_ast_stmt_t *c_parse2_if(c_parser_t *ctx) {
-    token_t keyw     = tkn_next(ctx->tkn_ctx);
-    pos_t   keyw_pos = keyw.pos;
+    token_t keyw = tkn_next(ctx->tkn_ctx);
+    assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_if);
+    pos_t keyw_pos = keyw.pos;
     tkn_delete(keyw);
 
     token_t peek = tkn_peek(ctx->tkn_ctx);
@@ -1509,18 +1566,42 @@ static c_ast_stmt_t *c_parse2_if(c_parser_t *ctx) {
 
 // Parse a goto statement.
 static c_ast_stmt_t *c_parse2_goto(c_parser_t *ctx) {
-    (void)ctx;
-    fprintf(stderr, "TODO: Create goto statement parser\n");
-    abort();
+    token_t keyw = tkn_next(ctx->tkn_ctx);
+    assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_goto);
+    pos_t keyw_pos = keyw.pos;
+    tkn_delete(keyw);
+
+    token_t peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type != TOKENTYPE_IDENT) {
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected identifier");
+        return c_ast_stmt_create_garbage(c_ast_garbage_create(keyw_pos));
+    }
+
+    token_t            ident  = tkn_next(ctx->tkn_ctx);
+    c_ast_stmt_goto_t *s_goto = c_ast_stmt_goto_create(
+        pos_including(keyw_pos, ident.pos),
+        c_ast_ident_create(ident.pos, lilycc_strdup(ident.strval))
+    );
+    tkn_delete(ident);
+
+    peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_SEMIC) {
+        tkn_delete(tkn_next(ctx->tkn_ctx));
+    } else {
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ;");
+    }
+
+    return c_ast_stmt_create_goto(s_goto);
 }
 
 // Parse a return statement.
 static c_ast_stmt_t *c_parse2_return(c_parser_t *ctx) {
     c_ast_expr_list_t *expr = NULL;
 
-    token_t keyw     = tkn_next(ctx->tkn_ctx);
-    pos_t   keyw_pos = keyw.pos;
-    pos_t   pos      = keyw_pos;
+    token_t keyw = tkn_next(ctx->tkn_ctx);
+    assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_return);
+    pos_t keyw_pos = keyw.pos;
+    pos_t pos      = keyw_pos;
     tkn_delete(keyw);
     token_t peek = tkn_peek(ctx->tkn_ctx);
     if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_SEMIC) {
@@ -1541,11 +1622,26 @@ static c_ast_stmt_t *c_parse2_return(c_parser_t *ctx) {
     return c_ast_stmt_create_return(c_ast_stmt_return_create(pos, expr));
 }
 
+// Parse a labelled statement.
+static c_ast_stmt_t *c_parse2_label(c_parser_t *ctx) {
+    fprintf(stderr, "TODO: labelled statement parsing\n");
+    abort();
+}
+
+// Parse a break/continue statement.
+static c_ast_stmt_t *c_parse2_break(c_parser_t *ctx) {
+    fprintf(stderr, "TODO: break/continue statement parsing\n");
+    abort();
+}
+
 // Parse a statment.
 c_ast_stmt_t *c_parse2_stmt(c_parser_t *ctx) {
-    token_t peek = tkn_peek(ctx->tkn_ctx);
+    token_t peek  = tkn_peek(ctx->tkn_ctx);
+    token_t peek2 = tkn_peek_n(ctx->tkn_ctx, 1);
 
-    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LCURL) {
+    if (peek.type == TOKENTYPE_IDENT && peek2.type == TOKENTYPE_OTHER && peek2.subtype == C_TKN_COLON) {
+        return c_parse2_label(ctx);
+    } else if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LCURL) {
         // Multi-statement parser will always continue until RCRUL token.
         tkn_delete(tkn_next(ctx->tkn_ctx));
         c_ast_stmt_list_t *stmts = c_parse2_stmts(ctx);
@@ -1555,6 +1651,8 @@ c_ast_stmt_t *c_parse2_stmt(c_parser_t *ctx) {
         return c_ast_stmt_create_def(c_parse2_def(ctx, false));
     } else if (peek.type == TOKENTYPE_KEYWORD) {
         switch (peek.subtype) {
+            case C_KEYW_break:
+            case C_KEYW_continue: return c_parse2_break(ctx);
             case C_KEYW_switch: return c_parse2_switch(ctx);
             case C_KEYW_do: return c_parse2_do_while(ctx);
             case C_KEYW_while: return c_parse2_while(ctx);

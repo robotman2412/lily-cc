@@ -56,6 +56,8 @@
 #define C_ALT_KEYW_DEF(main_spelling, alt_spelling)
 #endif
 
+// TODO: Change the keyword lookup table so that only the main spellings are in the enum.
+
 C_ALT_KEYW_DEF(alignas, _Alignas)
 C_ALT_KEYW_DEF(alignof, _Alignof)
 C_ALT_KEYW_DEF(bool, _Bool)

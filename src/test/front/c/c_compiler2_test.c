@@ -166,6 +166,10 @@ COMPILE_EXPR_TEST(lnot, "!1")
 // Misc expressions.
 COMPILE_EXPR_TEST(ternary, "0 ? 1 : 2")
 COMPILE_EXPR_TEST(exprs, "(1, 2)")
+COMPILE_EXPR_TEST(sizeof, "sizeof 1")
+COMPILE_EXPR_TEST(sizeof_type, "sizeof(char)")
+COMPILE_EXPR_TEST(alignof, "alignof 1")
+COMPILE_EXPR_TEST(alignof_type, "alignof(char)")
 
 // Primitive types.
 COMPILE_TYPE_TEST(char, "char", 1, 1)

@@ -92,8 +92,14 @@ static bool is_first_expr_tkn(c_parser_t *ctx, token_t tkn) {
             return !set_contains(&ctx->type_names, tkn.strval)
                    && (!ctx->func_body || !set_contains(&ctx->local_type_names, tkn.strval));
         case TOKENTYPE_KEYWORD:
-            return tkn.subtype == C_KEYW_sizeof || tkn.subtype == C_KEYW_alignof || tkn.subtype == C_KEYW_true
-                   || tkn.subtype == C_KEYW_false;
+            switch (tkn.subtype) {
+                case C_KEYW_sizeof:
+                case C_KEYW_alignof:
+                case C_KEYW__Alignof:
+                case C_KEYW_true:
+                case C_KEYW_false: return true;
+                default: return false;
+            }
         case TOKENTYPE_OTHER:
             switch (tkn.subtype) {
                 case C_TKN_AND:
@@ -122,6 +128,7 @@ static inline bool is_pushable_expr_tkn(c_parser_t *ctx, token_t tkn) {
             switch (tkn.subtype) {
                 case C_KEYW_sizeof:
                 case C_KEYW_alignof:
+                case C_KEYW__Alignof:
                 case C_KEYW_true:
                 case C_KEYW_false: return true;
                 default: return false;
@@ -134,6 +141,14 @@ static inline bool is_pushable_expr_tkn(c_parser_t *ctx, token_t tkn) {
 // Get operator precedence.
 // Returns -1 if not an operator token.
 static int oper_precedence(token_t token, bool is_prefix) {
+    if (token.type == TOKENTYPE_KEYWORD) {
+        switch (token.subtype) {
+            case C_KEYW_sizeof:
+            case C_KEYW__Alignof:
+            case C_KEYW_alignof: return is_prefix ? 12 : -1;
+            default: return -1;
+        }
+    }
     if (token.type != TOKENTYPE_OTHER) {
         return -1;
     }
@@ -645,6 +660,29 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
             c_ast_expr_t *val = pop_expr();
             push_expr(c_ast_expr_create_suffix(
                 c_ast_expr_suffix_create(pos_including(oper_pos, val->pos), oper, oper_pos, val)
+            ));
+
+        } else if (
+            !is_expr(2) && (is_keyw(1, C_KEYW_sizeof) || is_keyw(1, C_KEYW_alignof) || is_keyw(1, C_KEYW__Alignof))
+            && (is_expr(0) || is_type(0))
+            && oper_precedence(stack.arr[stack.len - 2].token, true) >= oper_precedence(peek, false)
+        ) { // Reduce prefix (sizeof/alignof).
+            c_ast_expr_t      *val  = NULL;
+            c_ast_type_name_t *type = NULL;
+            pos_t              val_pos;
+            if (is_type(0)) {
+                type    = pop_type();
+                val_pos = type->pos;
+            } else {
+                val     = pop_expr();
+                val_pos = val->pos;
+            }
+            token_t op         = pop_token();
+            bool    is_alignof = op.subtype == C_KEYW_alignof || op.subtype == C_KEYW__Alignof;
+            pos_t   oper_pos   = op.pos;
+            tkn_delete(op);
+            push_expr(c_ast_expr_create_sizealign(
+                c_ast_expr_sizealign_create(pos_including(oper_pos, val_pos), type, val, is_alignof)
             ));
 
         } else if (

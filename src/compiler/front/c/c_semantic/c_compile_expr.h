@@ -41,6 +41,9 @@ cir_expr_t *
     c_compile2_expr_compliteral(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_compliteral_t const *compliteral);
 // Compile an expression list.
 cir_expr_t *c_compile2_expr_exprs(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_list_t const *exprs);
+// Compile a `sizeof` or `alignof` expression.
+cir_expr_t *c_compile2_expr_sizealign(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_sizealign_t const *sizealign);
+
 // Compile a compound literal/initializer given a known target type.
 cir_expr_t *c_compile2_compinit(
     c_compiler_t *cc, cir_scope_t *scope, c_type_t type, pos_t type_pos, c_ast_init_list_t const *init

@@ -451,8 +451,9 @@ cir_expr_t *c_compile2_expr(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_t c
         case C_AST_TAG_EXPR_COMPLITERAL: return c_compile2_expr_compliteral(cc, scope, expr->expr_compliteral);
         case C_AST_TAG_EXPR_GARBAGE: return NULL;
         case C_AST_TAG_EXPRS: return c_compile2_expr_exprs(cc, scope, expr->expr_exprs);
-        default: abort();
+        case C_AST_TAG_EXPR_SIZEALIGN: return c_compile2_expr_sizealign(cc, scope, expr->expr_sizealign);
     }
+    UNREACHABLE();
 }
 
 
@@ -1132,6 +1133,49 @@ cir_expr_t *c_compile2_expr_exprs(c_compiler_t *cc, cir_scope_t *scope, c_ast_ex
 
     return cir_expr_create_exprs(cir_exprs_create(common, out));
 }
+
+// Compile a `sizeof` or `alignof` expression.
+cir_expr_t *c_compile2_expr_sizealign(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_sizealign_t const *sizealign) {
+    // Extract the type to get the size or align of.
+    c_type_t type;
+    if (sizealign->val) {
+        cir_expr_t *tmp = c_compile2_expr(cc, scope, sizealign->val);
+        if (!tmp) {
+            return NULL;
+        }
+        type = c_type_clone(tmp->common.type);
+        cir_expr_delete(tmp);
+    } else {
+        assert(sizealign->type != NULL);
+        type = c_compile2_spec_qual_list(cc, sizealign->type->spec_qual, scope);
+        if (!c_type_is_valid(type)) {
+            return NULL;
+        }
+        if (sizealign->type->decl) {
+            type = c_compile2_type(cc, scope, type, sizealign->type->decl, NULL);
+            if (!c_type_is_valid(type)) {
+                return NULL;
+            }
+        }
+    }
+
+    uint64_t size, align;
+    bool     res = c_type_get_size(cc, type, &size, &align);
+    c_type_delete(type);
+
+    if (!res) {
+        cctx_diagnostic(cc->cctx, sizealign->pos, DIAG_ERR, "Usage of incomplete type");
+        return NULL;
+    }
+
+    return c_compile2_synth_iconst(
+        cc,
+        sizealign->pos,
+        cc->options.size_type,
+        ui128(sizealign->is_alignof ? align : size)
+    );
+}
+
 
 // Helper for `c_compile2_compinit` that keeps track of the field being written.
 typedef struct {

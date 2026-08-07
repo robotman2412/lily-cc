@@ -115,6 +115,18 @@ C_AST_STRUCT_DEF(expr_cast, \
 )
 C_AST_META_STRUCT_DEF(expr_cast)
 
+#define C_AST_STRUCT_DEF_expr_sizealign(C_AST_STRUCT_DEF, C_AST_STRUCT_FIELD, C_AST_STRUCT_CHILD) \
+/* The `sizeof` and `alignof` operators. Exactly one of `type` OR `val` must be set. */ \
+C_AST_STRUCT_DEF(expr_sizealign, \
+    /* The type to check. */ \
+    C_AST_STRUCT_CHILD(expr_sizealign, type_name, type) \
+    /* Expression whose type to check. */ \
+    C_AST_STRUCT_CHILD(expr_sizealign, expr, val) \
+    /* Is an `alignof` expression. */ \
+    C_AST_STRUCT_FIELD(expr_sizealign, bool, is_alignof) \
+)
+C_AST_META_STRUCT_DEF(expr_sizealign)
+
 #define C_AST_STRUCT_DEF_expr_call(C_AST_STRUCT_DEF, C_AST_STRUCT_FIELD, C_AST_STRUCT_CHILD) \
 /* Function call expression (`expr(args)`). */ \
 C_AST_STRUCT_DEF(expr_call, \
@@ -170,6 +182,7 @@ C_AST_UNION_DEF(expr,
     C_AST_UNION_CHILD(expr, expr_prefix,      prefix,      EXPR_PREFIX)
     C_AST_UNION_CHILD(expr, expr_suffix,      suffix,      EXPR_SUFFIX)
     C_AST_UNION_CHILD(expr, expr_cast,        cast,        EXPR_CAST)
+    C_AST_UNION_CHILD(expr, expr_sizealign,   sizealign,   EXPR_SIZEALIGN)
     C_AST_UNION_CHILD(expr, expr_call,        call,        EXPR_CALL)
     C_AST_UNION_CHILD(expr, ident,            ident,       EXPR_IDENT)
     C_AST_UNION_CHILD(expr, expr_iconst,      iconst,      EXPR_ICONST)

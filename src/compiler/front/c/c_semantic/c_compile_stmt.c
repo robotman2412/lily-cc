@@ -37,6 +37,8 @@ cir_stmt_t *c_compile2_stmt(c_compiler_t *cc, cir_scope_t *scope, c_ast_stmt_t c
         case C_AST_TAG_STMT_GOTO: return c_compile2_stmt_goto(cc, scope, stmt->stmt_goto); break;
         case C_AST_TAG_STMT_EXPR: return c_compile2_stmt_expr(cc, scope, stmt->stmt_expr); break;
         case C_AST_TAG_STMT_DEF: return c_compile2_stmt_def(cc, scope, stmt->stmt_def);
+        case C_AST_TAG_STMT_BREAK: return c_compile2_stmt_break(cc, scope, stmt->stmt_break); break;
+        case C_AST_TAG_STMT_NOP: return c_compile2_stmt_nop(cc, scope, stmt->stmt_nop); break;
         case C_AST_TAG_STMT_GARBAGE: return NULL;
     }
     UNREACHABLE();
@@ -274,4 +276,18 @@ cir_stmt_t *c_compile2_stmt_def(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_
         case C_AST_TAG_DEF_GARBAGE: return NULL;
     }
     UNREACHABLE();
+}
+
+// Compile a break/continue in a statement.
+cir_stmt_t *c_compile2_stmt_break(c_compiler_t *cc, cir_scope_t *scope, c_ast_stmt_break_t const *stmt) {
+    (void)cc;
+    (void)scope;
+    return cir_stmt_create_break(cir_break_create(stmt->pos, stmt->is_continue));
+}
+
+// Compile a no-operation (`;`) statement.
+cir_stmt_t *c_compile2_stmt_nop(c_compiler_t *cc, cir_scope_t *scope, c_ast_stmt_nop_t const *stmt) {
+    (void)cc;
+    (void)scope;
+    return cir_stmt_create_nop(stmt->pos);
 }

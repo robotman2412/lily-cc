@@ -1012,6 +1012,7 @@ static c_ast_initval_t *c_parse2_compinit_or_expr(c_parser_t *ctx) {
 c_ast_spec_qual_list_t *c_parse2_spec_qual_list(c_parser_t *ctx, bool *is_typedef_out) {
     vec_c_ast_spec_qual_t args = {0};
     *is_typedef_out            = false;
+    bool seen_type_spec        = false;
 
     token_t peek = tkn_peek(ctx->tkn_ctx);
     pos_t   pos  = peek.pos;
@@ -1021,6 +1022,8 @@ c_ast_spec_qual_list_t *c_parse2_spec_qual_list(c_parser_t *ctx, bool *is_typede
             if (peek.type == TOKENTYPE_KEYWORD && peek.subtype == C_KEYW_typedef && is_typedef_out) {
                 *is_typedef_out = true;
             }
+
+            seen_type_spec |= is_type_specifier(peek);
 
             // Token added verbatim.
             token_t tkn = tkn_next(ctx->tkn_ctx);
@@ -1033,17 +1036,25 @@ c_ast_spec_qual_list_t *c_parse2_spec_qual_list(c_parser_t *ctx, bool *is_typede
                 || (ctx->func_body && set_contains(&ctx->local_type_names, peek.strval)))
         ) {
             // Identifier added verbatim.
+            if (seen_type_spec) {
+                // This check guards against a parsing error that might happen if you `typedef int foo` and proceed to
+                // use `foo` as the name of another decl.
+                break;
+            }
             token_t tkn = tkn_next(ctx->tkn_ctx);
             vec_push(&args, c_ast_spec_qual_create_typedef(c_ast_ident_create(tkn.pos, lilycc_strdup(tkn.strval))));
             tkn_delete(tkn);
+            seen_type_spec = true;
 
         } else if (peek.type == TOKENTYPE_KEYWORD && (peek.subtype == C_KEYW_struct || peek.subtype == C_KEYW_union)) {
             // Parse a struct/union specifier.
             vec_push(&args, c_ast_spec_qual_create_struct(c_parse2_struct_spec(ctx)));
+            seen_type_spec = true;
 
         } else if (peek.type == TOKENTYPE_KEYWORD && (peek.subtype == C_KEYW_enum)) {
             // Parse an enum specifier.
             vec_push(&args, c_ast_spec_qual_create_enum(c_parse2_enum_spec(ctx)));
+            seen_type_spec = true;
 
         } else {
             // Not valid in a specifier/qualifier list.
@@ -1624,14 +1635,42 @@ static c_ast_stmt_t *c_parse2_return(c_parser_t *ctx) {
 
 // Parse a labelled statement.
 static c_ast_stmt_t *c_parse2_label(c_parser_t *ctx) {
-    fprintf(stderr, "TODO: labelled statement parsing\n");
-    abort();
+    token_t ident = tkn_next(ctx->tkn_ctx);
+    assert(ident.type == TOKENTYPE_IDENT);
+
+    token_t peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_COLON) {
+        tkn_delete(tkn_next(ctx->tkn_ctx));
+    } else {
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected :");
+    }
+
+    c_ast_stmt_t *inner = c_parse2_stmt(ctx);
+    c_ast_stmt_t *res   = c_ast_stmt_create_label(c_ast_stmt_label_create(
+        pos_including(ident.pos, inner->pos),
+        c_ast_ident_create(ident.pos, lilycc_strdup(ident.strval)),
+        inner
+    ));
+
+    tkn_delete(ident);
+    return res;
 }
 
 // Parse a break/continue statement.
 static c_ast_stmt_t *c_parse2_break(c_parser_t *ctx) {
-    fprintf(stderr, "TODO: break/continue statement parsing\n");
-    abort();
+    token_t keyw = tkn_next(ctx->tkn_ctx);
+    assert(keyw.type == TOKENTYPE_KEYWORD && (keyw.subtype == C_KEYW_break || keyw.subtype == C_KEYW_continue));
+    c_ast_stmt_t *res = c_ast_stmt_create_break(c_ast_stmt_break_create(keyw.pos, keyw.subtype == C_KEYW_continue));
+    tkn_delete(keyw);
+
+    token_t peek = tkn_peek(ctx->tkn_ctx);
+    if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_SEMIC) {
+        tkn_delete(tkn_next(ctx->tkn_ctx));
+    } else {
+        cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ;");
+    }
+
+    return res;
 }
 
 // Parse a statment.
@@ -1641,6 +1680,10 @@ c_ast_stmt_t *c_parse2_stmt(c_parser_t *ctx) {
 
     if (peek.type == TOKENTYPE_IDENT && peek2.type == TOKENTYPE_OTHER && peek2.subtype == C_TKN_COLON) {
         return c_parse2_label(ctx);
+    } else if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_SEMIC) {
+        // No-op statement.
+        tkn_delete(tkn_next(ctx->tkn_ctx));
+        return c_ast_stmt_create_nop(c_ast_stmt_nop_create(peek.pos));
     } else if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LCURL) {
         // Multi-statement parser will always continue until RCRUL token.
         tkn_delete(tkn_next(ctx->tkn_ctx));

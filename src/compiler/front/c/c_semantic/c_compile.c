@@ -116,10 +116,7 @@ cir_unit_t *
             assert(ast->init->tag == C_AST_TAG_INITVAL_EXPR);
             init = c_compile2_expr(cc, scope, ast->init->initval_expr);
         }
-        if (!init) {
-            c_type_delete(type);
-            return NULL;
-        }
+        // If `init == NULL`, we still want the decl to be created to avoid noisy error recovery.
     }
 
     cir_decl_t *decl = cir_decl_create(name->pos, type, lilycc_strdup(name->name), init);
@@ -199,11 +196,26 @@ cir_unit_t *c_compile2_func(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_func
         }
         cir_scope_delete(func_scope);
         vec_clear(&body);
-        c_type_delete(type);
+
+        // For error recovery, we try to at least emit a decl of the function if the type is valid.
+        if (c_type_is_valid(type)) {
+            cir_decl_t *decl = cir_decl_create(name->pos, type, lilycc_strdup(name->name), NULL);
+            if (!cir_scope_add_decl(cc->cctx, scope, decl)) {
+                cir_decl_delete(decl);
+                return NULL;
+            }
+            return cir_unit_create_decl(decl);
+        }
+
         return NULL;
     }
 
-    return cir_unit_create_func(cir_func_create(name->pos, func_scope, type, lilycc_strdup(name->name), body));
+    cir_func_t *func = cir_func_create(name->pos, func_scope, type, lilycc_strdup(name->name), body);
+    if (!cir_scope_add_func(cc->cctx, scope, func)) {
+        cir_func_delete(func);
+        return NULL;
+    }
+    return cir_unit_create_func(func);
 }
 
 
@@ -455,17 +467,17 @@ c_type_opt_t c_compile2_spec_qual_list(c_compiler_t *cc, c_ast_spec_qual_list_t 
     // An enum/struct/union spec.
     c_ast_spec_qual_t const *comp         = NULL;
 
-    int  n_long       = 0;
-    bool has_int      = false;
-    bool has_short    = false;
-    bool has_char     = false;
-    bool has_float    = false;
-    bool has_double   = false;
-    bool has_void     = false;
-    bool has_bool     = false;
-    bool has_unsigned = false;
-    bool has_signed   = false;
-    bool has_int128   = false;
+    int n_long     = 0;
+    int n_int      = 0;
+    int n_short    = 0;
+    int n_char     = 0;
+    int n_float    = 0;
+    int n_double   = 0;
+    int n_void     = 0;
+    int n_bool     = 0;
+    int n_unsigned = 0;
+    int n_signed   = 0;
+    int n_int128   = 0;
 
     c_type_t type = C_TYPE_INVALID;
 
@@ -488,18 +500,18 @@ c_type_opt_t c_compile2_spec_qual_list(c_compiler_t *cc, c_ast_spec_qual_list_t 
                 case C_KEYW__Atomic: type.qual.q_atomic = true; break;
                 case C_KEYW_volatile: type.qual.q_volatile = true; break;
                 case C_KEYW_const: type.qual.q_const = true; break;
-                case C_KEYW_int: has_int = true; break;
-                case C_KEYW_short: has_short = true; break;
+                case C_KEYW_int: n_int++; break;
+                case C_KEYW_short: n_short++; break;
                 case C_KEYW_long: n_long++; break;
-                case C_KEYW_char: has_char = true; break;
-                case C_KEYW_float: has_float = true; break;
-                case C_KEYW_double: has_double = true; break;
-                case C_KEYW_void: has_void = true; break;
+                case C_KEYW_char: n_char++; break;
+                case C_KEYW_float: n_float++; break;
+                case C_KEYW_double: n_double++; break;
+                case C_KEYW_void: n_void++; break;
                 case C_KEYW__Bool:
-                case C_KEYW_bool: has_bool = true; break;
-                case C_KEYW_signed: has_signed = true; break;
-                case C_KEYW_unsigned: has_unsigned = true; break;
-                case C_KEYW___int128: has_int128 = true; break;
+                case C_KEYW_bool: n_bool++; break;
+                case C_KEYW_signed: n_signed++; break;
+                case C_KEYW_unsigned: n_unsigned++; break;
+                case C_KEYW___int128: n_int128++; break;
                 default:
                     fprintf(stderr, "BUG: Unhandled specifier-qualifier keyword %s\n", c_keyw_name[keyw]);
                     abort();
@@ -528,8 +540,9 @@ c_type_opt_t c_compile2_spec_qual_list(c_compiler_t *cc, c_ast_spec_qual_list_t 
         }
     }
 
-    if (has_signed && has_unsigned) {
-        cctx_diagnostic(cc->cctx, list->pos, DIAG_ERR, "Type cannot be both signed and unsigned");
+    if (n_signed && n_unsigned) {
+        cctx_diagnostic(cc->cctx, list->pos, DIAG_ERR, "Invalid combination of type specifiers");
+        return C_TYPE_INVALID;
     }
 
     // C type parsing is messy, can't do much about that.
@@ -571,85 +584,120 @@ c_type_opt_t c_compile2_spec_qual_list(c_compiler_t *cc, c_ast_spec_qual_list_t 
         type.extra = inner->type.extra;
         type.prim  = inner->type.prim;
 
-    } else if (has_char) {
-        if (has_unsigned) {
+    } else if (n_char) {
+        if (n_unsigned) {
             type.prim = C_PRIM_UCHAR;
-        } else if (has_signed) {
+        } else if (n_signed) {
             type.prim = C_PRIM_SCHAR;
         } else {
             type.prim = C_PRIM_CHAR;
         }
-        has_char     = false;
-        has_signed   = false;
-        has_unsigned = false;
-    } else if (has_short) {
-        if (has_unsigned) {
+        n_char--;
+        if (n_signed) {
+            n_signed--;
+        }
+        if (n_unsigned) {
+            n_unsigned--;
+        }
+    } else if (n_short) {
+        if (n_unsigned) {
             type.prim = C_PRIM_USHORT;
         } else {
             type.prim = C_PRIM_SSHORT;
         }
-        has_short    = false;
-        has_signed   = false;
-        has_unsigned = false;
-    } else if (has_int128) {
-        if (has_unsigned) {
+        n_short--;
+        if (n_signed) {
+            n_signed--;
+        }
+        if (n_unsigned) {
+            n_unsigned--;
+        }
+        if (n_int) {
+            n_int--;
+        }
+    } else if (n_int128) {
+        if (n_unsigned) {
             type.prim = C_PRIM_U128;
         } else {
             type.prim = C_PRIM_S128;
         }
-        has_int128   = false;
-        has_signed   = false;
-        has_unsigned = false;
+        n_int128--;
+        if (n_signed) {
+            n_signed--;
+        }
+        if (n_unsigned) {
+            n_unsigned--;
+        }
     } else if (n_long == 2) {
-        if (has_unsigned) {
+        if (n_unsigned) {
             type.prim = C_PRIM_ULLONG;
         } else {
             type.prim = C_PRIM_SLLONG;
         }
-        n_long       = 0;
-        has_signed   = false;
-        has_unsigned = false;
+        n_long = 0;
+        if (n_signed) {
+            n_signed--;
+        }
+        if (n_unsigned) {
+            n_unsigned--;
+        }
+        if (n_int) {
+            n_int--;
+        }
     } else if (n_long == 1) {
-        if (has_unsigned) {
+        if (n_unsigned) {
             type.prim = C_PRIM_ULONG;
         } else {
             type.prim = C_PRIM_SLONG;
         }
-        n_long       = 0;
-        has_signed   = false;
-        has_unsigned = false;
-    } else if (has_int || has_unsigned || has_signed) {
-        if (has_unsigned) {
+        n_long = 0;
+        if (n_signed) {
+            n_signed--;
+        }
+        if (n_unsigned) {
+            n_unsigned--;
+        }
+        if (n_int) {
+            n_int--;
+        }
+    } else if (n_int || n_unsigned || n_signed) {
+        if (n_unsigned) {
             type.prim = C_PRIM_UINT;
         } else {
             type.prim = C_PRIM_SINT;
         }
-        has_int      = false;
-        has_signed   = false;
-        has_unsigned = false;
-    } else if (has_float) {
+        if (n_int) {
+            n_int--;
+        }
+        if (n_signed) {
+            n_signed--;
+        }
+        if (n_unsigned) {
+            n_unsigned--;
+        }
+    } else if (n_float) {
         type.prim = C_PRIM_FLOAT;
-        has_float = false;
-    } else if (has_double) {
+        n_float--;
+    } else if (n_double) {
         if (n_long) {
             type.prim = C_PRIM_LDOUBLE;
         } else {
             type.prim = C_PRIM_DOUBLE;
         }
-        has_double = false;
+        n_double--;
         n_long--;
-    } else if (has_bool) {
+    } else if (n_bool) {
         type.prim = C_PRIM_BOOL;
-        has_bool  = false;
-    } else if (has_void) {
+        n_bool--;
+    } else if (n_void) {
         type.prim = C_PRIM_VOID;
-        has_void  = false;
+        n_void--;
     } else {
         type.prim = C_PRIM_SINT;
     }
 
-    if (n_long || has_int || has_short || has_char || has_float || has_double || has_void || has_bool || has_unsigned
-        || has_signed || has_int128) {
+    if (n_long || n_int || n_short || n_char || n_float || n_double || n_void || n_bool || n_unsigned || n_signed
+        || n_int128) {
         cctx_diagnostic(cc->cctx, list->pos, DIAG_ERR, "Invalid combination of type specifiers");
     }
 

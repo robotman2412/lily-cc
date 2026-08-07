@@ -241,23 +241,40 @@ bool c_type_is_compatible(c_type_ref_t a, c_type_ref_t b) {
 }
 
 // Whether type `rhs` can be cast to type `lhs`.
-bool c_type_is_castable(c_type_ref_t new_type, c_type_ref_t old_type) {
-    if (c_type_is_identical(new_type, old_type, false)) {
+bool c_type_is_castable(c_type_ref_t lhs, c_type_ref_t rhs) {
+    if (c_type_is_identical(lhs, rhs, false)) {
         return true;
     }
-    if (new_type.prim == C_PRIM_VOID) {
+    if (lhs.prim == C_PRIM_VOID) {
         return true;
     }
-    return ((old_type.prim < C_N_PRIM && old_type.prim != C_PRIM_VOID) || old_type.prim == C_COMP_POINTER)
-           && ((new_type.prim < C_N_PRIM && new_type.prim != C_PRIM_VOID) || new_type.prim == C_COMP_POINTER);
+    return ((rhs.prim < C_N_PRIM && rhs.prim != C_PRIM_VOID) || rhs.prim == C_COMP_POINTER || rhs.prim == C_COMP_ENUM)
+           && ((lhs.prim < C_N_PRIM && lhs.prim != C_PRIM_VOID) || lhs.prim == C_COMP_POINTER
+               || lhs.prim == C_COMP_ENUM);
+}
+
+static bool c_func_type_identifal(c_func_type_t const *lhs, c_func_type_t const *rhs) {
+    if (lhs == rhs) {
+        return true;
+    }
+
+    if (lhs->args.len != rhs->args.len) {
+        return false;
+    }
+
+    for (size_t i = 0; i < lhs->args.len; i++) {
+        if (!c_type_is_identical(lhs->args.arr[i].type, rhs->args.arr[i].type, false)) {
+            return false;
+        }
+    }
+
+    return c_type_is_identical(lhs->returns, rhs->returns, false);
 }
 
 // Determine whether two types are the same.
 // If `strict`, then modifiers like `_Atomic` and `volatile` also apply.
 bool c_type_is_identical(c_type_ref_t lhs, c_type_ref_t rhs, bool strict) {
-    if (strict
-        && (lhs.qual.q_restrict != rhs.qual.q_restrict || lhs.qual.q_atomic != rhs.qual.q_atomic
-            || lhs.qual.q_volatile != rhs.qual.q_volatile)) {
+    if (strict && lhs.qual.val != rhs.qual.val) {
         return false;
     }
 
@@ -292,7 +309,7 @@ bool c_type_is_identical(c_type_ref_t lhs, c_type_ref_t rhs, bool strict) {
         case C_COMP_ARRAY:
             return lhs.extra->length == rhs.extra->length
                    && c_type_is_identical(lhs.extra->inner, rhs.extra->inner, strict);
-        case C_COMP_FUNCTION: return lhs.extra->func_type == rhs.extra->func_type;
+        case C_COMP_FUNCTION: return c_func_type_identifal(lhs.extra->func_type, rhs.extra->func_type);
     }
     UNREACHABLE();
 }

@@ -106,6 +106,7 @@ cir_value_t *cir_value_create_scope_val(pos_t pos, cir_scope_val_t const *scope_
             };
             break;
         case CIR_SCOPE_VAL_ENUM_CONST:
+            // TODO: This is both incorrect handling of the enum type, and not compatible with const-propagation.
             node->common = (cir_expr_common_t){
                 .pos          = pos,
                 .is_lvalue    = false,
@@ -657,6 +658,13 @@ cir_stmt_t *cir_stmt_create_units(cir_unit_list_t *units) {
     return node;
 }
 
+cir_stmt_t *cir_stmt_create_nop(pos_t pos) {
+    cir_stmt_t *node = lilycc_malloc(sizeof(cir_stmt_t));
+    node->pos        = pos;
+    node->tag        = CIR_STMT_NOP;
+    return node;
+}
+
 void cir_stmt_delete(cir_stmt_t *node) {
     switch (node->tag) {
         case CIR_STMT_STMTS: cir_stmts_delete(node->stmts); break;
@@ -669,6 +677,7 @@ void cir_stmt_delete(cir_stmt_t *node) {
         case CIR_STMT_RETURN: cir_return_delete(node->return_stmt); break;
         case CIR_STMT_EXPR: cir_expr_delete(node->expr); break;
         case CIR_STMT_UNITS: cir_unit_list_delete(node->units); break;
+        case CIR_STMT_NOP: /* Nothing to delete. */ break;
     }
     lilycc_free(node);
 }
@@ -830,8 +839,37 @@ static bool cir_scope_add_value(cctx_t *ctx, cir_scope_t *scope, char const *nam
 
     cir_scope_val_t const *exist = map_get(&scope->values, name);
     if (exist) {
-        redef_diag(ctx, name, *val.pos, *exist->pos);
-        return false;
+        c_type_t exist_type = C_TYPE_INVALID; // Non-owning.
+        switch (exist->tag) {
+            case CIR_SCOPE_VAL_DECL: exist_type = exist->decl->type; break;
+            case CIR_SCOPE_VAL_FUNC: exist_type = exist->func->type; break;
+            case CIR_SCOPE_VAL_ENUM_CONST: break;
+        }
+        c_type_t val_type = C_TYPE_INVALID; // Non-owning.
+        switch (val.tag) {
+            case CIR_SCOPE_VAL_DECL: val_type = val.decl->type; break;
+            case CIR_SCOPE_VAL_FUNC: val_type = val.func->type; break;
+            case CIR_SCOPE_VAL_ENUM_CONST: break;
+        }
+        bool compatible_func = exist_type.prim == C_COMP_FUNCTION && val_type.prim == C_COMP_FUNCTION
+                               && c_type_is_identical(exist_type, val_type, false);
+
+        // TODO: Check for conflicting `static`.
+        // TODO: Check for `extern` on non-function types.
+
+        if (compatible_func && exist->tag == CIR_SCOPE_VAL_DECL && val.tag == CIR_SCOPE_VAL_FUNC) {
+            // Definition of forward-declared function.
+            map_remove(&scope->values, name);
+
+        } else if (compatible_func && val.tag == CIR_SCOPE_VAL_DECL) {
+            // Both are functions; if their types are compatible, that is due to forward-declaration.
+            return true;
+
+        } else {
+            // Conflicting declarations.
+            redef_diag(ctx, name, *val.pos, *exist->pos);
+            return false;
+        }
     }
 
     cir_typedef_t const *conflict = map_get(&scope->typedefs, name);
@@ -846,11 +884,11 @@ static bool cir_scope_add_value(cctx_t *ctx, cir_scope_t *scope, char const *nam
     return true;
 }
 
-bool cir_scope_add_decl(cctx_t *ctx, cir_scope_t *scope, cir_decl_t *decl) {
+bool cir_scope_add_decl(cctx_t *ctx, cir_scope_t *scope, cir_decl_t const *decl) {
     return cir_scope_add_value(ctx, scope, decl->name, (cir_scope_val_t){.tag = CIR_SCOPE_VAL_DECL, .decl = decl});
 }
 
-bool cir_scope_add_func(cctx_t *ctx, cir_scope_t *scope, cir_func_t *func) {
+bool cir_scope_add_func(cctx_t *ctx, cir_scope_t *scope, cir_func_t const *func) {
     return cir_scope_add_value(ctx, scope, func->name, (cir_scope_val_t){.tag = CIR_SCOPE_VAL_FUNC, .func = func});
 }
 
@@ -1554,6 +1592,9 @@ void cir_stmt_dbg(cir_stmt_t const *stmt, int indent, FILE *to) {
         case CIR_STMT_RETURN: cir_return_dbg(stmt->return_stmt, indent, to); break;
         case CIR_STMT_EXPR: cir_expr_dbg(stmt->expr, indent, to); break;
         case CIR_STMT_UNITS: cir_unit_list_dbg(stmt->units, indent, to); break;
+        case CIR_STMT_NOP:
+            fprintf(to, "nop @ %s:%d:%d\n", stmt->pos.srcfile->name, stmt->pos.line + 1, stmt->pos.col + 1);
+            break;
     }
 }
 

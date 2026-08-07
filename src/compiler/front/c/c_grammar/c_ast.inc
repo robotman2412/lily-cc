@@ -497,6 +497,20 @@ C_AST_STRUCT_DEF(stmt_goto, \
 )
 C_AST_META_STRUCT_DEF(stmt_goto)
 
+#define C_AST_STRUCT_DEF_stmt_break(C_AST_STRUCT_DEF, C_AST_STRUCT_FIELD, C_AST_STRUCT_CHILD) \
+/* Goto statement. */ \
+C_AST_STRUCT_DEF(stmt_break, \
+    /* Target label. */ \
+    C_AST_STRUCT_FIELD(stmt_break, bool, is_continue) \
+)
+C_AST_META_STRUCT_DEF(stmt_break)
+
+#define C_AST_STRUCT_DEF_stmt_nop(C_AST_STRUCT_DEF, C_AST_STRUCT_FIELD, C_AST_STRUCT_CHILD) \
+/* No-operation statement (`;`). */ \
+C_AST_STRUCT_DEF(stmt_nop, \
+)
+C_AST_META_STRUCT_DEF(stmt_nop)
+
 // One statement; tagged union of the variants above.
 C_AST_UNION_DEF(stmt,
     C_AST_UNION_CHILD(stmt, stmt_list,    stmts,   STMTS)
@@ -507,6 +521,8 @@ C_AST_UNION_DEF(stmt,
     C_AST_UNION_CHILD(stmt, stmt_case,    case,    STMT_CASE)
     C_AST_UNION_CHILD(stmt, stmt_label,   label,   STMT_LABEL)
     C_AST_UNION_CHILD(stmt, stmt_return,  return,  STMT_RETURN)
+    C_AST_UNION_CHILD(stmt, stmt_break,   break,   STMT_BREAK)
+    C_AST_UNION_CHILD(stmt, stmt_nop,     nop,     STMT_NOP)
     C_AST_UNION_CHILD(stmt, stmt_goto,    goto,    STMT_GOTO)
     C_AST_UNION_CHILD(stmt, expr_list,    expr,    STMT_EXPR)
     C_AST_UNION_CHILD(stmt, def,          def,     STMT_DEF)

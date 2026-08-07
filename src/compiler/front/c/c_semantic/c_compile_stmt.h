@@ -36,3 +36,7 @@ cir_stmt_t *c_compile2_stmt_goto(c_compiler_t *cc, cir_scope_t *scope, c_ast_stm
 cir_stmt_t *c_compile2_stmt_expr(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_list_t const *stmt);
 // Compile a declaration statement.
 cir_stmt_t *c_compile2_stmt_def(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_t const *stmt);
+// Compile a break/continue in a statement.
+cir_stmt_t *c_compile2_stmt_break(c_compiler_t *cc, cir_scope_t *scope, c_ast_stmt_break_t const *stmt);
+// Compile a no-operation (`;`) statement.
+cir_stmt_t *c_compile2_stmt_nop(c_compiler_t *cc, cir_scope_t *scope, c_ast_stmt_nop_t const *stmt);

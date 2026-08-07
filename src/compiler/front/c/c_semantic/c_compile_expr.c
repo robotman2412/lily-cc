@@ -306,11 +306,13 @@ static cir_expr_t *
     c_type_ref_t ltyp = lhs->common.type;
     c_type_ref_t rtyp = rhs->common.type;
 
-    if (ltyp.prim == C_PRIM_VOID || (ltyp.prim >= C_N_PRIM && ltyp.prim != C_COMP_POINTER)) {
+    if (ltyp.prim == C_PRIM_VOID
+        || (ltyp.prim >= C_N_PRIM && ltyp.prim != C_COMP_POINTER && ltyp.prim != C_COMP_ENUM)) {
         cctx_diagnostic(cc->cctx, lhs->common.pos, DIAG_ERR, "Expected arithmetic or complete pointer type");
         goto error;
     }
-    if (rtyp.prim == C_PRIM_VOID || (rtyp.prim >= C_N_PRIM && rtyp.prim != C_COMP_POINTER)) {
+    if (rtyp.prim == C_PRIM_VOID
+        || (rtyp.prim >= C_N_PRIM && rtyp.prim != C_COMP_POINTER && rtyp.prim != C_COMP_ENUM)) {
         cctx_diagnostic(cc->cctx, rhs->common.pos, DIAG_ERR, "Expected arithmetic or complete pointer type");
         goto error;
     }
@@ -378,11 +380,11 @@ static cir_expr_t *
         return raw_calc(cc, pos, op, lhs, cast2);
     }
 
-    if (!c_prim_is_arith(ltyp.prim)) {
+    if (ltyp.prim != C_COMP_ENUM && !c_prim_is_arith(ltyp.prim)) {
         cctx_diagnostic(cc->cctx, lhs->common.pos, DIAG_ERR, "Expected arithmetic type");
         goto error;
     }
-    if (!c_prim_is_arith(rtyp.prim)) {
+    if (rtyp.prim != C_COMP_ENUM && !c_prim_is_arith(rtyp.prim)) {
         cctx_diagnostic(cc->cctx, rhs->common.pos, DIAG_ERR, "Expected arithmetic type");
         goto error;
     }

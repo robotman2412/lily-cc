@@ -96,6 +96,7 @@ typedef enum {
     CIR_STMT_RETURN,
     CIR_STMT_EXPR,
     CIR_STMT_UNITS,
+    CIR_STMT_NOP,
 } cir_stmt_tag_t;
 
 // Tag for `cir_unit_t`.
@@ -575,10 +576,10 @@ struct cir_scope_val {
     // Active union variant.
     cir_scope_val_tag_t tag;
     union {
-        pos_t const *pos;
-        cir_decl_t  *decl;
-        cir_func_t  *func;
-        cir_const_t *enum_const;
+        pos_t const      *pos;
+        cir_decl_t const *decl;
+        cir_func_t const *func;
+        cir_const_t      *enum_const;
     };
 };
 
@@ -775,6 +776,8 @@ cir_stmt_t *cir_stmt_create_return(cir_return_t *return_stmt);
 cir_stmt_t *cir_stmt_create_expr(cir_expr_t *expr);
 // Construct a `cir_stmt` node wrapping a unit list.
 cir_stmt_t *cir_stmt_create_units(cir_unit_list_t *units);
+// Construct an empty `cir_stmt` node.
+cir_stmt_t *cir_stmt_create_nop(pos_t pos);
 // Destroy a `cir_stmt` node and the child it owns.
 void        cir_stmt_delete(cir_stmt_t *node);
 
@@ -816,10 +819,10 @@ cir_scope_t *cir_scope_func(cir_scope_t *scope);
 
 // Add a variable declaration to the value namespace of `scope`.
 // Returns `false` if `name` already exists in *this* scope (shadowing a parent is allowed).
-bool cir_scope_add_decl(cctx_t *ctx, cir_scope_t *scope, cir_decl_t *decl);
+bool cir_scope_add_decl(cctx_t *ctx, cir_scope_t *scope, cir_decl_t const *decl);
 // Add a function to the value namespace of `scope`.
 // Returns `false` if `name` already exists in *this* scope.
-bool cir_scope_add_func(cctx_t *ctx, cir_scope_t *scope, cir_func_t *func);
+bool cir_scope_add_func(cctx_t *ctx, cir_scope_t *scope, cir_func_t const *func);
 // Add an enum constant to the value namespace of `scope`.
 // Returns `false` if `name` already exists in *this* scope.
 bool cir_scope_add_enum_const(cctx_t *ctx, cir_scope_t *scope, char const *name, cir_const_t *enum_const);

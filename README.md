@@ -2,6 +2,7 @@
 ![Icon image](logo64.png)
 
 A work-in-progress C compiler for fun. It aims to one day be C23 (and some GNU extensions) compliant.
+
 # Lily-CC current progress
 
 ## C preprocessor
@@ -18,25 +19,32 @@ A work-in-progress C compiler for fun. It aims to one day be C23 (and some GNU e
 - Typed integer literals
 - Character and string literals
 ### Parser
-- `for`, `if`, `while`, `do...while`
-- All legal declaration types
-- `enum`
-- Partial `struct` and `union` support
+- Finished to C17 standard
+- A subset of C23
 ### Type system
 - All integer types
 - `_Bool`, `void`
 - `enum` types
+- `struct` and `union` types
 - Pointer types
-- Partial array support
+- Array types
+- Function (pointer) types
 ### Expressions
 - Infix operators `+ - * / % << >> ^ & |` (including assignment versions) and `< > <= >= != ==`
 - Prefix operators `++ -- * &`
 - Suffix operators `++ --`
-- Function calls (symbols only but funcptr could be supported now)
+- `sizeof` and `alignof`
+- Array indexing
+- Field subscripting
+- Compound literals
+- Function calls
 ### Statements
 - `if` and `if ... else`
 - `while` and `do ... while`
-- `for` loops (including their wierd scope rules)
+- `for` loops
+- `switch`
+- labels, `case` and `default`
+- `goto`, `break` and `continue`
 - `return`
 
 ## Intermediate representation
@@ -55,7 +63,7 @@ A work-in-progress C compiler for fun. It aims to one day be C23 (and some GNU e
 - Redundant jump/branch elimination
 
 ## RISC-V backend
-- Instruction selection for all of RV32I
+- Instruction selection for all of RV64IM (32-bit and 64-bit instructions and all integer operation including mul/div)
 
 # Reading list
 - Scalar Replacement Of Aggregates

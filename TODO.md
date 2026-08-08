@@ -34,11 +34,12 @@
     - Hexadecimal ✓
     - Decimal ✓
     - Octal ✓
-    - Binary (GNU extension) ✓
+    - Binary ✓
     - Type suffixes ✓
 
 ### C preprocessor
-- `#include` and `#include_next`
+- `#include` ✓
+- `#include_next`
 - `#embed`
 - `#define` and `#undef` ✓
 - `#pragma` ✓
@@ -79,36 +80,37 @@
     - For loop ✓
     - While loop ✓
     - If statement ✓
-    - Switch case
+    - Switch case ✓
     - Inline assembly
     - `__FUNCTION__` - current function name
 - Expressions
-    - Ternary
+    - Ternary ✓
     - Assignments ✓
     - Compound literals ✓
     - Casts ✓
-    - `sizeof` and `alignof`
+    - `sizeof` and `alignof` ✓
     - Operators ✓
     - Function calls ✓
 - Configurable parsing recursion limit
 
 ### C compiler
-- Types in expressions
+- Types in expressions ✓
     - Primitive types ✓
     - Pointers ✓
     - Arrays ✓
     - Structs ✓
     - Unions ✓
     - Enums ✓
-    - Function pointers
+    - Function pointers ✓
 - Expressions
-    - Ternary
-    - `sizeof` and `alignof`
+    - `_Generic`
+    - Ternary ✓
+    - `sizeof` and `alignof` ✓
     - Arithmetic ✓
     - Addrof ✓
     - Dereference ✓
     - Index ✓
-    - Function calls
+    - Function calls ✓
 - Modifiable l-value check ✓
 - Compound initializers/literals ✓
 
@@ -152,16 +154,13 @@
 - Instruction encoder
 - Instruction definitions
     - RV32I ✓
-    - RV64I
-    - Zicsr
-    - M
+    - RV64I ✓
+    - M ✓
     - A
     - F
     - D
     - C
     - V
-    - Privileged instructions
-- Register definitions
+- Register definitions ✓
     - Integer ✓
-    - Float
-    - CSR
+    - Float ✓

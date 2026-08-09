@@ -211,7 +211,7 @@ static void compute_dominance(ir_func_t *func, size_t nodes_len, dom_node_t *nod
         }
         set_foreach(ir_code_t, code, &nodes[i].code->pred) {
             size_t runner = code->dfs_index;
-            while (runner != nodes[i].idom) {
+            while (runner != (size_t)-1 && runner != nodes[i].idom) {
                 set_add(&nodes[runner].frontier, (void *)i);
                 runner = nodes[runner].idom;
             }

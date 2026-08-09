@@ -224,14 +224,12 @@ ra_nodes_t ra_liveness(ir_func_t const *func) {
 
     // Interference information per IR variable (that isn't unused).
     dlist_foreach_node(ir_var_t, var, &func->vars_list) {
-        if (var->used_at.len) {
-            ra_node_t *node = lilycc_calloc(1, sizeof(ra_node_t));
-            node->links     = PTR_SET_EMPTY;
-            node->regno     = REGNO_NONE;
-            node->var       = var;
-            map_set(&ra_vars, var, node);
-            set_add(&ra_nodes, node);
-        }
+        ra_node_t *node = lilycc_calloc(1, sizeof(ra_node_t));
+        node->links     = PTR_SET_EMPTY;
+        node->regno     = REGNO_NONE;
+        node->var       = var;
+        map_set(&ra_vars, var, node);
+        set_add(&ra_nodes, node);
     }
     for (size_t i = 0; i < lt_nodes_len; i++) {
         link_vars(&ra_vars, &lt_nodes[i].in);

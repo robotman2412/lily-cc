@@ -1675,9 +1675,11 @@ void cir_return_dbg(cir_return_t const *cir_return, int indent, FILE *to) {
         cir_return->pos.col + 1
     );
 
-    pindent(indent, to);
-    fputs("value: ", to);
-    cir_expr_dbg(cir_return->value, indent, to);
+    if (cir_return->value) {
+        pindent(indent, to);
+        fputs("value: ", to);
+        cir_expr_dbg(cir_return->value, indent, to);
+    }
 }
 
 void cir_stmt_dbg(cir_stmt_t const *stmt, int indent, FILE *to) {

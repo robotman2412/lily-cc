@@ -211,9 +211,19 @@ cir_stmt_t *c_compile2_stmt_case(c_compiler_t *cc, cir_scope_t *scope, c_ast_stm
     if (stmt->lo && stmt->hi) {
         hi = c_compile2_expr(cc, scope, stmt->hi);
     }
+
+    bool invalid_constant = false;
+    if (lo && !c_is_int_const_expr(lo)) {
+        cctx_diagnostic(cc->cctx, stmt->lo->pos, DIAG_ERR, "Expected integer constant expression");
+        invalid_constant = true;
+    }
+    if (hi && !c_is_int_const_expr(hi)) {
+        cctx_diagnostic(cc->cctx, stmt->hi->pos, DIAG_ERR, "Expected integer constant expression");
+        invalid_constant = true;
+    }
     cir_stmt_t *body = c_compile2_stmt(cc, scope, stmt->body);
 
-    if ((stmt->lo && !lo) || (stmt->lo && stmt->hi && !hi) || !body) {
+    if (invalid_constant || (stmt->lo && !lo) || (stmt->lo && stmt->hi && !hi) || !body) {
         if (lo) {
             cir_expr_delete(lo);
         }
@@ -225,6 +235,8 @@ cir_stmt_t *c_compile2_stmt_case(c_compiler_t *cc, cir_scope_t *scope, c_ast_stm
         }
         return NULL;
     }
+
+
 
     return cir_stmt_create_case(cir_case_create(stmt->pos, lo, hi, body));
 }

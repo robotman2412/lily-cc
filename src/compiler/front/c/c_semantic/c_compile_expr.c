@@ -39,6 +39,16 @@ static bool c_prim_is_arith(c_prim_t prim) {
     return prim < C_PRIM_VOID || prim == C_COMP_POINTER;
 }
 
+bool c_is_const_expr(cir_expr_t const *expr) {
+    return expr->tag == CIR_EXPR_VALUE
+           && (expr->value->tag == CIR_VALUE_COMP_CONST || expr->value->tag == CIR_VALUE_CONST
+               || (expr->value->tag == CIR_VALUE_SCOPE_VAL && expr->value->scope_val->tag == CIR_SCOPE_VAL_ENUM_CONST));
+}
+
+bool c_is_int_const_expr(cir_expr_t const *expr) {
+    return (expr->common.type.prim == C_COMP_ENUM || expr->common.type.prim < C_PRIM_FLOAT) && c_is_const_expr(expr);
+}
+
 // Determine the common result type of a ternary expression's two value operands.
 // Integer promotion follows the infix rules; arrays first decay into pointers.
 // For two pointers: if exactly one points to void, the other's type is used; if their inner
@@ -118,7 +128,7 @@ static c_prim_t usual_arith_conv(c_compiler_t *cc, c_type_ref_t type, c_type_ref
             other_prim = C_PRIM_SINT;
         }
 
-        if (prim >= C_N_PRIM || other_prim >= C_N_PRIM || prim == other_prim) {
+        if (prim >= C_N_PRIM || other_prim >= C_N_PRIM) {
             // No conversion can be done.
             return C_N_PRIM;
         }
@@ -176,7 +186,15 @@ static cir_expr_t *raw_cast(c_compiler_t *cc, pos_t pos, c_type_t type, cir_expr
         return NULL;
     }
 
-    if (val->tag == CIR_EXPR_VALUE && val->value->tag == CIR_VALUE_CONST && type.prim < C_PRIM_VOID) {
+    if (val->tag == CIR_EXPR_VALUE && val->value->tag == CIR_VALUE_COMP_VALUE
+        && val->value->scope_val->tag == CIR_SCOPE_VAL_ENUM_CONST) {
+        ir_prim_t   dest_prim = c_type_to_ir_type(cc, type);
+        ir_const_t  iconst    = ir_cast(dest_prim, val->value->scope_val->enum_const->iconst);
+        cir_expr_t *res       = cir_expr_create_value(cir_value_create_const(cir_const_create(pos, type.prim, iconst)));
+        c_type_delete(type);
+        cir_expr_delete(val);
+        return res;
+    } else if (val->tag == CIR_EXPR_VALUE && val->value->tag == CIR_VALUE_CONST && type.prim < C_PRIM_VOID) {
         ir_prim_t   dest_prim = c_type_to_ir_type(cc, type);
         ir_const_t  iconst    = ir_cast(dest_prim, val->value->iconst->iconst);
         cir_expr_t *res       = cir_expr_create_value(cir_value_create_const(cir_const_create(pos, type.prim, iconst)));
@@ -209,15 +227,16 @@ static cir_expr_t *raw_calc(c_compiler_t *cc, pos_t pos, cir_calc_op_t op, cir_e
     }
 
     c_type_t type;
+    c_prim_t prim = usual_arith_conv(cc, ltyp, rtyp);
+    if (prim == C_N_PRIM) {
+        type = c_type_clone(ltyp);
+    } else {
+        type = C_TYPE_FROM_PRIM(prim);
+        lhs  = raw_cast(cc, lhs->common.pos, C_TYPE_FROM_PRIM(prim), lhs);
+        rhs  = raw_cast(cc, rhs->common.pos, C_TYPE_FROM_PRIM(prim), rhs);
+    }
     if (op >= CIR_CALC_LAND) {
         type = C_TYPE_FROM_PRIM(C_PRIM_SINT);
-    } else {
-        c_prim_t prim = usual_arith_conv(cc, ltyp, rtyp);
-        if (prim == C_N_PRIM) {
-            type = c_type_clone(ltyp);
-        } else {
-            type = C_TYPE_FROM_PRIM(prim);
-        }
     }
 
     if ((lhs->tag == CIR_EXPR_VALUE && lhs->value->tag == CIR_VALUE_CONST && lhs->common.type.prim < C_PRIM_VOID)
@@ -736,17 +755,7 @@ cir_expr_t *c_compile2_expr_infix(c_compiler_t *cc, cir_scope_t *scope, c_ast_ex
             goto error;
         }
         // Insert an implicit cast if the RHS type differs.
-        if (!c_type_is_identical(ltyp, rhs->common.type, false)) {
-            rhs = cir_expr_create_cast(cir_cast_create(
-                (cir_expr_common_t){
-                    .pos          = rhs->common.pos,
-                    .is_lvalue    = false,
-                    .allow_addrof = false,
-                    .type         = c_type_clone(ltyp),
-                },
-                rhs
-            ));
-        }
+        rhs = raw_cast(cc, rhs->common.pos, c_type_clone(ltyp), rhs);
         return cir_expr_create_assign(cir_assign_create(lhs, rhs));
     }
 
@@ -979,14 +988,15 @@ cir_expr_t *c_compile2_expr_call(c_compiler_t *cc, cir_scope_t *scope, c_ast_exp
         cctx_diagnostic(cc->cctx, call->pos, DIAG_ERR, "Called object is not a function or function pointer");
         goto error;
     }
+    vec_c_func_arg_t const *type_args = &func_type.extra->func_type->args;
 
-    if (args.len != func_type.extra->func_type->args.len) {
+    if (args.len != type_args->len) {
         cctx_diagnostic(
             cc->cctx,
             call->pos,
             DIAG_ERR,
             "Function expects %zu argument(s), got %zu",
-            func_type.extra->func_type->args.len,
+            type_args->len,
             args.len
         );
         goto error;
@@ -995,21 +1005,13 @@ cir_expr_t *c_compile2_expr_call(c_compiler_t *cc, cir_scope_t *scope, c_ast_exp
     // Type-check each argument and insert an implicit cast where the type differs.
     for (size_t i = 0; i < args.len; i++) {
         cir_expr_t *arg = args.arr[i];
-        if (!c_type_is_castable(arg->common.type, arg->common.type)) {
-            cctx_diagnostic(cc->cctx, arg->common.pos, DIAG_ERR, "Incompatible argument type in function call");
-            goto error;
-        }
         if (!c_type_is_identical(arg->common.type, arg->common.type, false)) {
-            args.arr[i] = cir_expr_create_cast(cir_cast_create(
-                (cir_expr_common_t){
-                    .pos          = arg->common.pos,
-                    .is_lvalue    = false,
-                    .allow_addrof = false,
-                    .type         = c_type_clone(func_type.extra->func_type->args.arr[i].type),
-                },
-                arg
-            ));
+            args.arr[i] = raw_cast(cc, arg->common.pos, c_type_clone(type_args->arr[i].type), arg);
         }
+    }
+
+    if (errors) {
+        goto error;
     }
 
     return cir_expr_create_call(cir_call_create(

@@ -588,8 +588,18 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
                         );
                         break;
 
-                    case IR_OPERAND_TYPE_MEM:
                     case IR_OPERAND_TYPE_REG:
+                        // Simply replace the variable.
+                        ir_insn_set_operand(
+                            insn,
+                            i,
+                            IR_OPERAND_MEM(
+                                IR_MEMREF(data_type, IR_BADDR_REG(value.regno), .offset = operand->mem.offset)
+                            )
+                        );
+                        break;
+
+                    case IR_OPERAND_TYPE_MEM:
                     case IR_OPERAND_TYPE_STRUCT: UNREACHABLE();
                 }
             }

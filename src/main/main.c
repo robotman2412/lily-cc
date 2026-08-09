@@ -9,6 +9,7 @@
 #include "c_compile.h"
 #include "c_compiler.h"
 #include "c_ir.h"
+#include "c_lower.h"
 #include "c_parser.h"
 #include "c_parser2.h"
 #include "codegen.h"
@@ -18,6 +19,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static void compile(char const *path) {
     // Create requisite contexts.
@@ -129,9 +131,22 @@ static void compile2(char const *path) {
 
     // While not EOF, keep parsing and compiling stuff.
     c_ast_def_list_t *ast = c_parse2(pctx);
-    c_ast_def_list_dbg(ast, 0, stdout);
-    cir_trans_unit_t *tu = c_compile2(cc, ast);
-    cir_trans_unit_dbg(tu, 0, stdout);
+    cir_trans_unit_t *tu  = c_compile2(cc, ast);
+
+    for (size_t i = 0; i < tu->units.len; i++) {
+        if (tu->units.arr[i]->tag != CIR_UNIT_FUNC) {
+            continue;
+        }
+        ir_func_t *ir = c_lower_func(cc, tu->units.arr[i]->func);
+        ir_func_serialize(ir, NULL, stdout);
+        ir_func_to_ssa(ir);
+        ir_optimize(ir);
+        ir_func_serialize(ir, profile, stdout);
+        codegen(profile, ir);
+        ir_func_serialize(ir, profile, stdout);
+        asm_print_func(ir, profile, stdout);
+    }
+
     c_ast_def_list_delete(ast);
     cir_trans_unit_delete(tu);
 

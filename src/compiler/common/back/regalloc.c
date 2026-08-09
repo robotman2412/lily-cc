@@ -194,6 +194,9 @@ ra_nodes_t ra_liveness(ir_func_t const *func) {
         dirty_len--;
 
         // Propagate liveness of variables.
+        set_foreach(ir_var_t, var, &node->def) {
+            node->dirty |= set_add(&node->out, var);
+        }
         set_foreach(ir_var_t, var, &node->out) {
             if (!set_contains(&node->def, var)) {
                 node->dirty |= set_add(&node->in, var);
@@ -231,10 +234,8 @@ ra_nodes_t ra_liveness(ir_func_t const *func) {
         }
     }
     for (size_t i = 0; i < lt_nodes_len; i++) {
-        for (size_t x = 0; x < 2; x++) {
-            set_t const *vars = x ? &lt_nodes[i].in : &lt_nodes[i].out;
-            link_vars(&ra_vars, vars);
-        }
+        link_vars(&ra_vars, &lt_nodes[i].in);
+        link_vars(&ra_vars, &lt_nodes[i].out);
     }
 
     // Pre-colored interference graph nodes.

@@ -8,6 +8,7 @@
 #include "arith128.h"
 #include "map.h"
 #include "unreachable.h"
+#include "vec.h"
 
 #include <endian.h>
 #include <stdlib.h>
@@ -315,6 +316,8 @@ typedef struct ir_func       ir_func_t;
 // Machine register number.
 typedef uint16_t             regno_t;
 
+VEC_TYPE_DEF(vec_ir_operand_t, ir_operand_t);
+
 // No register assigned.
 #define REGNO_NONE UINT16_MAX
 
@@ -516,11 +519,11 @@ static inline ir_prim_t ir_operand_prim(ir_operand_t oper) {
 #define IR_FOR_OPERAND_VARS(operand, name, action)                                                                     \
     ({                                                                                                                 \
         if ((operand).type == IR_OPERAND_TYPE_VAR) {                                                                   \
-            ir_var_t *name = (operand).var;                                                                            \
+            ir_var_t *name = (operand).var; /* NOLINT */                                                               \
             action                                                                                                     \
         } else if ((operand).type == IR_OPERAND_TYPE_MEM) {                                                            \
             if ((operand).mem.base_type == IR_MEMBASE_VAR) {                                                           \
-                ir_var_t *name = (operand).mem.base_var;                                                               \
+                ir_var_t *name = (operand).mem.base_var; /* NOLINT */                                                  \
                 action                                                                                                 \
             }                                                                                                          \
         }                                                                                                              \

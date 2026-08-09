@@ -714,7 +714,8 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
             ));
 
         } else if (
-            is_expr(4) && is_punct(3, C_TKN_QUESTION) && is_expr(2) && is_punct(1, C_TKN_COLON) && is_expr(0)
+            ((is_expr(3) && is_punct(2, C_TKN_QUESTION)) || (is_expr(4) && is_punct(3, C_TKN_QUESTION) && is_expr(2)))
+            && is_punct(1, C_TKN_COLON) && is_expr(0)
             && oper_precedence(stack.arr[stack.len - 2].token, true) >= oper_precedence(peek, false)
         ) { // Reduce ternary.
             c_ast_expr_t *else_expr = pop_expr();
@@ -1464,7 +1465,7 @@ static c_ast_stmt_t *c_parse2_switch(c_parser_t *ctx) {
 static c_ast_stmt_t *c_parse2_case(c_parser_t *ctx) {
     token_t keyw = tkn_next(ctx->tkn_ctx);
     assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_case);
-    pos_t keyw_pos = keyw.pos;
+    pos_t pos = keyw.pos;
     tkn_delete(keyw);
 
     c_ast_expr_t *lo = c_parse2_expr(ctx);
@@ -1475,6 +1476,9 @@ static c_ast_stmt_t *c_parse2_case(c_parser_t *ctx) {
         tkn_delete(tkn_next(ctx->tkn_ctx));
         hi   = c_parse2_expr(ctx);
         peek = tkn_peek(ctx->tkn_ctx);
+        pos  = pos_including(pos, hi->pos);
+    } else {
+        pos = pos_including(pos, lo->pos);
     }
 
     if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_COLON) {
@@ -1484,8 +1488,7 @@ static c_ast_stmt_t *c_parse2_case(c_parser_t *ctx) {
     }
 
     c_ast_stmt_t *inner = c_parse2_stmt(ctx);
-    c_ast_stmt_t *res
-        = c_ast_stmt_create_case(c_ast_stmt_case_create(pos_including(keyw_pos, inner->pos), lo, hi, inner));
+    c_ast_stmt_t *res   = c_ast_stmt_create_case(c_ast_stmt_case_create(pos, lo, hi, inner));
     return res;
 }
 
@@ -1783,8 +1786,7 @@ static c_ast_stmt_t *c_parse2_default(c_parser_t *ctx) {
     }
 
     c_ast_stmt_t *inner = c_parse2_stmt(ctx);
-    c_ast_stmt_t *res
-        = c_ast_stmt_create_case(c_ast_stmt_case_create(pos_including(keyw_pos, inner->pos), NULL, NULL, inner));
+    c_ast_stmt_t *res   = c_ast_stmt_create_case(c_ast_stmt_case_create(keyw_pos, NULL, NULL, inner));
 
     return res;
 }
@@ -1802,11 +1804,9 @@ static c_ast_stmt_t *c_parse2_label(c_parser_t *ctx) {
     }
 
     c_ast_stmt_t *inner = c_parse2_stmt(ctx);
-    c_ast_stmt_t *res   = c_ast_stmt_create_label(c_ast_stmt_label_create(
-        pos_including(ident.pos, inner->pos),
-        c_ast_ident_create(ident.pos, lilycc_strdup(ident.strval)),
-        inner
-    ));
+    c_ast_stmt_t *res   = c_ast_stmt_create_label(
+        c_ast_stmt_label_create(ident.pos, c_ast_ident_create(ident.pos, lilycc_strdup(ident.strval)), inner)
+    );
 
     tkn_delete(ident);
     return res;

@@ -122,7 +122,7 @@ ir_insn_t *rv_xabi_return(backend_profile_t *profile, ir_insn_t *ret_insn) {
         retval_prim = IR_N_PRIM;
         ret_size    = ret_insn->operands[0].struct_frame->size;
     } else if (ret_insn->operands_len) {
-        retval_prim = ret_insn->operands[0].var->prim_type;
+        retval_prim = ir_operand_prim(ret_insn->operands[0]);
         ret_size    = ir_prim_sizes[retval_prim];
     } else {
         retval_prim = IR_N_PRIM;

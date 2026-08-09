@@ -13,6 +13,7 @@ add_library(c-frontend STATIC
     c_semantic/c_compile_expr.c
     c_semantic/c_compile_stmt.c
     c_semantic/c_compile.c
+    c_semantic/c_lower.c
     c_semantic/c_ir.c
     c_types/c_types.c
     c_compiler.c

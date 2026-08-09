@@ -574,7 +574,7 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
 
     regalloc(profile, func);
 
-    // Stip meta-instructions.
+    // Strip meta-instructions.
     dlist_foreach_node(ir_code_t, code, &func->code_list) {
         ir_insn_t *insn = (ir_insn_t *)code->insns.head;
         while (insn) {

@@ -535,10 +535,6 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
         }
     }
 
-    if (profile->backend->pre_isel_pass) {
-        profile->backend->pre_isel_pass(profile, func);
-    }
-
     // Promote IR variables smaller than minimum register size to be at least as wide.
     func->enforce_cmp_bool = false;
     dlist_foreach_node(ir_var_t, var, &func->vars_list) {
@@ -566,12 +562,6 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
         cg_isel(profile, code);
     }
 
-    if (profile->backend->post_isel_pass) {
-        profile->backend->post_isel_pass(profile, func);
-    }
-
-    // TODO: Stack offsets and what happens when they go out of range for immediate offsets.
-
     regalloc(profile, func);
 
     // Strip meta-instructions.
@@ -590,5 +580,11 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
             }
             insn = next;
         }
+    }
+
+    // Rather naive stack frame allocator; sort most-aligned frame first, call frame always at the end.
+
+    if (profile->backend->postproc_pass) {
+        profile->backend->postproc_pass(profile, func);
     }
 }

@@ -756,8 +756,8 @@ static inline ir_insn_t *rv_isel_mem(rv_profile_t const *profile, ir_insn_t *ins
             case IR_PRIM_u8: lo12_proto = &rv_insn_lbu; break;
             case IR_PRIM_s16: lo12_proto = &rv_insn_lh; break;
             case IR_PRIM_u16: lo12_proto = &rv_insn_lhu; break;
-            case IR_PRIM_s32: lo12_proto = &rv_insn_lw; break;
-            case IR_PRIM_u32: lo12_proto = profile->ext_enabled[RV_64] ? &rv_insn_lwu : &rv_insn_lw; break;
+            case IR_PRIM_s32:
+            case IR_PRIM_u32: lo12_proto = &rv_insn_lw; break; // TODO: Support for `lwu` as an optimization.
             case IR_PRIM_s64:
             case IR_PRIM_u64: lo12_proto = &rv_insn_ld; break;
             // case IR_PRIM_f32: lo12_proto = &rv_insn_flw; break;

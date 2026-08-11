@@ -70,8 +70,8 @@ struct backend {
     void (*delete_profile)(backend_profile_t *profile);
     // Prepare backend for codegen stage.
     void (*init_codegen)(backend_profile_t *profile);
-    // Perform target-specific passes before instruction selection.
-    void (*pre_isel_pass)(backend_profile_t *profile, ir_func_t *func);
+    // Perform target-specific post-processing passes.
+    void (*postproc_pass)(backend_profile_t *profile, ir_func_t *func);
     // Expand the ABI for a specific return instruction.
     ir_insn_t *(*xabi_return)(backend_profile_t *profile, ir_insn_t *ret_insn);
     // Expand the ABI for a specific call instruction.
@@ -80,8 +80,6 @@ struct backend {
     void (*xabi_entry)(backend_profile_t *profile, ir_func_t *func);
     // Perform instruction selection.
     ir_insn_t *(*isel)(backend_profile_t *profile, ir_insn_t *ir_insn);
-    // Perform target-specific passes after instruction selection.
-    void (*post_isel_pass)(backend_profile_t *profile, ir_func_t *func);
     // Emit load for register spilling.
     void (*ra_spill_load)(backend_profile_t *profile, ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame);
     // Emit store for register spilling.

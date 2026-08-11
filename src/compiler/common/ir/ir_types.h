@@ -340,7 +340,7 @@ struct ir_frame {
     uint64_t     align;
     // Frame size.
     uint64_t     size;
-    // Offset from frame pointer.
+    // Offset from frame pointer (stack pointer on function entry).
     uint64_t     offset;
 };
 
@@ -699,9 +699,12 @@ struct ir_func {
     // Number that will be used for the next code block.
     size_t       code_next_id;
     // Enforce the SSA form.
-    bool         enforce_ssa;
+    uint32_t     enforce_ssa      : 1;
     // Enforce comparison insn returns bool.
-    bool         enforce_cmp_bool;
+    uint32_t     enforce_cmp_bool : 1;
+    // Function will use a frame pointer.
+    // Always true if there are any `alloca` in the function.
+    uint32_t     use_frame_ptr    : 1;
 };
 
 // Byte size per primitive type.

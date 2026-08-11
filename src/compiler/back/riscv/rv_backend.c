@@ -69,9 +69,12 @@ void rv_init_codegen(backend_profile_t *profile0) {
     for (regno_t i = 5; i < 32; i++) {
         profile->base.gpr_classes[i] = (regclass_t){.int32 = 1, .int64 = profile->ext_enabled[RV_64]};
     }
+    // For large offsets (especially from the frame pointer), arbitrarily reserve `t0`.
+    // Inline assembly may still use it as it wishes; `t0` will only be used for stores and large stack offsets.
+    profile->base.gpr_classes[RV_REG_T(0)].val = 0;
     // Callee-save registers s0 and s1.
-    profile->base.gpr_classes[8].callee_save = 1;
-    profile->base.gpr_classes[9].callee_save = 1;
+    profile->base.gpr_classes[8].callee_save   = 1;
+    profile->base.gpr_classes[9].callee_save   = 1;
     // Callee-save registers s2 through s11.
     for (regno_t i = 18; i < 28; i++) {
         profile->base.gpr_classes[i].callee_save = 1;
@@ -108,16 +111,10 @@ void rv_spill_load(backend_profile_t *profile0, ir_insnloc_t loc, ir_var_t *dest
         case IR_PRIM_u8: op = &rv_insn_lbu; break;
         case IR_PRIM_s16: op = &rv_insn_lh; break;
         case IR_PRIM_u16: op = &rv_insn_lhu; break;
-        case IR_PRIM_s32: op = &rv_insn_lw; break;
-        case IR_PRIM_u32:
-            if (profile->ext_enabled[RV_64]) {
-                UNREACHABLE(); // TODO.
-            } else {
-                op = &rv_insn_lw;
-            }
-            break;
-        // case IR_PRIM_s64:
-        // case IR_PRIM_u64:
+        case IR_PRIM_s32:
+        case IR_PRIM_u32: op = &rv_insn_lw; break;
+        case IR_PRIM_s64:
+        case IR_PRIM_u64: op = &rv_insn_ld; break;
         // case IR_PRIM_s128:
         // case IR_PRIM_u128:
         // case IR_PRIM_f32:
@@ -149,8 +146,8 @@ void rv_spill_store(backend_profile_t *profile0, ir_insnloc_t loc, ir_var_t *src
         case IR_PRIM_u16: op = &rv_insn_sh; break;
         case IR_PRIM_s32:
         case IR_PRIM_u32: op = &rv_insn_sw; break;
-        // case IR_PRIM_s64:
-        // case IR_PRIM_u64:
+        case IR_PRIM_s64:
+        case IR_PRIM_u64: op = &rv_insn_sd; break;
         // case IR_PRIM_s128:
         // case IR_PRIM_u128:
         // case IR_PRIM_f32:

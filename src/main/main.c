@@ -14,7 +14,7 @@
 #include "c_parser2.h"
 #include "codegen.h"
 #include "ir.h"
-#include "ir/ir_optimizer.h"
+#include "ir_optimizer.h"
 #include "ir_serialization.h"
 
 #include <stdio.h>

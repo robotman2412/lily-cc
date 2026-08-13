@@ -5,7 +5,7 @@
 
 #include "compiler.h"
 #include "ir.h"
-#include "ir/ir_optimizer.h"
+#include "ir_optimizer.h"
 #include "ir_serialization.h"
 #include "ir_tokenizer.h"
 #include "ir_types.h"

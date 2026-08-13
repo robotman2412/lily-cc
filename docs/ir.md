@@ -61,7 +61,7 @@ And produce an in-memory representation as shown:
 ![An example showing a simple function containing a for loop](img/func-example.png)
 
 # IR Library
-The [ir](../src/compiler/common/ir/) subfolder of the [`compiler-common`](../src/compiler/common/) library is the intended way of interacting with the IR from the perspective of both the frontend and the backend. It is to be treated as the source of truth for the IR specification. This section presents an overview of the specification in a more human-readable format.
+The [ir](../src/compiler/common/ir/) subfolder of the [`lilycc`](../src/compiler/common/) library is the intended way of interacting with the IR from the perspective of both the frontend and the backend. It is to be treated as the source of truth for the IR specification. This section presents an overview of the specification in a more human-readable format.
 
 ## Data types
 The types that values (e.g. variables and constants) can have. Every data type has a fixed size and alignment equal to the size. All integer types are to be stored in two's complement. The size of a byte is exactly 8 bits and a byte must be the minimum addressable unit of memory.

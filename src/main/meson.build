@@ -11,7 +11,7 @@ executable(
 )
 
 executable(
-    'cpp',
+    'lily-cpp',
     'cpp.c',
     install: true,
     dependencies: [ front_c_dep ],

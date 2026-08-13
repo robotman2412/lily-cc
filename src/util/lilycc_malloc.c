@@ -20,9 +20,7 @@
 
 
 // Total size allocated through Lily-CC's allocator.
-atomic_size_t lilycc_total_alloc   = 0;
-// Allocation debug printing output.
-FILE         *lilycc_alloc_debugfd = NULL;
+atomic_size_t lilycc_total_alloc = 0;
 
 static bool alloc_instrument = true;
 
@@ -91,7 +89,7 @@ static void *wrap_realloc(void *ptr, size_t newsize) {
     alloc_hdr_t *hdr = (alloc_hdr_t *)ptr - 1;
 
     if (newsize < hdr->size) {
-        // memset((uint8_t *)(hdr + 1) + newsize, 0xcc, hdr->size - newsize);
+        memset((uint8_t *)(hdr + 1) + newsize, 0xcc, hdr->size - newsize);
     }
 
     alloc_hdr_t *mem = realloc(hdr, sizeof(alloc_hdr_t) + newsize);
@@ -100,7 +98,7 @@ static void *wrap_realloc(void *ptr, size_t newsize) {
     }
 
     if (newsize > mem->size) {
-        // memset((uint8_t *)(mem + 1) + mem->size, 0xcc, newsize - mem->size);
+        memset((uint8_t *)(mem + 1) + mem->size, 0xcc, newsize - mem->size);
     }
 
     lilycc_total_alloc -= mem->size;

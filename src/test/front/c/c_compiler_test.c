@@ -1,431 +1,199 @@
 
-// SPDX-FileCopyrightText: 2024-2025 Julian Scheffers <julian@scheffers.net>
+// SPDX-FileCopyrightText: 2026 Julian Scheffers <julian@scheffers.net>
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
+#include "c_ast.h"
+#include "c_compile.h"
+#include "c_compile_expr.h"
 #include "c_compiler.h"
+#include "c_ir.h"
 #include "c_parser.h"
 #include "c_std.h"
-#include "c_types1.h"
-#include "ir.h"
-#include "ir_optimizer.h"
-#include "ir_serialization.h"
-#include "ir_types.h"
+#include "c_types.h"
+#include "compiler.h"
 #include "list.h"
-#include "map.h"
 #include "testcase.h"
+#include "tokenizer.h"
 
-#include <string.h>
+#include <stdio.h>
 
+static c_options_t c_compiler_test_options = {
+    .c_std          = C_STD_max,
+    .gnu_ext_enable = true,
+    .char_is_signed = true,
+    .short16        = true,
+    .int32          = true,
+    .long64         = true,
+    .big_endian     = false,
+    .size_type      = C_PRIM_SLONG,
+};
 
-
-static char *test_c_compile_type() {
-    char const   source[] = "void (*foobarb)();";
-    cctx_t      *cctx     = cctx_create();
-    srcfile_t   *src      = srcfile_create(cctx, "<c_compile_type>", source, sizeof(source) - 1);
-    tokenizer_t *tctx     = &c_tkn_create_impl(src, C_STD_def)->base;
-    c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
-
-    c_compiler_t *cc = c_compiler_create(
-        cctx,
-        (c_options_t){
-            .c_std          = C_STD_def,
-            .char_is_signed = true,
-            .short16        = true,
-            .int32          = true,
-            .long64         = true,
-            .size_type      = C_PRIM_ULONG,
-        }
-    );
-
-    token_t decl = c_parse_decls(&pctx, false);
-
-    if (cctx->diagnostics.len) {
-        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
-        printf("\n");
-        while (diag) {
-            print_diagnostic(diag, stderr);
-            diag = (diagnostic_t const *)diag->node.next;
-        }
-        c_tkn_debug_print(decl);
-        return TEST_FAIL;
+#define TEST_DIAGNOSTICS()                                                                                             \
+    if (cctx->diagnostics.len) {                                                                                       \
+        fprintf(stdout, "\n");                                                                                         \
+        dlist_foreach_node(diagnostic_t, diag, &cctx->diagnostics) {                                                   \
+            print_diagnostic(diag, stdout);                                                                            \
+        }                                                                                                              \
+        goto fail;                                                                                                     \
     }
 
-    rc_t inner = c_compile_spec_qual_list(cc, &decl.params[0], &cc->global_scope);
+static char *c_compiler_test_expr(char const *name, char const *source) {
+    cctx_t       *cctx   = cctx_create();
+    srcfile_t    *src    = srcfile_create(cctx, name, source, strlen(source));
+    c_compiler_t *cc     = c_compiler_create(cctx, c_compiler_test_options);
+    tokenizer_t  *tkn    = c_tokenizer_create(cc, src, false);
+    c_parser_t   *parser = c_parser_create(cc, tkn);
+    cir_expr_t   *cir    = NULL;
+    char         *res    = TEST_FAIL;
 
-    if (cctx->diagnostics.len) {
-        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
-        printf("\n");
-        while (diag) {
-            print_diagnostic(diag, stderr);
-            diag = (diagnostic_t const *)diag->node.next;
-        }
-        if (inner) {
-            c_type_explain(inner->data, stdout);
-            printf("\n");
-        }
-        return TEST_FAIL;
+    c_ast_expr_t *ast = c_parse_expr(parser);
+    TEST_DIAGNOSTICS()
+
+    cir_scope_t *scope = cir_scope_create(CIR_SCOPE_GLOBAL, NULL);
+    cir                = c_compile_expr(cc, scope, ast);
+    cir_scope_delete(scope);
+    TEST_DIAGNOSTICS()
+
+    res = TEST_OK;
+
+fail:
+    if (cir) {
+        cir_expr_delete(cir);
     }
-
-    rc_t full = c_compile_decl(cc, &decl.params[1], &cc->global_scope, inner, NULL);
-
-    if (cctx->diagnostics.len) {
-        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
-        printf("\n");
-        while (diag) {
-            print_diagnostic(diag, stderr);
-            diag = (diagnostic_t const *)diag->node.next;
-        }
-        if (inner) {
-            c_type_explain(full->data, stdout);
-            printf("\n");
-        }
-        return TEST_FAIL;
-    }
-
-    tkn_delete(decl);
-    rc_delete(full);
+    c_ast_expr_delete(ast);
+    c_parser_delete(parser);
     c_compiler_delete(cc);
-    tkn_ctx_delete(tctx);
     cctx_delete(cctx);
-    return TEST_OK;
+
+    return res;
 }
-LILY_TEST_CASE(test_c_compile_type)
 
+#define COMPILE_EXPR_TEST(name, source)                                                                                \
+    static char *test_c_compile_expr_##name() {                                                                       \
+        return c_compiler_test_expr("<c_compile_expr_" #name ">", source);                                           \
+    }                                                                                                                  \
+    LILY_TEST_CASE(test_c_compile_expr_##name)
 
-static char *test_c_compile_expr() {
-    char const   source[] = "1 + 2 * 3";
-    cctx_t      *cctx     = cctx_create();
-    srcfile_t   *src      = srcfile_create(cctx, "<c_compile_expr>", source, sizeof(source) - 1);
-    tokenizer_t *tctx     = &c_tkn_create_impl(src, C_STD_def)->base;
-    c_parser_t   pctx     = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
+static char *c_compiler_test_type(char const *name, char const *source, uint64_t size, uint64_t align) {
+    cctx_t       *cctx   = cctx_create();
+    srcfile_t    *src    = srcfile_create(cctx, name, source, strlen(source));
+    c_compiler_t *cc     = c_compiler_create(cctx, c_compiler_test_options);
+    tokenizer_t  *tkn    = c_tokenizer_create(cc, src, false);
+    c_parser_t   *parser = c_parser_create(cc, tkn);
+    cir_expr_t   *cir    = NULL;
+    char         *res    = TEST_FAIL;
+    uint64_t      actual_size, actual_align;
+    bool          complete_type;
 
-    c_compiler_t *cc = c_compiler_create(
-        cctx,
-        (c_options_t){
-            .c_std          = C_STD_def,
-            .char_is_signed = true,
-            .short16        = true,
-            .int32          = true,
-            .long64         = true,
-            .size_type      = C_PRIM_ULONG,
-        }
-    );
-    c_prepass_t dummy_prepass = {
-        .pointer_taken = PTR_SET_EMPTY,
-    };
+    c_ast_type_name_t *ast = c_parse_type_name(parser);
+    TEST_DIAGNOSTICS()
 
-    token_t expr_tok = c_parse_expr(&pctx, false);
-
-    if (cctx->diagnostics.len) {
-        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
-        printf("\n");
-        while (diag) {
-            print_diagnostic(diag, stderr);
-            diag = (diagnostic_t const *)diag->node.next;
-        }
-        c_tkn_debug_print(expr_tok);
-        return TEST_FAIL;
+    cir_scope_t *scope = cir_scope_create(CIR_SCOPE_GLOBAL, NULL);
+    c_type_t     type  = c_compile_spec_qual_list(cc, ast->spec_qual, scope);
+    if (c_type_is_valid(type) && ast->decl) {
+        type = c_compile_type(cc, scope, type, ast->decl, NULL);
     }
-
-    ir_func_t       *func = ir_func_create("c_compile_expr", NULL, 0);
-    c_compile_expr_t expr = c_compile_expr(cc, &dummy_prepass, (ir_code_t *)func->code_list.head, NULL, &expr_tok);
-    c_value_destroy(expr.res);
-
-    if (cctx->diagnostics.len) {
-        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
-        printf("\n");
-        while (diag) {
-            print_diagnostic(diag, stderr);
-            diag = (diagnostic_t const *)diag->node.next;
-        }
-        ir_func_serialize(func, NULL, stdout);
-        return TEST_FAIL;
+    if (c_type_is_valid(type)) {
+        complete_type = c_type_get_size(cc, type, &actual_size, &actual_align);
+        res           = TEST_OK;
     }
+    c_type_delete(type);
+    cir_scope_delete(scope);
+    TEST_DIAGNOSTICS()
 
+    res = TEST_OK;
 
-    ir_func_delete(func);
-    tkn_delete(expr_tok);
-
+fail:
+    if (cir) {
+        cir_expr_delete(cir);
+    }
+    c_ast_type_name_delete(ast);
+    c_parser_delete(parser);
     c_compiler_delete(cc);
-    tkn_ctx_delete(tctx);
     cctx_delete(cctx);
-    return TEST_OK;
+
+    if (res == TEST_OK) {
+        RETURN_ON_FALSE(complete_type);
+        EXPECT_INT(actual_align, align);
+        EXPECT_INT(actual_size, size);
+    }
+
+    return res;
 }
-LILY_TEST_CASE(test_c_compile_expr)
+
+#define COMPILE_TYPE_TEST(name, source, size, align)                                                                   \
+    static char *test_c_compile_type_##name() {                                                                       \
+        return c_compiler_test_type("<c_compile_type_" #name ">", source, size, align);                              \
+    }                                                                                                                  \
+    LILY_TEST_CASE(test_c_compile_type_##name)
 
 
-static char *test_c_compile_func() {
-    // clang-format off
-    char const source[] =
-    "int foobar(int);\n"
-    "void functest() {\n"
-    "    int a;\n"
-    "    a = 3;\n"
-    "    if (a != 0) {\n"
-    "        a = 1;\n"
-    "    } else {\n"
-    "        a = 2;\n"
-    "    }\n"
-    "    return a;\n"
-    "}\n"
-    ;
-    // clang-format on
-    cctx_t       *cctx = cctx_create();
-    srcfile_t    *src  = srcfile_create(cctx, "<c_compile_func>", source, sizeof(source) - 1);
-    tokenizer_t  *tctx = &c_tkn_create_impl(src, C_STD_def)->base;
-    c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
-    c_compiler_t *cc   = c_compiler_create(
-        cctx,
-        (c_options_t){
-            .c_std          = C_STD_def,
-            .char_is_signed = true,
-            .short16        = true,
-            .int32          = true,
-            .long64         = true,
-            .size_type      = C_PRIM_ULONG,
-        }
-    );
 
-    token_t foobar_tok = c_parse_decls(&pctx, true);
+// Arithmetic infix operators.
+COMPILE_EXPR_TEST(add, "1 + 2")
+COMPILE_EXPR_TEST(sub, "1 - 2")
+COMPILE_EXPR_TEST(mul, "1 * 2")
+COMPILE_EXPR_TEST(div, "1 / 2")
+COMPILE_EXPR_TEST(mod, "1 % 2")
 
-    if (cctx->diagnostics.len) {
-        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
-        printf("\n");
-        while (diag) {
-            print_diagnostic(diag, stderr);
-            diag = (diagnostic_t const *)diag->node.next;
-        }
-        c_tkn_debug_print(foobar_tok);
-        return TEST_FAIL;
-    }
+// Bitwise infix operators.
+COMPILE_EXPR_TEST(shl, "1 << 2")
+COMPILE_EXPR_TEST(shr, "1 >> 2")
+COMPILE_EXPR_TEST(band, "1 & 2")
+COMPILE_EXPR_TEST(bor, "1 | 2")
+COMPILE_EXPR_TEST(bxor, "1 ^ 2")
 
-    token_t functest_tok = c_parse_decls(&pctx, true);
+// Logical infix operators.
+COMPILE_EXPR_TEST(land, "1 && 2")
+COMPILE_EXPR_TEST(lor, "1 || 2")
 
-    if (cctx->diagnostics.len) {
-        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
-        printf("\n");
-        while (diag) {
-            print_diagnostic(diag, stderr);
-            diag = (diagnostic_t const *)diag->node.next;
-        }
-        c_tkn_debug_print(functest_tok);
-        return TEST_FAIL;
-    }
+// Comparison infix operators.
+COMPILE_EXPR_TEST(eq, "1 == 2")
+COMPILE_EXPR_TEST(ne, "1 != 2")
+COMPILE_EXPR_TEST(lt, "1 < 2")
+COMPILE_EXPR_TEST(le, "1 <= 2")
+COMPILE_EXPR_TEST(gt, "1 > 2")
+COMPILE_EXPR_TEST(ge, "1 >= 2")
 
-    c_prepass_t prepass = c_precompile_pass(&functest_tok);
-    ir_func_t  *func    = c_compile_func_def(cc, &functest_tok, &prepass);
-    c_prepass_destroy(prepass);
+// Prefix operators (those not requiring an lvalue or pointer).
+COMPILE_EXPR_TEST(pos, "+1")
+COMPILE_EXPR_TEST(neg, "-1")
+COMPILE_EXPR_TEST(bnot, "~1")
+COMPILE_EXPR_TEST(lnot, "!1")
 
-    if (cctx->diagnostics.len) {
-        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
-        printf("\n");
-        while (diag) {
-            print_diagnostic(diag, stderr);
-            diag = (diagnostic_t const *)diag->node.next;
-        }
-        ir_func_serialize(func, NULL, stdout);
-        return TEST_FAIL;
-    }
+// Misc expressions.
+COMPILE_EXPR_TEST(ternary, "0 ? 1 : 2")
+COMPILE_EXPR_TEST(exprs, "(1, 2)")
+COMPILE_EXPR_TEST(sizeof, "sizeof 1")
+COMPILE_EXPR_TEST(sizeof_type, "sizeof(char)")
+COMPILE_EXPR_TEST(alignof, "alignof 1")
+COMPILE_EXPR_TEST(alignof_type, "alignof(char)")
 
-    ir_func_delete(func);
-    tkn_delete(functest_tok);
-    tkn_delete(foobar_tok);
+// Primitive types.
+COMPILE_TYPE_TEST(char, "char", 1, 1)
+COMPILE_TYPE_TEST(uchar, "unsigned char", 1, 1)
+COMPILE_TYPE_TEST(schar, "signed char", 1, 1)
+COMPILE_TYPE_TEST(ushort, "unsigned short", 2, 2)
+COMPILE_TYPE_TEST(sshort, "signed short", 2, 2)
+COMPILE_TYPE_TEST(uint, "unsigned int", 4, 4)
+COMPILE_TYPE_TEST(sint, "signed int", 4, 4)
+COMPILE_TYPE_TEST(ulong, "unsigned long", 8, 8)
+COMPILE_TYPE_TEST(slong, "signed long", 8, 8)
+COMPILE_TYPE_TEST(ullong, "unsigned long long", 8, 8)
+COMPILE_TYPE_TEST(sllong, "signed long long", 8, 8)
+COMPILE_TYPE_TEST(u128, "unsigned __int128", 16, 16)
+COMPILE_TYPE_TEST(s128, "signed __int128", 16, 16)
 
-    c_compiler_delete(cc);
-    tkn_ctx_delete(tctx);
-    cctx_delete(cctx);
-    return TEST_OK;
-}
-LILY_TEST_CASE(test_c_compile_func)
+// Pointer types.
+COMPILE_TYPE_TEST(ptr, "void *", 8, 8)
 
+// Fixed-size array types.
+COMPILE_TYPE_TEST(arr_of_ptr, "void *[4]", 32, 8)
+COMPILE_TYPE_TEST(arr_of_char, "char[9]", 9, 1)
+COMPILE_TYPE_TEST(arr2_of_char, "char[2][9]", 18, 1)
 
-static char *test_c_compile_enum() {
-    // clang-format off
-    char const source[] =
-    "enum a {\n"
-    "    a_0,\n"
-    "    a_1 = 9,\n"
-    "};\n"
-    "enum a enumtest() {\n"
-    "    return a_1;\n"
-    "}\n"
-    ;
-    // clang-format on
-    cctx_t       *cctx = cctx_create();
-    srcfile_t    *src  = srcfile_create(cctx, "<test_c_compile_enum>", source, sizeof(source) - 1);
-    tokenizer_t  *tctx = &c_tkn_create_impl(src, C_STD_def)->base;
-    c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
-    c_compiler_t *cc   = c_compiler_create(
-        cctx,
-        (c_options_t){
-            .c_std          = C_STD_def,
-            .char_is_signed = true,
-            .short16        = true,
-            .int32          = true,
-            .long64         = true,
-            .size_type      = C_PRIM_ULONG,
-        }
-    );
-
-    // Parse the enum.
-    token_t enum_tok = c_parse_decls(&pctx, true);
-
-    if (cctx->diagnostics.len) {
-        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
-        printf("\n");
-        while (diag) {
-            print_diagnostic(diag, stderr);
-            diag = (diagnostic_t const *)diag->node.next;
-        }
-        c_tkn_debug_print(enum_tok);
-        return TEST_FAIL;
-    }
-
-    // Parse the function.
-    token_t func_tok = c_parse_decls(&pctx, true);
-
-    if (cctx->diagnostics.len) {
-        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
-        printf("\n");
-        while (diag) {
-            print_diagnostic(diag, stderr);
-            diag = (diagnostic_t const *)diag->node.next;
-        }
-        c_tkn_debug_print(func_tok);
-        return TEST_FAIL;
-    }
-
-    // Compile both enum and function.
-    c_compile_decls(cc, NULL, NULL, &cc->global_scope, &enum_tok);
-    c_prepass_t prepass = c_precompile_pass(&func_tok);
-    ir_func_t  *func    = c_compile_func_def(cc, &func_tok, &prepass);
-    c_prepass_destroy(prepass);
-
-    if (cctx->diagnostics.len) {
-        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
-        printf("\n");
-        while (diag) {
-            print_diagnostic(diag, stderr);
-            diag = (diagnostic_t const *)diag->node.next;
-        }
-        ir_func_serialize(func, NULL, stdout);
-        return TEST_FAIL;
-    }
-
-    // Assert that the function is a simple one that literally returns s32'9
-    ir_func_to_ssa(func);
-    ir_optimize(func);
-    EXPECT_INT(func->code_list.len, 1);
-    ir_code_t const *code = func->entry;
-    EXPECT_INT(code->insns.len, 1);
-    ir_insn_t const *insn = container_of(code->insns.head, ir_insn_t, node);
-    EXPECT_INT(insn->type, IR_INSN_RETURN);
-    EXPECT_INT(insn->operands[0].type, IR_OPERAND_TYPE_CONST);
-    EXPECT_INT(insn->operands[0].iconst.prim_type, IR_PRIM_s32);
-    EXPECT_INT(insn->operands[0].iconst.constl, 9);
-
-    ir_func_delete(func);
-    tkn_delete(func_tok);
-    tkn_delete(enum_tok);
-
-    c_compiler_delete(cc);
-    tkn_ctx_delete(tctx);
-    cctx_delete(cctx);
-    return TEST_OK;
-}
-LILY_TEST_CASE(test_c_compile_enum)
-
-
-static char *test_c_compile_struct() {
-    // clang-format off
-    char const source[] =
-    "struct a {\n"
-    "    int x, *y;\n"
-    "    char;\n"
-    "    union {\n"
-    "        long z;\n"
-    "        int u;\n"
-    "    };\n"
-    "};\n"
-    ;
-    // clang-format on
-    cctx_t       *cctx = cctx_create();
-    srcfile_t    *src  = srcfile_create(cctx, "<test_c_compile_enum>", source, sizeof(source) - 1);
-    tokenizer_t  *tctx = &c_tkn_create_impl(src, C_STD_def)->base;
-    c_parser_t    pctx = {.tkn_ctx = tctx, .type_names = STR_SET_EMPTY};
-    c_compiler_t *cc   = c_compiler_create(
-        cctx,
-        (c_options_t){
-            .c_std          = C_STD_def,
-            .char_is_signed = true,
-            .short16        = true,
-            .int32          = true,
-            .long64         = true,
-            .size_type      = C_PRIM_ULONG,
-        }
-    );
-
-    // Parse the struct.
-    token_t struct_tok = c_parse_decls(&pctx, true);
-
-    if (cctx->diagnostics.len) {
-        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
-        printf("\n");
-        while (diag) {
-            print_diagnostic(diag, stderr);
-            diag = (diagnostic_t const *)diag->node.next;
-        }
-        c_tkn_debug_print(struct_tok);
-        return TEST_FAIL;
-    }
-
-    // Compile the struct declaration.
-    c_compile_decls(cc, NULL, NULL, &cc->global_scope, &struct_tok);
-
-    if (cctx->diagnostics.len) {
-        diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
-        printf("\n");
-        while (diag) {
-            print_diagnostic(diag, stderr);
-            diag = (diagnostic_t const *)diag->node.next;
-        }
-        return TEST_FAIL;
-    }
-
-    // Check the struct fields.
-    rc_t comp_rc = map_get(&cc->global_scope.comp_types, "a");
-    RETURN_ON_FALSE(comp_rc);
-    c_comp_t const *comp = comp_rc->data;
-    EXPECT_INT(comp->type, C_COMP_TYPE_STRUCT);
-    EXPECT_INT(comp->fields.len, 3);
-    RETURN_ON_FALSE(comp->fields.arr[0].name);
-    EXPECT_STR(comp->fields.arr[0].name, "x");
-    RETURN_ON_FALSE(comp->fields.arr[1].name);
-    EXPECT_STR(comp->fields.arr[1].name, "y");
-    RETURN_ON_FALSE(comp->fields.arr[2].name == NULL);
-    c_type_t const *inner_type = comp->fields.arr[2].type_rc->data;
-    c_comp_t const *inner_comp = inner_type->comp->data;
-    EXPECT_INT(inner_comp->fields.len, 2);
-    RETURN_ON_FALSE(inner_comp->fields.arr[0].name);
-    EXPECT_STR(inner_comp->fields.arr[0].name, "z");
-    RETURN_ON_FALSE(inner_comp->fields.arr[1].name);
-    EXPECT_STR(inner_comp->fields.arr[1].name, "u");
-
-    // Check struct layout.
-    EXPECT_INT(comp->size, 24);
-    EXPECT_INT(comp->align, 8);
-    EXPECT_INT(comp->fields.arr[0].offset, 0);
-    EXPECT_INT(comp->fields.arr[1].offset, 8);
-    EXPECT_INT(comp->fields.arr[2].offset, 16);
-    EXPECT_INT(inner_comp->fields.arr[0].offset, 0);
-    EXPECT_INT(inner_comp->fields.arr[1].offset, 0);
-
-    tkn_delete(struct_tok);
-
-    c_compiler_delete(cc);
-    tkn_ctx_delete(tctx);
-    cctx_delete(cctx);
-    return TEST_OK;
-}
-LILY_TEST_CASE(test_c_compile_struct)
+// Struct types.
+COMPILE_TYPE_TEST(struct, "struct { char a; int b; }", 8, 4)
+COMPILE_TYPE_TEST(union, "union { char a; int b; }", 4, 4)
+COMPILE_TYPE_TEST(struct_nesting, "struct { char a; struct { long c; }; int b; }", 24, 8)

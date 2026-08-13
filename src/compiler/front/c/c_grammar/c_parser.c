@@ -3,7 +3,7 @@
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
-#include "c_parser2.h"
+#include "c_parser.h"
 
 #include "arith128.h"
 #include "c_ast.h"
@@ -32,7 +32,7 @@ typedef enum {
     LR_ENTRY_TYPE,
 } lr_entry_type_t;
 
-// Stack entry in the LR parser of `c_parse2_expr`.
+// Stack entry in the LR parser of `c_parse_expr`.
 typedef struct {
     // Union tag.
     lr_entry_type_t tag;
@@ -49,31 +49,31 @@ VEC_TYPE_DEF(vec_lr_entry_t, lr_entry_t)
 static void lr_entry_delete(lr_entry_t entry);
 
 // Parse a direct (abstract) declaration.
-static c_ast_decl_t           *c_parse2_ddecl(c_parser_t *ctx, bool allows_name, bool is_typedef);
+static c_ast_decl_t           *c_parse_ddecl(c_parser_t *ctx, bool allows_name, bool is_typedef);
 // Parse an (abstract) declaration.
-static c_ast_decl_t           *c_parse2_decl(c_parser_t *ctx, bool allows_name, bool is_typedef);
+static c_ast_decl_t           *c_parse_decl(c_parser_t *ctx, bool allows_name, bool is_typedef);
 // Parse a type qualifier list.
-static c_ast_spec_qual_list_t *c_parse2_type_qual_list(c_parser_t *ctx);
+static c_ast_spec_qual_list_t *c_parse_type_qual_list(c_parser_t *ctx);
 // Parse one or more C expressions separated by commas or a type.
 // The return type is either `c_ast_type_name_t *` or `c_ast_exprs_t *`.
-static void                   *c_parse2_exprs_or_type(c_parser_t *ctx, bool *is_type_out);
+static void                   *c_parse_exprs_or_type(c_parser_t *ctx, bool *is_type_out);
 // Parse a compound initializer or expression.
-static c_ast_initval_t        *c_parse2_compinit_or_expr(c_parser_t *ctx);
+static c_ast_initval_t        *c_parse_compinit_or_expr(c_parser_t *ctx);
 
 // Parse a switch statement.
-static c_ast_stmt_t *c_parse2_switch(c_parser_t *ctx);
+static c_ast_stmt_t *c_parse_switch(c_parser_t *ctx);
 // Parse a do...while statement.
-static c_ast_stmt_t *c_parse2_do_while(c_parser_t *ctx);
+static c_ast_stmt_t *c_parse_do_while(c_parser_t *ctx);
 // Parse a while statement.
-static c_ast_stmt_t *c_parse2_while(c_parser_t *ctx);
+static c_ast_stmt_t *c_parse_while(c_parser_t *ctx);
 // Parse a for statement.
-static c_ast_stmt_t *c_parse2_for(c_parser_t *ctx);
+static c_ast_stmt_t *c_parse_for(c_parser_t *ctx);
 // Parse a if statement.
-static c_ast_stmt_t *c_parse2_if(c_parser_t *ctx);
+static c_ast_stmt_t *c_parse_if(c_parser_t *ctx);
 // Parse a goto statement.
-static c_ast_stmt_t *c_parse2_goto(c_parser_t *ctx);
+static c_ast_stmt_t *c_parse_goto(c_parser_t *ctx);
 // Parse a return statement.
-static c_ast_stmt_t *c_parse2_return(c_parser_t *ctx);
+static c_ast_stmt_t *c_parse_return(c_parser_t *ctx);
 
 // Eat tokens up to an including the next delimiter,
 // or stop before next curly bracket.
@@ -116,7 +116,7 @@ static bool is_first_expr_tkn(c_parser_t *ctx, token_t tkn) {
     }
 }
 
-// Is this a pushable token for `c_parse2_expr`?
+// Is this a pushable token for `c_parse_expr`?
 static inline bool is_pushable_expr_tkn(c_parser_t *ctx, token_t tkn) {
     (void)ctx;
     switch (tkn.type) {
@@ -334,14 +334,14 @@ static void lr_entry_delete(lr_entry_t entry) {
 
 
 // Parse a whole translation unit (all global declarations until EOF).
-c_ast_def_list_t *c_parse2(c_parser_t *ctx) {
+c_ast_def_list_t *c_parse(c_parser_t *ctx) {
     vec_c_ast_def_t items = {0};
     token_t         peek  = tkn_peek(ctx->tkn_ctx);
     pos_t           pos   = peek.pos;
     pos.len               = 0;
 
     while (peek.type != TOKENTYPE_EOF) {
-        c_ast_def_t *unit = c_parse2_def(ctx, true);
+        c_ast_def_t *unit = c_parse_def(ctx, true);
         pos               = pos_including(pos, unit->pos);
         vec_push(&items, unit);
         peek = tkn_peek(ctx->tkn_ctx);
@@ -352,19 +352,19 @@ c_ast_def_list_t *c_parse2(c_parser_t *ctx) {
 
 
 
-// Recursive implementation of `c_parse2_comp_init_field`.
-static c_ast_init_t *c_parse2_comp_init_field_r(c_parser_t *ctx) {
+// Recursive implementation of `c_parse_comp_init_field`.
+static c_ast_init_t *c_parse_comp_init_field_r(c_parser_t *ctx) {
     token_t peek = tkn_peek(ctx->tkn_ctx);
 
     if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_ASSIGN) {
         tkn_delete(tkn_next(ctx->tkn_ctx));
-        return c_ast_init_create_val(c_parse2_compinit_or_expr(ctx));
+        return c_ast_init_create_val(c_parse_compinit_or_expr(ctx));
 
     } else if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LBRAC) {
         token_t lbrac     = tkn_next(ctx->tkn_ctx);
         pos_t   lbrac_pos = lbrac.pos;
         tkn_delete(lbrac);
-        c_ast_expr_t *index = c_parse2_expr(ctx);
+        c_ast_expr_t *index = c_parse_expr(ctx);
         peek                = tkn_peek(ctx->tkn_ctx);
         if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RBRAC) {
             cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ]");
@@ -375,7 +375,7 @@ static c_ast_init_t *c_parse2_comp_init_field_r(c_parser_t *ctx) {
         token_t rbrac     = tkn_next(ctx->tkn_ctx);
         pos_t   rbrac_pos = rbrac.pos;
         tkn_delete(rbrac);
-        c_ast_init_t *inner = c_parse2_comp_init_field_r(ctx);
+        c_ast_init_t *inner = c_parse_comp_init_field_r(ctx);
         if (inner->tag == C_AST_TAG_INIT_GARBAGE) {
             pos_t pos = inner->pos;
             c_ast_init_delete(inner);
@@ -394,7 +394,7 @@ static c_ast_init_t *c_parse2_comp_init_field_r(c_parser_t *ctx) {
         token_t        ident     = tkn_next(ctx->tkn_ctx);
         c_ast_ident_t *ident_ast = c_ast_ident_create(ident.pos, lilycc_strdup(ident.strval));
         tkn_delete(ident);
-        c_ast_init_t *inner = c_parse2_comp_init_field_r(ctx);
+        c_ast_init_t *inner = c_parse_comp_init_field_r(ctx);
         if (inner->tag == C_AST_TAG_INIT_GARBAGE) {
             pos_t pos = inner->pos;
             c_ast_init_delete(inner);
@@ -409,17 +409,17 @@ static c_ast_init_t *c_parse2_comp_init_field_r(c_parser_t *ctx) {
 }
 
 // Parse a compound initializer field.
-c_ast_init_t *c_parse2_comp_init_field(c_parser_t *ctx) {
+c_ast_init_t *c_parse_comp_init_field(c_parser_t *ctx) {
     token_t peek = tkn_peek(ctx->tkn_ctx);
     if (peek.type != TOKENTYPE_OTHER || (peek.subtype != C_TKN_DOT && peek.subtype != C_TKN_LBRAC)) {
-        return c_ast_init_create_val(c_parse2_compinit_or_expr(ctx));
+        return c_ast_init_create_val(c_parse_compinit_or_expr(ctx));
     } else {
-        return c_parse2_comp_init_field_r(ctx);
+        return c_parse_comp_init_field_r(ctx);
     }
 }
 
 // Parse a compound initializer.
-c_ast_init_list_t *c_parse2_comp_init(c_parser_t *ctx) {
+c_ast_init_list_t *c_parse_comp_init(c_parser_t *ctx) {
     token_t lcurl = tkn_next(ctx->tkn_ctx);
     pos_t   start = lcurl.pos;
     if (lcurl.type != TOKENTYPE_OTHER || lcurl.subtype != C_TKN_LCURL) {
@@ -448,7 +448,7 @@ c_ast_init_list_t *c_parse2_comp_init(c_parser_t *ctx) {
             break;
         }
 
-        c_ast_init_t *field = c_parse2_comp_init_field(ctx);
+        c_ast_init_t *field = c_parse_comp_init_field(ctx);
         end                 = field->pos;
         vec_push(&fields, field);
 
@@ -470,16 +470,16 @@ c_ast_init_list_t *c_parse2_comp_init(c_parser_t *ctx) {
 }
 
 // Parse one or more C expressions separated by commas.
-c_ast_expr_list_t *c_parse2_exprs(c_parser_t *ctx) {
+c_ast_expr_list_t *c_parse_exprs(c_parser_t *ctx) {
     vec_c_ast_expr_t args = {0};
-    vec_push(&args, c_parse2_expr(ctx));
+    vec_push(&args, c_parse_expr(ctx));
     pos_t pos = args.arr[0]->pos;
 
     // While the next token is a comma, more expressions can be parsed.
     token_t tkn = tkn_peek(ctx->tkn_ctx);
     while (tkn.type == TOKENTYPE_OTHER && tkn.subtype == C_TKN_COMMA) {
         tkn_delete(tkn_next(ctx->tkn_ctx));
-        c_ast_expr_t *expr = c_parse2_expr(ctx);
+        c_ast_expr_t *expr = c_parse_expr(ctx);
         pos                = pos_including(pos, expr->pos);
         vec_push(&args, expr);
         tkn = tkn_peek(ctx->tkn_ctx);
@@ -490,7 +490,7 @@ c_ast_expr_list_t *c_parse2_exprs(c_parser_t *ctx) {
 }
 
 // Parse a C expression.
-c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
+c_ast_expr_t *c_parse_expr(c_parser_t *ctx) {
     // Assert that it starts with a token valid for the beginning of an expr.
     token_t peek = tkn_peek(ctx->tkn_ctx);
     if (!is_first_expr_tkn(ctx, peek)) {
@@ -568,7 +568,7 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
         }
 
         if (is_punct(0, C_TKN_LBRAC)) { // Recursively parse indexing.
-            c_ast_expr_t *rhs = c_parse2_expr(ctx);
+            c_ast_expr_t *rhs = c_parse_expr(ctx);
             if (rhs->tag == C_AST_TAG_EXPR_GARBAGE) {
                 push_expr(rhs);
                 goto err;
@@ -601,7 +601,7 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
                 res       = c_ast_expr_list_create(pos, (vec_c_ast_expr_t){0});
             } else {
                 // If not a function call, then it must have something in the parentheses.
-                res = c_parse2_exprs_or_type(ctx, &is_type);
+                res = c_parse_exprs_or_type(ctx, &is_type);
             }
             token_t rpar = tkn_peek(ctx->tkn_ctx);
             if (rpar.type != TOKENTYPE_OTHER || rpar.subtype != C_TKN_RPAR) {
@@ -628,7 +628,7 @@ c_ast_expr_t *c_parse2_expr(c_parser_t *ctx) {
             is_type(0) //
             && peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LCURL
         ) { // Recursively parse compound literals.
-            c_ast_init_list_t *init     = c_parse2_comp_init(ctx);
+            c_ast_init_list_t *init     = c_parse_comp_init(ctx);
             c_ast_type_name_t *typename = pop_type();
             push_expr(c_ast_expr_create_compliteral(
                 c_ast_expr_compliteral_create(pos_including(init->pos, typename->pos), typename, init)
@@ -870,9 +870,9 @@ err:;
 }
 
 // Parse a type name.
-c_ast_type_name_t *c_parse2_type_name(c_parser_t *ctx) {
+c_ast_type_name_t *c_parse_type_name(c_parser_t *ctx) {
     bool                    is_typedef;
-    c_ast_spec_qual_list_t *spec_qual = c_parse2_spec_qual_list(ctx, &is_typedef);
+    c_ast_spec_qual_list_t *spec_qual = c_parse_spec_qual_list(ctx, &is_typedef);
     if (is_typedef) {
         cctx_diagnostic(ctx->tkn_ctx->cctx, spec_qual->pos, DIAG_ERR, "`typedef` not allowed here");
     }
@@ -880,7 +880,7 @@ c_ast_type_name_t *c_parse2_type_name(c_parser_t *ctx) {
     if ((peek.type == TOKENTYPE_OTHER
          && (peek.subtype == C_TKN_MUL || peek.subtype == C_TKN_LBRAC || peek.subtype == C_TKN_LPAR))
         || peek.subtype == TOKENTYPE_IDENT) {
-        c_ast_decl_t *decl = c_parse2_decl(ctx, false, false);
+        c_ast_decl_t *decl = c_parse_decl(ctx, false, false);
         return c_ast_type_name_create(pos_including(spec_qual->pos, decl->pos), spec_qual, decl);
     } else {
         return c_ast_type_name_create(spec_qual->pos, spec_qual, NULL);
@@ -889,7 +889,7 @@ c_ast_type_name_t *c_parse2_type_name(c_parser_t *ctx) {
 
 
 // Parse a direct (abstract) declaration.
-static c_ast_decl_t *c_parse2_ddecl(c_parser_t *ctx, bool allows_name, bool is_typedef) {
+static c_ast_decl_t *c_parse_ddecl(c_parser_t *ctx, bool allows_name, bool is_typedef) {
     token_t       peek  = tkn_peek(ctx->tkn_ctx);
     token_t       peek1 = tkn_peek_n(ctx->tkn_ctx, 1);
     c_ast_decl_t *inner;
@@ -899,7 +899,7 @@ static c_ast_decl_t *c_parse2_ddecl(c_parser_t *ctx, bool allows_name, bool is_t
         // Parenthesized declarator.
         token_t lpar = tkn_next(ctx->tkn_ctx);
 
-        inner = c_parse2_decl(ctx, allows_name, is_typedef);
+        inner = c_parse_decl(ctx, allows_name, is_typedef);
         if (inner->tag == C_AST_TAG_DECL_GARBAGE) {
             tkn_delete(lpar);
             return inner;
@@ -963,7 +963,7 @@ static c_ast_decl_t *c_parse2_ddecl(c_parser_t *ctx, bool allows_name, bool is_t
             } else {
                 // Dimensioned array.
                 pos_t         pos  = inner ? pos_including(inner->pos, peek.pos) : peek.pos;
-                c_ast_expr_t *expr = c_ast_expr_create_exprs(c_parse2_exprs(ctx));
+                c_ast_expr_t *expr = c_ast_expr_create_exprs(c_parse_exprs(ctx));
                 peek               = tkn_peek(ctx->tkn_ctx);
                 if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_RBRAC) {
                     tkn_delete(tkn_next(ctx->tkn_ctx));
@@ -984,7 +984,7 @@ static c_ast_decl_t *c_parse2_ddecl(c_parser_t *ctx, bool allows_name, bool is_t
                 // Parse function args.
                 while (1) {
                     bool                    is_typedef;
-                    c_ast_spec_qual_list_t *param_qual = c_parse2_spec_qual_list(ctx, &is_typedef);
+                    c_ast_spec_qual_list_t *param_qual = c_parse_spec_qual_list(ctx, &is_typedef);
                     if (is_typedef) {
                         cctx_diagnostic(ctx->tkn_ctx->cctx, param_qual->pos, DIAG_ERR, "`typedef` not allowed here");
                     }
@@ -992,7 +992,7 @@ static c_ast_decl_t *c_parse2_ddecl(c_parser_t *ctx, bool allows_name, bool is_t
                     if (peek.type == TOKENTYPE_OTHER && (peek.subtype == C_TKN_RPAR || peek.subtype == C_TKN_COMMA)) {
                         vec_push(&params, c_ast_arg_def_create(param_qual->pos, param_qual, NULL));
                     } else {
-                        c_ast_decl_t *param_decl = c_parse2_decl(ctx, true, false);
+                        c_ast_decl_t *param_decl = c_parse_decl(ctx, true, false);
                         vec_push(&params, c_ast_arg_def_create(param_qual->pos, param_qual, param_decl));
                         peek = tkn_peek(ctx->tkn_ctx);
                     }
@@ -1023,18 +1023,18 @@ static c_ast_decl_t *c_parse2_ddecl(c_parser_t *ctx, bool allows_name, bool is_t
 }
 
 // Parse an (abstract) declaration.
-static c_ast_decl_t *c_parse2_decl(c_parser_t *ctx, bool allows_name, bool is_typedef) {
+static c_ast_decl_t *c_parse_decl(c_parser_t *ctx, bool allows_name, bool is_typedef) {
     token_t peek = tkn_peek(ctx->tkn_ctx);
     if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_MUL) {
         // If no `*`, there is required to be a direct decl.
-        return c_parse2_ddecl(ctx, allows_name, is_typedef);
+        return c_parse_ddecl(ctx, allows_name, is_typedef);
     }
 
     // Parse the pointer before the ddecl.
     token_t ptr     = tkn_next(ctx->tkn_ctx);
     pos_t   ptr_pos = ptr.pos;
     tkn_delete(ptr);
-    c_ast_spec_qual_list_t *list = c_parse2_type_qual_list(ctx);
+    c_ast_spec_qual_list_t *list = c_parse_type_qual_list(ctx);
     peek                         = tkn_peek(ctx->tkn_ctx);
     bool empty = peek.type != TOKENTYPE_OTHER
                  || (peek.subtype != C_TKN_MUL && peek.subtype != C_TKN_LPAR && peek.subtype != C_TKN_LBRAC);
@@ -1045,14 +1045,14 @@ static c_ast_decl_t *c_parse2_decl(c_parser_t *ctx, bool allows_name, bool is_ty
     c_ast_decl_t *inner = NULL;
     pos_t         pos   = ptr_pos;
     if (!empty) {
-        inner = c_parse2_decl(ctx, allows_name, is_typedef);
+        inner = c_parse_decl(ctx, allows_name, is_typedef);
         pos   = pos_including(ptr_pos, inner->pos);
     }
     return c_ast_decl_create_ptr(c_ast_decl_ptr_create(pos, ptr_pos, list, inner));
 }
 
 // Parse a type qualifier list.
-static c_ast_spec_qual_list_t *c_parse2_type_qual_list(c_parser_t *ctx) {
+static c_ast_spec_qual_list_t *c_parse_type_qual_list(c_parser_t *ctx) {
     vec_c_ast_spec_qual_t args = {0};
 
     token_t peek = tkn_peek(ctx->tkn_ctx);
@@ -1071,28 +1071,28 @@ static c_ast_spec_qual_list_t *c_parse2_type_qual_list(c_parser_t *ctx) {
 
 // Parse one or more C expressions separated by commas or a type.
 // The return type is either `c_ast_type_name_t *` or `c_ast_expr_list_t *`.
-static void *c_parse2_exprs_or_type(c_parser_t *ctx, bool *is_type_out) {
+static void *c_parse_exprs_or_type(c_parser_t *ctx, bool *is_type_out) {
     token_t tkn  = tkn_peek(ctx->tkn_ctx);
     *is_type_out = is_spec_qual_list_tkn(ctx, tkn);
     if (*is_type_out) {
-        return c_parse2_type_name(ctx);
+        return c_parse_type_name(ctx);
     } else {
-        return c_parse2_exprs(ctx);
+        return c_parse_exprs(ctx);
     }
 }
 
 // Parse a compound initializer or expression.
-static c_ast_initval_t *c_parse2_compinit_or_expr(c_parser_t *ctx) {
+static c_ast_initval_t *c_parse_compinit_or_expr(c_parser_t *ctx) {
     token_t peek = tkn_peek(ctx->tkn_ctx);
     if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LCURL) {
-        return c_ast_initval_create_compound(c_parse2_comp_init(ctx));
+        return c_ast_initval_create_compound(c_parse_comp_init(ctx));
     } else {
-        return c_ast_initval_create_expr(c_parse2_expr(ctx));
+        return c_ast_initval_create_expr(c_parse_expr(ctx));
     }
 }
 
 // Parse a type specifier/qualifier list.
-c_ast_spec_qual_list_t *c_parse2_spec_qual_list(c_parser_t *ctx, bool *is_typedef_out) {
+c_ast_spec_qual_list_t *c_parse_spec_qual_list(c_parser_t *ctx, bool *is_typedef_out) {
     vec_c_ast_spec_qual_t args = {0};
     *is_typedef_out            = false;
     bool seen_type_spec        = false;
@@ -1131,12 +1131,12 @@ c_ast_spec_qual_list_t *c_parse2_spec_qual_list(c_parser_t *ctx, bool *is_typede
 
         } else if (peek.type == TOKENTYPE_KEYWORD && (peek.subtype == C_KEYW_struct || peek.subtype == C_KEYW_union)) {
             // Parse a struct/union specifier.
-            vec_push(&args, c_ast_spec_qual_create_struct(c_parse2_struct_spec(ctx)));
+            vec_push(&args, c_ast_spec_qual_create_struct(c_parse_struct_spec(ctx)));
             seen_type_spec = true;
 
         } else if (peek.type == TOKENTYPE_KEYWORD && (peek.subtype == C_KEYW_enum)) {
             // Parse an enum specifier.
-            vec_push(&args, c_ast_spec_qual_create_enum(c_parse2_enum_spec(ctx)));
+            vec_push(&args, c_ast_spec_qual_create_enum(c_parse_enum_spec(ctx)));
             seen_type_spec = true;
 
         } else {
@@ -1152,7 +1152,7 @@ c_ast_spec_qual_list_t *c_parse2_spec_qual_list(c_parser_t *ctx, bool *is_typede
 
 // Parse a `_Static_assert(cond);` or `_Static_assert(cond, message);` declaration.
 // Caller has confirmed the next token is C_KEYW__Static_assert.
-static c_ast_def_t *c_parse2_static_assert(c_parser_t *ctx) {
+static c_ast_def_t *c_parse_static_assert(c_parser_t *ctx) {
     token_t keyw = tkn_next(ctx->tkn_ctx);
     pos_t   pos  = keyw.pos;
     tkn_delete(keyw);
@@ -1165,13 +1165,13 @@ static c_ast_def_t *c_parse2_static_assert(c_parser_t *ctx) {
     }
     tkn_delete(tkn_next(ctx->tkn_ctx));
 
-    c_ast_expr_t *cond    = c_parse2_expr(ctx);
+    c_ast_expr_t *cond    = c_parse_expr(ctx);
     c_ast_expr_t *message = NULL;
 
     peek = tkn_peek(ctx->tkn_ctx);
     if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_COMMA) {
         tkn_delete(tkn_next(ctx->tkn_ctx));
-        message = c_parse2_expr(ctx);
+        message = c_parse_expr(ctx);
         peek    = tkn_peek(ctx->tkn_ctx);
     }
 
@@ -1195,15 +1195,15 @@ static c_ast_def_t *c_parse2_static_assert(c_parser_t *ctx) {
 }
 
 // Parse a variable/function declarations/definition.
-c_ast_def_t *c_parse2_def(c_parser_t *ctx, bool allow_func_body) {
+c_ast_def_t *c_parse_def(c_parser_t *ctx, bool allow_func_body) {
     token_t peek = tkn_peek(ctx->tkn_ctx);
     if (peek.type == TOKENTYPE_KEYWORD && peek.subtype == C_KEYW__Static_assert) {
-        return c_parse2_static_assert(ctx);
+        return c_parse_static_assert(ctx);
     }
 
     vec_c_ast_init_decl_t   decls = {0};
     bool                    is_typedef;
-    c_ast_spec_qual_list_t *spec_qual = c_parse2_spec_qual_list(ctx, &is_typedef);
+    c_ast_spec_qual_list_t *spec_qual = c_parse_spec_qual_list(ctx, &is_typedef);
 
 
     // Decls are actually allowed to be empty.
@@ -1221,12 +1221,12 @@ c_ast_def_t *c_parse2_def(c_parser_t *ctx, bool allow_func_body) {
             tkn_delete(tkn_next(ctx->tkn_ctx));
             allow_func_body = false;
         }
-        c_ast_decl_t *decl    = c_parse2_decl(ctx, true, is_typedef);
+        c_ast_decl_t *decl    = c_parse_decl(ctx, true, is_typedef);
         peek                  = tkn_peek(ctx->tkn_ctx);
         c_ast_initval_t *init = NULL;
         if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_ASSIGN) {
             tkn_delete(tkn_next(ctx->tkn_ctx));
-            init = c_parse2_compinit_or_expr(ctx);
+            init = c_parse_compinit_or_expr(ctx);
             peek = tkn_peek(ctx->tkn_ctx);
         }
 
@@ -1243,7 +1243,7 @@ c_ast_def_t *c_parse2_def(c_parser_t *ctx, bool allow_func_body) {
         }
 
         tkn_delete(tkn_next(ctx->tkn_ctx));
-        c_ast_stmt_list_t *body = c_parse2_stmts(ctx);
+        c_ast_stmt_list_t *body = c_parse_stmts(ctx);
         decls_pos               = pos_including(decls_pos, body->pos);
 
         peek = tkn_peek(ctx->tkn_ctx);
@@ -1291,7 +1291,7 @@ garbage:
 }
 
 // Parse a struct or union specifier/definition.
-c_ast_struct_spec_t *c_parse2_struct_spec(c_parser_t *ctx) {
+c_ast_struct_spec_t *c_parse_struct_spec(c_parser_t *ctx) {
     c_ast_def_list_t *body = NULL;
     c_ast_ident_t    *name = NULL;
 
@@ -1327,7 +1327,7 @@ c_ast_struct_spec_t *c_parse2_struct_spec(c_parser_t *ctx) {
     pos_t body_pos       = peek.pos;
     body_pos.len         = 0;
     while (peek.type != TOKENTYPE_EOF && (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RCURL)) {
-        c_ast_def_t *def = c_parse2_def(ctx, false);
+        c_ast_def_t *def = c_parse_def(ctx, false);
         body_pos         = pos_including(body_pos, def->pos);
         vec_push(&args, def);
         peek = tkn_peek(ctx->tkn_ctx);
@@ -1348,7 +1348,7 @@ exit:
 }
 
 // Parse an enum specifier/definition.
-c_ast_enum_spec_t *c_parse2_enum_spec(c_parser_t *ctx) {
+c_ast_enum_spec_t *c_parse_enum_spec(c_parser_t *ctx) {
     c_ast_enumvar_list_t *body = NULL;
     c_ast_ident_t        *name = NULL;
 
@@ -1398,7 +1398,7 @@ c_ast_enum_spec_t *c_parse2_enum_spec(c_parser_t *ctx) {
             if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_ASSIGN) {
                 // Enum variant with specific index.
                 tkn_delete(tkn_next(ctx->tkn_ctx));
-                c_ast_expr_t *expr = c_parse2_expr(ctx);
+                c_ast_expr_t *expr = c_parse_expr(ctx);
                 vec_push(&args, c_ast_enumvar_create(pos_including(ident_ast->pos, expr->pos), ident_ast, expr));
 
                 peek = tkn_peek(ctx->tkn_ctx);
@@ -1431,7 +1431,7 @@ exit:
 }
 
 // Parse a switch statement.
-static c_ast_stmt_t *c_parse2_switch(c_parser_t *ctx) {
+static c_ast_stmt_t *c_parse_switch(c_parser_t *ctx) {
     token_t keyw = tkn_next(ctx->tkn_ctx);
     assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_switch);
     pos_t keyw_pos = keyw.pos;
@@ -1444,7 +1444,7 @@ static c_ast_stmt_t *c_parse2_switch(c_parser_t *ctx) {
     }
     tkn_delete(tkn_next(ctx->tkn_ctx));
 
-    c_ast_expr_list_t *cond = c_parse2_exprs(ctx);
+    c_ast_expr_list_t *cond = c_parse_exprs(ctx);
 
     peek = tkn_peek(ctx->tkn_ctx);
     if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RPAR) {
@@ -1455,26 +1455,26 @@ static c_ast_stmt_t *c_parse2_switch(c_parser_t *ctx) {
     }
     tkn_delete(tkn_next(ctx->tkn_ctx));
 
-    c_ast_stmt_t *body = c_parse2_stmt(ctx);
+    c_ast_stmt_t *body = c_parse_stmt(ctx);
     return c_ast_stmt_create_switch(
         c_ast_stmt_switch_create(pos_including(keyw_pos, body->pos), c_ast_expr_create_exprs(cond), body)
     );
 }
 
 // Parse a case statement.
-static c_ast_stmt_t *c_parse2_case(c_parser_t *ctx) {
+static c_ast_stmt_t *c_parse_case(c_parser_t *ctx) {
     token_t keyw = tkn_next(ctx->tkn_ctx);
     assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_case);
     pos_t pos = keyw.pos;
     tkn_delete(keyw);
 
-    c_ast_expr_t *lo = c_parse2_expr(ctx);
+    c_ast_expr_t *lo = c_parse_expr(ctx);
     c_ast_expr_t *hi = NULL;
 
     token_t peek = tkn_peek(ctx->tkn_ctx);
     if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_ELIPSIS) {
         tkn_delete(tkn_next(ctx->tkn_ctx));
-        hi   = c_parse2_expr(ctx);
+        hi   = c_parse_expr(ctx);
         peek = tkn_peek(ctx->tkn_ctx);
         pos  = pos_including(pos, hi->pos);
     } else {
@@ -1487,13 +1487,13 @@ static c_ast_stmt_t *c_parse2_case(c_parser_t *ctx) {
         cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected :");
     }
 
-    c_ast_stmt_t *inner = c_parse2_stmt(ctx);
+    c_ast_stmt_t *inner = c_parse_stmt(ctx);
     c_ast_stmt_t *res   = c_ast_stmt_create_case(c_ast_stmt_case_create(pos, lo, hi, inner));
     return res;
 }
 
 // Parse a do...while statement.
-static c_ast_stmt_t *c_parse2_do_while(c_parser_t *ctx) {
+static c_ast_stmt_t *c_parse_do_while(c_parser_t *ctx) {
     pos_t err_pos;
 
     token_t keyw = tkn_next(ctx->tkn_ctx);
@@ -1501,7 +1501,7 @@ static c_ast_stmt_t *c_parse2_do_while(c_parser_t *ctx) {
     pos_t keyw_pos = keyw.pos;
     tkn_delete(keyw);
 
-    c_ast_stmt_t *body = c_parse2_stmt(ctx);
+    c_ast_stmt_t *body = c_parse_stmt(ctx);
 
     token_t peek = tkn_peek(ctx->tkn_ctx);
     if (peek.type != TOKENTYPE_KEYWORD || peek.subtype != C_KEYW_while) {
@@ -1519,7 +1519,7 @@ static c_ast_stmt_t *c_parse2_do_while(c_parser_t *ctx) {
     }
     tkn_delete(tkn_next(ctx->tkn_ctx));
 
-    c_ast_expr_list_t *cond = c_parse2_exprs(ctx);
+    c_ast_expr_list_t *cond = c_parse_exprs(ctx);
 
     peek = tkn_peek(ctx->tkn_ctx);
     if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RPAR) {
@@ -1550,7 +1550,7 @@ err1:
 }
 
 // Parse a while statement.
-static c_ast_stmt_t *c_parse2_while(c_parser_t *ctx) {
+static c_ast_stmt_t *c_parse_while(c_parser_t *ctx) {
     token_t keyw = tkn_next(ctx->tkn_ctx);
     assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_while);
     pos_t keyw_pos = keyw.pos;
@@ -1563,7 +1563,7 @@ static c_ast_stmt_t *c_parse2_while(c_parser_t *ctx) {
     }
     tkn_delete(tkn_next(ctx->tkn_ctx));
 
-    c_ast_expr_list_t *cond = c_parse2_exprs(ctx);
+    c_ast_expr_list_t *cond = c_parse_exprs(ctx);
 
     peek = tkn_peek(ctx->tkn_ctx);
     if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RPAR) {
@@ -1574,14 +1574,14 @@ static c_ast_stmt_t *c_parse2_while(c_parser_t *ctx) {
     }
     tkn_delete(tkn_next(ctx->tkn_ctx));
 
-    c_ast_stmt_t *body = c_parse2_stmt(ctx);
+    c_ast_stmt_t *body = c_parse_stmt(ctx);
     return c_ast_stmt_create_while(
         c_ast_stmt_while_create(pos_including(keyw_pos, body->pos), c_ast_expr_create_exprs(cond), body, false)
     );
 }
 
 // Parse a for statement.
-static c_ast_stmt_t *c_parse2_for(c_parser_t *ctx) {
+static c_ast_stmt_t *c_parse_for(c_parser_t *ctx) {
     token_t keyw = tkn_next(ctx->tkn_ctx);
     assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_for);
     pos_t keyw_pos = keyw.pos;
@@ -1602,10 +1602,10 @@ static c_ast_stmt_t *c_parse2_for(c_parser_t *ctx) {
         init = NULL;
     } else if (is_spec_qual_list_tkn(ctx, peek)) {
         // Declaration as initializer.
-        init = c_ast_stmt_create_def(c_parse2_def(ctx, false));
+        init = c_ast_stmt_create_def(c_parse_def(ctx, false));
     } else {
         // Expression as initializer.
-        init = c_ast_stmt_create_expr(c_parse2_exprs(ctx));
+        init = c_ast_stmt_create_expr(c_parse_exprs(ctx));
 
         peek = tkn_peek(ctx->tkn_ctx);
         if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_SEMIC) {
@@ -1625,7 +1625,7 @@ static c_ast_stmt_t *c_parse2_for(c_parser_t *ctx) {
         cond = NULL;
     } else {
         // Expression as condition.
-        cond = c_parse2_exprs(ctx);
+        cond = c_parse_exprs(ctx);
 
         peek = tkn_peek(ctx->tkn_ctx);
         if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_SEMIC) {
@@ -1647,7 +1647,7 @@ static c_ast_stmt_t *c_parse2_for(c_parser_t *ctx) {
         inc = NULL;
     } else {
         // Expression as increment.
-        inc  = c_parse2_exprs(ctx);
+        inc  = c_parse_exprs(ctx);
         peek = tkn_peek(ctx->tkn_ctx);
     }
 
@@ -1667,12 +1667,12 @@ static c_ast_stmt_t *c_parse2_for(c_parser_t *ctx) {
     }
     tkn_delete(tkn_next(ctx->tkn_ctx));
 
-    c_ast_stmt_t *body = c_parse2_stmt(ctx);
+    c_ast_stmt_t *body = c_parse_stmt(ctx);
     return c_ast_stmt_create_for(c_ast_stmt_for_create(pos_including(keyw_pos, body->pos), init, cond, inc, body));
 }
 
 // Parse a if statement.
-static c_ast_stmt_t *c_parse2_if(c_parser_t *ctx) {
+static c_ast_stmt_t *c_parse_if(c_parser_t *ctx) {
     token_t keyw = tkn_next(ctx->tkn_ctx);
     assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_if);
     pos_t keyw_pos = keyw.pos;
@@ -1685,7 +1685,7 @@ static c_ast_stmt_t *c_parse2_if(c_parser_t *ctx) {
     }
     tkn_delete(tkn_next(ctx->tkn_ctx));
 
-    c_ast_expr_list_t *cond = c_parse2_exprs(ctx);
+    c_ast_expr_list_t *cond = c_parse_exprs(ctx);
 
     peek = tkn_peek(ctx->tkn_ctx);
     if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RPAR) {
@@ -1696,7 +1696,7 @@ static c_ast_stmt_t *c_parse2_if(c_parser_t *ctx) {
     }
     tkn_delete(tkn_next(ctx->tkn_ctx));
 
-    c_ast_stmt_t *body = c_parse2_stmt(ctx);
+    c_ast_stmt_t *body = c_parse_stmt(ctx);
 
     c_ast_stmt_t *else_body = NULL;
     pos_t         end_pos   = body->pos;
@@ -1704,7 +1704,7 @@ static c_ast_stmt_t *c_parse2_if(c_parser_t *ctx) {
     if (peek.type == TOKENTYPE_KEYWORD && peek.subtype == C_KEYW_else) {
         // An if...else statement.
         tkn_delete(tkn_next(ctx->tkn_ctx));
-        else_body = c_parse2_stmt(ctx);
+        else_body = c_parse_stmt(ctx);
         end_pos   = else_body->pos;
     }
 
@@ -1714,7 +1714,7 @@ static c_ast_stmt_t *c_parse2_if(c_parser_t *ctx) {
 }
 
 // Parse a goto statement.
-static c_ast_stmt_t *c_parse2_goto(c_parser_t *ctx) {
+static c_ast_stmt_t *c_parse_goto(c_parser_t *ctx) {
     token_t keyw = tkn_next(ctx->tkn_ctx);
     assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_goto);
     pos_t keyw_pos = keyw.pos;
@@ -1744,7 +1744,7 @@ static c_ast_stmt_t *c_parse2_goto(c_parser_t *ctx) {
 }
 
 // Parse a return statement.
-static c_ast_stmt_t *c_parse2_return(c_parser_t *ctx) {
+static c_ast_stmt_t *c_parse_return(c_parser_t *ctx) {
     c_ast_expr_list_t *expr = NULL;
 
     token_t keyw = tkn_next(ctx->tkn_ctx);
@@ -1754,7 +1754,7 @@ static c_ast_stmt_t *c_parse2_return(c_parser_t *ctx) {
     tkn_delete(keyw);
     token_t peek = tkn_peek(ctx->tkn_ctx);
     if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_SEMIC) {
-        expr = c_parse2_exprs(ctx);
+        expr = c_parse_exprs(ctx);
         peek = tkn_peek(ctx->tkn_ctx);
         if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_SEMIC) {
             pos = pos_between(pos, peek.pos);
@@ -1772,7 +1772,7 @@ static c_ast_stmt_t *c_parse2_return(c_parser_t *ctx) {
 }
 
 // Parse a default-labelled statement.
-static c_ast_stmt_t *c_parse2_default(c_parser_t *ctx) {
+static c_ast_stmt_t *c_parse_default(c_parser_t *ctx) {
     token_t keyw = tkn_next(ctx->tkn_ctx);
     assert(keyw.type == TOKENTYPE_KEYWORD && keyw.subtype == C_KEYW_default);
     pos_t keyw_pos = keyw.pos;
@@ -1785,14 +1785,14 @@ static c_ast_stmt_t *c_parse2_default(c_parser_t *ctx) {
         cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected :");
     }
 
-    c_ast_stmt_t *inner = c_parse2_stmt(ctx);
+    c_ast_stmt_t *inner = c_parse_stmt(ctx);
     c_ast_stmt_t *res   = c_ast_stmt_create_case(c_ast_stmt_case_create(keyw_pos, NULL, NULL, inner));
 
     return res;
 }
 
 // Parse a labelled statement.
-static c_ast_stmt_t *c_parse2_label(c_parser_t *ctx) {
+static c_ast_stmt_t *c_parse_label(c_parser_t *ctx) {
     token_t ident = tkn_next(ctx->tkn_ctx);
     assert(ident.type == TOKENTYPE_IDENT);
 
@@ -1803,7 +1803,7 @@ static c_ast_stmt_t *c_parse2_label(c_parser_t *ctx) {
         cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected :");
     }
 
-    c_ast_stmt_t *inner = c_parse2_stmt(ctx);
+    c_ast_stmt_t *inner = c_parse_stmt(ctx);
     c_ast_stmt_t *res   = c_ast_stmt_create_label(
         c_ast_stmt_label_create(ident.pos, c_ast_ident_create(ident.pos, lilycc_strdup(ident.strval)), inner)
     );
@@ -1813,7 +1813,7 @@ static c_ast_stmt_t *c_parse2_label(c_parser_t *ctx) {
 }
 
 // Parse a break/continue statement.
-static c_ast_stmt_t *c_parse2_break(c_parser_t *ctx) {
+static c_ast_stmt_t *c_parse_break(c_parser_t *ctx) {
     token_t keyw = tkn_next(ctx->tkn_ctx);
     assert(keyw.type == TOKENTYPE_KEYWORD && (keyw.subtype == C_KEYW_break || keyw.subtype == C_KEYW_continue));
     c_ast_stmt_t *res = c_ast_stmt_create_break(c_ast_stmt_break_create(keyw.pos, keyw.subtype == C_KEYW_continue));
@@ -1830,12 +1830,12 @@ static c_ast_stmt_t *c_parse2_break(c_parser_t *ctx) {
 }
 
 // Parse a statment.
-c_ast_stmt_t *c_parse2_stmt(c_parser_t *ctx) {
+c_ast_stmt_t *c_parse_stmt(c_parser_t *ctx) {
     token_t peek  = tkn_peek(ctx->tkn_ctx);
     token_t peek2 = tkn_peek_n(ctx->tkn_ctx, 1);
 
     if (peek.type == TOKENTYPE_IDENT && peek2.type == TOKENTYPE_OTHER && peek2.subtype == C_TKN_COLON) {
-        return c_parse2_label(ctx);
+        return c_parse_label(ctx);
     } else if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_SEMIC) {
         // No-op statement.
         tkn_delete(tkn_next(ctx->tkn_ctx));
@@ -1843,24 +1843,24 @@ c_ast_stmt_t *c_parse2_stmt(c_parser_t *ctx) {
     } else if (peek.type == TOKENTYPE_OTHER && peek.subtype == C_TKN_LCURL) {
         // Multi-statement parser will always continue until RCRUL token.
         tkn_delete(tkn_next(ctx->tkn_ctx));
-        c_ast_stmt_list_t *stmts = c_parse2_stmts(ctx);
+        c_ast_stmt_list_t *stmts = c_parse_stmts(ctx);
         tkn_delete(tkn_next(ctx->tkn_ctx));
         return c_ast_stmt_create_stmts(stmts);
     } else if (is_spec_qual_list_tkn(ctx, peek)) {
-        return c_ast_stmt_create_def(c_parse2_def(ctx, false));
+        return c_ast_stmt_create_def(c_parse_def(ctx, false));
     } else if (peek.type == TOKENTYPE_KEYWORD) {
         switch (peek.subtype) {
             case C_KEYW_break:
-            case C_KEYW_continue: return c_parse2_break(ctx);
-            case C_KEYW_switch: return c_parse2_switch(ctx);
-            case C_KEYW_case: return c_parse2_case(ctx);
-            case C_KEYW_default: return c_parse2_default(ctx);
-            case C_KEYW_do: return c_parse2_do_while(ctx);
-            case C_KEYW_while: return c_parse2_while(ctx);
-            case C_KEYW_for: return c_parse2_for(ctx);
-            case C_KEYW_if: return c_parse2_if(ctx);
-            case C_KEYW_goto: return c_parse2_goto(ctx);
-            case C_KEYW_return: return c_parse2_return(ctx);
+            case C_KEYW_continue: return c_parse_break(ctx);
+            case C_KEYW_switch: return c_parse_switch(ctx);
+            case C_KEYW_case: return c_parse_case(ctx);
+            case C_KEYW_default: return c_parse_default(ctx);
+            case C_KEYW_do: return c_parse_do_while(ctx);
+            case C_KEYW_while: return c_parse_while(ctx);
+            case C_KEYW_for: return c_parse_for(ctx);
+            case C_KEYW_if: return c_parse_if(ctx);
+            case C_KEYW_goto: return c_parse_goto(ctx);
+            case C_KEYW_return: return c_parse_return(ctx);
             default: {
                 cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected a statement");
                 c_eat_delim(ctx->tkn_ctx, false);
@@ -1870,7 +1870,7 @@ c_ast_stmt_t *c_parse2_stmt(c_parser_t *ctx) {
             }
         }
     } else {
-        c_ast_expr_list_t *expr = c_parse2_exprs(ctx);
+        c_ast_expr_list_t *expr = c_parse_exprs(ctx);
         peek                    = tkn_peek(ctx->tkn_ctx);
         if (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_SEMIC) {
             cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected ;");
@@ -1883,14 +1883,14 @@ c_ast_stmt_t *c_parse2_stmt(c_parser_t *ctx) {
 }
 
 // Parse multiple statments.
-c_ast_stmt_list_t *c_parse2_stmts(c_parser_t *ctx) {
+c_ast_stmt_list_t *c_parse_stmts(c_parser_t *ctx) {
     vec_c_ast_stmt_t args = {0};
 
     token_t peek = tkn_peek(ctx->tkn_ctx);
     pos_t   pos  = peek.pos;
     pos.len      = 0;
     while (peek.type != TOKENTYPE_EOF && (peek.type != TOKENTYPE_OTHER || peek.subtype != C_TKN_RCURL)) {
-        vec_push(&args, c_parse2_stmt(ctx));
+        vec_push(&args, c_parse_stmt(ctx));
         pos  = pos_including(pos, args.arr[args.len - 1]->pos);
         peek = tkn_peek(ctx->tkn_ctx);
     }

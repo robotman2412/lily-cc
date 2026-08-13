@@ -12,7 +12,6 @@
 #include "c_prim.h"
 #include "c_tokenizer.h"
 #include "c_types.h"
-#include "c_types1.h"
 #include "compiler.h"
 #include "ir_interpreter.h"
 #include "ir_types.h"
@@ -55,7 +54,7 @@ bool c_is_int_const_expr(cir_expr_t const *expr) {
 // types are incompatible, `void *` is used; otherwise the (compatible) left pointer type is kept.
 // Takes shares of the operand type rcs (not consumed); returns a new owned type rc, or NULL on
 // incompatible operands (after emitting a diagnostic).
-static c_type_opt_t c_compile2_ternary_result_type(c_compiler_t *cc, pos_t pos, c_type_ref_t lref, c_type_ref_t rref) {
+static c_type_opt_t c_compile_ternary_result_type(c_compiler_t *cc, pos_t pos, c_type_ref_t lref, c_type_ref_t rref) {
     c_type_t ltyp = c_type_clone_array_decay(lref);
     c_type_t rtyp = c_type_clone_array_decay(rref);
 
@@ -245,13 +244,13 @@ static cir_expr_t *raw_calc(c_compiler_t *cc, pos_t pos, cir_calc_op_t op, cir_e
         if (op == CIR_CALC_LAND) {
             bool lhs_b       = ir_calc1(IR_OP1_snez, lhs->value->iconst->iconst).constl;
             bool rhs_b       = ir_calc1(IR_OP1_snez, lhs->value->iconst->iconst).constl;
-            iconst.prim_type = c_prim_to_ir_type(cc, C_PRIM_SINT);
+            iconst.prim_type = c_type_to_ir_type(cc, C_TYPE_FROM_PRIM(C_PRIM_SINT));
             iconst.constl    = lhs_b & rhs_b;
             iconst.consth    = 0;
         } else if (op == CIR_CALC_LOR) {
             bool lhs_b       = ir_calc1(IR_OP1_snez, lhs->value->iconst->iconst).constl;
             bool rhs_b       = ir_calc1(IR_OP1_snez, lhs->value->iconst->iconst).constl;
-            iconst.prim_type = c_prim_to_ir_type(cc, C_PRIM_SINT);
+            iconst.prim_type = c_type_to_ir_type(cc, C_TYPE_FROM_PRIM(C_PRIM_SINT));
             iconst.constl    = lhs_b | rhs_b;
             iconst.consth    = 0;
         } else {
@@ -357,7 +356,7 @@ static cir_expr_t *
         cir_expr_t *cast = raw_cast(cc, pos, C_TYPE_FROM_PRIM(ptrdiff_prim), sub);
         assert(cast != NULL);
         cir_expr_t *div
-            = raw_calc(cc, pos, CIR_CALC_DIV, cast, c_compile2_synth_iconst(cc, pos, ptrdiff_prim, ui128(size)));
+            = raw_calc(cc, pos, CIR_CALC_DIV, cast, c_compile_synth_iconst(cc, pos, ptrdiff_prim, ui128(size)));
         assert(div != NULL);
         return div;
     }
@@ -391,7 +390,7 @@ static cir_expr_t *
             pos,
             CIR_CALC_MUL,
             cast1,
-            c_compile2_synth_iconst(cc, pos, cc->options.size_type, ui128(size))
+            c_compile_synth_iconst(cc, pos, cc->options.size_type, ui128(size))
         );
         assert(offset != NULL);
         cir_expr_t *cast2 = raw_cast(cc, pos, c_type_clone(ltyp), offset);
@@ -455,38 +454,38 @@ static cir_expr_t *expand_calc_assign(c_compiler_t *cc, pos_t pos, cir_calc_op_t
 
 // Compile an expression.
 // Returns `NULL` on semantic errors.
-cir_expr_t *c_compile2_expr(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_t const *expr) {
+cir_expr_t *c_compile_expr(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_t const *expr) {
     switch (expr->tag) {
-        case C_AST_TAG_EXPR_TERNARY: return c_compile2_expr_ternary(cc, scope, expr->expr_ternary);
-        case C_AST_TAG_EXPR_INDEX: return c_compile2_expr_index(cc, scope, expr->expr_index);
-        case C_AST_TAG_EXPR_INFIX: return c_compile2_expr_infix(cc, scope, expr->expr_infix);
-        case C_AST_TAG_EXPR_PREFIX: return c_compile2_expr_prefix(cc, scope, expr->expr_prefix);
-        case C_AST_TAG_EXPR_SUFFIX: return c_compile2_expr_suffix(cc, scope, expr->expr_suffix);
-        case C_AST_TAG_EXPR_CAST: return c_compile2_expr_cast(cc, scope, expr->expr_cast);
-        case C_AST_TAG_EXPR_CALL: return c_compile2_expr_call(cc, scope, expr->expr_call);
-        case C_AST_TAG_EXPR_IDENT: return c_compile2_expr_ident(cc, scope, expr->expr_ident);
-        case C_AST_TAG_EXPR_ICONST: return c_compile2_expr_iconst(cc, scope, expr->expr_iconst);
-        case C_AST_TAG_EXPR_SCONST: return c_compile2_expr_sconst(cc, scope, expr->expr_sconst);
-        case C_AST_TAG_EXPR_COMPLITERAL: return c_compile2_expr_compliteral(cc, scope, expr->expr_compliteral);
+        case C_AST_TAG_EXPR_TERNARY: return c_compile_expr_ternary(cc, scope, expr->expr_ternary);
+        case C_AST_TAG_EXPR_INDEX: return c_compile_expr_index(cc, scope, expr->expr_index);
+        case C_AST_TAG_EXPR_INFIX: return c_compile_expr_infix(cc, scope, expr->expr_infix);
+        case C_AST_TAG_EXPR_PREFIX: return c_compile_expr_prefix(cc, scope, expr->expr_prefix);
+        case C_AST_TAG_EXPR_SUFFIX: return c_compile_expr_suffix(cc, scope, expr->expr_suffix);
+        case C_AST_TAG_EXPR_CAST: return c_compile_expr_cast(cc, scope, expr->expr_cast);
+        case C_AST_TAG_EXPR_CALL: return c_compile_expr_call(cc, scope, expr->expr_call);
+        case C_AST_TAG_EXPR_IDENT: return c_compile_expr_ident(cc, scope, expr->expr_ident);
+        case C_AST_TAG_EXPR_ICONST: return c_compile_expr_iconst(cc, scope, expr->expr_iconst);
+        case C_AST_TAG_EXPR_SCONST: return c_compile_expr_sconst(cc, scope, expr->expr_sconst);
+        case C_AST_TAG_EXPR_COMPLITERAL: return c_compile_expr_compliteral(cc, scope, expr->expr_compliteral);
         case C_AST_TAG_EXPR_GARBAGE: return NULL;
-        case C_AST_TAG_EXPRS: return c_compile2_expr_exprs(cc, scope, expr->expr_exprs);
-        case C_AST_TAG_EXPR_SIZEALIGN: return c_compile2_expr_sizealign(cc, scope, expr->expr_sizealign);
+        case C_AST_TAG_EXPRS: return c_compile_expr_exprs(cc, scope, expr->expr_exprs);
+        case C_AST_TAG_EXPR_SIZEALIGN: return c_compile_expr_sizealign(cc, scope, expr->expr_sizealign);
     }
     UNREACHABLE();
 }
 
 
 // Compile a ternary expression.
-cir_expr_t *c_compile2_expr_ternary(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_ternary_t const *expr) {
-    cir_expr_t *cond      = c_compile2_expr(cc, scope, expr->cond);
-    cir_expr_t *if_expr   = expr->if_expr ? c_compile2_expr(cc, scope, expr->if_expr) : NULL;
-    cir_expr_t *else_expr = c_compile2_expr(cc, scope, expr->else_expr);
+cir_expr_t *c_compile_expr_ternary(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_ternary_t const *expr) {
+    cir_expr_t *cond      = c_compile_expr(cc, scope, expr->cond);
+    cir_expr_t *if_expr   = expr->if_expr ? c_compile_expr(cc, scope, expr->if_expr) : NULL;
+    cir_expr_t *else_expr = c_compile_expr(cc, scope, expr->else_expr);
     if (!cond || (!if_expr && expr->if_expr) || !else_expr) {
         goto error;
     }
 
     c_type_opt_t type
-        = c_compile2_ternary_result_type(cc, expr->pos, (if_expr ?: cond)->common.type, else_expr->common.type);
+        = c_compile_ternary_result_type(cc, expr->pos, (if_expr ?: cond)->common.type, else_expr->common.type);
     if (!c_type_is_valid(type)) {
         goto error;
     }
@@ -513,9 +512,9 @@ error:
 }
 
 // Compile an index expression.
-cir_expr_t *c_compile2_expr_index(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_index_t const *expr) {
-    cir_expr_t *lhs = c_compile2_expr(cc, scope, expr->lhs);
-    cir_expr_t *rhs = c_compile2_expr(cc, scope, expr->rhs);
+cir_expr_t *c_compile_expr_index(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_index_t const *expr) {
+    cir_expr_t *lhs = c_compile_expr(cc, scope, expr->lhs);
+    cir_expr_t *rhs = c_compile_expr(cc, scope, expr->rhs);
     if (!lhs || !rhs) {
         goto error;
     }
@@ -545,7 +544,7 @@ cir_expr_t *c_compile2_expr_index(c_compiler_t *cc, cir_scope_t *scope, c_ast_ex
                 goto non_const_prop;
             }
 
-            cir_expr_t *const_prop = c_compile2_const_from_bytes(
+            cir_expr_t *const_prop = c_compile_const_from_bytes(
                 cc,
                 expr->pos,
                 elem_type,
@@ -626,7 +625,7 @@ static bool is_compound_assign(c_tokentype_t oper) {
 
 // Compile a struct/union member access (`.` or `->`).
 static cir_expr_t *
-    c_compile2_expr_field(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_infix_t const *expr, bool is_arrow) {
+    c_compile_expr_field(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_infix_t const *expr, bool is_arrow) {
     // RHS must be a bare identifier denoting the member name.
     if (expr->rhs->tag != C_AST_TAG_EXPR_IDENT) {
         cctx_diagnostic(cc->cctx, expr->rhs->pos, DIAG_ERR, "Expected member name");
@@ -634,7 +633,7 @@ static cir_expr_t *
     }
     char const *name = expr->rhs->expr_ident->name;
 
-    cir_expr_t *lhs = c_compile2_expr(cc, scope, expr->lhs);
+    cir_expr_t *lhs = c_compile_expr(cc, scope, expr->lhs);
     if (!lhs) {
         return NULL;
     }
@@ -649,7 +648,7 @@ static cir_expr_t *
         }
 
         cir_expr_t *const_prop
-            = c_compile2_const_from_bytes(cc, lhs->common.pos, field.type, lhs->value->comp_const->blob + field.offset);
+            = c_compile_const_from_bytes(cc, lhs->common.pos, field.type, lhs->value->comp_const->blob + field.offset);
         if (const_prop != NULL) {
             cir_expr_delete(lhs);
             return const_prop;
@@ -702,7 +701,7 @@ static cir_expr_t *
 
     // Build a pointer-to-field type, then `ptr + offset` as that type, then deref.
     c_type_t    field_ptr_type = c_type_clone_pointer(field.type);
-    cir_expr_t *off_iconst = c_compile2_synth_iconst(cc, expr->oper_pos, cc->options.size_type, ui128(field.offset));
+    cir_expr_t *off_iconst = c_compile_synth_iconst(cc, expr->oper_pos, cc->options.size_type, ui128(field.offset));
     cir_expr_t *add        = cir_expr_create_calc(cir_calc_create(
         (cir_expr_common_t){
             .pos          = expr->pos,
@@ -726,17 +725,17 @@ static cir_expr_t *
 }
 
 // Compile an infix expression.
-cir_expr_t *c_compile2_expr_infix(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_infix_t const *expr) {
+cir_expr_t *c_compile_expr_infix(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_infix_t const *expr) {
     // Member access has a special RHS (a bare identifier), handle it before evaluating either side normally.
     if (expr->oper == C_TKN_DOT) {
-        return c_compile2_expr_field(cc, scope, expr, false);
+        return c_compile_expr_field(cc, scope, expr, false);
     }
     if (expr->oper == C_TKN_ARROW) {
-        return c_compile2_expr_field(cc, scope, expr, true);
+        return c_compile_expr_field(cc, scope, expr, true);
     }
 
-    cir_expr_t *lhs = c_compile2_expr(cc, scope, expr->lhs);
-    cir_expr_t *rhs = c_compile2_expr(cc, scope, expr->rhs);
+    cir_expr_t *lhs = c_compile_expr(cc, scope, expr->lhs);
+    cir_expr_t *rhs = c_compile_expr(cc, scope, expr->rhs);
     if (!lhs || !rhs) {
         goto error;
     }
@@ -794,8 +793,8 @@ error:
 }
 
 // Compile a prefix expression.
-cir_expr_t *c_compile2_expr_prefix(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_prefix_t const *expr) {
-    cir_expr_t *val = c_compile2_expr(cc, scope, expr->val);
+cir_expr_t *c_compile_expr_prefix(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_prefix_t const *expr) {
+    cir_expr_t *val = c_compile_expr(cc, scope, expr->val);
     if (!val) {
         return NULL;
     }
@@ -826,17 +825,17 @@ cir_expr_t *c_compile2_expr_prefix(c_compiler_t *cc, cir_scope_t *scope, c_ast_e
 
     switch (expr->oper) {
         case C_TKN_LNOT: { // Logical NOT `!expr`
-            cir_expr_t *zero = c_compile2_synth_iconst(cc, expr->pos, prim, I128_ZERO);
+            cir_expr_t *zero = c_compile_synth_iconst(cc, expr->pos, prim, I128_ZERO);
             return expand_calc(cc, expr->pos, CIR_CALC_EQ, val, zero, false);
         }
         case C_TKN_NOT: { // Bitwise NOT `~expr`
-            cir_expr_t *mask = c_compile2_synth_iconst(cc, expr->pos, prim, UI128_MAX);
+            cir_expr_t *mask = c_compile_synth_iconst(cc, expr->pos, prim, UI128_MAX);
             return expand_calc(cc, expr->pos, CIR_CALC_BXOR, val, mask, false);
         }
         case C_TKN_INC:   // Pre-increment `++expr`
         case C_TKN_DEC: { // Pre-decrement `--expr`
             c_type_t    type = c_type_clone(val->common.type);
-            cir_expr_t *one  = c_compile2_synth_iconst(cc, expr->pos, cc->options.size_type, ui128(1));
+            cir_expr_t *one  = c_compile_synth_iconst(cc, expr->pos, cc->options.size_type, ui128(1));
             cir_expr_t *calc
                 = expand_calc_assign(cc, expr->pos, expr->oper == C_TKN_INC ? CIR_CALC_ADD : CIR_CALC_SUB, val, one);
             if (!calc) {
@@ -850,7 +849,7 @@ cir_expr_t *c_compile2_expr_prefix(c_compiler_t *cc, cir_scope_t *scope, c_ast_e
             return raw_cast(cc, expr->pos, C_TYPE_FROM_PRIM(conv), val);
         }
         case C_TKN_SUB: { // Arithmetic negate `-`.
-            cir_expr_t *zero = c_compile2_synth_iconst(cc, expr->pos, prim, I128_ZERO);
+            cir_expr_t *zero = c_compile_synth_iconst(cc, expr->pos, prim, I128_ZERO);
             return expand_calc(cc, expr->pos, CIR_CALC_SUB, zero, val, false);
         }
         case C_TKN_AND: { // Address-of `&`
@@ -890,8 +889,8 @@ err0:
 }
 
 // Compile a suffix expression.
-cir_expr_t *c_compile2_expr_suffix(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_suffix_t const *expr) {
-    cir_expr_t *val = c_compile2_expr(cc, scope, expr->val);
+cir_expr_t *c_compile_expr_suffix(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_suffix_t const *expr) {
+    cir_expr_t *val = c_compile_expr(cc, scope, expr->val);
     if (!val) {
         return NULL;
     }
@@ -914,14 +913,14 @@ cir_expr_t *c_compile2_expr_suffix(c_compiler_t *cc, cir_scope_t *scope, c_ast_e
     }
 
     c_type_t    type  = c_type_clone(val->common.type);
-    cir_expr_t *one_a = c_compile2_synth_iconst(cc, expr->pos, cc->options.size_type, ui128(1));
+    cir_expr_t *one_a = c_compile_synth_iconst(cc, expr->pos, cc->options.size_type, ui128(1));
     cir_expr_t *res
         = expand_calc_assign(cc, expr->pos, expr->oper == C_TKN_INC ? CIR_CALC_ADD : CIR_CALC_SUB, val, one_a);
     if (!res) {
         return NULL;
     }
     // Simply offset by one in the opposite direction to effectively get the same result as post-increment/decrement.
-    cir_expr_t *one_b = c_compile2_synth_iconst(cc, expr->pos, cc->options.size_type, ui128(1));
+    cir_expr_t *one_b = c_compile_synth_iconst(cc, expr->pos, cc->options.size_type, ui128(1));
     cir_expr_t *undo
         = expand_calc(cc, expr->pos, expr->oper == C_TKN_INC ? CIR_CALC_SUB : CIR_CALC_ADD, res, one_b, false);
     assert(undo != NULL); // If the calc one worked, so should this one.
@@ -933,8 +932,8 @@ err0:
 }
 
 // Compile a cast expression.
-cir_expr_t *c_compile2_expr_cast(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_cast_t const *cast) {
-    c_type_t spec_qual = c_compile2_spec_qual_list(cc, cast->type->spec_qual, scope);
+cir_expr_t *c_compile_expr_cast(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_cast_t const *cast) {
+    c_type_t spec_qual = c_compile_spec_qual_list(cc, cast->type->spec_qual, scope);
     if (!c_type_is_valid(spec_qual)) {
         return NULL;
     }
@@ -945,12 +944,12 @@ cir_expr_t *c_compile2_expr_cast(c_compiler_t *cc, cir_scope_t *scope, c_ast_exp
     }
     c_ast_ident_t const *name;
 
-    c_type_t type = c_compile2_type(cc, scope, spec_qual, cast->type->decl, &name);
+    c_type_t type = c_compile_type(cc, scope, spec_qual, cast->type->decl, &name);
     if (name) {
         cctx_diagnostic(cc->cctx, name->pos, DIAG_ERR, "Identifier not allowed here");
     }
 
-    cir_expr_t *val = c_compile2_expr(cc, scope, cast->val);
+    cir_expr_t *val = c_compile_expr(cc, scope, cast->val);
     if (!val) {
         c_type_delete(type);
         return NULL;
@@ -960,13 +959,13 @@ cir_expr_t *c_compile2_expr_cast(c_compiler_t *cc, cir_scope_t *scope, c_ast_exp
 }
 
 // Compile a call expression.
-cir_expr_t *c_compile2_expr_call(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_call_t const *call) {
-    cir_expr_t *func   = c_compile2_expr(cc, scope, call->func);
+cir_expr_t *c_compile_expr_call(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_call_t const *call) {
+    cir_expr_t *func   = c_compile_expr(cc, scope, call->func);
     bool        errors = !func;
 
     vec_cir_expr_t args = {0};
     for (size_t i = 0; i < call->args->items.len; i++) {
-        cir_expr_t *arg = c_compile2_expr(cc, scope, call->args->items.arr[i]);
+        cir_expr_t *arg = c_compile_expr(cc, scope, call->args->items.arr[i]);
         if (!arg) {
             errors = true;
         } else {
@@ -1037,7 +1036,7 @@ error:
 }
 
 // Compile an identifier as part of an expression.
-cir_expr_t *c_compile2_expr_ident(c_compiler_t *cc, cir_scope_t *scope, c_ast_ident_t const *ident) {
+cir_expr_t *c_compile_expr_ident(c_compiler_t *cc, cir_scope_t *scope, c_ast_ident_t const *ident) {
     cir_scope_val_t *val = cir_scope_lookup_value(scope, ident->name);
     if (!val) {
         cctx_diagnostic(cc->cctx, ident->pos, DIAG_ERR, "Use of undeclared identifier '%s'", ident->name);
@@ -1047,13 +1046,13 @@ cir_expr_t *c_compile2_expr_ident(c_compiler_t *cc, cir_scope_t *scope, c_ast_id
 }
 
 // Compile an integer constant as part of an expression.
-cir_expr_t *c_compile2_expr_iconst(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_iconst_t const *iconst) {
+cir_expr_t *c_compile_expr_iconst(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_iconst_t const *iconst) {
     (void)scope;
-    return c_compile2_synth_iconst(cc, iconst->pos, iconst->prim, iconst->iconst);
+    return c_compile_synth_iconst(cc, iconst->pos, iconst->prim, iconst->iconst);
 }
 
 // Compile a string constant as part of an expression.
-cir_expr_t *c_compile2_expr_sconst(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_sconst_t const *sconst) {
+cir_expr_t *c_compile_expr_sconst(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_sconst_t const *sconst) {
     (void)scope;
 
     // String literals have type `char[N]`, NUL-terminated.
@@ -1078,8 +1077,8 @@ cir_expr_t *c_compile2_expr_sconst(c_compiler_t *cc, cir_scope_t *scope, c_ast_e
 
 // Compile a compound literal as part of an expression.
 cir_expr_t *
-    c_compile2_expr_compliteral(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_compliteral_t const *compliteral) {
-    c_type_t spec_qual_type = c_compile2_spec_qual_list(cc, compliteral->type->spec_qual, scope);
+    c_compile_expr_compliteral(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_compliteral_t const *compliteral) {
+    c_type_t spec_qual_type = c_compile_spec_qual_list(cc, compliteral->type->spec_qual, scope);
     if (!c_type_is_valid(spec_qual_type)) {
         return NULL;
     } else if (spec_qual_type.qual.s_typedef) {
@@ -1088,23 +1087,23 @@ cir_expr_t *
         return NULL;
     }
     c_ast_ident_t const *name;
-    c_type_t             type = c_compile2_type(cc, scope, spec_qual_type, compliteral->type->decl, &name);
+    c_type_t             type = c_compile_type(cc, scope, spec_qual_type, compliteral->type->decl, &name);
     if (!c_type_is_valid(type)) {
         return NULL;
     } else if (name) {
         cctx_diagnostic(cc->cctx, name->pos, DIAG_ERR, "name not allowed here");
     }
 
-    return c_compile2_compinit(cc, scope, type, compliteral->type->pos, compliteral->init);
+    return c_compile_compinit(cc, scope, type, compliteral->type->pos, compliteral->init);
 }
 
 // Compile an expression list.
-cir_expr_t *c_compile2_expr_exprs(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_list_t const *exprs) {
+cir_expr_t *c_compile_expr_exprs(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_list_t const *exprs) {
     vec_cir_expr_t out    = {0};
     bool           errors = false;
 
     for (size_t i = 0; i < exprs->items.len; i++) {
-        cir_expr_t *expr = c_compile2_expr(cc, scope, exprs->items.arr[i]);
+        cir_expr_t *expr = c_compile_expr(cc, scope, exprs->items.arr[i]);
         if (!expr) {
             errors = true;
         } else {
@@ -1137,11 +1136,11 @@ cir_expr_t *c_compile2_expr_exprs(c_compiler_t *cc, cir_scope_t *scope, c_ast_ex
 }
 
 // Compile a `sizeof` or `alignof` expression.
-cir_expr_t *c_compile2_expr_sizealign(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_sizealign_t const *sizealign) {
+cir_expr_t *c_compile_expr_sizealign(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr_sizealign_t const *sizealign) {
     // Extract the type to get the size or align of.
     c_type_t type;
     if (sizealign->val) {
-        cir_expr_t *tmp = c_compile2_expr(cc, scope, sizealign->val);
+        cir_expr_t *tmp = c_compile_expr(cc, scope, sizealign->val);
         if (!tmp) {
             return NULL;
         }
@@ -1149,12 +1148,12 @@ cir_expr_t *c_compile2_expr_sizealign(c_compiler_t *cc, cir_scope_t *scope, c_as
         cir_expr_delete(tmp);
     } else {
         assert(sizealign->type != NULL);
-        type = c_compile2_spec_qual_list(cc, sizealign->type->spec_qual, scope);
+        type = c_compile_spec_qual_list(cc, sizealign->type->spec_qual, scope);
         if (!c_type_is_valid(type)) {
             return NULL;
         }
         if (sizealign->type->decl) {
-            type = c_compile2_type(cc, scope, type, sizealign->type->decl, NULL);
+            type = c_compile_type(cc, scope, type, sizealign->type->decl, NULL);
             if (!c_type_is_valid(type)) {
                 return NULL;
             }
@@ -1170,7 +1169,7 @@ cir_expr_t *c_compile2_expr_sizealign(c_compiler_t *cc, cir_scope_t *scope, c_as
         return NULL;
     }
 
-    return c_compile2_synth_iconst(
+    return c_compile_synth_iconst(
         cc,
         sizealign->pos,
         cc->options.size_type,
@@ -1179,7 +1178,7 @@ cir_expr_t *c_compile2_expr_sizealign(c_compiler_t *cc, cir_scope_t *scope, c_as
 }
 
 
-// Helper for `c_compile2_compinit` that keeps track of the field being written.
+// Helper for `c_compile_compinit` that keeps track of the field being written.
 typedef struct {
     // Stack that indicates field being accessed.
     vec_size_t           stack;
@@ -1457,7 +1456,7 @@ static cir_expr_t *
         }
     }
 
-    cir_expr_t *value = c_compile2_expr(cc, scope, val->initval_expr);
+    cir_expr_t *value = c_compile_expr(cc, scope, val->initval_expr);
     if (!value) {
         return NULL;
     }
@@ -1491,7 +1490,7 @@ static bool c_compile_excess_init(c_compiler_t *cc, cir_scope_t *scope, c_ast_in
     } else {
         assert(init->tag == C_AST_TAG_INITVAL_EXPR);
         // Detached code created here means that it will compile but never run.
-        cir_expr_t *res = c_compile2_expr(cc, scope, init->initval_expr);
+        cir_expr_t *res = c_compile_expr(cc, scope, init->initval_expr);
         if (res) {
             cir_expr_delete(res);
             return false;
@@ -1502,7 +1501,7 @@ static bool c_compile_excess_init(c_compiler_t *cc, cir_scope_t *scope, c_ast_in
 }
 
 // Compile a compound literal/initializer given a known target type.
-cir_expr_t *c_compile2_compinit(
+cir_expr_t *c_compile_compinit(
     c_compiler_t *cc, cir_scope_t *scope, c_type_t type, pos_t type_pos, c_ast_init_list_t const *init
 ) {
     // Check type completeness.
@@ -1586,7 +1585,7 @@ cir_expr_t *c_compile2_compinit(
 
             } else if (field->tag == C_AST_TAG_INIT_INDEXED) {
                 // Indexed initializer field, e.g. `[foo] = bar`.
-                cir_expr_t *res = c_compile2_expr(cc, scope, field->init_indexed->index);
+                cir_expr_t *res = c_compile_expr(cc, scope, field->init_indexed->index);
                 if (res == NULL || !c_init_cursor_select_indexed(cc, &cursor, res, field->init_indexed->index->pos)) {
                     field_error = true;
                 }
@@ -1616,7 +1615,7 @@ cir_expr_t *c_compile2_compinit(
 
             } else {
                 // Recursively compile compound initializer.
-                res = c_compile2_compinit(
+                res = c_compile_compinit(
                     cc,
                     scope,
                     c_type_clone(cursor.field_type),
@@ -1641,7 +1640,7 @@ cir_expr_t *c_compile2_compinit(
             c_init_cursor_next(cc, &cursor);
 
         } else {
-            cir_expr_t *res = c_compile2_expr(cc, scope, val->initval_expr);
+            cir_expr_t *res = c_compile_expr(cc, scope, val->initval_expr);
             if (!res) {
                 error = true;
             } else {
@@ -1744,8 +1743,8 @@ cir_expr_t *c_compile2_compinit(
 }
 
 // Helper that creates a synthetic integer constant.
-cir_expr_t *c_compile2_synth_iconst(c_compiler_t *cc, pos_t pos, c_prim_t prim, i128_t value) {
-    ir_prim_t  ir_prim  = c_prim_to_ir_type(cc, prim);
+cir_expr_t *c_compile_synth_iconst(c_compiler_t *cc, pos_t pos, c_prim_t prim, i128_t value) {
+    ir_prim_t  ir_prim  = c_type_to_ir_type(cc, C_TYPE_FROM_PRIM(prim));
     ir_const_t ir_const = ir_cast(ir_prim, IR_CONST_S128(value));
 
     cir_value_t *cir_value = cir_value_create_const(cir_const_create(pos, prim, ir_const));
@@ -1756,7 +1755,7 @@ cir_expr_t *c_compile2_synth_iconst(c_compiler_t *cc, pos_t pos, c_prim_t prim, 
 // Helper that converts bytes into a constant value.
 // Unlike other functions, returning NULL is not an error but indicates this const-propagation is not possible.
 // This function assumes that `type` is a complete type.
-cir_expr_t *c_compile2_const_from_bytes(c_compiler_t *cc, pos_t pos, c_type_ref_t type, uint8_t const *blob) {
+cir_expr_t *c_compile_const_from_bytes(c_compiler_t *cc, pos_t pos, c_type_ref_t type, uint8_t const *blob) {
     if (type.prim == C_COMP_STRUCT || type.prim == C_COMP_UNION || type.prim == C_COMP_ARRAY) {
         uint64_t size, align;
         if (!c_type_get_size(cc, type, &size, &align)) {

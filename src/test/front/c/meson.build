@@ -4,8 +4,8 @@
 # SPDX-License-Identifier: MIT
 
 test_front_c_srcs = [
-    'c_compiler2_test.c',
-    'c_parser2_test.c',
+    'c_compiler_test.c',
+    'c_parser_test.c',
     'c_preproc_test.c',
     'c_tokenizer_test.c',
 ]

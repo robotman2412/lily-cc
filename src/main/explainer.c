@@ -3,20 +3,23 @@
 // SPDX-FileType: SOURCE
 // SPDX-License-Identifier: MIT
 
+#include "c_ast.h"
+#include "c_compile.h"
 #include "c_compiler.h"
+#include "c_ir.h"
 #include "c_parser.h"
+#include "c_types.h"
+#include "compiler.h"
+#include "tokenizer.h"
 
+#include <stdio.h>
 #include <string.h>
 
-static void compile_explain_type(char const *value) {
-    // Create requisite contexts.
-    cctx_t    *cctx = cctx_create();
-    srcfile_t *src  = srcfile_create(cctx, "<argv>", value, strlen(value));
-    if (!src) {
-        return;
-    }
 
-    c_compiler_t *cc = c_compiler_create(
+static bool compile_explain_type(bool is_detailed, char const *value) {
+    cctx_t       *cctx = cctx_create();
+    srcfile_t    *src  = srcfile_create(cctx, "<argv>", value, strlen(value));
+    c_compiler_t *cc   = c_compiler_create(
         cctx,
         (c_options_t){
             .c_std          = C_STD_def,
@@ -27,22 +30,27 @@ static void compile_explain_type(char const *value) {
             .size_type      = C_PRIM_ULONG,
         }
     );
-    tokenizer_t *tctx = c_tokenizer_create(cc, src, true);
+    tokenizer_t *tctx = c_tokenizer_create(cc, src, false);
     c_parser_t  *pctx = c_parser_create(cc, tctx);
 
-    // While not EOF, keep parsing and compiling stuff.
-    token_t ast     = c_parse_type_name(pctx);
-    rc_t    type_rc = NULL;
-    if (!cctx->diagnostics.len) {
-        if (ast.subtype == C_AST_TYPE_NAME) {
-            rc_t spec_qual = c_compile_spec_qual_list(cc, &ast.params[0], &cc->global_scope);
-            type_rc        = c_compile_decl(cc, &ast.params[1], &cc->global_scope, spec_qual, NULL);
-        } else if (ast.subtype == C_AST_SPEC_QUAL_LIST) {
-            type_rc = c_compile_spec_qual_list(cc, &ast, &cc->global_scope);
-        }
+    c_ast_type_name_t *ast = c_parse_type_name(pctx);
+    token_t            eof = tkn_peek(tctx);
+    if (eof.type != TOKENTYPE_EOF) {
+        cctx_diagnostic(cc->cctx, eof.pos, DIAG_ERR, "Expected end-of-file");
     }
 
-    // Print diagnostics.
+    cir_scope_t *scope = cir_scope_create(CIR_SCOPE_GLOBAL, NULL);
+    c_type_t     type  = c_compile_spec_qual_list(cc, ast->spec_qual, scope);
+    if (ast->decl) {
+        type = c_compile_type(cc, scope, type, ast->decl, NULL);
+    }
+
+    c_type_explain(cc, type, is_detailed, stdout);
+    if (!is_detailed) {
+        putc('\n', stdout);
+    }
+
+    bool errors = cctx->diagnostics.len;
     if (cctx->diagnostics.len) {
         diagnostic_t const *diag = (diagnostic_t const *)cctx->diagnostics.head;
         fflush(stdout);
@@ -52,19 +60,55 @@ static void compile_explain_type(char const *value) {
         }
         fflush(stderr);
     }
-    if (type_rc) {
-        c_type_explain(type_rc->data, stdout);
-        rc_delete(type_rc);
-    }
 
-    // Clean up.
+    c_type_delete(type);
+    c_ast_type_name_delete(ast);
+    cir_scope_delete(scope);
     c_parser_delete(pctx);
     c_compiler_delete(cc);
     cctx_delete(cctx);
+
+    return errors;
 }
 
 int main(int argc, char **argv) {
-    for (int i = 1; i < argc; i++) {
-        compile_explain_type(argv[i]);
+    int i = 1;
+
+    // Parse options.
+    bool detailed = false;
+    bool help     = argc <= 1;
+    bool error    = false;
+    for (; i < argc; i++) {
+        if (argv[i][0] != '-') {
+            break;
+        }
+        if (!strcmp(argv[i], "--")) {
+            i++;
+            break;
+        } else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
+            help = true;
+        } else if (!strcmp(argv[i], "--detailed")) {
+            detailed = true;
+        } else {
+            printf("%s: error: unrecognised option `%s`\n", argv[0], argv[i]);
+            error = true;
+        }
     }
+
+    if (help) {
+        printf("Usage %s [options] type...\n", argv[0]);
+        printf("Options:\n");
+        printf("  -h --help     Show this help text.\n");
+        printf("  --detailed    Print extra details including size and alignment.\n");
+    }
+    if (help || error) {
+        return 1;
+    }
+
+    // Explain types.
+    for (; i < argc; i++) {
+        error |= compile_explain_type(detailed, argv[i]);
+    }
+
+    return error;
 }

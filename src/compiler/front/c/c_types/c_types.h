@@ -6,8 +6,8 @@
 #pragma once
 
 #include "arith128.h"
+#include "c_compiler.h"
 #include "c_prim.h"
-#include "c_types1.h"
 #include "compiler.h"
 #include "vec.h"
 
@@ -239,6 +239,8 @@ ir_prim_t      c_type_to_ir_type(c_compiler_t *cc, c_type_ref_t type);
 c_field_info_t c_type_get_field(c_compiler_t *cc, c_type_ref_t type, char const *name, pos_t pos);
 // Delete a C type.
 void           c_type_delete(c_type_t type);
+// Explain the given type in human-readable form.
+void           c_type_explain(c_compiler_t *cc, c_type_ref_t type, bool detailed, FILE *to);
 // Print the type in simplified source form.
 void           c_type_print(c_type_ref_t type, char const *ident, bool fields, FILE *to);
 // Print the primitive type in simplified source form.

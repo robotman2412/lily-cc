@@ -7,9 +7,11 @@
 
 #include "arith128.h"
 #include "c_compiler.h"
+#include "c_options.h"
 #include "c_prim.h"
 #include "ir_types.h"
 #include "lilycc_malloc.h"
+#include "set.h"
 #include "unreachable.h"
 #include "vec.h"
 
@@ -18,6 +20,37 @@
 #include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
+
+
+
+// Primitive types' names.
+char const *c_prim_name[] = {
+    [C_PRIM_BOOL]     = "C_PRIM_BOOL",
+    [C_PRIM_CHAR]     = "C_PRIM_CHAR",
+    [C_PRIM_SCHAR]    = "C_PRIM_SCHAR",
+    [C_PRIM_UCHAR]    = "C_PRIM_UCHAR",
+    [C_PRIM_SSHORT]   = "C_PRIM_SSHORT",
+    [C_PRIM_USHORT]   = "C_PRIM_USHORT",
+    [C_PRIM_SINT]     = "C_PRIM_SINT",
+    [C_PRIM_UINT]     = "C_PRIM_UINT",
+    [C_PRIM_SLONG]    = "C_PRIM_SLONG",
+    [C_PRIM_ULONG]    = "C_PRIM_ULONG",
+    [C_PRIM_SLLONG]   = "C_PRIM_SLLONG",
+    [C_PRIM_ULLONG]   = "C_PRIM_ULLONG",
+    [C_PRIM_S128]     = "C_PRIM_S128",
+    [C_PRIM_U128]     = "C_PRIM_U128",
+    [C_PRIM_FLOAT]    = "C_PRIM_FLOAT",
+    [C_PRIM_DOUBLE]   = "C_PRIM_DOUBLE",
+    [C_PRIM_LDOUBLE]  = "C_PRIM_LDOUBLE",
+    [C_PRIM_VOID]     = "C_PRIM_VOID",
+    [C_N_PRIM]        = "C_N_PRIM",
+    [C_COMP_STRUCT]   = "C_COMP_STRUCT",
+    [C_COMP_UNION]    = "C_COMP_UNION",
+    [C_COMP_ENUM]     = "C_COMP_ENUM",
+    [C_COMP_POINTER]  = "C_COMP_POINTER",
+    [C_COMP_ARRAY]    = "C_COMP_ARRAY",
+    [C_COMP_FUNCTION] = "C_COMP_FUNCTION",
+};
 
 
 
@@ -430,6 +463,207 @@ void c_type_delete(c_type_t type) {
     }
 
     lilycc_free(type.extra);
+}
+
+static void c_type_explain_impl(c_compiler_t *cc, c_type_ref_t type, set_t *covered, FILE *to) {
+    // clang-format off
+    if (type.qual.s_auto)         fputs("auto ", to);
+    if (type.qual.s_constexpr)    fputs("constexpr ", to);
+    if (type.qual.s_extern)       fputs("extern ", to);
+    if (type.qual.s_register)     fputs("register ", to);
+    if (type.qual.s_static)       fputs("static ", to);
+    if (type.qual.s_thread_local) fputs("thread_local ", to);
+    if (type.qual.s_typedef)      fputs("typedef ", to);
+    if (type.qual.q_volatile)     fputs("volatile ", to);
+    if (type.qual.q_atomic)       fputs("atomic ", to);
+    if (type.qual.q_const)        fputs("const ", to);
+    if (type.qual.q_restrict)     fputs("restrict ", to);
+    // clang-format on
+
+    if (type.prim == C_COMP_POINTER) {
+        fputs("pointer to ", to);
+        c_type_explain_impl(cc, type.extra->inner, covered, to);
+
+    } else if (type.prim == C_COMP_ARRAY) {
+        fputs("array ", to);
+        if (type.extra->length >= 0) {
+            fprintf(to, "(length %" PRId32 ") ", type.extra->length);
+        }
+        fputs("to ", to);
+        c_type_explain_impl(cc, type.extra->inner, covered, to);
+
+    } else if (type.prim == C_COMP_FUNCTION) {
+        c_func_type_t const *func = type.extra->func_type;
+        fputs("function(", to);
+        for (size_t i = 0; i < func->args.len; i++) {
+            if (i) {
+                fputs(", ", to);
+            }
+            c_type_explain_impl(cc, func->args.arr[i].type, covered, to);
+        }
+        fputs(") returning ", to);
+        c_type_explain_impl(cc, type.extra->func_type->returns, covered, to);
+
+    } else if (type.prim == C_COMP_UNION || type.prim == C_COMP_STRUCT) {
+        c_struct_type_t const *inner = type.extra->struct_type;
+        fprintf(to, "%s %s", type.prim == C_COMP_UNION ? "union" : "struct", inner->name ?: "/* anonymous */");
+        if (set_add(covered, inner)) {
+            fputs(" {", to);
+            for (size_t i = 0; i < inner->fields.len; i++) {
+                fputs(i ? ", " : " ", to);
+                fprintf(to, "%s: ", inner->fields.arr[i].name);
+                c_type_explain_impl(cc, inner->fields.arr[i].type, covered, to);
+            }
+            fputs(" }", to);
+        }
+
+    } else if (type.prim == C_COMP_ENUM) {
+        c_enum_type_t const *inner = type.extra->enum_type;
+        fputs("enum : ", to);
+        c_prim_print(inner->prim, to);
+        fprintf(to, " %s", inner->name ?: "/* anonymous */");
+        if (set_add(covered, inner)) {
+            fputs(" {", to);
+            for (size_t i = 0; i < inner->variants.len; i++) {
+                fputs(i ? ", " : " ", to);
+                i128_t ord  = inner->variants.arr[i].ordinal;
+                bool   sign = !c_prim_is_uint(cc->options.char_is_signed, inner->prim) && cmp128s(ord, I128_ZERO);
+                if (sign) {
+                    ord = neg128(ord);
+                }
+                char buf[40];
+                itoa128(ord, 0, buf);
+                fprintf(to, "%s = %s%s", sign ? "-" : "", inner->variants.arr[i].name, buf);
+            }
+            fputs(" }", to);
+        }
+
+    } else {
+        c_prim_print(type.prim, to);
+    }
+}
+
+static void pindent(int indent, FILE *to) {
+    while (indent > 0) {
+        fputs("  ", to);
+        indent--;
+    }
+}
+
+static void c_type_explain_detailed_impl(c_compiler_t *cc, c_type_ref_t type, set_t *covered, int indent, FILE *to) {
+    pindent(indent, to);
+    fprintf(to, "prim: %s\n", c_prim_name[type.prim]);
+
+    if (type.qual.val != 0) {
+        pindent(indent, to);
+        fputs("qual:", to);
+        // clang-format off
+        if (type.qual.s_auto)         fputs(" auto", to);
+        if (type.qual.s_constexpr)    fputs(" constexpr", to);
+        if (type.qual.s_extern)       fputs(" extern", to);
+        if (type.qual.s_register)     fputs(" register", to);
+        if (type.qual.s_static)       fputs(" static", to);
+        if (type.qual.s_thread_local) fputs(" thread_local", to);
+        if (type.qual.s_typedef)      fputs(" typedef", to);
+        if (type.qual.q_volatile)     fputs(" volatile", to);
+        if (type.qual.q_atomic)       fputs(" atomic", to);
+        if (type.qual.q_const)        fputs(" const", to);
+        if (type.qual.q_restrict)     fputs(" restrict", to);
+        // clang-format on
+        fputs("\n", to);
+    }
+
+    uint64_t size, align;
+    if (c_type_get_size(cc, type, &size, &align)) {
+        pindent(indent, to);
+        fprintf(to, "size: %" PRIu64 "\n", size);
+        pindent(indent, to);
+        fprintf(to, "align: %" PRIu64 "\n", align);
+    }
+
+    if (type.prim == C_COMP_POINTER) {
+        pindent(indent, to);
+        fputs("inner:\n", to);
+        c_type_explain_detailed_impl(cc, type.extra->inner, covered, indent + 1, to);
+
+    } else if (type.prim == C_COMP_ARRAY) {
+        if (type.extra->length >= 0) {
+            pindent(indent, to);
+            fprintf(to, "length: %" PRId32 "\n", type.extra->length);
+        }
+        pindent(indent, to);
+        fputs("inner:\n", to);
+        c_type_explain_detailed_impl(cc, type.extra->inner, covered, indent + 1, to);
+
+    } else if (type.prim == C_COMP_FUNCTION) {
+        c_func_type_t const *func = type.extra->func_type;
+        pindent(indent, to);
+        fputs("returns:\n", to);
+        c_type_explain_detailed_impl(cc, func->returns, covered, indent + 1, to);
+        for (size_t i = 0; i < func->args.len; i++) {
+            pindent(indent, to);
+            fprintf(to, "args[%zu]:\n", i);
+            if (func->args.arr[i].name) {
+                pindent(indent + 1, to);
+                fprintf(to, "name: %s\n", func->args.arr[i].name);
+            }
+            c_type_explain_detailed_impl(cc, func->args.arr[i].type, covered, indent + 1, to);
+        }
+
+    } else if (type.prim == C_COMP_UNION || type.prim == C_COMP_STRUCT) {
+        c_struct_type_t const *inner = type.extra->struct_type;
+        pindent(indent, to);
+        fprintf(to, "name: %s\n", type.extra->struct_type->name);
+        if (set_add(covered, inner)) {
+            for (size_t i = 0; i < inner->fields.len; i++) {
+                pindent(indent, to);
+                fprintf(to, "fields[%zu]:\n", i);
+                if (inner->fields.arr[i].name) {
+                    pindent(indent + 1, to);
+                    fprintf(to, "name: %s\n", inner->fields.arr[i].name);
+                }
+                if (type.prim == C_COMP_STRUCT) {
+                    pindent(indent + 1, to);
+                    fprintf(to, "offset: %" PRIu64 "\n", inner->fields.arr[i].offset);
+                }
+                c_type_explain_detailed_impl(cc, inner->fields.arr[i].type, covered, indent + 1, to);
+            }
+        }
+
+    } else if (type.prim == C_COMP_ENUM) {
+        c_enum_type_t const *inner = type.extra->enum_type;
+        pindent(indent, to);
+        fprintf(to, "name: %s\n", type.extra->enum_type->name);
+        if (set_add(covered, inner)) {
+            for (size_t i = 0; i < inner->variants.len; i++) {
+                pindent(indent, to);
+                fprintf(to, "variants[%zu]:\n", i);
+                pindent(indent + 1, to);
+                fprintf(to, "name: %s\n", inner->variants.arr[i].name);
+
+                i128_t ord  = inner->variants.arr[i].ordinal;
+                bool   sign = !c_prim_is_uint(cc->options.char_is_signed, inner->prim) && cmp128s(ord, I128_ZERO);
+                if (sign) {
+                    ord = neg128(ord);
+                }
+                char buf[40];
+                itoa128(ord, 0, buf);
+                pindent(indent + 1, to);
+                fprintf(to, "ordinal: %s%s\n", sign ? "-" : "", buf);
+            }
+        }
+    }
+}
+
+// Explain the given type in human-readable form.
+void c_type_explain(c_compiler_t *cc, c_type_ref_t type, bool detailed, FILE *to) {
+    set_t covered = PTR_SET_EMPTY;
+    if (detailed) {
+        c_type_explain_detailed_impl(cc, type, &covered, 0, to);
+    } else {
+        c_type_explain_impl(cc, type, &covered, to);
+    }
+    set_clear(&covered);
 }
 
 static bool c_type_print_decl_pre(c_type_ref_t type, bool fields, FILE *to);

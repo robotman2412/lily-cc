@@ -5,7 +5,7 @@
 
 front_c_srcs = [
     'c_grammar/c_ast.c',
-    'c_grammar/c_parser2.c',
+    'c_grammar/c_parser.c',
     'c_lexicon/c_preproc.c',
     'c_lexicon/c_tokenizer.c',
     'c_semantic/c_compile_expr.c',
@@ -15,10 +15,6 @@ front_c_srcs = [
     'c_semantic/c_ir.c',
     'c_types/c_types.c',
     'c_compiler.c',
-    'c_parser.c',
-    'c_prepass.c',
-    'c_types1.c',
-    'c_values.c',
 ]
 
 front_c_include = [

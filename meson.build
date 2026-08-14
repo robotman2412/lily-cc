@@ -8,6 +8,7 @@ project(
     'c',
     version: '0.0.1',
     default_options: [
+        'c_link_args=\'-Wl,-rpath,$ORIGIN/../lib\'',
         'c_std=gnu11',
         'warning_level=2',
         'buildtype=debug',

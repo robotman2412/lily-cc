@@ -11,7 +11,7 @@ subdir('back/riscv')
 runner = executable(
     'lily-test',
     'main.c',
-    install: true,
+    install: false,
     dependencies: [ test_front_c_dep, test_back_riscv_dep, test_common_dep, harness_dep, util_dep ],
 )
 

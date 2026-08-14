@@ -2,6 +2,7 @@
 MAKEFLAGS += --silent --no-print-directory -j$(shell nproc)
 TEST      ?=
 VGFLAGS   ?=
+PREFIX    ?= $(HOME)/.local/
 DESTDIR   ?= /
 
 .PHONY: all
@@ -9,7 +10,7 @@ all: build
 
 .PHONY: build
 build:
-	[ -d build ] || meson setup build .
+	[ -d build ] || meson setup build . --prefix=$(PREFIX)
 	meson compile -C build
 
 .PHONY: install

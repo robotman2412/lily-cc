@@ -324,7 +324,9 @@ static void cg_normalize_op_order(ir_insn_t *insn) {
 // Expand combinators back into separate assignments from predecessor code blocks.
 static void cg_expand_comb(ir_insn_t *insn) {
     assert(insn->type == IR_INSN_COMBINATOR);
+    assert(insn->returns[0].type == IR_RETVAL_TYPE_VAR);
 
+    ir_var_t *tmp = ir_var_create(insn->code->func, insn->returns[0].dest_var->prim_type, NULL);
     for (size_t i = 0; i < insn->combinators_len; i++) {
         ir_code_t *pred = insn->combinators[i].pred;
 
@@ -337,9 +339,10 @@ static void cg_expand_comb(ir_insn_t *insn) {
             }
         }
 
-        ir_add_expr1(loc, insn->returns[0], IR_OP1_mov, insn->combinators[i].bind);
+        ir_add_expr1(loc, IR_RETVAL_VAR(tmp), IR_OP1_mov, insn->combinators[i].bind);
     }
 
+    ir_add_expr1(IR_BEFORE_INSN(insn), insn->returns[0], IR_OP1_mov, IR_OPERAND_VAR(tmp));
     ir_insn_delete(insn);
 }
 

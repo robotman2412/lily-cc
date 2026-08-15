@@ -57,12 +57,8 @@ static void compile2(char const *path) {
             continue;
         }
         ir_func_t *ir = c_lower_func(cc, tu->units.arr[i]->func);
-        ir_func_serialize(ir, NULL, stdout);
-        ir_func_to_ssa(ir);
-        ir_optimize(ir);
-        ir_func_serialize(ir, profile, stdout);
         codegen(profile, ir);
-        ir_func_serialize(ir, profile, stdout);
+        printf("\n");
         asm_print_func(ir, profile, stdout);
     }
 

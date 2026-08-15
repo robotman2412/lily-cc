@@ -120,6 +120,8 @@ ir_insn_t *ir_add_callframe_enter(ir_insnloc_t loc, ir_frame_t *frame);
 ir_insn_t *ir_add_callframe_exit(ir_insnloc_t loc, ir_frame_t *frame);
 // Add a variable usage marker.
 ir_insn_t *ir_add_mark_used(ir_insnloc_t loc, size_t operands_len, ir_operand_t const *operands);
+// Add a function epilogue placeholder.
+ir_insn_t *ir_add_epilogue(ir_insnloc_t loc);
 // Add a variable usage marker.
 // The remaining arguments are of type `ir_operand_t const`.
 ir_insn_t *ir_add_mark_used_va(ir_insnloc_t loc, size_t operands_len, ...);

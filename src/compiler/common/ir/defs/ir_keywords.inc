@@ -61,6 +61,7 @@ IR_KEYW_DEF(alloca)
 IR_KEYW_DEF(callframe_enter)
 IR_KEYW_DEF(callframe_exit)
 IR_KEYW_DEF(mark_used)
+IR_KEYW_DEF(epilogue)
 
 #undef IR_KEYW_DEF
 

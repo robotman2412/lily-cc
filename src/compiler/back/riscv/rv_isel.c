@@ -780,7 +780,7 @@ static inline ir_insn_t *rv_isel_mem(rv_profile_t const *profile, ir_insn_t *ins
             default: return false;
         }
     } else {
-        lo12_proto = &rv_insn_addi;
+        lo12_proto = &rv_insn_la;
     }
 
     if (insn->operands[0].mem.base_type == IR_MEMBASE_ABS) {

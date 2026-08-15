@@ -22,6 +22,7 @@ typedef enum {
     RV_OP_MADD,   RV_OP_MSUB,     RV_OP_NMSUB,  RV_OP_NMADD,    RV_OP_OP_FP,  RV_OP_OP_V,  RV_OP__cust2,    RV_OP__48b_2,
     RV_OP_BRANCH, RV_OP_JALR,     RV_OP__resv0, RV_OP_JAL,      RV_OP_SYSTEM, RV_OP_OP_VE, RV_OP__cust3,    RV_OP__80b,
     /* clang-format on */
+    RV_OP_INVALID,
 } rv_opcode_t;
 
 // Types of RISC-V instruction encoding.
@@ -50,6 +51,8 @@ typedef enum {
     RV_ENC_PSEUDO_J,
     // The `jr` pseudo-instruction.
     RV_ENC_PSEUDO_JR,
+    // The `la` pseudo-instruction.
+    RV_ENC_PSEUDO_LA,
 } rv_enc_type_t;
 
 

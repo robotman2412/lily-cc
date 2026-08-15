@@ -105,11 +105,15 @@ backend_profile_t *rv_create_profile();
 void               rv_delete_profile(backend_profile_t *profile);
 // Prepare backend for codegen stage.
 void               rv_init_codegen(backend_profile_t *profile);
+// Perform target-specific post-regalloc passes.
+void               rv_postreg_pass(backend_profile_t *profile, ir_func_t *func);
+// Perform target-specific post-processing passes.
+void               rv_postproc_pass(backend_profile_t *profile, ir_func_t *func);
 
 // Emit load for register spilling.
-void rv_spill_load(backend_profile_t *profile, ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame);
+void rv_spill_load(backend_profile_t *profile, ir_insnloc_t loc, ir_retval_t dest, ir_frame_t *frame, int64_t offset);
 // Emit store for register spilling.
-void rv_spill_store(backend_profile_t *profile, ir_insnloc_t loc, ir_var_t *src, ir_frame_t *frame);
+void rv_spill_store(backend_profile_t *profile, ir_insnloc_t loc, ir_operand_t src, ir_frame_t *frame, int64_t offset);
 // Print directives before the function label.
 void rv_asm_print_prefunc(backend_profile_t *profile, ir_func_t const *func, FILE *to);
 

@@ -40,8 +40,9 @@ __attribute__((const)) static inline int ir_prim_bits(ir_prim_t prim) {
         case IR_PRIM_bool: return 1;
         case IR_PRIM_f32: return 32;
         case IR_PRIM_f64: return 64;
-        default: UNREACHABLE();
+        case IR_N_PRIM: UNREACHABLE();
     }
+    UNREACHABLE();
 }
 
 // Minimum value of integer primitive types (including bool).
@@ -225,6 +226,8 @@ typedef enum __attribute__((packed)) {
     // Mark arbitrary values as used.
     // Used by ABI lowering and inline assembly.
     IR_INSN_MARK_USED,
+    // Placeholder for the function epilogue.
+    IR_INSN_EPILOGUE,
 } ir_insn_type_t;
 
 // Type of IR operand.
@@ -317,6 +320,7 @@ typedef struct ir_func       ir_func_t;
 typedef uint16_t             regno_t;
 
 VEC_TYPE_DEF(vec_ir_operand_t, ir_operand_t);
+VEC_TYPE_DEF(vec_ir_frame_t, ir_frame_t *);
 
 // No register assigned.
 #define REGNO_NONE UINT16_MAX
@@ -670,6 +674,10 @@ struct ir_func {
     // The stack frame for arguments passed to this function on the stack.
     // For variadic functions, may in reality be larger than what IR says.
     ir_frame_t  *call_frame;
+    // The stack frame to use for frame link and return address.
+    // Always allocated to offset 0.
+    // For use by the backend only.
+    ir_frame_t  *link_frame;
     // Function arguments.
     ir_arg_t    *args;
     // Function entrypoint.
@@ -698,6 +706,8 @@ struct ir_func {
     size_t       frame_next_id;
     // Number that will be used for the next code block.
     size_t       code_next_id;
+    // Total size of the stack allocated for this function.
+    uint64_t     stack_footprint;
     // Enforce the SSA form.
     uint32_t     enforce_ssa      : 1;
     // Enforce comparison insn returns bool.
@@ -705,6 +715,10 @@ struct ir_func {
     // Function will use a frame pointer.
     // Always true if there are any `alloca` in the function.
     uint32_t     use_frame_ptr    : 1;
+    // Is a leaf function; does not call any other functions, even implicitly.
+    uint32_t     is_leaf          : 1;
+    // Funcion may call `alloca`.
+    uint32_t     uses_alloca      : 1;
 };
 
 // Byte size per primitive type.

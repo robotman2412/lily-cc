@@ -7,6 +7,7 @@
 
 #include "asm_print.h"
 #include "insn_proto.h"
+#include "ir_interpreter.h"
 #include "ir_types.h"
 #include "rv_backend.h"
 #include "unreachable.h"
@@ -88,6 +89,7 @@ void rv_asm_print_insn(backend_profile_t *profile, ir_insn_t const *insn, FILE *
         case RV_ENC_U:
         case RV_ENC_J:
         case RV_ENC_PSEUDO_MV:
+        case RV_ENC_PSEUDO_LA:
         case RV_ENC_PSEUDO_LI: force_ret = true; break;
         case RV_ENC_S:
         case RV_ENC_B:
@@ -96,12 +98,16 @@ void rv_asm_print_insn(backend_profile_t *profile, ir_insn_t const *insn, FILE *
         case RV_ENC_PSEUDO_J:
         case RV_ENC_PSEUDO_JR: force_ret = false; break;
     }
+    if (proto == &rv_insn_jal || proto == &rv_insn_jalr) {
+        force_ret = false;
+    }
     bool is_branchy = proto == &rv_insn_j || proto == &rv_insn_jr || proto == &rv_insn_jal || proto == &rv_insn_jalr
                       || enc->enc_type == RV_ENC_B;
 
     fputs(proto->name, to);
 
-    bool delim = false;
+    bool delim    = false;
+    bool need_tmp = false;
     if (insn->returns_len || force_ret) {
         fputc(' ', to);
         delim = true;
@@ -121,13 +127,18 @@ void rv_asm_print_insn(backend_profile_t *profile, ir_insn_t const *insn, FILE *
         ir_operand_t operand = insn->operands[i];
         if (operand.type == IR_OPERAND_TYPE_MEM) {
             switch (operand.mem.base_type) {
-                case IR_MEMBASE_ABS: fprintf(to, "%" PRId64, operand.mem.offset); break;
-                case IR_MEMBASE_SYM: fputs(operand.mem.base_sym, to); break;
-                case IR_MEMBASE_FRAME:
-                    assert(!is_branchy);
-                    // TODO: Compute proper offsets.
-                    fprintf(to, "%" PRId64 "(sp)", operand.mem.offset + operand.mem.base_frame->offset);
+                case IR_MEMBASE_ABS:
+                    fprintf(to, "%" PRId64, operand.mem.offset);
+                    need_tmp = true;
                     break;
+                case IR_MEMBASE_SYM:
+                    fputs(operand.mem.base_sym, to);
+                    if (operand.mem.offset) {
+                        fprintf(to, "%+" PRId64, operand.mem.offset);
+                    }
+                    need_tmp = true;
+                    break;
+                case IR_MEMBASE_FRAME: UNREACHABLE(); // Eliminated by arch postproc.
                 case IR_MEMBASE_CODE: asm_print_code_label(operand.mem.base_code, to); break;
                 case IR_MEMBASE_VAR: UNREACHABLE();
                 case IR_MEMBASE_REG:
@@ -140,7 +151,7 @@ void rv_asm_print_insn(backend_profile_t *profile, ir_insn_t const *insn, FILE *
                     break;
             }
         } else if (operand.type == IR_OPERAND_TYPE_CONST) {
-            ir_const_t iconst = operand.iconst;
+            ir_const_t iconst = ir_trim_const(operand.iconst);
             switch (iconst.prim_type) {
                 case IR_PRIM_bool:
                 case IR_PRIM_u8:
@@ -163,5 +174,10 @@ void rv_asm_print_insn(backend_profile_t *profile, ir_insn_t const *insn, FILE *
             assert(operand.type == IR_OPERAND_TYPE_REG);
             fputs(rv_reg_names[operand.regno], to);
         }
+    }
+
+    if (need_tmp && (enc->opcode == RV_OP_STORE || enc->opcode == RV_OP_STORE_FP)) {
+        // RISC-V backend uses t0 for address temporaries.
+        fputs(", t0", to);
     }
 }

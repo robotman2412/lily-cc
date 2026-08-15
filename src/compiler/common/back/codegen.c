@@ -8,9 +8,9 @@
 #include "arith128.h"
 #include "backend.h"
 #include "ir.h"
-#include "ir/ir_serialization.h"
 #include "ir_interpreter.h"
 #include "ir_optimizer.h"
+#include "ir_serialization.h"
 #include "ir_types.h"
 #include "list.h"
 #include "regalloc.h"
@@ -19,6 +19,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 
@@ -34,11 +35,36 @@ static void cg_remove_jumps(ir_func_t *func) {
     }
 }
 
+static inline bool can_isel(ir_insn_t *insn) {
+    switch (insn->type) {
+        case IR_INSN_EXPR2:
+        case IR_INSN_EXPR1:
+        case IR_INSN_JUMP:
+        case IR_INSN_BRANCH:
+        case IR_INSN_LEA:
+        case IR_INSN_LOAD:
+        case IR_INSN_STORE:
+        case IR_INSN_ALLOCA: return true;
+        case IR_INSN_CALL:
+        case IR_INSN_RETURN:
+        case IR_INSN_MEMCPY:
+        case IR_INSN_MEMSET: UNREACHABLE(); // Should already be eliminated.
+        case IR_INSN_CLOBBER:
+        case IR_INSN_MACHINE:
+        case IR_INSN_COMBINATOR:
+        case IR_INSN_CALLFRAME_ENTER:
+        case IR_INSN_CALLFRAME_EXIT:
+        case IR_INSN_MARK_USED:
+        case IR_INSN_EPILOGUE: return false;
+    }
+    UNREACHABLE();
+}
+
 // Select machine instructions for all IR instructions.
 static void cg_isel(backend_profile_t *profile, ir_code_t *code) {
     ir_insn_t *cur = container_of(code->insns.tail, ir_insn_t, node);
     while (cur) {
-        if (cur->type != IR_INSN_MACHINE && cur->type != IR_INSN_COMBINATOR && cur->type != IR_INSN_CLOBBER) {
+        if (can_isel(cur)) {
             ir_insn_t *res = profile->backend->isel(profile, cur);
             if (!res) {
                 fprintf(stderr, "BUG: Backend cannot select an instruction for `");
@@ -428,9 +454,10 @@ static void cg_promote_var_1(backend_profile_t *profile, ir_var_t *orig) {
             case IR_INSN_MEMSET:
             case IR_INSN_ALLOCA: goto needs_clamp;
             case IR_INSN_CLOBBER:
-            case IR_INSN_MACHINE:
+            case IR_INSN_MACHINE: // We're before the stage that these would be added.
             case IR_INSN_CALLFRAME_ENTER:
-            case IR_INSN_CALLFRAME_EXIT: UNREACHABLE(); // We're before the stage that these would be added.
+            case IR_INSN_CALLFRAME_EXIT:
+            case IR_INSN_EPILOGUE: UNREACHABLE(); // And these three don't have operands.
         }
     }
     return;
@@ -490,6 +517,34 @@ needs_clamp:;
     }
 }
 
+static void cg_alloc_one_frame(ir_func_t *func, ir_frame_t *frame) {
+    if (func->stack_footprint % frame->align) {
+        func->stack_footprint += frame->align - func->stack_footprint % frame->align;
+    }
+    func->stack_footprint += frame->size;
+    frame->offset          = func->stack_footprint;
+}
+
+// Rather naive stack frame allocator; sort most-aligned frame first, call frame always at the end.
+static void cg_alloc_frames(backend_profile_t *profile, ir_func_t *func) {
+    if (func->link_frame) {
+        cg_alloc_one_frame(func, func->link_frame);
+    }
+    dlist_foreach_node(ir_frame_t, frame, &func->frames_list) {
+        if (frame != func->call_frame && frame != func->link_frame) {
+            cg_alloc_one_frame(func, frame); // TODO: coalesce frames not live at the same time.
+        }
+    }
+    if (func->call_frame) {
+        cg_alloc_one_frame(func, func->call_frame);
+    }
+
+    // Ensure function's stack usage preserves alignment.
+    if (func->stack_footprint % profile->stack_align) {
+        func->stack_footprint += profile->stack_align - (func->stack_footprint % profile->stack_align);
+    }
+}
+
 // Convert an SSA-form IR function completely into executable machine code.
 // All IR instructions are replaced, code order is decided by potentially re-ordering the code blocks from the
 // functions, and unnecessary jumps are removed. When finished, the code blocks and instructions therein will be in
@@ -502,14 +557,20 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
     ir_optimize(func);
 
     // Replace arithmetic that is not supported with function calls.
+    func->is_leaf = true; // We also check whether it is a leaf function while we're iterating all instructions.
     dlist_foreach_node(ir_code_t, code, &func->code_list) {
         ir_insn_t *insn = (ir_insn_t *)code->insns.head;
         while (insn) {
             ir_insn_t *next = (ir_insn_t *)insn->node.next;
-            cg_functionize_exprs(profile, insn);
+            if (insn->type == IR_INSN_CALL) {
+                func->is_leaf = false;
+            } else {
+                cg_functionize_exprs(profile, insn);
+            }
             insn = next;
         }
     }
+    func->use_frame_ptr = !func->is_leaf;
 
     // TODO: Deduplication of return code.
 
@@ -521,10 +582,6 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
     dlist_foreach_node(ir_code_t, code, &func->code_list) {
         cg_xabi(profile, code);
     }
-
-    // Post-ABI optimization pass.
-    // TODO: We'd need markers for vars to keep here, as ABI lowering doesn't mark them yet.
-    // ir_optimize(func);
 
     // Remove jumps that go the the next code block linearly.
     cg_remove_jumps(func);
@@ -567,6 +624,16 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
 
     regalloc(profile, func);
 
+    if (profile->backend->postreg_pass) {
+        profile->backend->postreg_pass(profile, func);
+    }
+
+    cg_alloc_frames(profile, func);
+
+    if (profile->backend->postproc_pass) {
+        profile->backend->postproc_pass(profile, func);
+    }
+
     // Strip meta-instructions.
     dlist_foreach_node(ir_code_t, code, &func->code_list) {
         ir_insn_t *insn = (ir_insn_t *)code->insns.head;
@@ -578,16 +645,11 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
                 case IR_INSN_ALLOCA:
                 case IR_INSN_CALLFRAME_ENTER:
                 case IR_INSN_CALLFRAME_EXIT:
-                case IR_INSN_MARK_USED: ir_insn_delete(insn); break;
+                case IR_INSN_MARK_USED:
+                case IR_INSN_EPILOGUE: ir_insn_delete(insn); break;
                 default: UNREACHABLE();
             }
             insn = next;
         }
-    }
-
-    // Rather naive stack frame allocator; sort most-aligned frame first, call frame always at the end.
-
-    if (profile->backend->postproc_pass) {
-        profile->backend->postproc_pass(profile, func);
     }
 }

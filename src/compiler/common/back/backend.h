@@ -28,6 +28,12 @@ typedef enum __attribute__((packed)) {
     LILY_128_BITS,
 } lily_bits_t;
 
+__attribute__((const)) static inline int lily_bits_absolute(lily_bits_t bits) {
+    return 8 << bits;
+}
+
+
+
 // Type of data that can be stored in a register.
 typedef union regclass         regclass_t;
 // Information common to all usage of a backend.
@@ -70,6 +76,8 @@ struct backend {
     void (*delete_profile)(backend_profile_t *profile);
     // Prepare backend for codegen stage.
     void (*init_codegen)(backend_profile_t *profile);
+    // Perform target-specific post-regalloc passes.
+    void (*postreg_pass)(backend_profile_t *profile, ir_func_t *func);
     // Perform target-specific post-processing passes.
     void (*postproc_pass)(backend_profile_t *profile, ir_func_t *func);
     // Expand the ABI for a specific return instruction.
@@ -81,9 +89,13 @@ struct backend {
     // Perform instruction selection.
     ir_insn_t *(*isel)(backend_profile_t *profile, ir_insn_t *ir_insn);
     // Emit load for register spilling.
-    void (*ra_spill_load)(backend_profile_t *profile, ir_insnloc_t loc, ir_var_t *dest, ir_frame_t *frame);
+    void (*ra_spill_load)(
+        backend_profile_t *profile, ir_insnloc_t loc, ir_retval_t dest, ir_frame_t *frame, int64_t offset
+    );
     // Emit store for register spilling.
-    void (*ra_spill_store)(backend_profile_t *profile, ir_insnloc_t loc, ir_var_t *src, ir_frame_t *frame);
+    void (*ra_spill_store)(
+        backend_profile_t *profile, ir_insnloc_t loc, ir_operand_t src, ir_frame_t *frame, int64_t offset
+    );
     // Print directives before the function label.
     void (*asm_print_prefunc)(backend_profile_t *profile, ir_func_t const *func, FILE *to);
     // Print instruction for the assembler.
@@ -93,41 +105,42 @@ struct backend {
 // Information specific to a certain profile for a backend.
 struct backend_profile {
     // Parent backend.
-    backend_t const   *backend;
+    backend_t const *backend;
+
     // What the minimum bits for this profile's arithmetic is.
-    lily_bits_t        arith_min_bits;
+    lily_bits_t arith_min_bits;
     // What the maximum bits for this profile's arithmetic is.
-    lily_bits_t        arith_max_bits;
-    // Log-base 2 alignment requirement for functions.
-    uint8_t            log2_func_align;
-    // Has insns for f32.
-    bool               has_f32;
-    // Has insns for f64.
-    bool               has_f64;
-    // Has insns for float square rooot.
-    bool               has_fsqrt;
-    // Has insns for multiply.
-    bool               has_mul;
-    // Has insns for divide.
-    bool               has_div;
-    // Has insns for remainder.
-    bool               has_rem;
-    // Has insns for variable bit shift.
-    bool               has_var_shift;
-    // Has insns for count leading/trailing zeroes.
-    bool               has_count_zeroes;
-    // Smallest bitcount to use for implicit integer arithmetic calls.
-    lily_bits_t        implicit_arith_min_bits;
+    lily_bits_t arith_max_bits;
     // Pointer size.
-    lily_bits_t        ptr_bits;
+    lily_bits_t ptr_bits;
     // Native general-purpose register size.
-    lily_bits_t        gpr_bits;
+    lily_bits_t gpr_bits;
+
     // Number of general-purpose registers.
-    regno_t            gpr_count;
-    // Frame pointer register number.
-    regno_t            frame_ptr_regno;
-    // Stack pointer register number.
-    regno_t            stack_ptr_regno;
+    regno_t gpr_count;
+    // Frame pointer register.
+    // Informs the register allocator which register can't be used if frame pointers are in use.
+    regno_t frame_ptr_reg;
+    // Minimum stack alignment.
+    uint8_t stack_align;
+
+    // Has insns for f32.
+    uint32_t has_f32          : 1;
+    // Has insns for f64.
+    uint32_t has_f64          : 1;
+    // Has insns for float square rooot.
+    uint32_t has_fsqrt        : 1;
+    // Has insns for multiply.
+    uint32_t has_mul          : 1;
+    // Has insns for divide.
+    uint32_t has_div          : 1;
+    // Has insns for remainder.
+    uint32_t has_rem          : 1;
+    // Has insns for variable bit shift.
+    uint32_t has_var_shift    : 1;
+    // Has insns for count leading/trailing zeroes.
+    uint32_t has_count_zeroes : 1;
+
     // Type of data that can be operated on in a register.
     // Setting a regclass to all 0 will cause the register not to be used by resource allocation.
     regclass_t        *gpr_classes;

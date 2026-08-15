@@ -707,7 +707,8 @@ void ir_insn_delete(ir_insn_t *insn) {
         case IR_INSN_MEMSET:
         case IR_INSN_CALLFRAME_ENTER:
         case IR_INSN_CALLFRAME_EXIT:
-        case IR_INSN_MARK_USED: assert(insn->returns_len == 0); break;
+        case IR_INSN_MARK_USED:
+        case IR_INSN_EPILOGUE: assert(insn->returns_len == 0); break;
         case IR_INSN_CALL: assert(insn->returns_len <= 1); break;
         case IR_INSN_MACHINE:
         case IR_INSN_CLOBBER: break;
@@ -729,6 +730,7 @@ void ir_insn_delete(ir_insn_t *insn) {
         case IR_INSN_RETURN: assert(insn->operands_len <= 1); break;
         case IR_INSN_MEMCPY: assert(insn->operands_len == 3); break;
         case IR_INSN_MEMSET: assert(insn->operands_len == 3); break;
+        case IR_INSN_EPILOGUE:
         case IR_INSN_CLOBBER: assert(insn->operands_len == 0); break;
         case IR_INSN_CALL:
         case IR_INSN_MACHINE:
@@ -1167,6 +1169,11 @@ ir_insn_t *ir_add_mark_used(ir_insnloc_t loc, size_t operands_len, ir_operand_t 
     insn->flags = IR_INSN_FLAG_NOREORDER;
     ir_emplace_insn(loc, insn);
     return insn;
+}
+
+// Add a function epilogue placeholder.
+ir_insn_t *ir_add_epilogue(ir_insnloc_t loc) {
+    return ir_create_insn(loc, IR_INSN_EPILOGUE, false, (ir_retval_t){}, 0, NULL);
 }
 
 // Add a variable usage marker.

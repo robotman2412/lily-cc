@@ -162,6 +162,7 @@ ir_insn_t *rv_xabi_return(backend_profile_t *profile, ir_insn_t *ret_insn) {
     }
 
 replace:;
+    ir_add_epilogue(IR_BEFORE_INSN(ret_insn));
     // ret
     ir_insn_t *mach = ir_add_mach_insn(IR_BEFORE_INSN(ret_insn), false, (ir_retval_t){}, &rv_insn_ret, 0, NULL);
     ir_insn_delete(ret_insn);
@@ -382,23 +383,25 @@ ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
         // Return value registers.
         if (is_int_ret && ret_size <= ptr_size) {
             // a0 used to return a value.
-            ir_add_clobber_va(cc.loc, 1, IR_RETVAL_REG(RV_REG_A(1)));
+            cc.loc = IR_AFTER_INSN(ir_add_clobber_va(cc.loc, 1, IR_RETVAL_REG(RV_REG_A(1))));
         } else if (is_int_ret && ret_size <= 2 * ptr_size) {
             // a0 and a1 used to return a value.
             // No clobbers for a0 nor a1.
         } else {
             // No output registers.
-            ir_add_clobber_va(cc.loc, 2, IR_RETVAL_REG(RV_REG_A(0)), IR_RETVAL_REG(RV_REG_A(1)));
+            cc.loc
+                = IR_AFTER_INSN(ir_add_clobber_va(cc.loc, 2, IR_RETVAL_REG(RV_REG_A(0)), IR_RETVAL_REG(RV_REG_A(1))));
         }
         if (is_float_ret && ret_size <= fpr_size) {
             // fa0 used to return a value.
-            ir_add_clobber_va(cc.loc, 1, IR_RETVAL_REG(RV_REG_FA(1)));
+            cc.loc = IR_AFTER_INSN(ir_add_clobber_va(cc.loc, 1, IR_RETVAL_REG(RV_REG_FA(1))));
         } else if (is_float_ret && ret_size <= 2 * fpr_size) {
             // fa0 and fa1 used to return a value.
             // No clobbers for fa0 nor fa1.
         } else {
             // No output registers.
-            ir_add_clobber_va(cc.loc, 2, IR_RETVAL_REG(RV_REG_FA(0)), IR_RETVAL_REG(RV_REG_FA(1)));
+            cc.loc
+                = IR_AFTER_INSN(ir_add_clobber_va(cc.loc, 2, IR_RETVAL_REG(RV_REG_FA(0)), IR_RETVAL_REG(RV_REG_FA(1))));
         }
 
 #define c    ,
@@ -406,27 +409,27 @@ ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
 
         // Integer temporary registers.
         if (rve && rv_profile->is_rve) {
-            ir_add_clobber_va(
+            cc.loc = IR_AFTER_INSN(ir_add_clobber_va(
                 cc.loc,
                 4 + 3,
                 RV_RVE_NONRET_A_REGS(f, c), // a2-a5
                 RV_RVE_T_REGS(f, c)         // t0-t2
-            );
+            ));
         } else if (rve) {
-            ir_add_clobber_va(
+            cc.loc = IR_AFTER_INSN(ir_add_clobber_va(
                 cc.loc,
                 6 + 7 + 10,
                 RV_NONRET_A_REGS(f, c), // a2-a7
                 RV_ALL_T_REGS(f, c),    // t0-t6
                 RV_NONRVE_S_REGS(f, c)  // s2-s11
-            );
+            ));
         } else {
-            ir_add_clobber_va(
+            cc.loc = IR_AFTER_INSN(ir_add_clobber_va(
                 cc.loc,
                 6 + 7,
                 RV_NONRET_A_REGS(f, c), // a2-a7
                 RV_ALL_T_REGS(f, c)     // t0-t6
-            );
+            ));
         }
 
 #undef f
@@ -434,14 +437,14 @@ ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
 
         // Float temporary registers.
         if (f32 || f64) {
-            ir_add_clobber_va(
+            cc.loc = IR_AFTER_INSN(ir_add_clobber_va(
                 cc.loc,
-                2,
+                6 + 7,
                 RV_NONRET_FA_REGS(f, c), // fa2-fa7
                 RV_ALL_FT_REGS(f, c)     // ft0-ft6
-            );
+            ));
         } else if (rv_profile->ext_enabled[RV_EXT_F]) {
-            ir_add_clobber_va(cc.loc, 2, RV_ALL_FPRS(f, c));
+            cc.loc = IR_AFTER_INSN(ir_add_clobber_va(cc.loc, 32, RV_ALL_FPRS(f, c)));
         }
 
 #undef f
@@ -456,7 +459,7 @@ ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
     } else {
         proto = &rv_insn_jal;
     }
-    ir_insn_t *new_node = ir_add_mach_insn(cc.loc, true, IR_RETVAL_REG(0), proto, 1, (ir_operand_t const[]){call_dest});
+    ir_insn_t *new_node = ir_add_mach_insn(cc.loc, false, (ir_retval_t){}, proto, 1, (ir_operand_t const[]){call_dest});
     new_node->flags |= IR_INSN_FLAG_NOREORDER;
     cc.loc           = IR_AFTER_INSN(new_node);
 

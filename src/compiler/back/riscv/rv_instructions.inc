@@ -15,7 +15,7 @@
 #ifndef RV_INSN_PSEUDO
 // Pseudo-instructions.
 #define RV_INSN_PSEUDO(name, encoding) \
-    RV_INSN_BASE(name, 0, 0, 0, 0, encoding)
+    RV_INSN_BASE(name, RV_OP_INVALID, 0, 0, 0, encoding)
 #endif
 
 #ifndef RV_INSN_ALU_RI
@@ -58,6 +58,7 @@ RV_INSN_PSEUDO( li,      RV_ENC_PSEUDO_LI)
 RV_INSN_PSEUDO( ret,     RV_ENC_PSEUDO_RET)
 RV_INSN_PSEUDO( j,       RV_ENC_PSEUDO_J)
 RV_INSN_PSEUDO( jr,      RV_ENC_PSEUDO_JR)
+RV_INSN_PSEUDO( la,      RV_ENC_PSEUDO_LA)
 
 /* ==== RV32I instructions ==== */
 

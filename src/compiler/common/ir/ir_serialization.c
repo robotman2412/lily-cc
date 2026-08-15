@@ -164,6 +164,7 @@ void ir_insn_serialize(ir_insn_t const *insn, backend_profile_t const *profile_o
         case IR_INSN_CALLFRAME_ENTER: fputs("callframe_enter", to); break;
         case IR_INSN_CALLFRAME_EXIT: fputs("callframe_exit", to); break;
         case IR_INSN_MARK_USED: fputs("mark_used", to); break;
+        case IR_INSN_EPILOGUE: fputs("epilogue", to); break;
     }
 
     if (insn->type == IR_INSN_COMBINATOR) {
@@ -494,6 +495,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                         }
                         break;
                     case IR_KEYW_clobber:
+                    case IR_KEYW_epilogue:
                         if (operands_len) {
                             cctx_diagnostic(from->cctx, stmt->params[1].pos, DIAG_ERR, "Instruction takes no operands");
                             insn_ok = false;
@@ -525,6 +527,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     case IR_KEYW_callframe_enter:
                     case IR_KEYW_callframe_exit:
                     case IR_KEYW_mark_used:
+                    case IR_KEYW_epilogue:
                         if (returns_len != 0) {
                             cctx_diagnostic(from->cctx, stmt->params[1].pos, DIAG_ERR, "Instruction returns nothing");
                             insn_ok = false;
@@ -856,6 +859,8 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                             break;
 
                         case IR_KEYW_mark_used: ir_add_mark_used(IR_APPEND(cur_code), operands_len, operands); break;
+
+                        case IR_KEYW_epilogue: ir_add_epilogue(IR_APPEND(cur_code)); break;
                     }
                 }
 

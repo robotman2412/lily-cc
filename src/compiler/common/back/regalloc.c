@@ -7,6 +7,7 @@
 
 #include "arrays.h"
 #include "backend.h"
+#include "bitops.h"
 #include "ir.h"
 #include "ir_types.h"
 #include "lilycc_malloc.h"
@@ -380,10 +381,10 @@ static void ra_spill(backend_profile_t *profile, ra_nodes_t nodes) {
     set_addall(&orig_use, &to_spill->used_at);
 
     set_foreach(ir_insn_t, insn, &orig_def) {
-        profile->backend->ra_spill_store(profile, IR_AFTER_INSN(insn), to_spill, frame);
+        profile->backend->ra_spill_store(profile, IR_AFTER_INSN(insn), IR_OPERAND_VAR(to_spill), frame, 0);
     }
     set_foreach(ir_insn_t, insn, &orig_use) {
-        profile->backend->ra_spill_load(profile, IR_BEFORE_INSN(insn), to_spill, frame);
+        profile->backend->ra_spill_load(profile, IR_BEFORE_INSN(insn), IR_RETVAL_VAR(to_spill), frame, 0);
     }
 
     set_clear(&orig_def);
@@ -412,7 +413,7 @@ static void push_node(ra_nodes_t *nodes, ra_node_t *node) {
     set_add(&nodes->nodes, node);
 }
 
-static void choose_one_reg(backend_profile_t *profile, ra_node_t *node) {
+static void choose_one_reg(backend_profile_t *profile, ra_node_t *node, uint32_t *callee_save, bool use_frame_ptr) {
     if (node->regno != REGNO_NONE) {
         return;
     }
@@ -424,6 +425,10 @@ static void choose_one_reg(backend_profile_t *profile, ra_node_t *node) {
     bool any_match  = false;
     bool weak_match = false;
     for (regno_t regno = 0; regno < profile->gpr_count; regno++) {
+        if (use_frame_ptr && regno == profile->frame_ptr_reg) {
+            continue;
+        }
+
         // Check regclass matches.
         regclass_t regclass = profile->gpr_classes[regno];
         switch (node->var->prim_type) {
@@ -493,11 +498,53 @@ static void choose_one_reg(backend_profile_t *profile, ra_node_t *node) {
         fprintf(stderr, "BUG: No regclass matches primitive type %s\n", ir_prim_names[node->var->prim_type]);
         abort();
     }
+
+    if (profile->gpr_classes[node->regno].callee_save) {
+        callee_save[node->regno / 32] |= 1 << (node->regno % 32);
+    }
+}
+
+static void ra_callee_save_regs_impl(
+    backend_profile_t *profile, ir_frame_t *frame, uint32_t const *callee_save, ir_insnloc_t loc, bool is_restore
+) {
+    int64_t word_size = lily_bits_absolute(profile->gpr_bits) / 8;
+    int64_t offset    = 0;
+    for (size_t i = 0; i < (profile->gpr_count + 31) / 32; i++) {
+        uint32_t tmp = callee_save[i];
+        while (tmp) {
+            regno_t reg  = lilycc_ctz32(tmp);
+            tmp         ^= 1 << reg;
+
+            if (is_restore) {
+                profile->backend->ra_spill_load(profile, loc, IR_RETVAL_REG(reg), frame, offset);
+            } else {
+                profile->backend->ra_spill_store(profile, loc, IR_OPERAND_REG(reg), frame, offset);
+            }
+            offset += word_size;
+        }
+    }
+}
+
+static void
+    ra_callee_save_regs(backend_profile_t *profile, ir_func_t *func, ir_frame_t *frame, uint32_t const *callee_save) {
+    ra_callee_save_regs_impl(profile, frame, callee_save, IR_PREPEND(func->entry), false);
+
+    dlist_foreach_node(ir_code_t, code, &func->code_list) {
+        dlist_foreach_node_rev(ir_insn_t, insn, &code->insns) {
+            if (insn->type == IR_INSN_EPILOGUE) {
+                ra_callee_save_regs_impl(profile, frame, callee_save, IR_BEFORE_INSN(insn), true);
+                goto next;
+            }
+        }
+    next:;
+    }
 }
 
 // Perform resource allocation for the given function.
 // Allocates registers to IR variables and frame offsets ir IR stack frames.
 void regalloc(backend_profile_t *profile, ir_func_t *func) {
+    uint32_t *callee_save = lilycc_calloc((profile->gpr_count + 31) / 32, sizeof(uint32_t));
+
     ra_nodes_t nodes;
 again:
     nodes = ra_liveness(func);
@@ -570,13 +617,14 @@ constrained: // Constrained, uncolored nodes.
     while (stack.len) {
         ra_node_t *node = vec_pop(&stack);
         push_node(&nodes, node);
-        choose_one_reg(profile, node);
+        choose_one_reg(profile, node, callee_save, func->use_frame_ptr);
         must_spill |= node->regno == REGNO_NONE;
     }
 
     if (must_spill) {
         // Must spill a node.
         ra_spill(profile, nodes);
+        memset(callee_save, 0, (profile->gpr_count + 31) / 32 * sizeof(uint32_t));
         goto again;
     }
 
@@ -595,5 +643,17 @@ constrained: // Constrained, uncolored nodes.
         ir_var_replace(node->var, IR_OPERAND_REG(node->regno));
     }
 
+    // Create spill frames for callee-saved registers.
+    uint64_t count = 0;
+    for (size_t i = 0; i < (profile->gpr_count + 31) / 32; i++) {
+        count += lilycc_popcount32(callee_save[i]);
+    }
+    if (count > 0) {
+        uint64_t    gpr_size    = lily_bits_absolute(profile->gpr_bits) / 8;
+        ir_frame_t *spill_frame = ir_frame_create(func, count * gpr_size, gpr_size, NULL);
+        ra_callee_save_regs(profile, func, spill_frame, callee_save);
+    }
+
+    lilycc_free(callee_save);
     ra_nodes_destroy(nodes);
 }

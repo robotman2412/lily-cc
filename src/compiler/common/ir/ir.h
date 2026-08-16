@@ -76,6 +76,9 @@ void      ir_var_replace(ir_var_t *var, ir_operand_t value);
 // Create a new IR code block.
 // If `name` is `NULL`, its name will be `code%zu` where `%zu` is a number.
 ir_code_t *ir_code_create(ir_func_t *func, char const *name);
+// Create a new IR code block and place it after `pred` in the schedule.
+// If `name` is `NULL`, its name will be `code%zu` where `%zu` is a number.
+ir_code_t *ir_code_create_after(ir_code_t *pred, char const *name);
 // Delete an IR code block and all contained instructions.
 void       ir_code_delete(ir_code_t *code);
 

@@ -25,6 +25,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 
 
@@ -415,9 +416,9 @@ static c_lower_expr_t c_lower_expr_ternary_mem(
 
     ir_var_t   *condvar = ir_var_create(code->func, IR_PRIM_bool, NULL);
     ir_frame_t *res     = ir_frame_create(code->func, size, align, NULL);
-    ir_code_t  *ldom    = ir_code_create(code->func, NULL);
-    ir_code_t  *rdom    = ir_code_create(code->func, NULL);
-    ir_code_t  *out     = ir_code_create(code->func, NULL);
+    ir_code_t  *ldom    = ir_code_create_after(code, NULL);
+    ir_code_t  *rdom    = ir_code_create_after(ldom, NULL);
+    ir_code_t  *out     = ir_code_create_after(rdom, NULL);
 
     ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(condvar), IR_OP1_snez, cond);
     ir_add_branch(IR_APPEND(code), IR_OPERAND_VAR(condvar), ldom);
@@ -461,8 +462,8 @@ static c_lower_expr_t c_lower_expr_ternary_var(
 
     if (!ternary->if_expr) {
         // Two-operand ternary (GNU extension).
-        ir_code_t *rdom = ir_code_create(code->func, NULL);
-        ir_code_t *out  = ir_code_create(code->func, NULL);
+        ir_code_t *rdom = ir_code_create_after(code, NULL);
+        ir_code_t *out  = ir_code_create_after(rdom, NULL);
 
         ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(res), IR_OP1_mov, cond);
         ir_add_branch(IR_APPEND(code), IR_OPERAND_VAR(condvar), out);
@@ -477,9 +478,9 @@ static c_lower_expr_t c_lower_expr_ternary_var(
 
         code = out;
     } else {
-        ir_code_t *ldom = ir_code_create(code->func, NULL);
-        ir_code_t *rdom = ir_code_create(code->func, NULL);
-        ir_code_t *out  = ir_code_create(code->func, NULL);
+        ir_code_t *ldom = ir_code_create_after(code, NULL);
+        ir_code_t *rdom = ir_code_create_after(ldom, NULL);
+        ir_code_t *out  = ir_code_create_after(rdom, NULL);
 
         ir_add_branch(IR_APPEND(code), IR_OPERAND_VAR(condvar), ldom);
         ir_add_jump(IR_APPEND(code), rdom);
@@ -529,8 +530,8 @@ static c_lower_expr_t
     ir_var_t  *ltmp = ir_var_create(code->func, IR_PRIM_bool, NULL);
     ir_var_t  *rtmp = ir_var_create(code->func, IR_PRIM_bool, NULL);
     ir_var_t  *res  = ir_var_create(code->func, cc->options.int32 ? IR_PRIM_s32 : IR_PRIM_s16, NULL);
-    ir_code_t *rdom = ir_code_create(code->func, NULL);
-    ir_code_t *out  = ir_code_create(code->func, NULL);
+    ir_code_t *rdom = ir_code_create_after(code, NULL);
+    ir_code_t *out  = ir_code_create_after(rdom, NULL);
 
     c_lower_expr_t lhs = c_lower_expr(cc, code, scope, calc->lhs);
     code               = lhs.code;
@@ -770,10 +771,10 @@ ir_code_t *c_lower_stmt_stmts(c_compiler_t *cc, ir_code_t *code, c_lower_scope_t
 
 // Lower a C IR for loop statement to Lily IR.
 ir_code_t *c_lower_stmt_for(c_compiler_t *cc, ir_code_t *code, c_lower_scope_t *scope, cir_for_t const *for_loop) {
-    ir_code_t *inc   = ir_code_create(code->func, NULL);
-    ir_code_t *check = ir_code_create(code->func, NULL);
-    ir_code_t *body  = ir_code_create(code->func, NULL);
-    ir_code_t *out   = ir_code_create(code->func, NULL);
+    ir_code_t *inc   = ir_code_create_after(code, NULL);
+    ir_code_t *check = ir_code_create_after(inc, NULL);
+    ir_code_t *body  = ir_code_create_after(check, NULL);
+    ir_code_t *out   = ir_code_create_after(body, NULL);
 
     c_lower_scope_t nested_scope = {
         .parent          = scope,
@@ -820,9 +821,9 @@ ir_code_t *c_lower_stmt_for(c_compiler_t *cc, ir_code_t *code, c_lower_scope_t *
 // Lower a C IR while/do-while loop statement to Lily IR.
 ir_code_t *
     c_lower_stmt_while(c_compiler_t *cc, ir_code_t *code, c_lower_scope_t *scope, cir_while_t const *while_loop) {
-    ir_code_t *check = ir_code_create(code->func, NULL);
-    ir_code_t *body  = ir_code_create(code->func, NULL);
-    ir_code_t *out   = ir_code_create(code->func, NULL);
+    ir_code_t *check = ir_code_create_after(code, NULL);
+    ir_code_t *body  = ir_code_create_after(check, NULL);
+    ir_code_t *out   = ir_code_create_after(body, NULL);
 
     c_lower_scope_t nested_scope = {
         .parent          = scope,
@@ -888,8 +889,8 @@ static void check_case_overlap(
 // Lower a C IR switch statement to Lily IR.
 ir_code_t *
     c_lower_stmt_switch(c_compiler_t *cc, ir_code_t *code, c_lower_scope_t *scope, cir_switch_t const *switch_stmt) {
-    ir_code_t *body = ir_code_create(code->func, NULL);
-    ir_code_t *out  = ir_code_create(code->func, NULL);
+    ir_code_t *body = ir_code_create_after(code, NULL);
+    ir_code_t *out  = ir_code_create_after(body, NULL);
 
     vec_c_lower_case_t case_labels  = {0};
     c_lower_scope_t    nested_scope = {
@@ -924,8 +925,8 @@ ir_code_t *
         } else if (label->is_ranged) {
             // Inclusive range case labels.
             check_case_overlap(cc, case_labels.arr, i, label->lo, label->hi, label->pos);
-            ir_code_t *check = ir_code_create(code->func, NULL);
-            ir_code_t *next  = ir_code_create(code->func, NULL);
+            ir_code_t *check = ir_code_create_after(code, NULL);
+            ir_code_t *next  = ir_code_create_after(check, NULL);
 
             ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(condvar), IR_OP2_slt, expr.val, IR_OPERAND_CONST(label->lo));
             ir_add_branch(IR_APPEND(code), IR_OPERAND_VAR(condvar), next);
@@ -940,7 +941,7 @@ ir_code_t *
         } else {
             // Single value case labels.
             check_case_overlap(cc, case_labels.arr, i, label->lo, label->lo, label->pos);
-            ir_code_t *next = ir_code_create(code->func, NULL);
+            ir_code_t *next = ir_code_create_after(code, NULL);
 
             ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(condvar), IR_OP2_seq, expr.val, IR_OPERAND_CONST(label->lo));
             ir_add_branch(IR_APPEND(code), IR_OPERAND_VAR(condvar), label->code);
@@ -966,9 +967,9 @@ ir_code_t *c_lower_stmt_if(c_compiler_t *cc, ir_code_t *code, c_lower_scope_t *s
     ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(condvar), IR_OP1_snez, cond.val);
 
     if (if_stmt->else_body) {
-        ir_code_t *if_body   = ir_code_create(code->func, NULL);
-        ir_code_t *else_body = ir_code_create(code->func, NULL);
-        ir_code_t *out       = ir_code_create(code->func, NULL);
+        ir_code_t *if_body   = ir_code_create_after(code, NULL);
+        ir_code_t *else_body = ir_code_create_after(if_body, NULL);
+        ir_code_t *out       = ir_code_create_after(else_body, NULL);
 
         ir_add_branch(IR_APPEND(code), IR_OPERAND_VAR(condvar), if_body);
         ir_add_jump(IR_APPEND(code), else_body);
@@ -981,8 +982,8 @@ ir_code_t *c_lower_stmt_if(c_compiler_t *cc, ir_code_t *code, c_lower_scope_t *s
         return out;
 
     } else {
-        ir_code_t *if_body = ir_code_create(code->func, NULL);
-        ir_code_t *out     = ir_code_create(code->func, NULL);
+        ir_code_t *if_body = ir_code_create_after(code, NULL);
+        ir_code_t *out     = ir_code_create_after(if_body, NULL);
 
         ir_add_branch(IR_APPEND(code), IR_OPERAND_VAR(condvar), if_body);
         ir_add_jump(IR_APPEND(code), out);
@@ -996,7 +997,7 @@ ir_code_t *c_lower_stmt_if(c_compiler_t *cc, ir_code_t *code, c_lower_scope_t *s
 
 // Lower a C IR case-labeled statement to Lily IR.
 ir_code_t *c_lower_stmt_case(c_compiler_t *cc, ir_code_t *code, c_lower_scope_t *scope, cir_case_t const *cir_case) {
-    ir_code_t *out = ir_code_create(code->func, NULL);
+    ir_code_t *out = ir_code_create_after(code, NULL);
     ir_add_jump(IR_APPEND(code), out);
     assert(scope->case_labels != NULL);
 
@@ -1050,7 +1051,7 @@ ir_code_t *c_lower_stmt_goto(c_compiler_t *cc, ir_code_t *code, c_lower_scope_t 
     assert(target != NULL);
     ir_add_jump(IR_APPEND(code), target);
     // Dummy code block; any statements afer this one are dead.
-    return ir_code_create(code->func, NULL);
+    return ir_code_create_after(code, NULL);
 }
 
 // Lower a C IR break statement to Lily IR.
@@ -1061,7 +1062,7 @@ ir_code_t *
     assert(target != NULL);
     ir_add_jump(IR_APPEND(code), target);
     // Dummy code block; any statements afer this one are dead.
-    return ir_code_create(code->func, NULL);
+    return ir_code_create_after(code, NULL);
 }
 
 // Lower a C IR return statement to Lily IR.

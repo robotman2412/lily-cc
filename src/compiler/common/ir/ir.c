@@ -608,9 +608,7 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
     assert(var->used_at.len == 0);
 }
 
-// Create a new IR code block.
-// If `name` is `NULL`, its name will be `code%zu` where `%zu` is a number.
-ir_code_t *ir_code_create(ir_func_t *func, char const *name) {
+ir_code_t *ir_code_create_impl(ir_func_t *func, char const *name) {
     ir_code_t *code = lilycc_calloc(1, sizeof(ir_code_t));
     code->func      = func;
     code->pred      = PTR_SET_EMPTY;
@@ -627,7 +625,22 @@ ir_code_t *ir_code_create(ir_func_t *func, char const *name) {
     }
     name_free_assert(func, code->name);
     map_set(&func->code_by_name, code->name, code);
+    return code;
+}
+
+// Create a new IR code block.
+// If `name` is `NULL`, its name will be `code%zu` where `%zu` is a number.
+ir_code_t *ir_code_create(ir_func_t *func, char const *name) {
+    ir_code_t *code = ir_code_create_impl(func, name);
     dlist_append(&func->code_list, &code->node);
+    return code;
+}
+
+// Create a new IR code block and place it after `pred` in the schedule.
+// If `name` is `NULL`, its name will be `code%zu` where `%zu` is a number.
+ir_code_t *ir_code_create_after(ir_code_t *pred, char const *name) {
+    ir_code_t *code = ir_code_create_impl(pred->func, name);
+    dlist_insert_after(&pred->func->code_list, &pred->node, &code->node);
     return code;
 }
 
@@ -782,6 +795,40 @@ void ir_insn_set_operand(ir_insn_t *insn, size_t index, ir_operand_t operand) {
         } else if (operand.mem.base_type == IR_MEMBASE_SYM) {
             assert(operand.mem.base_sym);
         }
+    }
+
+    switch (insn->type) {
+        case IR_INSN_MACHINE:
+        case IR_INSN_MARK_USED: break;
+        case IR_INSN_ALLOCA:
+        case IR_INSN_COMBINATOR:
+        case IR_INSN_CALL:
+        case IR_INSN_RETURN:
+        case IR_INSN_EXPR2:
+        case IR_INSN_EXPR1: assert(operand.type != IR_OPERAND_TYPE_MEM); break;
+        case IR_INSN_JUMP:
+        case IR_INSN_BRANCH:
+        case IR_INSN_LEA:
+        case IR_INSN_LOAD:
+        case IR_INSN_STORE:
+            if (index == 0) {
+                assert(operand.type == IR_OPERAND_TYPE_MEM);
+            } else {
+                assert(operand.type != IR_OPERAND_TYPE_MEM);
+            }
+            break;
+        case IR_INSN_MEMCPY:
+        case IR_INSN_MEMSET:
+            if (index < 2) {
+                assert(operand.type == IR_OPERAND_TYPE_MEM);
+            } else {
+                assert(operand.type != IR_OPERAND_TYPE_MEM);
+            }
+            break;
+        case IR_INSN_CLOBBER:
+        case IR_INSN_CALLFRAME_ENTER:
+        case IR_INSN_CALLFRAME_EXIT:
+        case IR_INSN_EPILOGUE: UNREACHABLE();
     }
 #endif
 
@@ -995,6 +1042,10 @@ ir_insn_t *ir_add_expr1(ir_insnloc_t loc, ir_retval_t dest, ir_op1_type_t oper, 
     // TODO: Enforce no additive operations for bool.
     assert(oper < IR_N_OP1);
     bool enforce_cmp_bool = ir_insnloc_code(loc)->func->enforce_cmp_bool;
+    if (operand.type == IR_OPERAND_TYPE_MEM || operand.type == IR_OPERAND_TYPE_STRUCT) {
+        fprintf(stderr, "BUG: IR expr1 operands must not be MEM nor STRUCT\n");
+        abort();
+    }
     if (oper == IR_OP1_snez || oper == IR_OP1_seqz) {
         if (dest.type == IR_RETVAL_TYPE_VAR) {
             if (dest.dest_var->prim_type != IR_PRIM_bool && enforce_cmp_bool) {
@@ -1024,6 +1075,11 @@ ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_retval_t dest, ir_op2_type_t oper, 
     bool      enforce_cmp_bool = ir_insnloc_code(loc)->func->enforce_cmp_bool;
     ir_prim_t lhs_prim         = lhs.type != IR_OPERAND_TYPE_REG ? ir_operand_prim(lhs) : IR_N_PRIM;
     ir_prim_t rhs_prim         = rhs.type != IR_OPERAND_TYPE_REG ? ir_operand_prim(rhs) : IR_N_PRIM;
+    if (lhs.type == IR_OPERAND_TYPE_MEM || lhs.type == IR_OPERAND_TYPE_STRUCT || rhs.type == IR_OPERAND_TYPE_MEM
+        || rhs.type == IR_OPERAND_TYPE_STRUCT) {
+        fprintf(stderr, "BUG: IR expr1 operands must not be MEM nor STRUCT\n");
+        abort();
+    }
     if (lhs.type != IR_OPERAND_TYPE_REG && rhs.type != IR_OPERAND_TYPE_REG && lhs_prim != rhs_prim) {
         fprintf(stderr, "BUG: IR %s has conflicting operand types\n", ir_op2_names[oper]);
         abort();
@@ -1429,7 +1485,7 @@ ir_insn_t *ir_next_after(ir_insn_t const *insn) {
 
 // Get the branch target instruction.
 ir_insn_t *ir_branch_target(ir_insn_t const *insn) {
-    if (insn->type != IR_INSN_BRANCH) {
+    if (insn->type != IR_INSN_BRANCH && insn->type != IR_INSN_JUMP) {
         return NULL;
     }
     return ir_first_in_code(insn->operands[0].mem.base_code);

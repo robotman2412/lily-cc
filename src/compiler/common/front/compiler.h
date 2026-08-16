@@ -140,6 +140,8 @@ struct cctx {
     srcfile_t **srcs;
     // Linked list of diagnostics.
     dlist_t     diagnostics;
+    // Number of error diagnostics.
+    size_t      n_err;
 };
 
 // Diagnostic message.

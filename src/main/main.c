@@ -53,13 +53,21 @@ static void compile2(char const *path) {
     cir_trans_unit_t *tu  = c_compile(cc, ast);
 
     for (size_t i = 0; i < tu->units.len; i++) {
-        if (tu->units.arr[i]->tag != CIR_UNIT_FUNC) {
-            continue;
+        switch (tu->units.arr[i]->tag) {
+            case CIR_UNIT_DECL: printf("decl %s\n", tu->units.arr[i]->decl->name); break;
+            case CIR_UNIT_FUNC: printf("func %s\n", tu->units.arr[i]->func->name); break;
         }
-        ir_func_t *ir = c_lower_func(cc, tu->units.arr[i]->func);
-        codegen(profile, ir);
-        printf("\n");
-        asm_print_func(ir, profile, stdout);
+    }
+    if (cctx->n_err == 0) {
+        for (size_t i = 0; i < tu->units.len; i++) {
+            if (tu->units.arr[i]->tag != CIR_UNIT_FUNC) {
+                continue;
+            }
+            ir_func_t *ir = c_lower_func(cc, tu->units.arr[i]->func);
+            codegen(profile, ir);
+            printf("\n");
+            asm_print_func(ir, profile, stdout);
+        }
     }
 
     c_ast_def_list_delete(ast);

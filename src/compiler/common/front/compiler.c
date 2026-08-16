@@ -113,6 +113,11 @@ diagnostic_t *cctx_diagnostic(cctx_t *ctx, pos_t pos, diag_lvl_t lvl, char const
     diag->lvl  = lvl;
     diag->msg  = buf;
     dlist_append(&ctx->diagnostics, &diag->node);
+
+    if (lvl == DIAG_ERR) {
+        ctx->n_err++;
+    }
+
     return diag;
 }
 

@@ -33,6 +33,7 @@ static void link_vars(map_t *ra_vars, set_t const *vars) {
         if (!node1) {
             continue;
         }
+        assert(node1->var == var1);
         set_foreach(ir_var_t, var2, vars) {
             if (var1 == var2) {
                 continue;
@@ -41,6 +42,7 @@ static void link_vars(map_t *ra_vars, set_t const *vars) {
             if (!node2) {
                 continue;
             }
+            assert(node2->var == var2);
             set_add(&node1->links, node2);
         }
     }
@@ -48,6 +50,7 @@ static void link_vars(map_t *ra_vars, set_t const *vars) {
 
 // Helper for `ra_liveness` that links IR variables to physical registers.
 static void link_regs(ra_node_t *node, map_t const *ra_vars, set_t const *vars) {
+    assert(node->var == NULL);
     set_foreach(ir_var_t, var, vars) {
         ra_node_t *reg_node = map_get(ra_vars, var);
         assert(reg_node != NULL);
@@ -132,7 +135,15 @@ ra_nodes_t ra_liveness(ir_func_t const *func) {
                 // Variables referenced.
                 assert(insn->type != IR_INSN_COMBINATOR);
                 for (size_t x = 0; x < insn->operands_len; x++) {
-                    IR_FOR_OPERAND_VARS(insn->operands[x], var, set_add(&lt_nodes[i].use, var););
+                    IR_FOR_OPERAND_VARS(
+                        insn->operands[x],
+                        var,
+                        if (var->assigned_at.len) {
+                            // Only keep if the var is assigned at least once.
+                            // If undefined but used, we will simply accept any arbitrary register chosen.
+                            set_add(&lt_nodes[i].use, var);
+                        }
+                    );
                 }
 
                 // Variables defined.
@@ -288,43 +299,43 @@ void ra_nodes_destroy(ra_nodes_t nodes) {
 
 // Count IR instructions until first use.
 static int64_t time_to_use(ir_var_t *var) {
-    set_t work = PTR_SET_EMPTY;
+    if (var->used_at.len == 0 || var->assigned_at.len == 0) {
+        return INT64_MAX;
+    }
+
+    set_t covered = PTR_SET_EMPTY;
+    set_t work    = PTR_SET_EMPTY;
+    set_addall(&covered, &var->assigned_at);
     set_addall(&work, &var->assigned_at);
 
-    int64_t time = -1;
-    while (1) {
+    int64_t time = 0;
+    while (work.len) {
         set_t next = PTR_SET_EMPTY;
         set_foreach(ir_insn_t, insn, &work) {
             if (set_contains(&var->used_at, insn)) {
                 set_clear(&next);
                 set_clear(&work);
+                set_clear(&covered);
                 return time;
             }
-            if (insn->type == IR_INSN_JUMP) {
-                ir_insn_t *tmp = ir_branch_target(insn);
-                if (tmp) {
-                    set_add(&next, tmp);
-                }
-            } else if (insn->type != IR_INSN_RETURN) {
-                if (insn->type == IR_INSN_BRANCH) {
-                    ir_insn_t *tmp = ir_branch_target(insn);
-                    if (tmp) {
-                        set_add(&next, tmp);
-                    }
-                }
-                ir_insn_t *tmp = ir_next_after(insn);
-                if (tmp) {
-                    set_add(&next, tmp);
+            if (insn->node.next) {
+                set_add(&next, insn->node.next);
+            } else {
+                set_foreach(ir_code_t, succ, &insn->code->succ) {
+                    set_add(&next, ir_first_in_code(succ));
                 }
             }
         }
         set_clear(&work);
         work = next;
+        set_removeall(&work, &covered);
+        set_addall(&covered, &work);
 
         time++;
     }
+    set_clear(&covered);
 
-    return time;
+    return INT64_MAX;
 }
 
 // Estimate node spill cost.
@@ -332,23 +343,27 @@ void ra_spill_cost(backend_profile_t *profile, ra_node_t *node) {
     (void)profile;
     if (node->var == NULL) {
         // Can't spill precolored nodes.
-        node->spill_cost = INT_MAX;
+        node->spill_cost = INT64_MAX;
         return;
     }
-
-    if (node->var->used_at.len == 0) {
-        // Don't spill something never used.
-        assert(node->links.len == 0);
-        node->spill_cost = INT_MAX;
+    if (node->var->no_spill) {
+        // Was already spilled previously.
+        node->spill_cost = INT64_MAX;
         return;
     }
 
     int64_t ttu = time_to_use(node->var);
-    if (ttu < 1 && node->var->used_at.len == 1) {
-        // Variable used immediately and only once; don't spill.
-        node->spill_cost = INT_MAX;
+    if (ttu == INT64_MAX) {
+        // Never used; no need to spill.
+        node->spill_cost = INT64_MAX;
         return;
-    } else if (ttu < 1) {
+    }
+    if (ttu < 1 && node->var->used_at.len <= 1) {
+        // Variable used immediately and only once; don't spill.
+        node->spill_cost = INT64_MAX;
+        return;
+    }
+    if (ttu < 1) {
         ttu = 1;
     }
 
@@ -370,6 +385,35 @@ static void ra_spill(backend_profile_t *profile, ra_nodes_t nodes) {
 
     if (spill_cost == INT64_MAX) {
         fprintf(stderr, "BUG: Cannot select IR variable to spill\n");
+
+        set_foreach(ra_node_t, node, &nodes.nodes) {
+            if (node->var && node->regno == REGNO_NONE) {
+                fprintf(stderr, "CULPRIT: %%%s\n", node->var->name);
+            }
+        }
+
+        set_foreach(ra_node_t, node, &nodes.nodes) {
+            if (node->var) {
+                fprintf(stderr, "%%%s", node->var->name);
+            }
+            if (node->regno != REGNO_NONE) {
+                fprintf(stderr, ":$%s", profile->gpr_names[node->regno]);
+            }
+            if (node->links.len > 0) {
+                fputs(" <=", stderr);
+            }
+            set_foreach(ra_node_t, link, &node->links) {
+                fprintf(stderr, " ");
+                if (link->var) {
+                    fprintf(stderr, "%%%s", link->var->name);
+                } else {
+                    assert(link->regno != REGNO_NONE);
+                    fprintf(stderr, ":$%s", profile->gpr_names[link->regno]);
+                }
+            }
+            fprintf(stderr, "\n");
+        }
+
         abort();
     }
 
@@ -386,6 +430,7 @@ static void ra_spill(backend_profile_t *profile, ra_nodes_t nodes) {
     set_foreach(ir_insn_t, insn, &orig_use) {
         profile->backend->ra_spill_load(profile, IR_BEFORE_INSN(insn), IR_RETVAL_VAR(to_spill), frame, 0);
     }
+    to_spill->no_spill = true;
 
     set_clear(&orig_def);
     set_clear(&orig_use);
@@ -509,7 +554,7 @@ static void ra_callee_save_regs_impl(
 ) {
     int64_t word_size = lily_bits_absolute(profile->gpr_bits) / 8;
     int64_t offset    = 0;
-    for (size_t i = 0; i < (profile->gpr_count + 31) / 32; i++) {
+    for (size_t i = 0; i < (profile->gpr_count + 31u) / 32u; i++) {
         uint32_t tmp = callee_save[i];
         while (tmp) {
             regno_t reg  = lilycc_ctz32(tmp);
@@ -543,16 +588,15 @@ static void
 // Perform resource allocation for the given function.
 // Allocates registers to IR variables and frame offsets ir IR stack frames.
 void regalloc(backend_profile_t *profile, ir_func_t *func) {
-    uint32_t *callee_save = lilycc_calloc((profile->gpr_count + 31) / 32, sizeof(uint32_t));
-
-    ra_nodes_t nodes;
-again:
-    nodes = ra_liveness(func);
+    uint32_t *callee_save = lilycc_calloc((profile->gpr_count + 31u) / 32u, sizeof(uint32_t));
 
     // K values per type of IR variable.
     regno_t k_values[IR_N_PRIM] = {0};
     for (regno_t i = 0; i < profile->gpr_count; i++) {
         regclass_t class = profile->gpr_classes[i];
+        if (i == profile->frame_ptr_reg && func->use_frame_ptr) {
+            continue;
+        }
         if (class.f64) {
             k_values[IR_PRIM_f64]++;
         }
@@ -581,6 +625,10 @@ again:
             k_values[IR_PRIM_bool]++;
         }
     }
+
+    ra_nodes_t nodes;
+again:
+    nodes = ra_liveness(func);
 
     vec_ra_node_t stack = {0};
 
@@ -624,7 +672,7 @@ constrained: // Constrained, uncolored nodes.
     if (must_spill) {
         // Must spill a node.
         ra_spill(profile, nodes);
-        memset(callee_save, 0, (profile->gpr_count + 31) / 32 * sizeof(uint32_t));
+        memset(callee_save, 0, (profile->gpr_count + 31u) / 32u * sizeof(uint32_t));
         goto again;
     }
 
@@ -645,7 +693,7 @@ constrained: // Constrained, uncolored nodes.
 
     // Create spill frames for callee-saved registers.
     uint64_t count = 0;
-    for (size_t i = 0; i < (profile->gpr_count + 31) / 32; i++) {
+    for (size_t i = 0; i < (profile->gpr_count + 31u) / 32u; i++) {
         count += lilycc_popcount32(callee_save[i]);
     }
     if (count > 0) {

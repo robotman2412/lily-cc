@@ -375,6 +375,8 @@ struct ir_var {
     ir_prim_t    orig_prim_type;
     // Whether this variable was visited; used by the optimizer.
     bool         visited;
+    // Prevent spilling during regalloc.
+    bool         no_spill;
     // Is one of this function's args and if so, which.
     ptrdiff_t    arg_index;
     // Instructions that assign this variable.
@@ -524,11 +526,13 @@ static inline ir_prim_t ir_operand_prim(ir_operand_t oper) {
     ({                                                                                                                 \
         if ((operand).type == IR_OPERAND_TYPE_VAR) {                                                                   \
             ir_var_t *name = (operand).var; /* NOLINT */                                                               \
-            action                                                                                                     \
+            action;                                                                                                    \
+            (operand).var = name; /* NOLINT */                                                                         \
         } else if ((operand).type == IR_OPERAND_TYPE_MEM) {                                                            \
             if ((operand).mem.base_type == IR_MEMBASE_VAR) {                                                           \
                 ir_var_t *name = (operand).mem.base_var; /* NOLINT */                                                  \
-                action                                                                                                 \
+                action;                                                                                                \
+                (operand).mem.base_var = name; /* NOLINT */                                                            \
             }                                                                                                          \
         }                                                                                                              \
     })
@@ -538,11 +542,13 @@ static inline ir_prim_t ir_operand_prim(ir_operand_t oper) {
     ({                                                                                                                 \
         if ((operand).type == IR_OPERAND_TYPE_REG) {                                                                   \
             regno_t name = (operand).regno;                                                                            \
-            action                                                                                                     \
+            action;                                                                                                    \
+            (operand).regno = name;                                                                                    \
         } else if ((operand).type == IR_OPERAND_TYPE_MEM) {                                                            \
             if ((operand).mem.base_type == IR_MEMBASE_REG) {                                                           \
                 regno_t name = (operand).mem.base_regno;                                                               \
-                action                                                                                                 \
+                action;                                                                                                \
+                (operand).mem.base_regno = name;                                                                       \
             }                                                                                                          \
         }                                                                                                              \
     })

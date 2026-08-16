@@ -380,6 +380,7 @@ c_lower_expr_t c_lower_expr_cast(c_compiler_t *cc, ir_code_t *code, c_lower_scop
     code               = res.code;
 
     if (ir_operand_prim(res.val) < IR_N_PRIM) {
+        res.val             = load_prim(cc, code, res.val);
         ir_prim_t cast_prim = c_type_to_ir_type(cc, cast->common.type);
 
         if (cast_prim == ir_operand_prim(res.val)) {
@@ -887,7 +888,8 @@ static void check_case_overlap(
 // Lower a C IR switch statement to Lily IR.
 ir_code_t *
     c_lower_stmt_switch(c_compiler_t *cc, ir_code_t *code, c_lower_scope_t *scope, cir_switch_t const *switch_stmt) {
-    ir_code_t *out = ir_code_create(code->func, NULL);
+    ir_code_t *body = ir_code_create(code->func, NULL);
+    ir_code_t *out  = ir_code_create(code->func, NULL);
 
     vec_c_lower_case_t case_labels  = {0};
     c_lower_scope_t    nested_scope = {
@@ -903,6 +905,9 @@ ir_code_t *
     c_lower_expr_t expr = c_lower_expr(cc, code, scope, switch_stmt->value);
     code                = expr.code;
     expr.val            = load_prim(cc, code, expr.val);
+
+    ir_code_t *after_body = c_lower_stmt(cc, body, &nested_scope, switch_stmt->body);
+    ir_add_jump(IR_APPEND(after_body), out);
 
     ir_code_t *default_label = NULL;
     ir_var_t  *condvar       = ir_var_create(code->func, IR_PRIM_bool, NULL);
@@ -1019,7 +1024,7 @@ ir_code_t *c_lower_stmt_case(c_compiler_t *cc, ir_code_t *code, c_lower_scope_t 
 
     vec_push(scope->case_labels, lower_case);
 
-    return out;
+    return c_lower_stmt(cc, out, scope, cir_case->body);
 }
 
 // Lower a C IR labeled statement to Lily IR.
@@ -1035,7 +1040,7 @@ ir_code_t *c_lower_stmt_label(c_compiler_t *cc, ir_code_t *code, c_lower_scope_t
     dlist_remove(&func->code_list, &out->node);
     dlist_insert_after(&func->code_list, &code->node, &out->node);
 
-    return out;
+    return c_lower_stmt(cc, out, scope, label->body);
 }
 
 // Lower a C IR goto statement to Lily IR.

@@ -35,7 +35,7 @@ static c_prim_t usual_arith_conv(c_compiler_t *cc, c_type_ref_t type, c_type_ref
 
 // Whether a primitive is an arithmetic type (integer or floating point).
 static bool c_prim_is_arith(c_prim_t prim) {
-    return prim < C_PRIM_VOID || prim == C_COMP_POINTER;
+    return prim < C_PRIM_VOID || prim == C_COMP_ENUM || prim == C_COMP_POINTER;
 }
 
 bool c_is_const_expr(cir_expr_t const *expr) {
@@ -59,8 +59,10 @@ static c_type_opt_t c_compile_ternary_result_type(c_compiler_t *cc, pos_t pos, c
     c_type_t rtyp = c_type_clone_array_decay(rref);
 
     // Both arithmetic: apply the usual arithmetic conversions.
-    if (c_prim_is_arith(ltyp.prim) && c_prim_is_arith(rtyp.prim)) {
+    if (ltyp.prim != C_COMP_POINTER && rtyp.prim != C_COMP_POINTER && c_prim_is_arith(ltyp.prim)
+        && c_prim_is_arith(rtyp.prim)) {
         c_prim_t prim = usual_arith_conv(cc, ltyp, rtyp);
+        assert(prim != C_N_PRIM); // Should always be possible.
         c_type_delete(ltyp);
         c_type_delete(rtyp);
         return C_TYPE_FROM_PRIM(prim);
@@ -701,8 +703,8 @@ static cir_expr_t *
 
     // Build a pointer-to-field type, then `ptr + offset` as that type, then deref.
     c_type_t    field_ptr_type = c_type_clone_pointer(field.type);
-    cir_expr_t *off_iconst = c_compile_synth_iconst(cc, expr->oper_pos, cc->options.size_type, ui128(field.offset));
-    cir_expr_t *add        = cir_expr_create_calc(cir_calc_create(
+    cir_expr_t *off_iconst     = c_compile_synth_iconst(cc, expr->oper_pos, cc->options.size_type, ui128(field.offset));
+    cir_expr_t *add            = cir_expr_create_calc(cir_calc_create(
         (cir_expr_common_t){
             .pos          = expr->pos,
             .is_lvalue    = false,
@@ -798,6 +800,10 @@ cir_expr_t *c_compile_expr_prefix(c_compiler_t *cc, cir_scope_t *scope, c_ast_ex
     if (!val) {
         return NULL;
     }
+    val = array_decay(cc, val);
+    if (!val) {
+        return NULL;
+    }
 
     // All prefix operators require pointer or integral type.
     if (
@@ -862,6 +868,7 @@ cir_expr_t *c_compile_expr_prefix(c_compiler_t *cc, cir_scope_t *scope, c_ast_ex
         }
         case C_TKN_MUL: { // Dereference `*expr`
             if (val->common.type.prim != C_COMP_POINTER) {
+                cctx_diagnostic(cc->cctx, val->common.pos, DIAG_ERR, "Expected pointer type");
                 goto err0;
             }
             cir_expr_common_t common = {
@@ -1006,6 +1013,9 @@ cir_expr_t *c_compile_expr_call(c_compiler_t *cc, cir_scope_t *scope, c_ast_expr
         cir_expr_t *arg = args.arr[i];
         if (!c_type_is_identical(arg->common.type, arg->common.type, false)) {
             args.arr[i] = raw_cast(cc, arg->common.pos, c_type_clone(type_args->arr[i].type), arg);
+            if (args.arr[i] == NULL) {
+                errors = true;
+            }
         }
     }
 
@@ -1615,13 +1625,7 @@ cir_expr_t *c_compile_compinit(
 
             } else {
                 // Recursively compile compound initializer.
-                res = c_compile_compinit(
-                    cc,
-                    scope,
-                    c_type_clone(cursor.field_type),
-                    (pos_t){0},
-                    val->initval_compound
-                );
+                res = c_compile_compinit(cc, scope, c_type_clone(cursor.field_type), (pos_t){0}, val->initval_compound);
             }
 
             if (!res) {

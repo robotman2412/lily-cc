@@ -725,8 +725,8 @@ static inline ir_insn_t *
             lo12_proto,
             2,
             (ir_operand_t const[]){
-                IR_OPERAND_MEM(IR_MEMREF(memref.data_type, IR_BADDR_VAR(ptr), .offset = offset)),
                 ir_insn->operands[1],
+                IR_OPERAND_MEM(IR_MEMREF(memref.data_type, IR_BADDR_VAR(ptr), .offset = offset)),
             }
         );
     } else {
@@ -822,6 +822,7 @@ ir_insn_t *rv_isel(backend_profile_t *base_profile, ir_insn_t *insn) {
     rv_profile_t const *profile = (void *)base_profile;
 
     if (insn->type == IR_INSN_EXPR1 && (insn->op1 == IR_OP1_mov || insn->op1 == IR_OP1_bitcast)) {
+        assert(insn->operands[0].type != IR_OPERAND_TYPE_MEM);
         if (insn->operands[0].type == IR_OPERAND_TYPE_CONST) {
             if (insn->op1 == IR_OP1_bitcast || insn->returns[0].type == IR_RETVAL_TYPE_REG) {
                 // Constant bit-cast.
@@ -841,18 +842,25 @@ ir_insn_t *rv_isel(backend_profile_t *base_profile, ir_insn_t *insn) {
         }
     } else if (insn->type == IR_INSN_JUMP) {
         // Jump instruction.
+        assert(insn->operands[0].mem.base_type == IR_MEMBASE_CODE);
         return rv_isel_jump(profile, insn);
     } else if (insn->type == IR_INSN_BRANCH) {
         // Branch instruction patterns.
+        assert(insn->operands[0].type == IR_OPERAND_TYPE_MEM);
+        assert(insn->operands[0].mem.base_type == IR_MEMBASE_CODE);
         return rv_isel_branch(profile, insn);
     } else if (insn->type == IR_INSN_EXPR2) {
         // Binary expressions.
+        assert(insn->operands[0].type != IR_OPERAND_TYPE_MEM);
+        assert(insn->operands[1].type != IR_OPERAND_TYPE_MEM);
         return rv_isel_expr2_ri(profile, insn) ?: rv_isel_expr2_rr(profile, insn);
     } else if (insn->type == IR_INSN_EXPR1) {
         // Unary expressions.
+        assert(insn->operands[0].type != IR_OPERAND_TYPE_MEM);
         return rv_isel_expr1(profile, insn);
     } else if (insn->type == IR_INSN_LEA || insn->type == IR_INSN_LOAD || insn->type == IR_INSN_STORE) {
         // Memory instructions.
+        assert(insn->operands[0].type == IR_OPERAND_TYPE_MEM);
         return rv_isel_mem(profile, insn);
     }
 

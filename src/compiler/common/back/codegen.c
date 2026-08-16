@@ -349,7 +349,9 @@ static void cg_normalize_op_order(ir_insn_t *insn) {
 
 // Expand combinators back into separate assignments from predecessor code blocks.
 static void cg_expand_comb(ir_insn_t *insn) {
-    assert(insn->type == IR_INSN_COMBINATOR);
+    if (insn->type != IR_INSN_COMBINATOR) {
+        return;
+    }
     assert(insn->returns[0].type == IR_RETVAL_TYPE_VAR);
 
     ir_var_t *tmp = ir_var_create(insn->code->func, insn->returns[0].dest_var->prim_type, NULL);
@@ -551,10 +553,7 @@ static void cg_alloc_frames(backend_profile_t *profile, ir_func_t *func) {
 // order as written to the eventual executable file.
 void codegen(backend_profile_t *profile, ir_func_t *func) {
     ir_func_to_ssa(func);
-
-    // Perform optimizations.
-    // TODO: Make this configurable.
-    ir_optimize(func);
+    opt_dead_code(func);
 
     // Replace arithmetic that is not supported with function calls.
     func->is_leaf = true; // We also check whether it is a leaf function while we're iterating all instructions.
@@ -608,12 +607,11 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
     // Convert from strict SSA to non-strict SSA by converting combinators into moves.
     func->enforce_ssa = false;
     dlist_foreach_node(ir_code_t, code, &func->code_list) {
-        while (code->insns.head) {
-            ir_insn_t *insn = container_of(code->insns.head, ir_insn_t, node);
-            if (insn->type != IR_INSN_COMBINATOR) {
-                break;
-            }
+        ir_insn_t *insn = (ir_insn_t *)code->insns.head;
+        while (insn) {
+            ir_insn_t *next = (ir_insn_t *)insn->node.next;
             cg_expand_comb(insn);
+            insn = next;
         }
     }
 

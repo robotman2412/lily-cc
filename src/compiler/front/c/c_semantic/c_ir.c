@@ -513,8 +513,10 @@ cir_case_t *cir_case_create(pos_t pos, cir_expr_t *lo, cir_expr_t *hi, cir_stmt_
 }
 
 void cir_case_delete(cir_case_t *node) {
-    cir_expr_delete(node->lo);
-    if (node->hi) { // Only `hi` is optional.
+    if (node->lo) {
+        cir_expr_delete(node->lo);
+    }
+    if (node->hi) {
         cir_expr_delete(node->hi);
     }
     cir_stmt_delete(node->body);

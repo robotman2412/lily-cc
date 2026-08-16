@@ -389,6 +389,7 @@ static c_ast_init_t *c_parse_comp_init_field_r(c_parser_t *ctx) {
         tkn_delete(dot);
         peek = tkn_peek(ctx->tkn_ctx);
         if (peek.type != TOKENTYPE_IDENT) {
+            cctx_diagnostic(ctx->tkn_ctx->cctx, peek.pos, DIAG_ERR, "Expected identifier");
             return c_ast_init_create_garbage(c_ast_garbage_create(dot_pos));
         }
         token_t        ident     = tkn_next(ctx->tkn_ctx);
@@ -1252,10 +1253,6 @@ c_ast_def_t *c_parse_def(c_parser_t *ctx, bool allow_func_body) {
         } else {
             decls_pos = pos_including(decls_pos, peek.pos);
             tkn_delete(tkn_next(ctx->tkn_ctx));
-        }
-
-        if (!allow_func_body) {
-            goto garbage;
         }
 
         c_ast_decl_t *decl = decls.arr[0]->decl;

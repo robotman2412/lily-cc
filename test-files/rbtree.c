@@ -158,21 +158,32 @@ rbtree_node_t* rbtree_search(rbtree_t* tree, uint64_t query, rbtree_search_type_
     }
 }
 
-static void rbtree_insert_fixup(rbtree_t* tree, rbtree_node_t* node, rbtree_node_t* parent, rbtree_direction_t dir) {
+/*
+    offset  size
+    -8      8       frame link
+    -16     8       return addr
+    -24     8       tree
+    -32     8       node
+    -40     8       parent
+    -44     4       dir
+    -56     8       grandparent
+    -64     8       uncle
+*/
+static void rbtree_insert_fixup(rbtree_t* tree, rbtree_node_t* node, rbtree_node_t* parent, rbtree_direction_t dir) { // code0
     rb_set_color(node, RB_RED);
     rb_set_parent(node, parent);
 
-    if (!parent) {
+    if (!parent) { // code1
         tree->root = node;
         rb_set_color(node, RB_BLACK);
-        return;
-    }
+        return; // code2
+    } // code3
 
-    do {
+    do { // code5
         // case 1
-        if (rb_get_color(parent) == RB_BLACK) {
-            return;
-        }
+        if (rb_get_color(parent) == RB_BLACK) { // code7
+            return; // code9
+        } // code8
 
         rbtree_node_t* grandparent = rb_get_parent(parent);
 
@@ -205,14 +216,26 @@ static void rbtree_insert_fixup(rbtree_t* tree, rbtree_node_t* node, rbtree_node
         rb_set_color(grandparent, RB_RED);
         node = grandparent;
 
-    } while ((parent = rb_get_parent(node)));
+    } while ((parent = rb_get_parent(node)) /* code4 */); // code6
 
     // case 3
     rb_set_color(tree->root, RB_BLACK);
     return;
 }
 
-rbtree_node_t* rbtree_insert(rbtree_t* tree, rbtree_node_t* node) {
+/*
+    offset  size
+    -8      8       frame link
+    -16     8       return addr
+    -24     8       tree
+    -32     8       node
+    -40     8       parent
+    -48     8       cur
+    -52     4       dir
+    -64     8       key
+    -72     8       cur_val
+*/
+rbtree_node_t* rbtree_insert(rbtree_t* tree, rbtree_node_t* node) { // code0
     node->left = nullptr;
     node->right = nullptr;
     rb_set_parent(node, 0);
@@ -223,45 +246,57 @@ rbtree_node_t* rbtree_insert(rbtree_t* tree, rbtree_node_t* node) {
 
     uint64_t key = tree->value_of_node(node);
 
-    while (cur) {
+    while (cur /* code1 */) { // code2
         parent = cur;
         uint64_t cur_val = tree->value_of_node(cur);
 
-        if (key < cur_val) {
+        if (key < cur_val /* code4 */) { // code5
             dir = RB_LEFT;
             cur = cur->left;
-        } else {
+        } else { // code6
             dir = RB_RIGHT;
             cur = cur->right;
         }
-    }
+    } // code3
 
-    if (!parent) {
+    if (!parent /* code7 */) { // code8
         tree->root = node;
         rb_set_parent(node, 0);
-    } else {
+    } else { // code9
         rb_set_parent(node, parent);
         parent->children[dir] = node;
-    }
+    } // code10
 
     rbtree_insert_fixup(tree, node, parent, dir);
 
     return node;
 }
 
-static void rbtree_remove_fixup(rbtree_t* tree, rbtree_node_t* node, rbtree_direction_t dir) {
+/*
+    offset  size
+    -8      8       frame link
+    -16     8       return addr
+    -24     8       tree
+    -32     8       node
+    -36     4       dir
+    -48     8       parent
+    -56     8       sibling
+    -64     8       close_nephew
+    -72     8       distant_nephew
+*/
+static void rbtree_remove_fixup(rbtree_t* tree, rbtree_node_t* node, rbtree_direction_t dir) { // code0
     rbtree_node_t* parent = rb_get_parent(node);
 
-    if (!parent) {
+    if (!parent /* code1 */) { // code2
         rb_set_color(node, RB_BLACK);
-        return;
-    }
+        return; // code3
+    } // code4
 
     rbtree_node_t* sibling;
     rbtree_node_t* close_nephew;
     rbtree_node_t* distant_nephew;
 
-    do {
+    do { // code5
         sibling = parent->children[1 - dir];
         distant_nephew = sibling->children[1 - dir];
         close_nephew = sibling->children[dir];

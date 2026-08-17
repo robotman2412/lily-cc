@@ -15,13 +15,14 @@
 
 // Print a reference to the local label for a code block.
 void asm_print_code_label(ir_code_t const *code, FILE *to) {
-    fprintf(to, ".L%s", code->name);
+    fprintf(to, ".L%s.%s", code->func->name, code->name);
 }
 
 // Print a function for the assembler.
 void asm_print_func(ir_func_t *func, backend_profile_t *profile, FILE *to) {
     // TODO: Symbol visibility.
     fprintf(to, "    .section \".text\", \"ax\"\n");
+    fprintf(to, "    .global %s\n", func->name);
     fprintf(to, "    .type %s, @function\n", func->name);
     profile->backend->asm_print_prefunc(profile, func, to);
     fprintf(to, "%s:\n", func->name);

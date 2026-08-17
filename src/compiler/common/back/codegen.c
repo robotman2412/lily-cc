@@ -626,6 +626,7 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
         profile->backend->postreg_pass(profile, func);
     }
 
+    opt_unused_frames(func);
     cg_alloc_frames(profile, func);
 
     if (profile->backend->postproc_pass) {

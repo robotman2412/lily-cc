@@ -346,6 +346,7 @@ struct ir_frame {
     uint64_t     size;
     // Offset from frame pointer (stack pointer on function entry).
     uint64_t     offset;
+    bool         visited;
 };
 
 // IR function argument.

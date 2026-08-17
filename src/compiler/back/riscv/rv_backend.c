@@ -243,9 +243,74 @@ static void rv_expand_mem(ir_insn_t *insn) {
     *mem = IR_MEMREF(IR_N_PRIM, IR_BADDR_REG(reg), .offset = offset);
 }
 
+static ir_insn_t *
+    rv_frame_link(rv_profile_t *profile, ir_insnloc_t loc, regno_t save, int64_t offset, bool is_restore) {
+    insn_proto_t const *store = profile->ext_enabled[RV_64] ? &rv_insn_sd : &rv_insn_sw;
+    insn_proto_t const *load  = profile->ext_enabled[RV_64] ? &rv_insn_ld : &rv_insn_lw;
+
+    regno_t base = RV_REG_SP;
+
+    if (offset < -2048 || offset > 2047) {
+        int64_t offset_hi  = offset >> 12;
+        offset             = offset << 52 >> 52;
+        offset_hi         += offset < 0;
+
+        // lui t0, %hi(offset)
+        loc  = IR_AFTER_INSN(ir_add_mach_insn(
+            loc,
+            true,
+            IR_RETVAL_REG(RV_REG_T(0)),
+            &rv_insn_lui,
+            1,
+            (ir_operand_t const[]){
+                IR_OPERAND_CONST(IR_CONST_S64(offset_hi)),
+            }
+        ));
+        // add t0, t0, sp
+        loc  = IR_AFTER_INSN(ir_add_mach_insn(
+            loc,
+            true,
+            IR_RETVAL_REG(RV_REG_T(0)),
+            &rv_insn_add,
+            2,
+            (ir_operand_t const[]){
+                IR_OPERAND_REG(RV_REG_T(0)),
+                IR_OPERAND_REG(RV_REG_SP),
+            }
+        ));
+        base = RV_REG_T(0);
+    }
+
+    ir_operand_t memref = IR_OPERAND_MEM(IR_MEMREF(IR_N_PRIM, IR_BADDR_REG(base), .offset = offset));
+
+    if (is_restore) {
+        return ir_add_mach_insn(
+            loc,
+            true,
+            IR_RETVAL_REG(save),
+            load,
+            1,
+            (ir_operand_t const[]){
+                memref,
+            }
+        );
+    } else {
+        return ir_add_mach_insn(
+            loc,
+            false,
+            (ir_retval_t){},
+            store,
+            2,
+            (ir_operand_t const[]){
+                IR_OPERAND_REG(save),
+                memref,
+            }
+        );
+    }
+}
+
 static void rv_write_prologue(rv_profile_t *profile, ir_func_t *func, ir_insnloc_t loc) {
-    int64_t             word_size = profile->ext_enabled[RV_64] ? 8 : 4;
-    insn_proto_t const *store     = profile->ext_enabled[RV_64] ? &rv_insn_sd : &rv_insn_sw;
+    int64_t word_size = profile->ext_enabled[RV_64] ? 8 : 4;
 
     // Decrease `sp`.
     if (func->stack_footprint == 0) {
@@ -292,31 +357,11 @@ static void rv_write_prologue(rv_profile_t *profile, ir_func_t *func, ir_insnloc
     int64_t offset = (int64_t)func->stack_footprint;
     if (!func->is_leaf || func->use_frame_ptr) {
         offset -= word_size;
-        loc     = IR_AFTER_INSN(ir_add_mach_insn(
-            loc,
-            false,
-            (ir_retval_t){},
-            store,
-            2,
-            (ir_operand_t const[]){
-                IR_OPERAND_REG(RV_REG_RA),
-                IR_OPERAND_MEM(IR_MEMREF(IR_N_PRIM, IR_BADDR_REG(RV_REG_SP), .offset = offset)),
-            }
-        ));
+        loc     = IR_AFTER_INSN(rv_frame_link(profile, loc, RV_REG_RA, offset, false));
     }
     if (func->use_frame_ptr) {
         offset -= word_size;
-        loc     = IR_AFTER_INSN(ir_add_mach_insn(
-            loc,
-            false,
-            (ir_retval_t){},
-            store,
-            2,
-            (ir_operand_t const[]){
-                IR_OPERAND_REG(RV_REG_S(0)),
-                IR_OPERAND_MEM(IR_MEMREF(IR_N_PRIM, IR_BADDR_REG(RV_REG_SP), .offset = offset)),
-            }
-        ));
+        loc     = IR_AFTER_INSN(rv_frame_link(profile, loc, RV_REG_S(0), offset, false));
     }
 
     // Update `fp`.
@@ -353,8 +398,7 @@ static void rv_write_prologue(rv_profile_t *profile, ir_func_t *func, ir_insnloc
 }
 
 static void rv_write_epilogue(rv_profile_t *profile, ir_func_t *func, ir_insnloc_t loc) {
-    int64_t             word_size = profile->ext_enabled[RV_64] ? 8 : 4;
-    insn_proto_t const *load      = profile->ext_enabled[RV_64] ? &rv_insn_ld : &rv_insn_lw;
+    int64_t word_size = profile->ext_enabled[RV_64] ? 8 : 4;
 
     int64_t footprint;
     if (func->uses_alloca) {
@@ -366,7 +410,7 @@ static void rv_write_epilogue(rv_profile_t *profile, ir_func_t *func, ir_insnloc
             true,
             IR_RETVAL_REG(RV_REG_SP),
             &rv_insn_addi,
-            1,
+            2,
             (ir_operand_t const[]){
                 IR_OPERAND_REG(RV_REG_S(0)),
                 IR_OPERAND_CONST(IR_CONST_S16(2 * word_size)),
@@ -379,29 +423,11 @@ static void rv_write_epilogue(rv_profile_t *profile, ir_func_t *func, ir_insnloc
     int64_t offset = footprint;
     if (!func->is_leaf || func->use_frame_ptr) {
         offset -= word_size;
-        loc     = IR_AFTER_INSN(ir_add_mach_insn(
-            loc,
-            true,
-            IR_RETVAL_REG(RV_REG_RA),
-            load,
-            1,
-            (ir_operand_t const[]){
-                IR_OPERAND_MEM(IR_MEMREF(IR_N_PRIM, IR_BADDR_REG(RV_REG_SP), .offset = offset)),
-            }
-        ));
+        loc     = IR_AFTER_INSN(rv_frame_link(profile, loc, RV_REG_RA, offset, true));
     }
     if (func->use_frame_ptr) {
         offset -= word_size;
-        loc     = IR_AFTER_INSN(ir_add_mach_insn(
-            loc,
-            true,
-            IR_RETVAL_REG(RV_REG_S(0)),
-            load,
-            1,
-            (ir_operand_t const[]){
-                IR_OPERAND_MEM(IR_MEMREF(IR_N_PRIM, IR_BADDR_REG(RV_REG_SP), .offset = offset)),
-            }
-        ));
+        loc     = IR_AFTER_INSN(rv_frame_link(profile, loc, RV_REG_S(0), offset, true));
     }
 
     if (footprint == 0) {

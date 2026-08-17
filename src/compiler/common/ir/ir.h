@@ -63,6 +63,8 @@ void ir_func_recalc_flow(ir_func_t *func);
 // Create a new stack frame.
 // If `name` is `NULL`, its name will be `frame%zu` where `%zu` is a number.
 ir_frame_t *ir_frame_create(ir_func_t *func, uint64_t size, uint64_t align, char const *name);
+// Delete an IR stack frame.
+void        ir_frame_delete(ir_frame_t *frame);
 
 // Create a new variable.
 // If `name` is `NULL`, its name will be `var%zu` where `%zu` is a number.

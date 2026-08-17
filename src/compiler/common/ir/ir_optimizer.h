@@ -18,6 +18,9 @@ bool opt_strength_reduce(ir_func_t *func);
 // Optimization: Delete all variables and assignments to them whose value is never read.
 // Returns whether any variables were deleted.
 bool opt_unused_vars(ir_func_t *func);
+// Optimization: Delete unused stack frames.
+// Returns whether any frames were deleted.
+bool opt_unused_frames(ir_func_t *func);
 // Optimization: Delete code from dead paths.
 // Returns whether any code was changed or removed.
 bool opt_dead_code(ir_func_t *func);

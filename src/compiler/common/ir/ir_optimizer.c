@@ -205,6 +205,49 @@ bool opt_unused_vars(ir_func_t *func) {
     return deleted;
 }
 
+// Optimization: Delete unused stack frames.
+// Returns whether any frames were deleted.
+bool opt_unused_frames(ir_func_t *func) {
+    dlist_foreach_node(ir_frame_t, frame, &func->frames_list) {
+        frame->visited = false;
+    }
+
+    dlist_foreach_node(ir_code_t, code, &func->code_list) {
+        dlist_foreach_node(ir_insn_t, insn, &code->insns) {
+            if (insn->type == IR_INSN_COMBINATOR) {
+                continue;
+            }
+            for (size_t i = 0; i < insn->returns_len; i++) {
+                if (insn->returns[i].type == IR_RETVAL_TYPE_STRUCT) {
+                    insn->returns[i].dest_struct->visited = true;
+                }
+            }
+            for (size_t i = 0; i < insn->operands_len; i++) {
+                if (insn->operands[i].type == IR_OPERAND_TYPE_STRUCT) {
+                    insn->operands[i].struct_frame->visited = true;
+                } else if (
+                    insn->operands[i].type == IR_OPERAND_TYPE_MEM && insn->operands[i].mem.base_type == IR_MEMBASE_FRAME
+                ) {
+                    insn->operands[i].mem.base_frame->visited = true;
+                }
+            }
+        }
+    }
+
+    bool        deleted = false;
+    ir_frame_t *frame   = (ir_frame_t *)func->frames_list.head;
+    while (frame) {
+        ir_frame_t *next = (ir_frame_t *)frame->node.next;
+        if (!frame->visited) {
+            ir_frame_delete(frame);
+            deleted = true;
+        }
+        frame = next;
+    }
+
+    return deleted;
+}
+
 
 
 // Dead code optimization depth-first search.

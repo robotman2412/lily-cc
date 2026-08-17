@@ -79,7 +79,7 @@ static ir_insn_t *rv_emit_int_cast(
     } else if (
         (src_prim == IR_PRIM_s64 || src_prim == IR_PRIM_u64) && (dest_prim == IR_PRIM_s32 || dest_prim == IR_PRIM_u32)
     ) {
-        // addiw dest, src, x0
+        // addiw dest, src, 0
         return ir_add_mach_insn(
             loc,
             true,
@@ -113,7 +113,7 @@ static ir_insn_t *rv_emit_int_cast(
             dest,
             &rv_insn_srai,
             2,
-            (ir_operand_t const[]){src, IR_OPERAND_CONST(IR_CONST_S16(shamt))}
+            (ir_operand_t const[]){IR_OPERAND_VAR(tmp), IR_OPERAND_CONST(IR_CONST_S16(shamt))}
         );
     } else if (dest_prim == IR_PRIM_u8) {
         // Zero-extend (one byte).
@@ -122,7 +122,7 @@ static ir_insn_t *rv_emit_int_cast(
             loc,
             true,
             dest,
-            &rv_insn_srai,
+            &rv_insn_andi,
             2,
             (ir_operand_t const[]){src, IR_OPERAND_CONST(IR_CONST_S16(255))}
         );
@@ -489,7 +489,7 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t const *profile, ir_insn_t
                 insn->returns[0],
                 &rv_insn_sltu,
                 2,
-                (ir_operand_t const[]){IR_OPERAND_CONST(IR_CONST_U16(1)), IR_OPERAND_VAR(tmp)}
+                (ir_operand_t const[]){IR_OPERAND_REG(0), IR_OPERAND_VAR(tmp)}
             );
         }
         ir_insn_delete(insn);
@@ -861,6 +861,9 @@ ir_insn_t *rv_isel(backend_profile_t *base_profile, ir_insn_t *insn) {
     } else if (insn->type == IR_INSN_LEA || insn->type == IR_INSN_LOAD || insn->type == IR_INSN_STORE) {
         // Memory instructions.
         assert(insn->operands[0].type == IR_OPERAND_TYPE_MEM);
+        if (insn->type == IR_INSN_STORE) {
+            rv_operand_to_reg(profile, insn, 1);
+        }
         return rv_isel_mem(profile, insn);
     }
 

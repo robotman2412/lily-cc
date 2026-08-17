@@ -474,6 +474,13 @@ ir_frame_t *ir_frame_create(ir_func_t *func, uint64_t size, uint64_t align, char
     return frame;
 }
 
+// Delete an IR stack frame.
+void ir_frame_delete(ir_frame_t *frame) {
+    dlist_remove(&frame->func->frames_list, &frame->node);
+    lilycc_free(frame->name);
+    lilycc_free(frame);
+}
+
 
 
 // Create a new variable.

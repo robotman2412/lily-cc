@@ -1176,12 +1176,16 @@ ir_insn_t *ir_add_lea(ir_insnloc_t loc, ir_retval_t dest, ir_memref_t memref) {
 
 // Add a memory load to a code block.
 ir_insn_t *ir_add_load(ir_insnloc_t loc, ir_retval_t dest, ir_memref_t memref) {
-    return ir_create_insn_va(loc, IR_INSN_LOAD, true, dest, 1, IR_OPERAND_MEM(memref));
+    ir_insn_t *insn  = ir_create_insn_va(loc, IR_INSN_LOAD, true, dest, 1, IR_OPERAND_MEM(memref));
+    insn->flags     |= IR_INSN_FLAG_SIDE_EFFECTS;
+    return insn;
 }
 
 // Add a memory store to a code block.
 ir_insn_t *ir_add_store(ir_insnloc_t loc, ir_operand_t src, ir_memref_t memref) {
-    return ir_create_insn_va(loc, IR_INSN_STORE, false, (ir_retval_t){}, 2, IR_OPERAND_MEM(memref), src);
+    ir_insn_t *insn  = ir_create_insn_va(loc, IR_INSN_STORE, false, (ir_retval_t){}, 2, IR_OPERAND_MEM(memref), src);
+    insn->flags     |= IR_INSN_FLAG_SIDE_EFFECTS;
+    return insn;
 }
 
 
@@ -1404,7 +1408,9 @@ ir_insn_t *ir_add_call(
     operands_copy[0]            = IR_OPERAND_MEM(to);
     memcpy(operands_copy + 1, operands, operands_len * sizeof(ir_operand_t));
 
-    return ir_create_insn(loc, IR_INSN_CALL, has_dest, dest, 1 + operands_len, operands_copy);
+    ir_insn_t *insn  = ir_create_insn(loc, IR_INSN_CALL, has_dest, dest, 1 + operands_len, operands_copy);
+    insn->flags     |= IR_INSN_FLAG_SIDE_EFFECTS;
+    return insn;
 }
 
 // Add an unconditional jump.

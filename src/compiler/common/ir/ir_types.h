@@ -578,24 +578,24 @@ struct ir_retval {
 
 // Modifies the flags register.
 // Prevents reordering across calls or instructions that also have this flag set.
-#define IR_INSN_FLAG_SETS_FLAG_REG   (1 << 0)
+#define IR_INSN_FLAG_SETS_FLAG_REG (1 << 0)
 // Volatile memory access.
 // May not be re-ordered across calls or instructions that also have this flag set.
-#define IR_INSN_FLAG_VOLATILE        (1 << 1)
+#define IR_INSN_FLAG_VOLATILE      (1 << 1)
 // May not be re-ordered.
-#define IR_INSN_FLAG_NOREORDER       (1 << 2)
-// Function call or memory access without side-effects (does not write to non-stack memory).
-// May be re-ordered.
-#define IR_INSN_FLAG_NO_SIDE_EFFECTS (1 << 3)
-// Pure function call (depends only on inputs and does not read global state).
-// May be re-ordered, removed or combined with identical calls.
-#define IR_INSN_FLAG_PURE            (1 << 4)
+#define IR_INSN_FLAG_NOREORDER     (1 << 2)
+// Function call or memory access with side-effects (writes to non-stack memory).
+// May be re-ordered unless specified otherwise.
+#define IR_INSN_FLAG_SIDE_EFFECTS  (1 << 3)
+// Impure function call (reads global state).
+// Prevents re-ordering or combination with identical calls.
+#define IR_INSN_FLAG_IMPURE        (1 << 4)
 // Is a 1:1 register-register copy that can be eliminated if dest==src.
 // Used to optimize out redundant copies after register selection.
-#define IR_INSN_FLAG_RR_COPY         (1 << 5)
+#define IR_INSN_FLAG_RR_COPY       (1 << 5)
 // This instruction is part of a sequence that clamps the destination back in range;
 // do not clamp the input variable just for this instruction.
-#define IR_INSN_FLAG_CLAMPING        (1 << 6)
+#define IR_INSN_FLAG_CLAMPING      (1 << 6)
 
 // IR instruction.
 struct ir_insn {

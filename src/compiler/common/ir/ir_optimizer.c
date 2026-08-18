@@ -167,6 +167,13 @@ static void check_var_used(ir_var_t *var) {
         return;
     }
 
+    set_foreach(ir_insn_t, insn, &var->assigned_at) {
+        if (insn->flags & IR_INSN_FLAG_SIDE_EFFECTS) {
+            mark_used_dfs(var);
+            return;
+        }
+    }
+
     set_foreach(ir_insn_t, insn, &var->used_at) {
         if (insn->type != IR_INSN_COMBINATOR) {
             mark_used_dfs(var);

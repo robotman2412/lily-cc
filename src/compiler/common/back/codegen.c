@@ -553,7 +553,11 @@ static void cg_alloc_frames(backend_profile_t *profile, ir_func_t *func) {
 // order as written to the eventual executable file.
 void codegen(backend_profile_t *profile, ir_func_t *func) {
     ir_func_to_ssa(func);
-    opt_dead_code(func);
+    bool changed = true;
+    while (changed) {
+        changed  = opt_dead_code(func);
+        changed |= opt_unused_vars(func);
+    }
 
     // Replace arithmetic that is not supported with function calls.
     func->is_leaf = true; // We also check whether it is a leaf function while we're iterating all instructions.

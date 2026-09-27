@@ -2298,13 +2298,13 @@ static void c_macro_expand(c_preproc_t *pre, pos_t pos, c_macro_t const *macro) 
             if (subst->type == C_SUBST_ARG) {
                 arg = &args.arr[subst->arg_index];
             } else if (subst->type == C_SUBST_VA_ARGS) {
-                if (args.len >= 1) {
+                if (args.arr[args.len - 1].tokens.len > 0) {
                     // Only expand __VA_ARGS__ if there are varargs specified.
                     // If not, put a placemarker token there instead.
                     arg = &args.arr[args.len - 1];
                 }
             } else if (subst->type == C_SUBST_VA_OPT) {
-                if (args.len > macro->regular.args.len) {
+                if (args.arr[args.len - 1].tokens.len > 0) {
                     // Only expand __VA_OPT__ if there are varargs specified.
                     // If not, put a placemarker token there instead.
                     arg = &subst->va_opt;

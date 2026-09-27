@@ -56,10 +56,8 @@ typedef enum {
     TOKENTYPE_AST,
 } tokentype_t;
 
-#ifndef NDEBUG
 // Enum names of `tokentype_t` values.
-extern char const *const tokentype_names[];
-#endif
+extern char const *const tokentype_name[];
 
 
 // Source file.
@@ -79,13 +77,9 @@ typedef struct token      token_t;
 // Source file.
 struct srcfile {
     // Associated frontend context.
-    cctx_t *ctx;
+    cctx_t     *ctx;
     // File path.
-    char   *path;
-#ifdef SRCFILE_CHECK_REALPATH
-    // Real file path (after symlinks).
-    char *realpath;
-#endif
+    char       *path;
     // File name; view of name in file path.
     char const *name;
     // Is this stored in RAM (as opposed to on disk)?

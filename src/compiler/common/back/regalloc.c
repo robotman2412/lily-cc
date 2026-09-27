@@ -540,7 +540,7 @@ static void choose_one_reg(backend_profile_t *profile, ra_node_t *node, uint32_t
     }
 
     if (!any_match) {
-        fprintf(stderr, "BUG: No regclass matches primitive type %s\n", ir_prim_names[node->var->prim_type]);
+        fprintf(stderr, "BUG: No regclass matches primitive type %s\n", ir_prim_name[node->var->prim_type]);
         abort();
     }
 

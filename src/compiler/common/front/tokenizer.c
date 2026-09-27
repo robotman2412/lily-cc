@@ -255,7 +255,7 @@ void tkn_debug_testcase_r(
     pindent(indent);
     printf("EXPECT_INT(%s.pos.len, %lld);\n", access, (long long)token.pos.len);
     pindent(indent);
-    printf("EXPECT_INT(%s.type, %s);\n", access, tokentype_names[token.type]);
+    printf("EXPECT_INT(%s.type, %s);\n", access, tokentype_name[token.type]);
     if (token.type == TOKENTYPE_AST) {
         pindent(indent);
         printf("EXPECT_INT(%s.subtype, %s);\n", access, ast[token.subtype]);

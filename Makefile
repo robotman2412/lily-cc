@@ -23,15 +23,15 @@ clang-tidy:
 
 .PHONY: test
 test: build
-	meson test -C build
+	meson test -C build --print-errorlogs
 
 .PHONY: valgrind-test
 valgrind-test: build
-	LILY_TEST_FORK=0 meson test -C build --setup valgrind
+	meson test -C build --print-errorlogs --setup valgrind
 
 .PHONY: gdb-test
 gdb-test: build
-	LILY_TEST_FORK=0 meson test -C build --gdb
+	meson test -C build --print-errorlogs --gdb
 
 .PHONY: clean
 clean:

@@ -42,7 +42,7 @@ void ir_const_serialize(ir_const_t iconst, FILE *to) {
         fprintf(stderr, "TODO: ir_const_serialize for f64\n");
         abort();
     } else {
-        fputs(ir_prim_names[iconst.prim_type], to);
+        fputs(ir_prim_name[iconst.prim_type], to);
         fputc('\'', to);
         uint8_t size = ir_prim_sizes[iconst.prim_type];
 
@@ -92,7 +92,7 @@ void ir_operand_serialize(
             fputs("struct ", to);
         }
         if (show_memop_type && operand->mem.data_type < IR_N_PRIM) {
-            fprintf(to, "(%s ", ir_prim_names[operand->mem.data_type]);
+            fprintf(to, "(%s ", ir_prim_name[operand->mem.data_type]);
         } else {
             fputc('(', to);
         }
@@ -115,7 +115,7 @@ void ir_operand_serialize(
 
         fputc(')', to);
     } else if (operand->type == IR_OPERAND_TYPE_UNDEF) {
-        fputs(ir_prim_names[operand->undef_type], to);
+        fputs(ir_prim_name[operand->undef_type], to);
         fputs("'?", to);
     } else if (operand->type == IR_OPERAND_TYPE_REG) {
         fputc('$', to);
@@ -219,7 +219,7 @@ void ir_func_serialize(ir_func_t const *func, backend_profile_t const *profile_o
 
     ir_var_t *var = (ir_var_t *)func->vars_list.head;
     while (var) {
-        fprintf(to, "    var %%%s %s\n", var->name, ir_prim_names[var->prim_type]);
+        fprintf(to, "    var %%%s %s\n", var->name, ir_prim_name[var->prim_type]);
         var = (ir_var_t *)var->node.next;
     }
 
@@ -227,7 +227,7 @@ void ir_func_serialize(ir_func_t const *func, backend_profile_t const *profile_o
         switch (func->args[i].arg_type) {
             case IR_ARG_TYPE_VAR: fprintf(to, "    arg %%%s\n", func->args[i].var->name); break;
             case IR_ARG_TYPE_STRUCT: fprintf(to, "    arg struct %%%s\n", func->args[i].struct_frame->name); break;
-            case IR_ARG_TYPE_IGNORED: fprintf(to, "    arg %s\n", ir_prim_names[func->args[i].ignored_prim]); break;
+            case IR_ARG_TYPE_IGNORED: fprintf(to, "    arg %s\n", ir_prim_name[func->args[i].ignored_prim]); break;
         }
     }
 
@@ -710,7 +710,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                                     stmt->params[0].params[0].pos,
                                     DIAG_HINT,
                                     "Return type is %s",
-                                    ir_prim_names[returns[0].dest_var->prim_type]
+                                    ir_prim_name[returns[0].dest_var->prim_type]
                                 );
                                 insn_ok = false;
                             }

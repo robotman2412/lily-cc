@@ -80,7 +80,7 @@ static void cg_isel(backend_profile_t *profile, ir_code_t *code) {
                     }
                 }
                 set_foreach(ir_var_t, var, &vars) {
-                    fprintf(stderr, "Note: %%%s is %s\n", var->name, ir_prim_names[var->prim_type]);
+                    fprintf(stderr, "Note: %%%s is %s\n", var->name, ir_prim_name[var->prim_type]);
                 }
                 set_clear(&vars);
                 fflush(stderr);
@@ -119,7 +119,7 @@ static void cg_xabi(backend_profile_t *profile, ir_code_t *code) {
                     }
                 }
                 set_foreach(ir_var_t, var, &vars) {
-                    fprintf(stderr, "Note: %%%s is %s\n", var->name, ir_prim_names[var->prim_type]);
+                    fprintf(stderr, "Note: %%%s is %s\n", var->name, ir_prim_name[var->prim_type]);
                 }
                 set_clear(&vars);
                 fflush(stderr);
@@ -144,7 +144,7 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
     func->enforce_ssa = false;
     if (insn->op2 == IR_OP2_add && softfloat) {
         char buf[32];
-        snprintf(buf, sizeof(buf) - 1, "__lily_add_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
+        snprintf(buf, sizeof(buf) - 1, "__lily_add_%s", ir_prim_name[ir_prim_as_unsigned(prim)]);
         ir_add_call(
             IR_AFTER_INSN(insn),
             IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM(buf)),
@@ -156,7 +156,7 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_sub && softfloat) {
         char buf[32];
-        snprintf(buf, sizeof(buf) - 1, "__lily_sub_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
+        snprintf(buf, sizeof(buf) - 1, "__lily_sub_%s", ir_prim_name[ir_prim_as_unsigned(prim)]);
         ir_add_call(
             IR_AFTER_INSN(insn),
             IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM(buf)),
@@ -168,7 +168,7 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_mul && (softfloat || !profile->has_mul)) {
         char buf[32];
-        snprintf(buf, sizeof(buf) - 1, "__lily_mul_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
+        snprintf(buf, sizeof(buf) - 1, "__lily_mul_%s", ir_prim_name[ir_prim_as_unsigned(prim)]);
         ir_add_call(
             IR_AFTER_INSN(insn),
             IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM(buf)),
@@ -180,7 +180,7 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_div && (softfloat || !profile->has_div)) {
         char buf[32];
-        snprintf(buf, sizeof(buf) - 1, "__lily_div_%s", ir_prim_names[prim]);
+        snprintf(buf, sizeof(buf) - 1, "__lily_div_%s", ir_prim_name[prim]);
         ir_add_call(
             IR_AFTER_INSN(insn),
             IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM(buf)),
@@ -192,7 +192,7 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_rem && (softfloat || !profile->has_rem)) {
         char buf[32];
-        snprintf(buf, sizeof(buf) - 1, "__lily_rem_%s", ir_prim_names[prim]);
+        snprintf(buf, sizeof(buf) - 1, "__lily_rem_%s", ir_prim_name[prim]);
         ir_add_call(
             IR_AFTER_INSN(insn),
             IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM(buf)),
@@ -204,7 +204,7 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_shr && insn->operands[1].type != IR_OPERAND_TYPE_CONST && !profile->has_var_shift) {
         char buf[32];
-        snprintf(buf, sizeof(buf) - 1, "__lily_shr_%s", ir_prim_names[prim]);
+        snprintf(buf, sizeof(buf) - 1, "__lily_shr_%s", ir_prim_name[prim]);
         ir_var_t *tmp = ir_var_create(insn->code->func, IR_PRIM_u8, NULL); // __lily_shr_* uses u8 as shift amount
         ir_add_expr1(IR_AFTER_INSN(insn), IR_RETVAL_VAR(tmp), IR_OP1_mov, insn->operands[1]);
         ir_add_call(
@@ -218,7 +218,7 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_shr && insn->operands[1].type != IR_OPERAND_TYPE_CONST && !profile->has_var_shift) {
         char buf[32];
-        snprintf(buf, sizeof(buf) - 1, "__lily_shl_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
+        snprintf(buf, sizeof(buf) - 1, "__lily_shl_%s", ir_prim_name[ir_prim_as_unsigned(prim)]);
         ir_var_t *tmp = ir_var_create(insn->code->func, IR_PRIM_u8, NULL); // __lily_shl_u* uses u8 as shift amount
         ir_add_expr1(IR_AFTER_INSN(insn), IR_RETVAL_VAR(tmp), IR_OP1_mov, insn->operands[1]);
         ir_add_call(
@@ -258,10 +258,10 @@ static void cg_functionize_expr1(backend_profile_t *profile, ir_insn_t *insn) {
             strcpy(buf, "__lily_fconv_f32");
         } else if (ret_prim == IR_PRIM_f32 || ret_prim == IR_PRIM_f64) {
             // Int to float.
-            snprintf(buf, sizeof(buf) - 1, "__lily_itof_%s_%s", ir_prim_names[ret_prim], ir_prim_names[prim]);
+            snprintf(buf, sizeof(buf) - 1, "__lily_itof_%s_%s", ir_prim_name[ret_prim], ir_prim_name[prim]);
         } else {
             // Float to int.
-            snprintf(buf, sizeof(buf) - 1, "__lily_ftoi_%s_%s", ir_prim_names[prim], ir_prim_names[ret_prim]);
+            snprintf(buf, sizeof(buf) - 1, "__lily_ftoi_%s_%s", ir_prim_name[prim], ir_prim_name[ret_prim]);
         }
         ir_add_call(
             IR_AFTER_INSN(insn),
@@ -274,7 +274,7 @@ static void cg_functionize_expr1(backend_profile_t *profile, ir_insn_t *insn) {
         ir_insn_delete(insn);
     } else if (insn->op1 == IR_OP1_neg && softfloat) {
         char buf[32];
-        snprintf(buf, sizeof(buf) - 1, "__lily_neg_%s", ir_prim_names[ir_prim_as_unsigned(prim)]);
+        snprintf(buf, sizeof(buf) - 1, "__lily_neg_%s", ir_prim_name[ir_prim_as_unsigned(prim)]);
         ir_add_call(
             IR_AFTER_INSN(insn),
             IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM(buf)),

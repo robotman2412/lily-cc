@@ -22,7 +22,7 @@ uint8_t const ir_prim_sizes[] = {
     [IR_PRIM_f64]  = 8,
 };
 
-char const *const ir_prim_names[] = {
+char const *const ir_prim_name[] = {
 #define IR_PRIM_DEF(prim) #prim,
 #include "defs/ir_primitives.inc"
 };

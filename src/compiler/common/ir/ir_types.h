@@ -731,7 +731,7 @@ struct ir_func {
 // Byte size per primitive type.
 extern uint8_t const     ir_prim_sizes[];
 // Names used in the serialized representation for `ir_prim_t`.
-extern char const *const ir_prim_names[];
+extern char const *const ir_prim_name[];
 // Names used in the serialized representation for `ir_op2_type_t`.
 extern char const *const ir_op2_names[];
 // Names used in the serialized representation for `ir_op1_type_t`.

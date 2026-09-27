@@ -27,11 +27,11 @@ test: build
 
 .PHONY: valgrind-test
 valgrind-test: build
-	meson test -C build --setup valgrind
+	LILY_TEST_FORK=0 meson test -C build --setup valgrind
 
 .PHONY: gdb-test
 gdb-test: build
-	meson test -C build --gdb
+	LILY_TEST_FORK=0 meson test -C build --gdb
 
 .PHONY: clean
 clean:

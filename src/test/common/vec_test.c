@@ -6,6 +6,8 @@
 #include "testcase.h"
 #include "vec.h"
 
+#include <limits.h>
+
 
 
 static char *test_vec_basic() {
@@ -46,6 +48,59 @@ static char *test_vec_push() {
     return TEST_OK;
 }
 LILY_TEST_CASE(test_vec_push)
+
+
+
+static VEC_BSEARCH_DEF_DEFAULT(vec_bsearch_test, vec_int_t);
+
+static char *test_vec_bsearch() {
+    vec_int_t     vec = VEC_INIT;
+    vec_bsearch_t res;
+
+    vec_push(&vec, 1);
+    vec_push(&vec, 2);
+    vec_push(&vec, 4);
+    vec_push(&vec, 5);
+
+    res = vec_bsearch_test(&vec, INT_MIN);
+    EXPECT_INT(res.index, 0);
+    RETURN_ON_FALSE(res.found == false);
+
+    res = vec_bsearch_test(&vec, 0);
+    EXPECT_INT(res.index, 0);
+    RETURN_ON_FALSE(res.found == false);
+
+    res = vec_bsearch_test(&vec, 1);
+    EXPECT_INT(res.index, 0);
+    RETURN_ON_FALSE(res.found == true);
+
+    res = vec_bsearch_test(&vec, 3);
+    EXPECT_INT(res.index, 2);
+    RETURN_ON_FALSE(res.found == false);
+
+    res = vec_bsearch_test(&vec, 2);
+    EXPECT_INT(res.index, 1);
+    RETURN_ON_FALSE(res.found == true);
+
+    res = vec_bsearch_test(&vec, 4);
+    EXPECT_INT(res.index, 2);
+    RETURN_ON_FALSE(res.found == true);
+
+    res = vec_bsearch_test(&vec, 5);
+    EXPECT_INT(res.index, 3);
+    RETURN_ON_FALSE(res.found == true);
+
+    res = vec_bsearch_test(&vec, 6);
+    EXPECT_INT(res.index, 4);
+    RETURN_ON_FALSE(res.found == false);
+
+    res = vec_bsearch_test(&vec, INT_MAX);
+    EXPECT_INT(res.index, 4);
+    RETURN_ON_FALSE(res.found == false);
+
+    return TEST_OK;
+}
+LILY_TEST_CASE(test_vec_bsearch)
 
 
 

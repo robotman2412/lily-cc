@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -56,6 +57,8 @@ typedef struct {
         size_t                 len;                                                                                    \
         size_t                 cap;                                                                                    \
     } name; /* NOLINT(bugprone-macro-parentheses) */
+// Initialize empty vector.
+#define VEC_INIT {.arr = NULL, .len = 0, .cap = 0}
 
 // Reserve space for at least N additional elements.
 // Not intended for direct use.
@@ -83,10 +86,10 @@ void rawvec_remove_n(rawvec_t *vec, size_t elem_size, size_t index, size_t count
 // Reserve space for exactly N elements.
 #define vec_reserve_exact(vec, n_elem) rawvec_call(rawvec_reserve_exact, (vec), (n_elem))
 // Insert an element into the vector.
-#define vec_insert(vec, index, value)  vec_insert((vec), (index), (value), 1)
+#define vec_insert(vec, index, value)  vec_insert_n((vec), (index), (value), 1)
 // Insert elements into the vector.
 #define vec_insert_n(vec, index, value, count)                                                                         \
-    rawvec_call(rawvec_insert, (vec), (index), (VEC_ELEM_TYPE(vec)[1]){(value)}, (vount))
+    rawvec_call(rawvec_insert_n, (vec), (index), (VEC_ELEM_TYPE(vec)[1]){(value)}, (count))
 // Remove an element from the vector.
 #define vec_remove(vec, index)                                                                                         \
     ({                                                                                                                 \
@@ -146,6 +149,57 @@ void rawvec_remove_n(rawvec_t *vec, size_t elem_size, size_t index, size_t count
 
 
 
+// Vector binary search result.
+typedef struct {
+    size_t index;
+    bool   found;
+} vec_bsearch_t;
+
+// VEC_BSEARCH_DEF comparator that uses the `<` and `>` operators.
+#define VEC_BSEARCH_CMP_DEFAULT        ((lhs < rhs) ? -1 : (lhs > rhs) ? 1 : 0)
+// Like VEC_BSEARCH_CMP_DEFAULT, but lets you specify the expressions for lhs and rhs, which must have no side effects.
+#define VEC_BSEARCH_CMP_EXPR(lhs, rhs) (((lhs) < (rhs)) ? -1 : ((lhs) > (rhs)) ? 1 : 0)
+
+// Implement binary search for the given vector type by value.
+// The vector should be sorted in ascending order.
+// The comparator function shall use the identifiers `lhs` and `rhs` as its left and right operands,
+// and return an integer indicating ordering (e.g. lhs < rhs implies result <= -1).
+#define VEC_BSEARCH_DEF(func_name, vec_type, compare_type, comparator)                                                 \
+    vec_bsearch_t func_name(vec_type const *vec, __typeof__(compare_type) const lhs) {                                 \
+        size_t start = 0;                                                                                              \
+        size_t end   = vec->len;                                                                                       \
+        while (end > start) {                                                                                          \
+            size_t            midpoint = (start + end) / 2; /* Nobody is making a vector of SIZE_MAX/2 elements. */    \
+            __auto_type const rhs      = vec->arr[midpoint];                                                           \
+            __auto_type       ordering = (comparator);                                                                 \
+            if (ordering < 0) {                                                                                        \
+                end = midpoint;                                                                                        \
+            } else if (ordering > 0) {                                                                                 \
+                start = midpoint + 1;                                                                                  \
+            } else {                                                                                                   \
+                return (vec_bsearch_t){                                                                                \
+                    .index = midpoint,                                                                                 \
+                    .found = true,                                                                                     \
+                };                                                                                                     \
+            }                                                                                                          \
+        }                                                                                                              \
+        return (vec_bsearch_t){                                                                                        \
+            .index = start,                                                                                            \
+            .found = false,                                                                                            \
+        };                                                                                                             \
+    }
+
+// Implement binary search for the given vector type by value.
+// The vector should be sorted in ascending order.
+#define VEC_BSEARCH_DEF_DEFAULT(func_name, vec_type)                                                                   \
+    VEC_BSEARCH_DEF(func_name, vec_type, VEC_ELEM_TYPE((vec_type *)NULL), VEC_BSEARCH_CMP_DEFAULT)
+
+// Like VEC_BSEARCH_DEF_DEFAULT, but lets you specify the expressions for lhs and rhs, which must have no side effects.
+#define VEC_BSEARCH_DEF_EXPR(func_name, vec_type, lhs, rhs)                                                            \
+    VEC_BSEARCH_DEF(func_name, vec_type, VEC_ELEM_TYPE((vec_type *)NULL), VEC_BSEARCH_CMP_DEFAULT)
+
+
+
 VEC_TYPE_DEF(vec_char_t, char)
 VEC_TYPE_DEF(vec_schar_t, signed char)
 VEC_TYPE_DEF(vec_short_t, short)
@@ -168,6 +222,6 @@ VEC_TYPE_DEF(vec_int32_t, int32_t)
 VEC_TYPE_DEF(vec_int64_t, int64_t)
 VEC_TYPE_DEF(vec_size_t, size_t)
 
-VEC_TYPE_DEF(vec_bool_t, _Bool)
+VEC_TYPE_DEF(vec_bool_t, bool)
 VEC_TYPE_DEF(vec_ptr_t, void *)
 VEC_TYPE_DEF(vec_cstr_t, char *)

@@ -631,6 +631,9 @@ struct ir_insn {
             ir_combinator_t *combinators;
         };
     };
+    // Instruction index as seen in program order.
+    // Not evaluated unless specifically requested.
+    size_t              icount;
     // Machine instruction prototye.
     insn_proto_t const *prototype;
 };
@@ -655,6 +658,10 @@ struct ir_code {
     // Node index in depth-first search tree.
     // Used while converting into SSA form.
     size_t       dfs_index;
+    // Instruction index when entering this code block.
+    size_t       icount_in;
+    // Instruction index at the end of this code block.
+    size_t       icount_out;
 };
 
 // IR function return type.

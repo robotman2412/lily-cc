@@ -431,6 +431,19 @@ void ir_func_recalc_flow(ir_func_t *func) {
     }
 }
 
+// Iterate the function in program order and evaluate the icount of each instruction.
+void ir_func_eval_icount(ir_func_t *func) {
+    size_t icount = 0;
+    dlist_foreach_node(ir_code_t, code, &func->code_list) {
+        code->icount_in = icount;
+        dlist_foreach_node(ir_insn_t, insn, &code->insns) {
+            insn->icount = icount;
+            icount++;
+        }
+        code->icount_out = icount;
+    }
+}
+
 
 
 // Check that a name isn't already in use.

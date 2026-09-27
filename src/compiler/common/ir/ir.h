@@ -59,6 +59,8 @@ void       ir_func_delete(ir_func_t *func);
 void ir_func_to_ssa(ir_func_t *func);
 // Recalculate the predecessors and successors for code blocks.
 void ir_func_recalc_flow(ir_func_t *func);
+// Iterate the function in program order and evaluate the icount of each instruction.
+void ir_func_eval_icount(ir_func_t *func);
 
 // Create a new stack frame.
 // If `name` is `NULL`, its name will be `frame%zu` where `%zu` is a number.

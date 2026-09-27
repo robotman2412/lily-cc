@@ -5,7 +5,6 @@
 
 #include "regalloc.h"
 
-#include "arrays.h"
 #include "backend.h"
 #include "bitops.h"
 #include "ir.h"
@@ -15,6 +14,7 @@
 #include "map.h"
 #include "set.h"
 #include "unreachable.h"
+#include "vec.h"
 
 #include <assert.h>
 #include <limits.h>
@@ -76,215 +76,86 @@ static ra_node_t *alloc_reg_node(set_t *ra_nodes, map_t *ra_regs, regno_t regno)
     return node;
 }
 
+static VEC_BSEARCH_DEF(liveness_search, vec_live_range_t, lr_pos_t, lhs.start < rhs);
+
+// Insert into a set of live ranges, coalesce and de-duplicate.
+static void live_range_add(vec_live_range_t *liveness, live_range_t range) {
+}
+
+// Helper for `ra_liveness` that traces from a use back to definition by depth-first search.
+// Returns whether the definition was found from the given point.
+static bool ra_liveness_trace_impl(
+    set_t *code_visited, vec_live_range_t *liveness, ir_code_t *code, ir_insn_t *cur, ir_var_t *var, lr_pos_t end
+) {
+    ir_func_t *func = cur->code->func;
+    while (1) {
+        if (cur) {
+            for (size_t i = 0; i < cur->returns_len; i++) {
+                if (cur->returns[i].type == IR_RETVAL_TYPE_VAR && cur->returns[i].dest_var == var) {
+                    break;
+                }
+            }
+        }
+
+        if (cur && cur->node.prev) {
+            cur = (ir_insn_t *)cur->node.prev;
+        } else if (code == func->entry) {
+            return false;
+        } else {
+            bool found = false;
+            set_foreach(ir_code_t, pred, &code->pred) {
+                if (set_add(code_visited, pred)) {
+                    found |= ra_liveness_trace_impl(
+                        code_visited,
+                        liveness,
+                        pred,
+                        (ir_insn_t *)pred->insns.tail,
+                        var,
+                        lr_pos_new(pred->icount_out, ISTAGE_MAX)
+                    );
+                }
+            }
+            if (found) {
+                break;
+            } else {
+                return false;
+            }
+        }
+    }
+
+    live_range_t range = {
+        .start = cur ? lr_pos_new(cur->icount, ISTAGE_OUTPUT) : end,
+        .end   = end,
+    };
+    size_t index = liveness_search(liveness, range.start).index;
+    // TODO: Check for coalescing.
+    vec_insert(liveness, index, range);
+
+    return true;
+}
+
+// Helper for `ra_liveness` that traces from a use back to definition by depth-first search.
+// Returns whether the definition was found from the given point.
+static vec_live_range_t ra_liveness_trace(ir_insn_t *cur, ir_var_t *var, istage_t stage) {
+    vec_live_range_t liveness = {0};
+    if (var->assigned_at.len == 0) {
+        // The value is undefined.
+        // No live ranges means no register conflicts,
+        // and makes regalloc pick any arbitrary register for it,
+        // which may have any possible value.
+    } else {
+        set_t code_visited = PTR_SET_EMPTY;
+        ra_liveness_trace_impl(&code_visited, &liveness, cur->code, cur, var, lr_pos_new(cur->icount, stage));
+        set_clear(&code_visited);
+    }
+    return liveness;
+}
+
 // Perform liveness analisys for variables in a function.
 // Assumes at least trivial dead-code elimination has been done.
 // Returns a map of `ir_var_t *` -> `ra_node_t *`.
-ra_nodes_t ra_liveness(ir_func_t const *func) {
-    // TODO: This may need to be changed to increase efficiency.
-
-    // Lifetime analisys graph node.
-    typedef struct lt_node lt_node_t;
-    struct lt_node {
-        // Associated IR instruction.
-        ir_insn_t const *insn;
-
-        // Number of predecessor nodes.
-        size_t      pred_len;
-        // Predecessor nodes.
-        lt_node_t **pred;
-        // Successor nodes. The most possible here is two (in case of branch instructions).
-        lt_node_t  *succ0, *succ1;
-
-        // Variables referenced by this node.
-        set_t use;
-        // Variables defined by this node.
-        set_t def;
-
-        // Variables defined by a predecessor.
-        set_t in;
-        // Variables referenced by a successor.
-        set_t out;
-
-        // Is currently in the dirty set.
-        bool dirty;
-    };
-
-    size_t     lt_nodes_len = 0;
-    lt_node_t *lt_nodes;
-    map_t      insn_to_node = PTR_MAP_EMPTY;
-
-    // Allocate all of the nodes.
-    {
-        dlist_foreach_node(ir_code_t const, code, &func->code_list) {
-            lt_nodes_len += code->insns.len;
-        }
-        lt_nodes = lilycc_calloc(lt_nodes_len, sizeof(lt_node_t));
-        for (size_t x = 0; x < lt_nodes_len; x++) {
-            lt_nodes[x].in  = PTR_SET_EMPTY;
-            lt_nodes[x].out = PTR_SET_EMPTY;
-            lt_nodes[x].use = PTR_SET_EMPTY;
-            lt_nodes[x].def = PTR_SET_EMPTY;
-        }
-
-        size_t i = 0;
-        dlist_foreach_node(ir_code_t const, code, &func->code_list) {
-            dlist_foreach_node(ir_insn_t const, insn, &code->insns) {
-                lt_nodes[i].insn = insn;
-                map_set(&insn_to_node, insn, &lt_nodes[i]);
-
-                // Variables referenced.
-                assert(insn->type != IR_INSN_COMBINATOR);
-                for (size_t x = 0; x < insn->operands_len; x++) {
-                    IR_FOR_OPERAND_VARS(
-                        insn->operands[x],
-                        var,
-                        if (var->assigned_at.len) {
-                            // Only keep if the var is assigned at least once.
-                            // If undefined but used, we will simply accept any arbitrary register chosen.
-                            set_add(&lt_nodes[i].use, var);
-                        }
-                    );
-                }
-
-                // Variables defined.
-                for (size_t x = 0; x < insn->returns_len; x++) {
-                    if (insn->returns[x].type == IR_RETVAL_TYPE_VAR) {
-                        set_add(&lt_nodes[i].def, insn->returns[x].dest_var);
-                    }
-                }
-
-                i++;
-            }
-        }
-    }
-
-    // Establish predecessor-successor relationships.
-    for (size_t i = 0; i < lt_nodes_len; i++) {
-        ir_insn_t const *insn = lt_nodes[i].insn;
-
-        ir_insn_t const *succ = ir_next_after(insn);
-        if (succ) {
-            lt_node_t *succ_node = map_get(&insn_to_node, succ);
-            lt_nodes[i].succ0    = succ_node;
-            array_len_insert_strong(
-                &succ_node->pred,
-                sizeof(lt_node_t *),
-                &succ_node->pred_len,
-                (lt_node_t *[]){&lt_nodes[i]},
-                succ_node->pred_len
-            );
-        }
-
-        ir_insn_t const *branch = ir_branch_target(insn);
-        if (branch) {
-            lt_node_t *branch_node = map_get(&insn_to_node, branch);
-            lt_nodes[i].succ1      = branch_node;
-            array_len_insert_strong(
-                &branch_node->pred,
-                sizeof(lt_node_t *),
-                &branch_node->pred_len,
-                (lt_node_t *[]){&lt_nodes[i]},
-                branch_node->pred_len
-            );
-        }
-    }
-
-    // Nodes that may need to be updated.
-    size_t      dirty_len = lt_nodes_len;
-    lt_node_t **dirty     = lilycc_calloc(lt_nodes_len, sizeof(lt_node_t *));
-    for (size_t i = 0; i < lt_nodes_len; i++) {
-        dirty[i]          = &lt_nodes[i];
-        lt_nodes[i].dirty = true;
-    }
-
-    // Iterate until no mode nodes are dirty.
-    while (dirty_len) {
-        // Pop the first dirty node.
-        lt_node_t *node;
-        array_remove(dirty, sizeof(lt_node_t *), dirty_len, &node, 0);
-        node->dirty = false;
-        dirty_len--;
-
-        // Propagate liveness of variables.
-        set_foreach(ir_var_t, var, &node->def) {
-            node->dirty |= set_add(&node->out, var);
-        }
-        set_foreach(ir_var_t, var, &node->out) {
-            if (!set_contains(&node->def, var)) {
-                node->dirty |= set_add(&node->in, var);
-            }
-        }
-        node->dirty |= set_addall(&node->in, &node->use) > 0;
-
-        // Mark predecessors as dirty if needed.
-        for (size_t i = 0; i < node->pred_len; i++) {
-            lt_node_t *pred       = node->pred[i];
-            bool       pred_dirty = set_addall(&pred->out, &node->in) > 0;
-            if (pred_dirty && !pred->dirty) {
-                dirty[dirty_len++] = pred;
-                pred->dirty        = true;
-            }
-        }
-
-        if (node->dirty) {
-            dirty[dirty_len++] = node;
-        }
-    }
-
-    set_t ra_nodes = PTR_SET_EMPTY;
-    map_t ra_vars  = PTR_MAP_EMPTY;
-
-    // Interference information per IR variable (that isn't unused).
-    dlist_foreach_node(ir_var_t, var, &func->vars_list) {
-        ra_node_t *node = lilycc_calloc(1, sizeof(ra_node_t));
-        node->links     = PTR_SET_EMPTY;
-        node->regno     = REGNO_NONE;
-        node->var       = var;
-        map_set(&ra_vars, var, node);
-        set_add(&ra_nodes, node);
-    }
-    for (size_t i = 0; i < lt_nodes_len; i++) {
-        link_vars(&ra_vars, &lt_nodes[i].in);
-        link_vars(&ra_vars, &lt_nodes[i].out);
-    }
-
-    // Pre-colored interference graph nodes.
-    map_t ra_regs = PTR_MAP_EMPTY;
-    for (size_t i = 0; i < lt_nodes_len; i++) {
-        ir_insn_t const *insn = lt_nodes[i].insn;
-        assert(insn->type != IR_INSN_COMBINATOR);
-        for (size_t x = 0; x < insn->returns_len; x++) {
-            if (insn->returns[x].type == IR_RETVAL_TYPE_REG) {
-                ra_node_t *node = alloc_reg_node(&ra_nodes, &ra_regs, insn->returns[x].dest_regno);
-                link_regs(node, &ra_vars, &lt_nodes[i].out);
-            }
-        }
-        for (size_t x = 0; x < insn->operands_len; x++) {
-            IR_FOR_OPERAND_REGS(insn->operands[x], regno, {
-                ra_node_t *node = alloc_reg_node(&ra_nodes, &ra_regs, regno);
-                link_regs(node, &ra_vars, &lt_nodes[i].in);
-            });
-        }
-    }
-
-    // Cleanup.
-    for (size_t i = 0; i < lt_nodes_len; i++) {
-        lt_node_t *node = &lt_nodes[i];
-        set_clear(&node->in);
-        set_clear(&node->out);
-        set_clear(&node->use);
-        set_clear(&node->def);
-        lilycc_free(node->pred);
-    }
-    map_clear(&ra_regs);
-    map_clear(&insn_to_node);
-    lilycc_free(lt_nodes);
-    lilycc_free(dirty);
-
-    return (ra_nodes_t){
-        .nodes  = ra_nodes,
-        .by_var = ra_vars,
-    };
+ra_nodes_t ra_liveness(ir_func_t *func) {
+    ir_func_eval_icount(func);
 }
 
 // Delete an `ra_nodes_t`.

@@ -1,5 +1,13 @@
 # lily-cc TODO
 
+## Generic Code Style
+- Create GNU attribute wrapper macros
+- Misc arithmetic utilities
+    - Replace calls to built-ins such as __builtin_clz etc. with properly typed wrapper utility
+    - Arithmetic min/max macros (is math.h ok to use?)
+- Determine whether `({})` syntax is widely supported
+    - If not, find a replacement for them in macros such as out params
+
 ## C frontend
 ### Extensions
 - `__attribute__` syntax

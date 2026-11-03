@@ -7,16 +7,11 @@
 #include <string.h>
 
 uint8_t const ir_prim_sizes[] = {
-    [IR_PRIM_s8]   = 1,
-    [IR_PRIM_u8]   = 1,
-    [IR_PRIM_s16]  = 2,
-    [IR_PRIM_u16]  = 2,
-    [IR_PRIM_s32]  = 4,
-    [IR_PRIM_u32]  = 4,
-    [IR_PRIM_s64]  = 8,
-    [IR_PRIM_u64]  = 8,
-    [IR_PRIM_s128] = 16,
-    [IR_PRIM_u128] = 16,
+    [IR_PRIM_i8]   = 1,
+    [IR_PRIM_i16]  = 2,
+    [IR_PRIM_i32]  = 4,
+    [IR_PRIM_i64]  = 8,
+    [IR_PRIM_i128] = 16,
     [IR_PRIM_bool] = 1,
     [IR_PRIM_f32]  = 4,
     [IR_PRIM_f64]  = 8,
@@ -42,7 +37,7 @@ char const *const ir_op1_names[] = {
 // Convert an IR constant into bytes.
 // Assumes the caller allocates enough space.
 void ir_const_to_blob(ir_const_t iconst, uint8_t *blob, bool big_endian) {
-    size_t size = ir_prim_sizes[iconst.prim_type];
+    size_t size = ir_prim_size(iconst.prim_type);
     if (big_endian != (BYTE_ORDER == BIG_ENDIAN)) {
         uint8_t tmp[16];
         memcpy(tmp, &iconst.const128, size);
@@ -59,7 +54,7 @@ void ir_const_to_blob(ir_const_t iconst, uint8_t *blob, bool big_endian) {
 ir_const_t ir_const_from_blob(ir_prim_t prim, uint8_t const *blob, bool big_endian) {
     ir_const_t iconst = {0};
     iconst.prim_type  = prim;
-    size_t size       = ir_prim_sizes[iconst.prim_type];
+    size_t size       = ir_prim_size(iconst.prim_type);
     if (big_endian != (BYTE_ORDER == BIG_ENDIAN)) {
         uint8_t tmp[16];
         for (size_t i = 0; i < size; i++) {

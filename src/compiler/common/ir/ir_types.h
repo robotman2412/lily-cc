@@ -27,16 +27,11 @@ typedef enum __attribute__((packed)) {
 // Number of bits (exluding padding) per IR type.
 __attribute__((const)) static inline int ir_prim_bits(ir_prim_t prim) {
     switch (prim) {
-        case IR_PRIM_s8:
-        case IR_PRIM_u8: return 8;
-        case IR_PRIM_s16:
-        case IR_PRIM_u16: return 16;
-        case IR_PRIM_s32:
-        case IR_PRIM_u32: return 32;
-        case IR_PRIM_s64:
-        case IR_PRIM_u64: return 64;
-        case IR_PRIM_s128:
-        case IR_PRIM_u128: return 128;
+        case IR_PRIM_i8: return 8;
+        case IR_PRIM_i16: return 16;
+        case IR_PRIM_i32: return 32;
+        case IR_PRIM_i64: return 64;
+        case IR_PRIM_i128: return 128;
         case IR_PRIM_bool: return 1;
         case IR_PRIM_f32: return 32;
         case IR_PRIM_f64: return 64;
@@ -45,22 +40,33 @@ __attribute__((const)) static inline int ir_prim_bits(ir_prim_t prim) {
     UNREACHABLE();
 }
 
+// Number of bits (exluding padding) per IR type.
+__attribute__((const)) static inline size_t ir_prim_size(ir_prim_t prim) {
+    switch (prim) {
+        case IR_PRIM_i8: return 8;
+        case IR_PRIM_i16: return 16;
+        case IR_PRIM_i32: return 32;
+        case IR_PRIM_i64: return 64;
+        case IR_PRIM_i128: return 128;
+        case IR_PRIM_bool: return 1;
+        case IR_PRIM_f32: return 32;
+        case IR_PRIM_f64: return 64;
+        case IR_N_PRIM: return 0;
+    }
+    UNREACHABLE();
+}
+
 // Minimum value of integer primitive types (including bool).
 // Meaningless for other primitive types.
-__attribute__((const)) static inline i128_t ir_prim_min(ir_prim_t prim) {
+__attribute__((const)) static inline i128_t ir_prim_min(ir_prim_t prim, bool is_signed) {
     switch (prim) {
             // clang-format off
         case IR_PRIM_bool: return I128_ZERO; break;
-        case IR_PRIM_s8:   return i128(INT8_MIN); break;
-        case IR_PRIM_u8:   return I128_ZERO; break;
-        case IR_PRIM_s16:  return i128(INT16_MIN); break;
-        case IR_PRIM_u16:  return I128_ZERO; break;
-        case IR_PRIM_s32:  return i128(INT32_MIN); break;
-        case IR_PRIM_u32:  return I128_ZERO; break;
-        case IR_PRIM_s64:  return i128(INT64_MIN); break;
-        case IR_PRIM_u64:  return I128_ZERO; break;
-        case IR_PRIM_s128: return I128_MIN; break;
-        case IR_PRIM_u128: return I128_ZERO; break;
+        case IR_PRIM_i8:   return is_signed ? i128(INT8_MIN)  : I128_ZERO; break;
+        case IR_PRIM_i16:  return is_signed ? i128(INT16_MIN) : I128_ZERO; break;
+        case IR_PRIM_i32:  return is_signed ? i128(INT32_MIN) : I128_ZERO; break;
+        case IR_PRIM_i64:  return is_signed ? i128(INT64_MIN) : I128_ZERO; break;
+        case IR_PRIM_i128: return is_signed ? I128_MIN        : I128_ZERO; break;
             // clang-format on
         default: // Intentionally meaningless value.
 #ifdef NDEBUG
@@ -73,20 +79,15 @@ __attribute__((const)) static inline i128_t ir_prim_min(ir_prim_t prim) {
 
 // Maximum value of integer primitive types (including bool).
 // Meaningless for other primitive types.
-__attribute__((const)) static inline i128_t ir_prim_max(ir_prim_t prim) {
+__attribute__((const)) static inline i128_t ir_prim_max(ir_prim_t prim, bool is_signed) {
     switch (prim) {
             // clang-format off
         case IR_PRIM_bool: return ui128(1); break;
-        case IR_PRIM_s8:   return i128(INT8_MAX); break;
-        case IR_PRIM_u8:   return ui128(UINT8_MAX); break;
-        case IR_PRIM_s16:  return i128(INT16_MAX); break;
-        case IR_PRIM_u16:  return ui128(UINT16_MAX); break;
-        case IR_PRIM_s32:  return i128(INT32_MAX); break;
-        case IR_PRIM_u32:  return ui128(UINT32_MAX); break;
-        case IR_PRIM_s64:  return i128(INT64_MAX); break;
-        case IR_PRIM_u64:  return ui128(UINT64_MAX); break;
-        case IR_PRIM_s128: return I128_MAX; break;
-        case IR_PRIM_u128: return UI128_MAX; break;
+        case IR_PRIM_i8:   return is_signed ? i128(INT8_MAX)  : ui128(UINT8_MAX);  break;
+        case IR_PRIM_i16:  return is_signed ? i128(INT16_MAX) : ui128(UINT16_MAX); break;
+        case IR_PRIM_i32:  return is_signed ? i128(INT32_MAX) : ui128(UINT32_MAX); break;
+        case IR_PRIM_i64:  return is_signed ? i128(INT64_MAX) : ui128(UINT64_MAX); break;
+        case IR_PRIM_i128: return is_signed ? I128_MAX        : UI128_MAX;         break;
             // clang-format on
         default: // Intentionally meaningless value.
 #ifdef NDEBUG
@@ -109,53 +110,12 @@ __attribute__((const)) static inline bool ir_prim_is_float(ir_prim_t prim) {
 // Whether a primitive is of integer type.
 __attribute__((const)) static inline bool ir_prim_is_integer(ir_prim_t prim) {
     switch (prim) {
-        case IR_PRIM_s8:
-        case IR_PRIM_s16:
-        case IR_PRIM_s32:
-        case IR_PRIM_s64:
-        case IR_PRIM_s128:
-        case IR_PRIM_u8:
-        case IR_PRIM_u16:
-        case IR_PRIM_u32:
-        case IR_PRIM_u64:
-        case IR_PRIM_u128: return true;
+        case IR_PRIM_i8:
+        case IR_PRIM_i16:
+        case IR_PRIM_i32:
+        case IR_PRIM_i64:
+        case IR_PRIM_i128: return true;
         default: return false;
-    }
-}
-
-// Whether a primitive is signed.
-__attribute__((const)) static inline bool ir_prim_is_signed(ir_prim_t prim) {
-    switch (prim) {
-        case IR_PRIM_s8:
-        case IR_PRIM_s16:
-        case IR_PRIM_s32:
-        case IR_PRIM_s64:
-        case IR_PRIM_s128: return true;
-        default: return false;
-    }
-}
-
-// Get unsigned counterpart of primitive.
-__attribute__((const)) static inline ir_prim_t ir_prim_as_unsigned(ir_prim_t prim) {
-    switch (prim) {
-        case IR_PRIM_s8: return IR_PRIM_u8;
-        case IR_PRIM_s16: return IR_PRIM_u16;
-        case IR_PRIM_s32: return IR_PRIM_u32;
-        case IR_PRIM_s64: return IR_PRIM_u64;
-        case IR_PRIM_s128: return IR_PRIM_u128;
-        default: return prim;
-    }
-}
-
-// Get unsigned counterpart of primitive.
-__attribute__((const)) static inline ir_prim_t ir_prim_as_signed(ir_prim_t prim) {
-    switch (prim) {
-        case IR_PRIM_u8: return IR_PRIM_s8;
-        case IR_PRIM_u16: return IR_PRIM_s16;
-        case IR_PRIM_u32: return IR_PRIM_s32;
-        case IR_PRIM_u64: return IR_PRIM_s64;
-        case IR_PRIM_u128: return IR_PRIM_s128;
-        default: return prim;
     }
 }
 
@@ -384,9 +344,10 @@ struct ir_var {
     set_t        assigned_at;
     // Instructions that read this variable.
     set_t        used_at;
-    // For integer typed vars: possible range of the values in this variable (inclusive).
-    // Interpret as signed iff the IR type is signed.
-    i128_t       range_min, range_max;
+    // For integer typed vars: possible range of the values in this variable (inclusive, unsigned).
+    i128_t       range_minu, range_maxu;
+    // For integer typed vars: possible range of the values in this variable (inclusive, signed).
+    i128_t       range_mins, range_maxs;
 };
 
 // IR constant.
@@ -421,17 +382,17 @@ struct ir_const {
 
 #define IR_CONST_BOOL(value) ((ir_const_t){.prim_type = IR_PRIM_bool, .constl = (bool)(value)})
 
-#define IR_CONST_U8(value)   ((ir_const_t){.prim_type = IR_PRIM_u8, .constl = (uint8_t)(value)})
-#define IR_CONST_U16(value)  ((ir_const_t){.prim_type = IR_PRIM_u16, .constl = (uint16_t)(value)})
-#define IR_CONST_U32(value)  ((ir_const_t){.prim_type = IR_PRIM_u32, .constl = (uint32_t)(value)})
-#define IR_CONST_U64(value)  ((ir_const_t){.prim_type = IR_PRIM_u64, .constl = (uint64_t)(value)})
-#define IR_CONST_U128(value) ((ir_const_t){.prim_type = IR_PRIM_u128, .const128 = (value)})
+#define IR_CONST_U8(value)   ((ir_const_t){.prim_type = IR_PRIM_i8, .constl = (uint8_t)(value)})
+#define IR_CONST_U16(value)  ((ir_const_t){.prim_type = IR_PRIM_i16, .constl = (uint16_t)(value)})
+#define IR_CONST_U32(value)  ((ir_const_t){.prim_type = IR_PRIM_i32, .constl = (uint32_t)(value)})
+#define IR_CONST_U64(value)  ((ir_const_t){.prim_type = IR_PRIM_i64, .constl = (uint64_t)(value)})
+#define IR_CONST_U128(value) ((ir_const_t){.prim_type = IR_PRIM_i128, .const128 = (value)})
 
-#define IR_CONST_S8(value)   ((ir_const_t){.prim_type = IR_PRIM_s8, .constl = (int8_t)(value)})
-#define IR_CONST_S16(value)  ((ir_const_t){.prim_type = IR_PRIM_s16, .constl = (int16_t)(value)})
-#define IR_CONST_S32(value)  ((ir_const_t){.prim_type = IR_PRIM_s32, .constl = (int32_t)(value)})
-#define IR_CONST_S64(value)  ((ir_const_t){.prim_type = IR_PRIM_s64, .constl = (int64_t)(value)})
-#define IR_CONST_S128(value) ((ir_const_t){.prim_type = IR_PRIM_s128, .const128 = (value)})
+#define IR_CONST_S8(value)   ((ir_const_t){.prim_type = IR_PRIM_i8, .constl = (int8_t)(value)})
+#define IR_CONST_S16(value)  ((ir_const_t){.prim_type = IR_PRIM_i16, .constl = (int16_t)(value)})
+#define IR_CONST_S32(value)  ((ir_const_t){.prim_type = IR_PRIM_i32, .constl = (int32_t)(value)})
+#define IR_CONST_S64(value)  ((ir_const_t){.prim_type = IR_PRIM_i64, .constl = (int64_t)(value)})
+#define IR_CONST_S128(value) ((ir_const_t){.prim_type = IR_PRIM_i128, .const128 = (value)})
 
 #define IR_CONST_F32(value) ((ir_const_t){.prim_type = IR_PRIM_f32, .constf32 = (float)(value)})
 #define IR_CONST_F64(value) ((ir_const_t){.prim_type = IR_PRIM_f64, .constf64 = (double)(value)})
@@ -729,7 +690,7 @@ struct ir_func {
 };
 
 // Byte size per primitive type.
-extern uint8_t const     ir_prim_sizes[];
+extern uint8_t const     ir_prim_sizes[] __attribute__((deprecated("Use ir_prim_size()")));
 // Names used in the serialized representation for `ir_prim_t`.
 extern char const *const ir_prim_name[];
 // Names used in the serialized representation for `ir_op2_type_t`.

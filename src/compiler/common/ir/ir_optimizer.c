@@ -64,18 +64,21 @@ static bool strength_reduce_expr(ir_insn_t *expr) {
     rhs.iconst       = ir_trim_const(rhs.iconst);
     ir_const_t p_rhs = ir_const_is_negative(rhs.iconst) ? ir_calc1(IR_OP1_neg, rhs.iconst) : rhs.iconst;
 
-    if (oper == IR_OP2_div && ir_const_popcnt(rhs.iconst) == 1 && !ir_const_is_negative(rhs.iconst)) {
+    if ((oper == IR_OP2_div || oper == IR_OP2_divu) && ir_const_popcnt(rhs.iconst) == 1
+        && !ir_const_is_negative(rhs.iconst)) {
         // Replace a division with a right shift.
         rhs.iconst.constl = ir_const_ctz(rhs.iconst);
         rhs.iconst.consth = 0;
-        oper              = IR_OP2_shr;
+        oper              = oper == IR_OP2_divu ? IR_OP2_shru : IR_OP2_shra;
         return true;
 
-    } else if (oper == IR_OP2_rem && ir_const_popcnt(p_rhs) == 1) {
+    } else if ((oper == IR_OP2_rem || oper == IR_OP2_remu) && ir_const_popcnt(p_rhs) == 1) {
         // Replace a remainder with a bitmask.
         int    bits = ir_const_ctz(p_rhs);
         i128_t mask = add128(i128_pack(-1, -1), shl128(i128_pack(0, 1), bits));
         if (!(prim & 1)) {
+            ir_op2_type_t shr = oper == IR_OP2_divu ? IR_OP2_shru : IR_OP2_shra;
+
             // Add instructions to extract and copy the sign from the lhs to the output.
             ir_var_t *tmp1 = ir_var_create(expr->code->func, prim, NULL);
             ir_var_t *tmp2 = ir_var_create(expr->code->func, prim, NULL);
@@ -83,13 +86,13 @@ static bool strength_reduce_expr(ir_insn_t *expr) {
             ir_var_t *tmp4 = ir_var_create(expr->code->func, prim, NULL);
 
             ir_const_t shamt1 = {.prim_type = prim, .constl = ir_prim_sizes[prim] * 8 - 1};
-            ir_add_expr2(IR_BEFORE_INSN(expr), IR_RETVAL_VAR(tmp1), IR_OP2_shr, lhs, IR_OPERAND_CONST(shamt1));
+            ir_add_expr2(IR_BEFORE_INSN(expr), IR_RETVAL_VAR(tmp1), shr, lhs, IR_OPERAND_CONST(shamt1));
 
             ir_const_t shamt2 = {.prim_type = prim, .constl = ir_prim_sizes[prim] * 8 - bits};
             ir_add_expr2(
                 IR_BEFORE_INSN(expr),
                 IR_RETVAL_VAR(tmp2),
-                IR_OP2_shr,
+                shr,
                 IR_OPERAND_VAR(tmp1),
                 IR_OPERAND_CONST(shamt2)
             );

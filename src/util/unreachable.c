@@ -9,7 +9,7 @@
 
 
 #ifndef NDEBUG
-void UNREACHABLE(char const *file, int line) {
+void lilycc_unreachable_code(char const *file, int line) {
     fflush(stdout);
     fprintf(stderr, "BUG: %s:%d: unreachable code\n", file, line);
     abort();

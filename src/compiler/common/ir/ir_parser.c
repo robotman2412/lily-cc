@@ -97,7 +97,7 @@ token_t ir_parse_memoperand(tokenizer_t *from) {
 
     bool          has_type = false;
     token_t const type     = tkn_peek(from);
-    if (type.type == TOKENTYPE_KEYWORD && type.subtype >= IR_KEYW_s8 && type.subtype <= IR_KEYW_f64) {
+    if (type.type == TOKENTYPE_KEYWORD && type.subtype >= IR_KEYW_i8 && type.subtype <= IR_KEYW_f64) {
         tkn_next(from);
         has_type = true;
     }
@@ -234,7 +234,7 @@ token_t ir_parse_var(tokenizer_t *from) {
         return ast_from_va(IR_AST_GARBAGE, 1, ident);
     }
     token_t type = tkn_next(from);
-    if (type.type != TOKENTYPE_KEYWORD || type.subtype < IR_KEYW_s8 || type.subtype > IR_KEYW_f64) {
+    if (type.type != TOKENTYPE_KEYWORD || type.subtype < IR_KEYW_i8 || type.subtype > IR_KEYW_f64) {
         cctx_diagnostic(from->cctx, type.pos, DIAG_ERR, "Expected type");
         return ast_from_va(IR_AST_GARBAGE, 2, ident, type);
     }

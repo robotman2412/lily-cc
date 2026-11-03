@@ -7,15 +7,12 @@
 
 
 
-#include <stdio.h>
-#include <stdlib.h>
-
 #ifdef NDEBUG
 // Mark some code as unreachable.
 #define UNREACHABLE() __builtin_unreachable()
 #else
 // Mark some code as unreachable.
-void UNREACHABLE(char const *file, int line) __attribute__((noreturn));
+void lilycc_unreachable_code(char const *file, int line) __attribute__((noreturn));
 // Mark some code as unreachable.
-#define UNREACHABLE() UNREACHABLE(__FILE__, __LINE__)
+#define UNREACHABLE() lilycc_unreachable_code(__FILE__, __LINE__)
 #endif

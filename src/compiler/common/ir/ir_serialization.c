@@ -271,7 +271,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
             default: UNREACHABLE();
             case IR_AST_VAR: {
                 claim_name(stmt->params[0]) {
-                    ir_var_create(func, stmt->params[1].subtype - IR_KEYW_s8 + IR_PRIM_s8, stmt->params[0].strval);
+                    ir_var_create(func, stmt->params[1].subtype - IR_KEYW_i8 + IR_PRIM_i8, stmt->params[0].strval);
                 }
             } break;
             case IR_AST_CODE: {
@@ -336,7 +336,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                 } else {
                     ir_arg_t arg
                         = {.arg_type     = IR_ARG_TYPE_IGNORED,
-                           .ignored_prim = stmt->params[0].subtype - IR_KEYW_s8 + IR_PRIM_s8};
+                           .ignored_prim = stmt->params[0].subtype - IR_KEYW_i8 + IR_PRIM_i8};
                     array_len_insert_strong(&func->args, sizeof(ir_arg_t), &func->args_len, &arg, func->args_len);
                 }
             } break;
@@ -395,7 +395,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                         if (operand_ast->params[0].type == TOKENTYPE_KEYWORD) {
                             // With a type.
                             nontype                = 1;
-                            operand->mem.data_type = operand_ast->params[0].subtype - IR_KEYW_s8 + IR_PRIM_s8;
+                            operand->mem.data_type = operand_ast->params[0].subtype - IR_KEYW_i8 + IR_PRIM_i8;
                         } else {
                             // Without a type.
                             operand->mem.data_type = IR_N_PRIM;
@@ -592,8 +592,8 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                         goto operand0_mem;
 
                     case IR_KEYW_memset:
-                        // Second operand must be either u8 or s8.
-                        if (ir_prim_as_unsigned(ir_operand_prim(operands[2])) != IR_PRIM_u8) {
+                        // Second operand must be i8.
+                        if (ir_operand_prim(operands[2]) != IR_PRIM_i8) {
                             cctx_diagnostic(
                                 from->cctx,
                                 stmt->params[2].params[2].pos,
@@ -668,7 +668,8 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                         goto operand_nomem;
 
                     case IR_KEYW_shl:
-                    case IR_KEYW_shr:
+                    case IR_KEYW_shra:
+                    case IR_KEYW_shru:
                     case IR_KEYW_band:
                     case IR_KEYW_bor:
                     case IR_KEYW_bxor:

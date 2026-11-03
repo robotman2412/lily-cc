@@ -10,7 +10,7 @@
 
 
 // Get the range of possible values from an IR operand.
-bool ir_get_operand_range(ir_operand_t operand, i128_t *min_out, i128_t *max_out);
+bool ir_get_operand_range(ir_operand_t operand, i128_t *minu_out, i128_t *maxu_out, i128_t *mins_out, i128_t *maxs_out);
 // Update the possible range according to an expr2 instruction.
 void ir_expr2_range(ir_var_t *var, ir_insn_t const *insn);
 // Update the possible range according to an expr1 instruction.
@@ -18,7 +18,7 @@ void ir_expr1_range(ir_var_t *var, ir_insn_t const *insn);
 // Update the possible range according to an instruction.
 void ir_insn_range(ir_var_t *var, ir_insn_t const *insn);
 // Expand the possible range of a variable.
-void ir_expand_range(ir_var_t *var, i128_t min, i128_t max);
+void ir_expand_range(ir_var_t *var, i128_t minu, i128_t maxu, i128_t mins, i128_t maxs);
 // Recompute the possible range of a variable.
 void ir_calc_var_range(ir_var_t *var);
 // Recompute the possible ranges of all variables in the function.
@@ -41,9 +41,9 @@ bool       ir_const_identical(ir_const_t lhs, ir_const_t rhs) __attribute__((con
 // Floats are promoted to f64, then compared bitwise.
 bool       ir_const_lenient_identical(ir_const_t lhs, ir_const_t rhs) __attribute__((const));
 // Truncate unused bits of a constant.
-ir_const_t ir_trim_const(ir_const_t value) __attribute__((const));
-// Cast from one type to another with IR rules.
-ir_const_t ir_cast(ir_prim_t type, ir_const_t value) __attribute__((const));
+ir_const_t ir_trim_const(ir_const_t value, bool is_signed) __attribute__((const));
+// Arithmetic cast between two types.
+ir_const_t ir_cast(ir_prim_t type, ir_const_t value, bool is_signed) __attribute__((const));
 // Calculate the result of an expr1.
 ir_const_t ir_calc1(ir_op1_type_t oper, ir_const_t value) __attribute__((const));
 // Calculate the result of an expr2.

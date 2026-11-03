@@ -137,23 +137,15 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
         };
     }
 
-    bool const is_signed = prim <= IR_PRIM_s128 && !(prim & 1);
-    int const  bitcount  = prim == IR_PRIM_bool ? 1 : ir_prim_sizes[prim] * 8;
+    int const bitcount = prim == IR_PRIM_bool ? 1 : ir_prim_sizes[prim] * 8;
 
     // Negate and check for overflow.
-    if (is_signed) {
+    if (is_negative) {
         // Check for overflow (signed edition).
-        i128_t const sign_mask = shl128(i128_pack(0, 1), bitcount - 1);
-        i128_t const max_val   = add128(sign_mask, neg128(i128_pack(0, 1)));
-        if (is_negative) {
-            toolarge |= cmp128u(val, sign_mask) > 0;
-        } else {
-            toolarge |= cmp128u(val, max_val) > 0;
-        }
-
-        if (is_negative) {
-            val = neg128(val);
-        }
+        i128_t const sign_mask  = shl128(i128_pack(0, 1), bitcount - 1);
+        i128_t const max_val    = add128(sign_mask, neg128(i128_pack(0, 1)));
+        toolarge               |= cmp128u(val, sign_mask) > 0;
+        val                     = neg128(val);
 
         // Truncate signed number.
         if (cmp128u(and128(val, sign_mask), i128_pack(0, 0))) {
@@ -191,7 +183,7 @@ static token_t ir_tkn_numeric(tokenizer_t *ctx, ir_prim_t prim, pos_t start_pos,
     } else if (toolarge) {
         bool   val_u_negative = false;
         i128_t val_u;
-        if (is_signed && hi64(val) >> 63) {
+        if (is_negative && hi64(val) >> 63) {
             val_u          = neg128(val);
             val_u_negative = true;
         } else {
@@ -542,7 +534,7 @@ retry:
         ctx->pos = pos2;
 
         // Numeric constants.
-        ir_prim_t prim = kw.subtype - IR_KEYW_s8 + IR_PRIM_s8;
+        ir_prim_t prim = kw.subtype - IR_KEYW_i8 + IR_PRIM_i8;
         if (prim < 0 || prim >= IR_N_PRIM) {
             prim = 0;
             cctx_diagnostic(ctx->cctx, kw.pos, DIAG_ERR, "Expected a type for numeric literal");

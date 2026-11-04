@@ -9,7 +9,6 @@ common_srcs = [
     'back/codegen.c',
     'back/regalloc.c',
     'back/insn_proto.c',
-    'back/sub_tree.c',
     'front/compiler.c',
     'front/tokenizer.c',
     'ir/ir_interpreter.c',

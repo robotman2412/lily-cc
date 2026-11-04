@@ -10,10 +10,12 @@
 
 // Move value without conversion.
 IR_OP1_DEF(mov)
-// Arithmetic cast (signed).
-IR_OP1_DEF(casts)
-// Arithmetic cast (unsigned).
-IR_OP1_DEF(castu)
+// Zero-extend integer.
+IR_OP1_DEF(zeroext)
+// Sign-extend integer.
+IR_OP1_DEF(signext)
+// Truncate integer.
+IR_OP1_DEF(trunc)
 // Bit-cast value.
 IR_OP1_DEF(bitcast)
 

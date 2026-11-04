@@ -43,6 +43,7 @@ bool       ir_const_lenient_identical(ir_const_t lhs, ir_const_t rhs) __attribut
 // Truncate unused bits of a constant.
 ir_const_t ir_trim_const(ir_const_t value, bool is_signed) __attribute__((const));
 // Arithmetic cast between two types.
+// TODO: Replace cast operations with explicit alternatives matching the IR instructions.
 ir_const_t ir_cast(ir_prim_t type, ir_const_t value, bool is_signed) __attribute__((const));
 // Calculate the result of an expr1.
 ir_const_t ir_calc1(ir_op1_type_t oper, ir_const_t value) __attribute__((const));

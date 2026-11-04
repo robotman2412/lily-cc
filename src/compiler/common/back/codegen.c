@@ -16,8 +16,10 @@
 #include "regalloc.h"
 #include "set.h"
 #include "unreachable.h"
+#include "vec.h"
 
 #include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -431,138 +433,155 @@ static void cg_promote_var_0(backend_profile_t *profile, ir_var_t *var) {
     }
 }
 
-// Insert additional computations as needded to clamp promoted variable back in range.
-static void cg_promote_var_1(backend_profile_t *profile, ir_var_t *orig) {
-    (void)profile;
-    assert(orig->assigned_at.len <= 1);
-    if (orig->orig_prim_type == orig->prim_type || orig->assigned_at.len == 0 || orig->arg_index >= 0) {
+// Tracks sign/zero-extension information for `cg_promote_var_1`.
+typedef struct {
+    ir_insn_t *insn;
+    size_t     index;
+    bool       use_sign_ext; // As opposed to zero-extension.
+} sign_tag_t;
+VEC_TYPE_DEF(vec_sign_tag_t, sign_tag_t);
+
+// Tracks sign/zero-extension information for `cg_promote_var_1`.
+typedef struct {
+    vec_sign_tag_t operand;
+    ir_var_t      *target;
+    bool           need_sign_ext;
+    bool           need_zero_ext;
+} sign_tag_list_t;
+
+// Insert one entry into the sign tag list for `cg_promote_var_1`.
+static void cg_add_sign_tag(sign_tag_list_t *list, ir_insn_t *insn, size_t index, ir_sign_t sign) {
+    if (insn->operands[index].type != IR_OPERAND_TYPE_VAR || insn->operands[index].var != list->target
+        || sign == IR_SIGN_AGNOSTIC) {
         return;
     }
+    sign_tag_t tag = {
+        .insn         = insn,
+        .index        = index,
+        .use_sign_ext = sign == IR_SIGN_SIGNEXT,
+    };
+    vec_push(&list->operand, tag);
+    if (sign == IR_SIGN_SIGNEXT) {
+        list->need_sign_ext = true;
+    } else {
+        list->need_zero_ext = true;
+    }
+}
+
+// Insert additional computations as needded to clamp promoted variable back in range.
+static void cg_promote_var_1(backend_profile_t *profile, ir_var_t *orig) {
     ir_insn_t *assignment = set_next(&orig->assigned_at, NULL)->value;
-    assert(orig->prim_type < IR_PRIM_f32);
+    assert(ir_prim_is_integer(orig->prim_type));
 
-    // TODO: Use IR var ranges to optimize out truncations.
+    sign_tag_list_t tags = {
+        .operand       = VEC_INIT,
+        .target        = orig,
+        .need_sign_ext = false,
+        .need_zero_ext = false,
+    };
 
+    // For every instruction operand that uses this value, determine whether it needs any widening and what kind.
     set_foreach(ir_insn_t, insn, &orig->used_at) {
+#define tag(index, sign) cg_add_sign_tag(&tags, insn, index, sign)
+
         if (insn->flags & IR_INSN_FLAG_CLAMPING) {
             continue;
         }
         switch (insn->type) {
-            case IR_INSN_EXPR1:
-                switch (insn->op1) {
-                    case IR_OP1_seqz:
-                    case IR_OP1_snez:
-                    case IR_OP1_mov:
-                    case IR_OP1_castu:
-                    case IR_OP1_casts:
-                    case IR_OP1_bitcast: goto needs_clamp;
-                    case IR_OP1_neg:
-                    case IR_OP1_bneg:
-                    case IR_N_OP1: break;
-                }
-                break;
-            case IR_INSN_EXPR2:
+            case IR_INSN_EXPR2: // Depends on operation.
                 switch (insn->op2) {
-                    case IR_OP2_shru:
-                    case IR_OP2_divu:
-                    case IR_OP2_remu:
-                    case IR_OP2_sgtu:
+                    case IR_OP2_seq:  // Widening type must be consistent across all equality comparisons;
+                    case IR_OP2_sne:  // choose unsigned widening because it is generally cheaper.
+                    case IR_OP2_sgtu: // Unsigned operations.
                     case IR_OP2_sleu:
                     case IR_OP2_sltu:
                     case IR_OP2_sgeu:
-                    case IR_OP2_shrs:
-                    case IR_OP2_divs:
-                    case IR_OP2_rems:
-                    case IR_OP2_sgts:
+                    case IR_OP2_divu:
+                    case IR_OP2_remu:
+                        tag(0, IR_SIGN_ZEROEXT);
+                        tag(1, IR_SIGN_ZEROEXT);
+                        break;
+                    case IR_OP2_sgts: // Signed operations.
                     case IR_OP2_sles:
                     case IR_OP2_slts:
                     case IR_OP2_sges:
-                    case IR_OP2_seq:
-                    case IR_OP2_sne: goto needs_clamp;
-                    case IR_OP2_add:
+                    case IR_OP2_divs:
+                    case IR_OP2_rems:
+                        tag(0, IR_SIGN_SIGNEXT);
+                        tag(1, IR_SIGN_SIGNEXT);
+                        break;
+                    case IR_OP2_shru: tag(0, IR_SIGN_ZEROEXT); break; // RHS being out of range is UB so not widened.
+                    case IR_OP2_shrs: tag(0, IR_SIGN_SIGNEXT); break;
+                    case IR_OP2_add: // The rest are MSB-agnostic arithmetic operations.
                     case IR_OP2_sub:
                     case IR_OP2_mul:
                     case IR_OP2_shl:
                     case IR_OP2_band:
                     case IR_OP2_bor:
-                    case IR_OP2_bxor:
-                    case IR_N_OP2: break;
+                    case IR_OP2_bxor: break;
+                    case IR_N_OP2: UNREACHABLE();
                 }
                 break;
-            case IR_INSN_JUMP:
-            case IR_INSN_BRANCH:
+            case IR_INSN_EXPR1: // Depends on operation.
+                switch (insn->op1) {
+                    case IR_OP1_bitcast: // Bit-cast assumes correct bit pattern; cut off the top bits.
+                    case IR_OP1_seqz:    // Comparison against zero needs widening; zero-extension considered cheaper.
+                    case IR_OP1_snez: tag(0, IR_SIGN_ZEROEXT); break;
+                    case IR_OP1_mov:     // Literal copy.
+                    case IR_OP1_zeroext: // Explicitly widening instructions.
+                    case IR_OP1_signext:
+                    case IR_OP1_trunc: // Truncation.
+                    case IR_OP1_neg:   // MSB-agnostic arithmetic.
+                    case IR_OP1_bneg: break;
+                    case IR_N_OP1: UNREACHABLE();
+                }
+                break;
+            case IR_INSN_CALL: // Depends per operand on sign tag.
+                for (size_t i = 0; i < insn->operands_len; i++) {
+                    tag(i, insn->operands[i].sign);
+                }
+                break;
+            case IR_INSN_RETURN: // Depends on function sign tag.
+                if (insn->returns_len) {
+                    tag(0, orig->func->rettype.sign);
+                }
+                break;
+            case IR_INSN_LOAD: // Agnostic.
             case IR_INSN_STORE:
-            case IR_INSN_LOAD:
-            case IR_INSN_LEA: goto needs_clamp;
-            case IR_INSN_MARK_USED: break; // Out of range doesn't matter here.
-            case IR_INSN_COMBINATOR:
-            case IR_INSN_CALL:
-            case IR_INSN_RETURN:
+            case IR_INSN_COMBINATOR: break;
+            case IR_INSN_LEA: // Would be UB due to using arguments that aren't pointer-sized.
             case IR_INSN_MEMCPY:
             case IR_INSN_MEMSET:
-            case IR_INSN_ALLOCA: goto needs_clamp;
-            case IR_INSN_CLOBBER:
-            case IR_INSN_MACHINE: // We're before the stage that these would be added.
-            case IR_INSN_CALLFRAME_ENTER:
+            case IR_INSN_ALLOCA:
+            case IR_INSN_CALLFRAME_ENTER: // Impossible; do not have (integer) operands.
             case IR_INSN_CALLFRAME_EXIT:
-            case IR_INSN_EPILOGUE: UNREACHABLE(); // And these three don't have operands.
+            case IR_INSN_JUMP:
+            case IR_INSN_BRANCH:
+            case IR_INSN_MACHINE: // These instructions should not exist at this stage.
+            case IR_INSN_CLOBBER:
+            case IR_INSN_MARK_USED:
+            case IR_INSN_EPILOGUE: UNREACHABLE();
         }
-    }
-    return;
 
-needs_clamp:;
-    i128_t const prim_min = ir_prim_min(orig->orig_prim_type);
-    i128_t const prim_max = ir_prim_max(orig->orig_prim_type);
-    if (ir_prim_is_signed(orig->orig_prim_type)) {
-        if (cmp128s(prim_min, orig->range_min) <= 0 && cmp128s(prim_max, orig->range_max) >= 0) {
-            // Already in range.
-            return;
-        }
-    } else {
-        if (cmp128u(prim_min, orig->range_min) <= 0 && cmp128u(prim_max, orig->range_max) >= 0) {
-            // Already in range.
-            return;
-        }
+#undef tag
     }
 
-    int       bits  = ir_prim_bits(orig->orig_prim_type);
-    ir_var_t *dirty = ir_var_create(orig->func, orig->prim_type, NULL);
-    ir_insn_set_return(assignment, 0, IR_RETVAL_VAR(dirty));
-
-    // Don't forget to skip additional combinator nodes; IR assumes they come first.
-    ir_insnloc_t loc = IR_AFTER_INSN(assignment);
-    while (loc.type == IR_INSNLOC_AFTER_INSN && loc.insn->node.next) {
-        ir_insn_t *next = container_of(loc.insn->node.next, ir_insn_t, node);
-        if (next->type != IR_INSN_COMBINATOR) {
-            break;
-        }
-        loc.insn = next;
+    ir_var_t *sign_extended = NULL;
+    ir_var_t *zero_extended = NULL;
+    if (tags.need_sign_ext) {
+        sign_extended = ir_var_create(orig->func, orig->prim_type, NULL);
+        ir_add_expr1(IR_AFTER_INSN(assignment), IR_RETVAL_VAR(sign_extended), IR_OP1_signext, IR_OPERAND_VAR(orig));
+    }
+    if (tags.need_zero_ext) {
+        zero_extended = ir_var_create(orig->func, orig->prim_type, NULL);
+        ir_add_expr1(IR_AFTER_INSN(assignment), IR_RETVAL_VAR(zero_extended), IR_OP1_zeroext, IR_OPERAND_VAR(orig));
     }
 
-    if (ir_prim_is_signed(orig->orig_prim_type)) {
-        // Signed values truncated by shifting left then right.
-        ir_const_t shamt = {
-            .prim_type = orig->prim_type,
-            .const128  = ui128(ir_prim_bits(orig->prim_type) - bits),
-        };
-        ir_var_t  *shl_v = ir_var_create(orig->func, orig->prim_type, NULL);
-        ir_insn_t *shl_i
-            = ir_add_expr2(loc, IR_RETVAL_VAR(shl_v), IR_OP2_shl, IR_OPERAND_VAR(orig), IR_OPERAND_CONST(shamt));
-        ir_add_expr2(
-            IR_AFTER_INSN(shl_i),
-            IR_RETVAL_VAR(orig),
-            IR_OP2_shr,
-            IR_OPERAND_VAR(shl_v),
-            IR_OPERAND_CONST(shamt)
-        );
-    } else {
-        // Unsigned values truncated by bitwise AND.
-        ir_const_t iconst = {
-            .prim_type = orig->prim_type,
-            .const128  = sub128(shl128(ui128(1), bits), ui128(1)),
-        };
-        ir_add_expr2(loc, IR_RETVAL_VAR(orig), IR_OP2_band, IR_OPERAND_VAR(dirty), IR_OPERAND_CONST(iconst));
+    for (size_t i = 0; i < tags.operand.len; i++) {
+        sign_tag_t const tag = tags.operand.arr[i];
+        ir_insn_set_operand(tag.insn, tag.index, IR_OPERAND_VAR(tag.use_sign_ext ? sign_extended : zero_extended));
     }
+    vec_clear(&tags.operand);
 }
 
 static void cg_alloc_one_frame(ir_func_t *func, ir_frame_t *frame) {

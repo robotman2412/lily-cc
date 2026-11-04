@@ -478,32 +478,27 @@ static void choose_one_reg(backend_profile_t *profile, ra_node_t *node, uint32_t
         regclass_t regclass = profile->gpr_classes[regno];
         switch (node->var->prim_type) {
             case IR_PRIM_bool:
-            case IR_PRIM_s8:
-            case IR_PRIM_u8:
+            case IR_PRIM_i8:
                 if (!regclass.int8) {
                     continue;
                 }
                 break;
-            case IR_PRIM_s16:
-            case IR_PRIM_u16:
+            case IR_PRIM_i16:
                 if (!regclass.int16) {
                     continue;
                 }
                 break;
-            case IR_PRIM_s32:
-            case IR_PRIM_u32:
+            case IR_PRIM_i32:
                 if (!regclass.int32) {
                     continue;
                 }
                 break;
-            case IR_PRIM_s64:
-            case IR_PRIM_u64:
+            case IR_PRIM_i64:
                 if (!regclass.int64) {
                     continue;
                 }
                 break;
-            case IR_PRIM_s128:
-            case IR_PRIM_u128:
+            case IR_PRIM_i128:
                 if (!regclass.int128) {
                     continue;
                 }
@@ -604,24 +599,19 @@ void regalloc(backend_profile_t *profile, ir_func_t *func) {
             k_values[IR_PRIM_f32]++;
         }
         if (class.int128) {
-            k_values[IR_PRIM_u128]++;
-            k_values[IR_PRIM_s128]++;
+            k_values[IR_PRIM_i128]++;
         }
         if (class.int64) {
-            k_values[IR_PRIM_u64]++;
-            k_values[IR_PRIM_s64]++;
+            k_values[IR_PRIM_i64]++;
         }
         if (class.int32) {
-            k_values[IR_PRIM_u32]++;
-            k_values[IR_PRIM_s32]++;
+            k_values[IR_PRIM_i32]++;
         }
         if (class.int16) {
-            k_values[IR_PRIM_u16]++;
-            k_values[IR_PRIM_s16]++;
+            k_values[IR_PRIM_i16]++;
         }
         if (class.int8) {
-            k_values[IR_PRIM_u8]++;
-            k_values[IR_PRIM_s8]++;
+            k_values[IR_PRIM_i8]++;
             k_values[IR_PRIM_bool]++;
         }
     }

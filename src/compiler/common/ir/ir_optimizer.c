@@ -378,9 +378,9 @@ static bool const_prop_expr(ir_insn_t *expr) {
         ir_const_t iconst;
         if (expr->op1 == IR_OP1_mov) {
             iconst = expr->operands[0].iconst;
-        } else if (expr->op1 == IR_OP1_castu) {
+        } else if (expr->op1 == IR_OP1_zeroext || expr->op1 == IR_OP1_trunc) {
             iconst = ir_cast(expr->returns[0].dest_var->prim_type, expr->operands[0].iconst, false);
-        } else if (expr->op1 == IR_OP1_casts) {
+        } else if (expr->op1 == IR_OP1_signext) {
             iconst = ir_cast(expr->returns[0].dest_var->prim_type, expr->operands[0].iconst, true);
         } else {
             iconst = ir_calc1(expr->op1, expr->operands[0].iconst);

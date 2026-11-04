@@ -6,7 +6,9 @@
 #pragma once
 
 #include "arith128.h"
+#include "list.h"
 #include "map.h"
+#include "set.h"
 #include "unreachable.h"
 #include "vec.h"
 
@@ -119,9 +121,15 @@ __attribute__((const)) static inline bool ir_prim_is_integer(ir_prim_t prim) {
     }
 }
 
-#include "arith128.h"
-#include "list.h"
-#include "set.h"
+// IR sign-significance.
+typedef enum __attribute__((packed)) {
+    // Is sign-agnostic (needs no extension).
+    IR_SIGN_AGNOSTIC,
+    // Needs to be zero-extended.
+    IR_SIGN_ZEROEXT,
+    // Needs to be sign-extended.
+    IR_SIGN_SIGNEXT,
+} ir_sign_t;
 
 // Binary IR operators.
 typedef enum __attribute__((packed)) {
@@ -312,6 +320,7 @@ struct ir_frame {
 // IR function argument.
 struct ir_arg {
     ir_arg_type_t arg_type;
+    ir_sign_t     sign;
     union {
         // Primitive argument.
         ir_var_t   *var;
@@ -441,6 +450,8 @@ struct ir_memref {
 struct ir_operand {
     // What kind of operand this is.
     ir_operand_type_t type;
+    // Sign-extension tag used for function arguments.
+    ir_sign_t         sign;
     union {
         // Constant / immediate value.
         ir_const_t  iconst;
@@ -471,17 +482,47 @@ static inline ir_prim_t ir_operand_prim(ir_operand_t oper) {
 }
 
 // A constant operand.
-#define IR_OPERAND_CONST(iconst_)     ((ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = (iconst_)})
+#define IR_OPERAND_CONST(iconst_)                                                                                      \
+    ((ir_operand_t){                                                                                                   \
+        .type   = IR_OPERAND_TYPE_CONST,                                                                               \
+        .sign   = IR_SIGN_AGNOSTIC,                                                                                    \
+        .iconst = (iconst_),                                                                                           \
+    })
 // An undefined operand.
-#define IR_OPERAND_UNDEF(undef_type_) ((ir_operand_t){.type = IR_OPERAND_TYPE_UNDEF, .undef_type = (undef_type_)})
+#define IR_OPERAND_UNDEF(undef_type_)                                                                                  \
+    ((ir_operand_t){                                                                                                   \
+        .type       = IR_OPERAND_TYPE_UNDEF,                                                                           \
+        .sign       = IR_SIGN_AGNOSTIC,                                                                                \
+        .undef_type = (undef_type_),                                                                                   \
+    })
 // A variable operand.
-#define IR_OPERAND_VAR(var_)          ((ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = (var_)})
+#define IR_OPERAND_VAR(var_)                                                                                           \
+    ((ir_operand_t){                                                                                                   \
+        .type = IR_OPERAND_TYPE_VAR,                                                                                   \
+        .sign = IR_SIGN_AGNOSTIC,                                                                                      \
+        .var  = (var_),                                                                                                \
+    })
 // A memory location operand.
-#define IR_OPERAND_MEM(mem_)          ((ir_operand_t){.type = IR_OPERAND_TYPE_MEM, .mem = (mem_)})
+#define IR_OPERAND_MEM(mem_)                                                                                           \
+    ((ir_operand_t){                                                                                                   \
+        .type = IR_OPERAND_TYPE_MEM,                                                                                   \
+        .sign = IR_SIGN_AGNOSTIC,                                                                                      \
+        .mem  = (mem_),                                                                                                \
+    })
 // A struct operand.
-#define IR_OPERAND_STRUCT(frame_)     ((ir_operand_t){.type = IR_OPERAND_TYPE_STRUCT, .struct_frame = (frame_)})
+#define IR_OPERAND_STRUCT(frame_)                                                                                      \
+    ((ir_operand_t){                                                                                                   \
+        .type         = IR_OPERAND_TYPE_STRUCT,                                                                        \
+        .sign         = IR_SIGN_AGNOSTIC,                                                                              \
+        .struct_frame = (frame_),                                                                                      \
+    })
 // A register operand.
-#define IR_OPERAND_REG(regno_)        ((ir_operand_t){.type = IR_OPERAND_TYPE_REG, .regno = (regno_)})
+#define IR_OPERAND_REG(regno_)                                                                                         \
+    ((ir_operand_t){                                                                                                   \
+        .type  = IR_OPERAND_TYPE_REG,                                                                                  \
+        .sign  = IR_SIGN_AGNOSTIC,                                                                                     \
+        .regno = (regno_),                                                                                             \
+    })
 
 // Helper macro for performing an operation on all variables in an IR operand.
 #define IR_FOR_OPERAND_VARS(operand, name, action)                                                                     \
@@ -622,7 +663,10 @@ struct ir_code {
 struct ir_funcret {
     ir_funcret_type_t type;
     union {
-        ir_prim_t prim_type;
+        struct {
+            ir_prim_t prim_type;
+            ir_sign_t sign;
+        };
         struct {
             uint64_t size, align;
         } struct_type;

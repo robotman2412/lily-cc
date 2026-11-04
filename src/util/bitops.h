@@ -5,17 +5,33 @@
 
 #pragma once
 
-
+#include <stddef.h>
+#include <stdint.h>
 
 // Count ones.
-#define lilycc_popcount32(x) (__builtin_popcount(x))
-// Count ones.
-#define lilycc_popcount64(x) (__builtin_popcountll(x))
+static inline int lilycc_popcount32(uint32_t x) {
+    return __builtin_popcount(x);
+}
+static inline int lilycc_popcount64(uint64_t x) {
+    return __builtin_popcountll(x);
+}
+
 // Count trailing (least-significant) zeroes.
-#define lilycc_ctz32(x)      (__builtin_ctz(x))
-// Count trailing (least-significant) zeroes.
-#define lilycc_ctz64(x)      (__builtin_ctzll(x))
+static inline int lilycc_ctz32(uint32_t x) {
+    return __builtin_ctz(x);
+}
+static inline int lilycc_ctz64(uint64_t x) {
+    return __builtin_ctzll(x);
+}
+
 // Count leading (most-significant) zeroes.
-#define lilycc_clz32(x)      (__builtin_clz(x))
-// Count leading (most-significant) zeroes.
-#define lilycc_clz64(x)      (__builtin_clzll(x))
+static inline int lilycc_clz32(uint32_t x) {
+    return __builtin_clz(x);
+}
+static inline int lilycc_clz64(uint64_t x) {
+    return __builtin_clzll(x);
+}
+// Size depends on the platform
+static inline int lilycc_clzl(size_t x) {
+    return __builtin_clzl(x);
+}

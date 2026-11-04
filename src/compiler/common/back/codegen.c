@@ -144,7 +144,7 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
     func->enforce_ssa = false;
     if (insn->op2 == IR_OP2_add && softfloat) {
         char buf[32];
-        snprintf(buf, sizeof(buf) - 1, "__lily_add_%s", ir_prim_name[ir_prim_as_unsigned(prim)]);
+        snprintf(buf, sizeof(buf) - 1, "__lily_add_%s", ir_prim_name[prim]);
         ir_add_call(
             IR_AFTER_INSN(insn),
             IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM(buf)),
@@ -156,7 +156,7 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_sub && softfloat) {
         char buf[32];
-        snprintf(buf, sizeof(buf) - 1, "__lily_sub_%s", ir_prim_name[ir_prim_as_unsigned(prim)]);
+        snprintf(buf, sizeof(buf) - 1, "__lily_sub_%s", ir_prim_name[prim]);
         ir_add_call(
             IR_AFTER_INSN(insn),
             IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM(buf)),
@@ -168,7 +168,7 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
         ir_insn_delete(insn);
     } else if (insn->op2 == IR_OP2_mul && (softfloat || !profile->has_mul)) {
         char buf[32];
-        snprintf(buf, sizeof(buf) - 1, "__lily_mul_%s", ir_prim_name[ir_prim_as_unsigned(prim)]);
+        snprintf(buf, sizeof(buf) - 1, "__lily_mul_%s", ir_prim_name[prim]);
         ir_add_call(
             IR_AFTER_INSN(insn),
             IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM(buf)),
@@ -178,9 +178,9 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
             insn->operands
         );
         ir_insn_delete(insn);
-    } else if (insn->op2 == IR_OP2_div && (softfloat || !profile->has_div)) {
+    } else if (insn->op2 == IR_OP2_divu && (softfloat || !profile->has_div)) {
         char buf[32];
-        snprintf(buf, sizeof(buf) - 1, "__lily_div_%s", ir_prim_name[prim]);
+        snprintf(buf, sizeof(buf) - 1, "__lily_divu_%s", ir_prim_name[prim]);
         ir_add_call(
             IR_AFTER_INSN(insn),
             IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM(buf)),
@@ -190,9 +190,9 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
             insn->operands
         );
         ir_insn_delete(insn);
-    } else if (insn->op2 == IR_OP2_rem && (softfloat || !profile->has_rem)) {
+    } else if (insn->op2 == IR_OP2_remu && (softfloat || !profile->has_rem)) {
         char buf[32];
-        snprintf(buf, sizeof(buf) - 1, "__lily_rem_%s", ir_prim_name[prim]);
+        snprintf(buf, sizeof(buf) - 1, "__lily_remu_%s", ir_prim_name[prim]);
         ir_add_call(
             IR_AFTER_INSN(insn),
             IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM(buf)),
@@ -202,10 +202,34 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
             insn->operands
         );
         ir_insn_delete(insn);
-    } else if (insn->op2 == IR_OP2_shr && insn->operands[1].type != IR_OPERAND_TYPE_CONST && !profile->has_var_shift) {
+    } else if (insn->op2 == IR_OP2_divs && (softfloat || !profile->has_div)) {
         char buf[32];
-        snprintf(buf, sizeof(buf) - 1, "__lily_shr_%s", ir_prim_name[prim]);
-        ir_var_t *tmp = ir_var_create(insn->code->func, IR_PRIM_u8, NULL); // __lily_shr_* uses u8 as shift amount
+        snprintf(buf, sizeof(buf) - 1, "__lily_divs_%s", ir_prim_name[prim]);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            2,
+            insn->operands
+        );
+        ir_insn_delete(insn);
+    } else if (insn->op2 == IR_OP2_rems && (softfloat || !profile->has_rem)) {
+        char buf[32];
+        snprintf(buf, sizeof(buf) - 1, "__lily_rems_%s", ir_prim_name[prim]);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            2,
+            insn->operands
+        );
+        ir_insn_delete(insn);
+    } else if (insn->op2 == IR_OP2_shru && insn->operands[1].type != IR_OPERAND_TYPE_CONST && !profile->has_var_shift) {
+        char buf[32];
+        snprintf(buf, sizeof(buf) - 1, "__lily_shru_%s", ir_prim_name[prim]);
+        ir_var_t *tmp = ir_var_create(insn->code->func, IR_PRIM_i8, NULL); // __lily_shr_* uses u8 as shift amount
         ir_add_expr1(IR_AFTER_INSN(insn), IR_RETVAL_VAR(tmp), IR_OP1_mov, insn->operands[1]);
         ir_add_call(
             IR_AFTER_INSN(insn),
@@ -216,10 +240,24 @@ static void cg_functionize_expr2(backend_profile_t *profile, ir_insn_t *insn) {
             (ir_operand_t const[]){insn->operands[0], IR_OPERAND_VAR(tmp)}
         );
         ir_insn_delete(insn);
-    } else if (insn->op2 == IR_OP2_shr && insn->operands[1].type != IR_OPERAND_TYPE_CONST && !profile->has_var_shift) {
+    } else if (insn->op2 == IR_OP2_shrs && insn->operands[1].type != IR_OPERAND_TYPE_CONST && !profile->has_var_shift) {
         char buf[32];
-        snprintf(buf, sizeof(buf) - 1, "__lily_shl_%s", ir_prim_name[ir_prim_as_unsigned(prim)]);
-        ir_var_t *tmp = ir_var_create(insn->code->func, IR_PRIM_u8, NULL); // __lily_shl_u* uses u8 as shift amount
+        snprintf(buf, sizeof(buf) - 1, "__lily_shrs_%s", ir_prim_name[prim]);
+        ir_var_t *tmp = ir_var_create(insn->code->func, IR_PRIM_i8, NULL); // __lily_shr_* uses u8 as shift amount
+        ir_add_expr1(IR_AFTER_INSN(insn), IR_RETVAL_VAR(tmp), IR_OP1_mov, insn->operands[1]);
+        ir_add_call(
+            IR_AFTER_INSN(insn),
+            IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM(buf)),
+            true,
+            insn->returns[0],
+            2,
+            (ir_operand_t const[]){insn->operands[0], IR_OPERAND_VAR(tmp)}
+        );
+        ir_insn_delete(insn);
+    } else if (insn->op2 == IR_OP2_shl && insn->operands[1].type != IR_OPERAND_TYPE_CONST && !profile->has_var_shift) {
+        char buf[32];
+        snprintf(buf, sizeof(buf) - 1, "__lily_shl_%s", ir_prim_name[prim]);
+        ir_var_t *tmp = ir_var_create(insn->code->func, IR_PRIM_i8, NULL); // __lily_shl_u* uses u8 as shift amount
         ir_add_expr1(IR_AFTER_INSN(insn), IR_RETVAL_VAR(tmp), IR_OP1_mov, insn->operands[1]);
         ir_add_call(
             IR_AFTER_INSN(insn),
@@ -274,7 +312,7 @@ static void cg_functionize_expr1(backend_profile_t *profile, ir_insn_t *insn) {
         ir_insn_delete(insn);
     } else if (insn->op1 == IR_OP1_neg && softfloat) {
         char buf[32];
-        snprintf(buf, sizeof(buf) - 1, "__lily_neg_%s", ir_prim_name[ir_prim_as_unsigned(prim)]);
+        snprintf(buf, sizeof(buf) - 1, "__lily_neg_%s", ir_prim_name[prim]);
         ir_add_call(
             IR_AFTER_INSN(insn),
             IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM(buf)),
@@ -320,10 +358,14 @@ static void cg_normalize_op_order(ir_insn_t *insn) {
     ir_op2_type_t commuted_op2 = insn->op2;
     switch (insn->op2) {
         // Commutable with replacement operator.
-        case IR_OP2_sgt: commuted_op2 = IR_OP2_slt; break;
-        case IR_OP2_sle: commuted_op2 = IR_OP2_sge; break;
-        case IR_OP2_slt: commuted_op2 = IR_OP2_sgt; break;
-        case IR_OP2_sge: commuted_op2 = IR_OP2_sle; break;
+        case IR_OP2_sgtu: commuted_op2 = IR_OP2_sltu; break;
+        case IR_OP2_sleu: commuted_op2 = IR_OP2_sgeu; break;
+        case IR_OP2_sltu: commuted_op2 = IR_OP2_sgtu; break;
+        case IR_OP2_sgeu: commuted_op2 = IR_OP2_sleu; break;
+        case IR_OP2_sgts: commuted_op2 = IR_OP2_slts; break;
+        case IR_OP2_sles: commuted_op2 = IR_OP2_sges; break;
+        case IR_OP2_slts: commuted_op2 = IR_OP2_sgts; break;
+        case IR_OP2_sges: commuted_op2 = IR_OP2_sles; break;
 
         // Commutable with same operator.
         case IR_OP2_seq:
@@ -377,16 +419,11 @@ static void cg_expand_comb(ir_insn_t *insn) {
 // Promote IR variable to at least as wide as the minimum register size.
 static void cg_promote_var_0(backend_profile_t *profile, ir_var_t *var) {
     var->orig_prim_type = var->prim_type;
-    ir_prim_t min_uint  = profile->arith_min_bits * 2 + IR_PRIM_u8;
-    ir_prim_t min_sint  = profile->arith_min_bits * 2 + IR_PRIM_s8;
+    ir_prim_t min_uint  = (ir_prim_t)(profile->arith_min_bits - LILY_8_BITS) + IR_PRIM_i8;
     if (var->prim_type == IR_PRIM_bool) {
         var->prim_type = min_uint;
     } else if (!ir_prim_is_integer(var->prim_type)) {
         return;
-    } else if (ir_prim_is_signed(var->prim_type)) {
-        if (var->prim_type < min_sint) {
-            var->prim_type = min_sint;
-        }
     } else {
         if (var->prim_type < min_uint) {
             var->prim_type = min_uint;
@@ -416,6 +453,8 @@ static void cg_promote_var_1(backend_profile_t *profile, ir_var_t *orig) {
                     case IR_OP1_seqz:
                     case IR_OP1_snez:
                     case IR_OP1_mov:
+                    case IR_OP1_castu:
+                    case IR_OP1_casts:
                     case IR_OP1_bitcast: goto needs_clamp;
                     case IR_OP1_neg:
                     case IR_OP1_bneg:
@@ -424,13 +463,20 @@ static void cg_promote_var_1(backend_profile_t *profile, ir_var_t *orig) {
                 break;
             case IR_INSN_EXPR2:
                 switch (insn->op2) {
-                    case IR_OP2_shr:
-                    case IR_OP2_div:
-                    case IR_OP2_rem:
-                    case IR_OP2_sgt:
-                    case IR_OP2_sle:
-                    case IR_OP2_slt:
-                    case IR_OP2_sge:
+                    case IR_OP2_shru:
+                    case IR_OP2_divu:
+                    case IR_OP2_remu:
+                    case IR_OP2_sgtu:
+                    case IR_OP2_sleu:
+                    case IR_OP2_sltu:
+                    case IR_OP2_sgeu:
+                    case IR_OP2_shrs:
+                    case IR_OP2_divs:
+                    case IR_OP2_rems:
+                    case IR_OP2_sgts:
+                    case IR_OP2_sles:
+                    case IR_OP2_slts:
+                    case IR_OP2_sges:
                     case IR_OP2_seq:
                     case IR_OP2_sne: goto needs_clamp;
                     case IR_OP2_add:

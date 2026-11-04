@@ -1,8 +1,6 @@
 
 #include "ir_types.h"
 
-#include "arith128.h"
-
 #include <endian.h>
 #include <string.h>
 

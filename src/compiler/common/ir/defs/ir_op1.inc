@@ -11,7 +11,7 @@
 // Move value without conversion.
 IR_OP1_DEF(mov)
 // Arithmetic cast (signed).
-IR_OP1_DEF(cast)
+IR_OP1_DEF(casts)
 // Arithmetic cast (unsigned).
 IR_OP1_DEF(castu)
 // Bit-cast value.

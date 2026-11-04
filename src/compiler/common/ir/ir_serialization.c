@@ -31,7 +31,7 @@
 
 // Serialize an IR constant.
 void ir_const_serialize(ir_const_t iconst, FILE *to) {
-    iconst = ir_trim_const(iconst);
+    iconst = ir_trim_const(iconst, false);
     if (iconst.prim_type == IR_PRIM_bool) {
         fputs(iconst.constl ? "true" : "false", to);
 
@@ -48,7 +48,7 @@ void ir_const_serialize(ir_const_t iconst, FILE *to) {
 
         // Print decimal representation.
         i128_t u_val;
-        if (!(iconst.prim_type & 1) && iconst.consth >> 63) {
+        if (!eqzero128(shr128u(iconst.const128, ir_prim_bits(iconst.prim_type) - 1))) {
             // Negative number.
             u_val = neg128(iconst.const128);
             fputc('-', to);
@@ -645,10 +645,14 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                         }
                         break;
 
-                    case IR_KEYW_sgt:
-                    case IR_KEYW_sle:
-                    case IR_KEYW_sge:
-                    case IR_KEYW_slt:
+                    case IR_KEYW_sgtu:
+                    case IR_KEYW_sleu:
+                    case IR_KEYW_sgeu:
+                    case IR_KEYW_sltu:
+                    case IR_KEYW_sgts:
+                    case IR_KEYW_sles:
+                    case IR_KEYW_sges:
+                    case IR_KEYW_slts:
                     case IR_KEYW_seq:
                     case IR_KEYW_sne:
                     case IR_KEYW_seqz:
@@ -668,8 +672,8 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                         goto operand_nomem;
 
                     case IR_KEYW_shl:
-                    case IR_KEYW_shra:
                     case IR_KEYW_shru:
+                    case IR_KEYW_shrs:
                     case IR_KEYW_band:
                     case IR_KEYW_bor:
                     case IR_KEYW_bxor:
@@ -691,8 +695,10 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     case IR_KEYW_add:
                     case IR_KEYW_sub:
                     case IR_KEYW_mul:
-                    case IR_KEYW_div:
-                    case IR_KEYW_rem:
+                    case IR_KEYW_divu:
+                    case IR_KEYW_remu:
+                    case IR_KEYW_divs:
+                    case IR_KEYW_rems:
                     case IR_KEYW_neg:
                     operand_match:
                         // Operand must equal return type.
@@ -833,7 +839,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                             ir_add_expr2(
                                 IR_APPEND(cur_code),
                                 returns[0],
-                                stmt->params[1].subtype - IR_KEYW_sgt + IR_OP2_sgt,
+                                stmt->params[1].subtype - IR_KEYW_sgtu + IR_OP2_sgtu,
                                 operands[0],
                                 operands[1]
                             );

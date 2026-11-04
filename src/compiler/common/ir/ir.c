@@ -5,6 +5,7 @@
 
 #include "ir.h"
 
+#include "arith128.h"
 #include "arrays.h"
 #include "insn_proto.h"
 #include "ir/ir_optimizer.h"
@@ -507,8 +508,10 @@ ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
     var->arg_index      = -1;
 
     // Intentionally reversed; causes range to be calculated properly when assigned.
-    var->range_min = ir_prim_max(type, false);
-    var->range_max = ir_prim_min(type, true);
+    var->range_minu = ir_prim_max(type, false);
+    var->range_maxu = UI128_ZERO;
+    var->range_minu = ir_prim_max(type, true);
+    var->range_maxu = ir_prim_min(type, true);
 
     dlist_append(&func->vars_list, &var->node);
     map_set(&func->var_by_name, var->name, var);
@@ -1091,7 +1094,7 @@ ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_retval_t dest, ir_op2_type_t oper, 
         fprintf(stderr, "BUG: IR %s has conflicting operand types\n", ir_op2_names[oper]);
         abort();
     }
-    if (oper >= IR_OP2_sgt && oper <= IR_OP2_sne) {
+    if (oper >= IR_OP2_sgtu && oper <= IR_OP2_sne) {
         if (dest.type == IR_RETVAL_TYPE_VAR) {
             if (dest.dest_var->prim_type != IR_PRIM_bool && enforce_cmp_bool) {
                 fprintf(stderr, "BUG: IR %s must return a boolean\n", ir_op2_names[oper]);

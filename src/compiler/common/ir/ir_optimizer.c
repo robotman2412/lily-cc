@@ -61,23 +61,23 @@ static bool strength_reduce_expr(ir_insn_t *expr) {
     if (rhs.type != IR_OPERAND_TYPE_CONST) {
         return false;
     }
-    rhs.iconst       = ir_trim_const(rhs.iconst);
+    rhs.iconst       = ir_trim_const(rhs.iconst, true);
     ir_const_t p_rhs = ir_const_is_negative(rhs.iconst) ? ir_calc1(IR_OP1_neg, rhs.iconst) : rhs.iconst;
 
-    if ((oper == IR_OP2_div || oper == IR_OP2_divu) && ir_const_popcnt(rhs.iconst) == 1
+    if ((oper == IR_OP2_divu || oper == IR_OP2_divu) && ir_const_popcnt(rhs.iconst) == 1
         && !ir_const_is_negative(rhs.iconst)) {
         // Replace a division with a right shift.
         rhs.iconst.constl = ir_const_ctz(rhs.iconst);
         rhs.iconst.consth = 0;
-        oper              = oper == IR_OP2_divu ? IR_OP2_shru : IR_OP2_shra;
+        oper              = oper == IR_OP2_divu ? IR_OP2_shru : IR_OP2_shrs;
         return true;
 
-    } else if ((oper == IR_OP2_rem || oper == IR_OP2_remu) && ir_const_popcnt(p_rhs) == 1) {
+    } else if ((oper == IR_OP2_remu || oper == IR_OP2_remu) && ir_const_popcnt(p_rhs) == 1) {
         // Replace a remainder with a bitmask.
         int    bits = ir_const_ctz(p_rhs);
         i128_t mask = add128(i128_pack(-1, -1), shl128(i128_pack(0, 1), bits));
         if (!(prim & 1)) {
-            ir_op2_type_t shr = oper == IR_OP2_divu ? IR_OP2_shru : IR_OP2_shra;
+            ir_op2_type_t shr = oper == IR_OP2_divu ? IR_OP2_shru : IR_OP2_shrs;
 
             // Add instructions to extract and copy the sign from the lhs to the output.
             ir_var_t *tmp1 = ir_var_create(expr->code->func, prim, NULL);
@@ -377,7 +377,11 @@ static bool const_prop_expr(ir_insn_t *expr) {
         // Calculate unary expression at compile time.
         ir_const_t iconst;
         if (expr->op1 == IR_OP1_mov) {
-            iconst = ir_cast(expr->returns[0].dest_var->prim_type, expr->operands[0].iconst);
+            iconst = expr->operands[0].iconst;
+        } else if (expr->op1 == IR_OP1_castu) {
+            iconst = ir_cast(expr->returns[0].dest_var->prim_type, expr->operands[0].iconst, false);
+        } else if (expr->op1 == IR_OP1_casts) {
+            iconst = ir_cast(expr->returns[0].dest_var->prim_type, expr->operands[0].iconst, true);
         } else {
             iconst = ir_calc1(expr->op1, expr->operands[0].iconst);
         }
@@ -430,7 +434,7 @@ static bool const_prop_expr(ir_insn_t *expr) {
         return true;
 
     } else if (
-        expr->type == IR_INSN_EXPR2 && (expr->op2 == IR_OP2_mul || expr->op2 == IR_OP2_div)
+        expr->type == IR_INSN_EXPR2 && (expr->op2 == IR_OP2_mul || expr->op2 == IR_OP2_divu)
         && expr->operands[1].type == IR_OPERAND_TYPE_CONST && expr->operands[1].iconst.consth == 0
         && expr->operands[1].iconst.constl == 1
     ) {

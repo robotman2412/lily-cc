@@ -259,7 +259,7 @@ void ir_expr1_range(ir_var_t *var, ir_insn_t const *insn) {
     }
     switch (insn->op1) {
         case IR_OP1_mov:
-        case IR_OP1_cast:
+        case IR_OP1_casts:
         case IR_OP1_castu:
             if (insn->operands[0].type == IR_OPERAND_TYPE_VAR && insn->operands[0].var->prim_type < IR_PRIM_f32) {
                 ir_expand_range(
@@ -611,7 +611,7 @@ ir_const_t ir_cast(ir_prim_t type, ir_const_t value, bool is_signed) {
 
 // Calculate the result of an expr1.
 ir_const_t ir_calc1(ir_op1_type_t oper, ir_const_t value) {
-    if (oper == IR_OP1_mov || oper == IR_OP1_cast || oper == IR_OP1_castu || oper == IR_OP1_bitcast) {
+    if (oper == IR_OP1_mov || oper == IR_OP1_casts || oper == IR_OP1_castu || oper == IR_OP1_bitcast) {
         printf("BUG: IR move/cast operations are invalid for ir_calc1\n");
         abort();
     } else if (oper == IR_OP1_snez || oper == IR_OP1_seqz) {

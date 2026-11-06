@@ -6,6 +6,7 @@
 #include "cand_tree.h"
 
 #include "backend.h"
+#include "bitops.h"
 #include "insn_proto.h"
 #include "ir_interpreter.h"
 #include "ir_types.h"
@@ -349,8 +350,8 @@ static size_t tree_isel_match_proto(
                     }
 
                     int64_t val           = ir_trim_const(ir_operands[i]->iconst).constl;
-                    int     unsigned_bits = 64 - __builtin_clzll(val);
-                    int     signed_bits   = val < 0 ? 64 - __builtin_clzll(~val) : unsigned_bits + 1;
+                    int     unsigned_bits = 64 - lilycc_clz64(val);
+                    int     signed_bits   = val < 0 ? 64 - lilycc_clz64(~val) : unsigned_bits + 1;
 
                     if (is_unsigned && unsigned_bits + !rule.operand_kinds.uint > rule.const_bits) {
                         imm_ok = false;

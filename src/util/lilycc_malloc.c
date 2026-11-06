@@ -7,6 +7,8 @@
 
 #include "lilycc_malloc.h"
 
+#include "arith.h"
+
 #include <assert.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -116,7 +118,7 @@ static void *wrap_calloc(size_t nmemb, size_t size) {
         return NULL;
     }
     size_t total;
-    if (__builtin_mul_overflow(nmemb, size, &total)) {
+    if (lilycc_mul_overflow(nmemb, size, &total)) {
         return NULL;
     }
     void *mem = wrap_malloc(total);

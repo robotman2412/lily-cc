@@ -6,6 +6,7 @@
 #include "ir.h"
 
 #include "arrays.h"
+#include "bitops.h"
 #include "insn_proto.h"
 #include "ir/ir_optimizer.h"
 #include "ir_types.h"
@@ -1328,9 +1329,9 @@ static ir_insn_t *ir_gen_memcpy_impl(
         if (max_bytes > ir_prim_sizes[copy_max_prim]) {
             max_bytes = ir_prim_sizes[copy_max_prim];
         }
-        int ilog2 = __builtin_ctzll(max_bytes);
-        if (ilog2 > __builtin_ctzll(ir_prim_sizes[copy_max_prim])) {
-            ilog2 = __builtin_ctzll(ir_prim_sizes[copy_max_prim]);
+        int ilog2 = lilycc_ctz64(max_bytes);
+        if (ilog2 > lilycc_ctz64(ir_prim_sizes[copy_max_prim])) {
+            ilog2 = lilycc_ctz64(ir_prim_sizes[copy_max_prim]);
         }
         copy_prim = IR_PRIM_u8 + 2 * ilog2;
 

@@ -5,6 +5,7 @@
 
 #include "map.h"
 
+#include "bitops.h"
 #include "lilycc_malloc.h"
 
 #include <stdio.h>
@@ -72,7 +73,7 @@ void map_auto_resize(map_t *map) {
     size_t min_buckets = (map->len + MAP_MAX_BUCKET_SIZE - 1) / MAP_MAX_BUCKET_SIZE;
     // Round up to the next power of 2.
     if (min_buckets & (min_buckets - 1)) {
-        min_buckets = 1lu << (1 + 8 * sizeof(size_t) - __builtin_clzl(min_buckets));
+        min_buckets = 1lu << (1 + 8 * sizeof(size_t) - lilycc_clzl(min_buckets));
     }
 
     map_resize(map, min_buckets);

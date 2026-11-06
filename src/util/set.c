@@ -9,6 +9,7 @@
 #include "lilycc_malloc.h"
 #include "list.h"
 
+#include <bitops.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -74,7 +75,7 @@ static void set_auto_resize(set_t *set) {
     size_t min_buckets = (set->len + SET_MAX_BUCKET_SIZE - 1) / SET_MAX_BUCKET_SIZE;
     // Round up to the next power of 2.
     if (min_buckets & (min_buckets - 1)) {
-        min_buckets = 1lu << (1 + 8 * sizeof(size_t) - __builtin_clzl(min_buckets));
+        min_buckets = 1lu << (1 + 8 * sizeof(size_t) - lilycc_clzl(min_buckets));
     }
 
     set_resize(set, min_buckets);

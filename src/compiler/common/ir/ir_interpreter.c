@@ -6,6 +6,7 @@
 #include "ir/ir_interpreter.h"
 
 #include "arith128.h"
+#include "bitops.h"
 #include "ir_types.h"
 #include "list.h"
 #include "set.h"
@@ -414,9 +415,9 @@ int ir_count_bits(ir_const_t iconst, bool allow_s, bool allow_u) {
     }
     int bits;
     if (hi64(value)) {
-        bits = 128 - __builtin_clzll(hi64(value));
+        bits = 128 - lilycc_clz64(hi64(value));
     } else {
-        bits = 64 - __builtin_clzll(lo64(value));
+        bits = 64 - lilycc_clz64(lo64(value));
     }
 
     if (sign > 0 && !allow_u) {
@@ -434,9 +435,9 @@ int ir_const_clz(ir_const_t value) {
     }
 
     if (value.consth) {
-        return __builtin_clzll(value.consth);
+        return lilycc_clz64(value.consth);
     } else {
-        return 64 + __builtin_clzll(value.constl);
+        return 64 + lilycc_clz64(value.constl);
     }
 }
 
@@ -448,9 +449,9 @@ int ir_const_ctz(ir_const_t value) {
     }
 
     if (value.constl) {
-        return __builtin_ctzll(value.constl);
+        return lilycc_ctz64(value.constl);
     } else {
-        return 64 + __builtin_ctzll(value.consth);
+        return 64 + lilycc_ctz64(value.consth);
     }
 }
 

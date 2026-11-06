@@ -7,6 +7,7 @@
 // See https://github.com/robotman2412/lily-cc/issues/1
 
 #include "backend.h"
+#include "bitops.h"
 #include "ir.h"
 #include "ir_types.h"
 #include "rv_backend.h"
@@ -41,12 +42,12 @@ static ir_insn_t *rv_reg_to_struct(
 
     ir_insn_t *new_node;
     for (int64_t offset2 = 0; offset2 < size;) {
-        int copy_max_exp = __builtin_ctz(frame->align);
-        if (copy_max_exp > __builtin_ctz(size - offset2)) {
-            copy_max_exp = __builtin_ctz(size - offset2);
+        int copy_max_exp = lilycc_ctz32(frame->align);
+        if (copy_max_exp > lilycc_ctz32(size - offset2)) {
+            copy_max_exp = lilycc_ctz32(size - offset2);
         }
-        if (copy_max_exp > __builtin_ctz(ptr_size)) {
-            copy_max_exp = __builtin_ctz(ptr_size);
+        if (copy_max_exp > lilycc_ctz32(ptr_size)) {
+            copy_max_exp = lilycc_ctz32(ptr_size);
         }
 
         ir_prim_t copy_prim = copy_max_exp * 2;

@@ -5,6 +5,8 @@
 
 #include "arith128.h"
 
+#include "bitops.h"
+
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
@@ -68,9 +70,9 @@ i128_divrem_t divrem128u(i128_t lhs, i128_t rhs) {
     // Determine max shift amount.
     int max;
     if (rhs.hi == 0) {
-        max = __builtin_clzll(rhs.lo) + 64;
+        max = lilycc_clz64(rhs.lo) + 64;
     } else {
-        max = __builtin_clzll(rhs.hi);
+        max = lilycc_clz64(rhs.hi);
     }
 
     // Shift divisor left by this amount.
@@ -167,18 +169,18 @@ i128_t rem128s(i128_t lhs, i128_t rhs) {
 // Count trailing zeroes.
 int ctz128(i128_t a) {
     if (lo64(a) == 0) {
-        return 64 + __builtin_ctzll(hi64(a));
+        return 64 + lilycc_ctz64(hi64(a));
     } else {
-        return __builtin_ctzll(lo64(a));
+        return lilycc_ctz64(lo64(a));
     }
 }
 
 // Count leading zeroes.
 int clz128(i128_t a) {
     if (hi64(a) == 0) {
-        return 64 + __builtin_clzll(lo64(a));
+        return 64 + lilycc_clz64(lo64(a));
     } else {
-        return __builtin_clzll(hi64(a));
+        return lilycc_clz64(hi64(a));
     }
 }
 

@@ -11,7 +11,7 @@
 
 int main() {
     ir_func_t *func              = ir_func_create("myfunc", "entry", 1);
-    func->args[0].arg_type       = IR_ARG_TYPE_VAR;
+    func->args[0].arg_type       = IR_FUNCARG_TYPE_VAR;
     func->args[0].var            = ir_var_create(func, IR_PRIM_f32, "myparam");
     func->args[0].var->arg_index = 0;
     ir_code_t *cur               = func->entry;

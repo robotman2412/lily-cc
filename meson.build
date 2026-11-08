@@ -18,7 +18,7 @@ project(
 
 add_global_arguments(
     '-Wno-type-limits', '-Wno-unused-function',
-    '-Werror=all', '-Werror=enum-conversion', '-Werror=incompatible-pointer-types',
+    '-Werror=all', '-Werror=enum-conversion', '-Werror=incompatible-pointer-types', '-Werror=implicit-fallthrough',
     '-Wno-error=unused-parameter', '-Wno-error=unused-variable', '-Wno-error=unused-but-set-variable', '-Wno-error=unused',
     language: 'c'
 )

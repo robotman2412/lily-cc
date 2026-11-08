@@ -23,11 +23,11 @@
 // Define RISC-V encoding cookie.
 #define RV_COOKIE(_ext, _opcode, _enc_type, _funct3, _funct7, _funct12) \
     &(rv_encoding_t const) {    \
-        .opcode    = _opcode,   \
-        .enc_type  = _enc_type, \
-        .funct3    = _funct3,   \
-        .funct7    = _funct7,   \
-        .funct12   = _funct12,  \
+        .opcode    = (_opcode),   \
+        .enc_type  = (_enc_type), \
+        .funct3    = (_funct3),   \
+        .funct7    = (_funct7),   \
+        .funct12   = (_funct12),  \
     }
 
 // Define a generic RISC-V instruction.
@@ -39,7 +39,7 @@
 
 // Define an ALU instruction.
 #define RV_INSN_ALU(_name, op_maj, funct3, funct7, is_ri) \
-    RV_INSN_BASE(_name, op_maj, funct3, funct7, 0, is_ri ? RV_ENC_I : RV_ENC_R) 
+    RV_INSN_BASE(_name, op_maj, funct3, funct7, 0, (is_ri) ? RV_ENC_I : RV_ENC_R) 
 
 // Define a register-immediate ALU instruction.
 #define RV_INSN_ALU_RI(name, op_maj, funct3, funct7) \
@@ -151,23 +151,17 @@ void rv_asm_print_insn(backend_profile_t *profile, ir_insn_t const *insn, FILE *
                     break;
             }
         } else if (operand.type == IR_OPERAND_TYPE_CONST) {
-            ir_const_t iconst = ir_trim_const(operand.iconst);
+            ir_const_t iconst = ir_trim_const(operand.iconst, true);
             switch (iconst.prim_type) {
                 case IR_PRIM_bool:
-                case IR_PRIM_u8:
-                case IR_PRIM_u16:
-                case IR_PRIM_u32:
-                case IR_PRIM_u64: fprintf(to, "%" PRIu64, iconst.constl); break;
-
-                case IR_PRIM_s8:
-                case IR_PRIM_s16:
-                case IR_PRIM_s32:
-                case IR_PRIM_s64: fprintf(to, "%" PRId64, (int64_t)iconst.constl); break;
+                case IR_PRIM_i8:
+                case IR_PRIM_i16:
+                case IR_PRIM_i32:
+                case IR_PRIM_i64: fprintf(to, "%" PRId64, (int64_t)iconst.constl); break;
 
                 case IR_PRIM_f32: // TODO.
                 case IR_PRIM_f64: // TODO.
-                case IR_PRIM_s128:
-                case IR_PRIM_u128:
+                case IR_PRIM_i128:
                 case IR_N_PRIM: UNREACHABLE();
             }
         } else {

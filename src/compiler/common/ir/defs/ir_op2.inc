@@ -9,14 +9,22 @@
 #endif
 
 /* ==== Comparison operators ==== */
-// Greater than.
-IR_OP2_DEF(sgt)
-// Less than or equal.
-IR_OP2_DEF(sle)
-// Less than.
-IR_OP2_DEF(slt)
-// Greater than or equal.
-IR_OP2_DEF(sge)
+// Greater than (unsigned).
+IR_OP2_DEF(sgtu)
+// Less than or equal (unsigned).
+IR_OP2_DEF(sleu)
+// Less than (unsigned).
+IR_OP2_DEF(sltu)
+// Greater than or equal (unsigned).
+IR_OP2_DEF(sgeu)
+// Greater than (signed).
+IR_OP2_DEF(sgts)
+// Less than or equal (signed).
+IR_OP2_DEF(sles)
+// Less than (signed).
+IR_OP2_DEF(slts)
+// Greater than or equal (signed).
+IR_OP2_DEF(sges)
 // Equal.
 IR_OP2_DEF(seq)
 // Not equal.
@@ -29,16 +37,22 @@ IR_OP2_DEF(add)
 IR_OP2_DEF(sub)
 // Multiplication.
 IR_OP2_DEF(mul)
-// Division.
-IR_OP2_DEF(div)
-// Remainder.
-IR_OP2_DEF(rem)
+// Division (unsigned).
+IR_OP2_DEF(divu)
+// Remainder (unsigned).
+IR_OP2_DEF(remu)
+// Division (signed).
+IR_OP2_DEF(divs)
+// Remainder (signed).
+IR_OP2_DEF(rems)
 
 /* ==== Bitwise operators ==== */
 // Bitwise shift left.
 IR_OP2_DEF(shl)
-// Bitwise shift right.
-IR_OP2_DEF(shr)
+// Bitwise (unsigned) shift right.
+IR_OP2_DEF(shru)
+// Arithmetic (signed) shift right.
+IR_OP2_DEF(shrs)
 // Bitwise AND.
 IR_OP2_DEF(band)
 // Bitwise OR.

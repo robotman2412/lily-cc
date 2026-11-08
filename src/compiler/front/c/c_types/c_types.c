@@ -357,19 +357,19 @@ ir_prim_t c_type_to_ir_type(c_compiler_t *cc, c_type_ref_t type) {
     }
     switch (prim) {
         case C_PRIM_BOOL: return IR_PRIM_bool;
-        case C_PRIM_CHAR: return cc->options.char_is_signed ? IR_PRIM_s8 : IR_PRIM_u8;
-        case C_PRIM_SCHAR: return IR_PRIM_s8;
-        case C_PRIM_UCHAR: return IR_PRIM_u8;
-        case C_PRIM_SSHORT: return IR_PRIM_s16;
-        case C_PRIM_USHORT: return IR_PRIM_u16;
-        case C_PRIM_SINT: return cc->options.int32 ? IR_PRIM_s32 : IR_PRIM_s16;
-        case C_PRIM_UINT: return cc->options.int32 ? IR_PRIM_u32 : IR_PRIM_u16;
-        case C_PRIM_SLONG: return cc->options.long64 ? IR_PRIM_s64 : IR_PRIM_s32;
-        case C_PRIM_ULONG: return cc->options.long64 ? IR_PRIM_u64 : IR_PRIM_u32;
-        case C_PRIM_SLLONG: return IR_PRIM_s64;
-        case C_PRIM_ULLONG: return IR_PRIM_u64;
-        case C_PRIM_S128: return IR_PRIM_s128;
-        case C_PRIM_U128: return IR_PRIM_u128;
+        case C_PRIM_CHAR:
+        case C_PRIM_SCHAR:
+        case C_PRIM_UCHAR: return IR_PRIM_i8;
+        case C_PRIM_SSHORT:
+        case C_PRIM_USHORT: return IR_PRIM_i16;
+        case C_PRIM_SINT:
+        case C_PRIM_UINT: return cc->options.int32 ? IR_PRIM_i32 : IR_PRIM_i16;
+        case C_PRIM_SLONG:
+        case C_PRIM_ULONG: return cc->options.long64 ? IR_PRIM_i64 : IR_PRIM_i32;
+        case C_PRIM_SLLONG:
+        case C_PRIM_ULLONG: return IR_PRIM_i64;
+        case C_PRIM_S128:
+        case C_PRIM_U128: return IR_PRIM_i128;
         case C_PRIM_FLOAT: return IR_PRIM_f32;
         case C_PRIM_DOUBLE:
         case C_PRIM_LDOUBLE: return IR_PRIM_f64; // TODO: long double support.

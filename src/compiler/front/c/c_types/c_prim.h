@@ -79,7 +79,7 @@ typedef enum __attribute__((packed)) {
 extern char const *c_prim_name[];
 
 // Convert to corresponding unsigned type.
-static c_prim_t c_prim_to_uint(bool char_is_signed, c_prim_t prim) {
+static inline c_prim_t c_prim_to_uint(bool char_is_signed, c_prim_t prim) {
     if (prim == C_PRIM_CHAR && !char_is_signed) {
         return C_PRIM_CHAR;
     } else if (prim >= C_PRIM_FLOAT) {
@@ -91,7 +91,7 @@ static c_prim_t c_prim_to_uint(bool char_is_signed, c_prim_t prim) {
 }
 
 // Convert to corresponding signed type.
-static c_prim_t c_prim_to_sint(bool char_is_signed, c_prim_t prim) {
+static inline c_prim_t c_prim_to_sint(bool char_is_signed, c_prim_t prim) {
     if (prim == C_PRIM_CHAR && char_is_signed) {
         return C_PRIM_CHAR;
     } else if (prim >= C_PRIM_FLOAT) {
@@ -105,13 +105,27 @@ static c_prim_t c_prim_to_sint(bool char_is_signed, c_prim_t prim) {
 // Whether a primitive is an usigned integer type.
 static inline bool c_prim_is_uint(bool char_is_signed, c_prim_t prim) {
     switch (prim) {
-        case C_PRIM_CHAR: return char_is_signed;
+        case C_PRIM_CHAR: return !char_is_signed;
         case C_PRIM_UCHAR:
         case C_PRIM_USHORT:
         case C_PRIM_UINT:
         case C_PRIM_ULONG:
         case C_PRIM_ULLONG:
         case C_PRIM_U128: return true;
+        default: return false;
+    }
+}
+
+// Whether a primitive is an usigned integer type.
+static inline bool c_prim_is_sint(bool char_is_signed, c_prim_t prim) {
+    switch (prim) {
+        case C_PRIM_CHAR: return char_is_signed;
+        case C_PRIM_SCHAR:
+        case C_PRIM_SSHORT:
+        case C_PRIM_SINT:
+        case C_PRIM_SLONG:
+        case C_PRIM_SLLONG:
+        case C_PRIM_S128: return true;
         default: return false;
     }
 }

@@ -72,13 +72,13 @@ ir_func_t *c_lower_func(c_compiler_t *cc, cir_func_t const *func) {
         }
 
         if (arg->type.prim == C_COMP_STRUCT || arg->type.prim == C_COMP_UNION) {
-            ir->args[i].arg_type     = IR_ARG_TYPE_STRUCT;
+            ir->args[i].arg_type     = IR_FUNCARG_TYPE_STRUCT;
             ir->args[i].struct_frame = frame;
         } else {
             ir_prim_t prim       = c_type_to_ir_type(cc, arg->type);
             ir_var_t *tmp        = ir_var_create(ir, prim, NULL);
             tmp->arg_index       = (ptrdiff_t)i;
-            ir->args[i].arg_type = IR_ARG_TYPE_VAR;
+            ir->args[i].arg_type = IR_FUNCARG_TYPE_VAR;
             ir->args[i].var      = tmp;
             ir_add_store(IR_APPEND(ir->entry), IR_OPERAND_VAR(tmp), IR_MEMREF(prim, IR_BADDR_FRAME(frame)));
         }
@@ -529,7 +529,7 @@ static c_lower_expr_t
 
     ir_var_t  *ltmp = ir_var_create(code->func, IR_PRIM_bool, NULL);
     ir_var_t  *rtmp = ir_var_create(code->func, IR_PRIM_bool, NULL);
-    ir_var_t  *res  = ir_var_create(code->func, cc->options.int32 ? IR_PRIM_s32 : IR_PRIM_s16, NULL);
+    ir_var_t  *res  = ir_var_create(code->func, cc->options.int32 ? IR_PRIM_i32 : IR_PRIM_i16, NULL);
     ir_code_t *rdom = ir_code_create_after(code, NULL);
     ir_code_t *out  = ir_code_create_after(rdom, NULL);
 
@@ -573,16 +573,17 @@ c_lower_expr_t c_lower_expr_calc(c_compiler_t *cc, ir_code_t *code, c_lower_scop
     code               = rhs.code;
     rhs.val            = load_prim(cc, code, rhs.val);
 
-    ir_var_t     *res = ir_var_create(code->func, c_type_to_ir_type(cc, calc->common.type), NULL);
+    bool          is_signed = c_prim_is_sint(cc->options.char_is_signed, calc->common.type.prim);
+    ir_var_t     *res       = ir_var_create(code->func, c_type_to_ir_type(cc, calc->common.type), NULL);
     ir_op2_type_t oper;
     switch (calc->op) {
         case CIR_CALC_ADD: oper = IR_OP2_add; goto arith;
         case CIR_CALC_SUB: oper = IR_OP2_sub; goto arith;
         case CIR_CALC_MUL: oper = IR_OP2_mul; goto arith;
-        case CIR_CALC_DIV: oper = IR_OP2_div; goto arith;
-        case CIR_CALC_MOD: oper = IR_OP2_rem; goto arith;
+        case CIR_CALC_DIV: oper = is_signed ? IR_OP2_divs : IR_OP2_divu; goto arith;
+        case CIR_CALC_MOD: oper = is_signed ? IR_OP2_rems : IR_OP2_remu; goto arith;
         case CIR_CALC_SHL: oper = IR_OP2_shl; goto arith;
-        case CIR_CALC_SHR: oper = IR_OP2_shr; goto arith;
+        case CIR_CALC_SHR: oper = is_signed ? IR_OP2_shrs : IR_OP2_shru; goto arith;
         case CIR_CALC_BAND: oper = IR_OP2_band; goto arith;
         case CIR_CALC_BOR: oper = IR_OP2_bor; goto arith;
         case CIR_CALC_BXOR:
@@ -595,16 +596,18 @@ c_lower_expr_t c_lower_expr_calc(c_compiler_t *cc, ir_code_t *code, c_lower_scop
         case CIR_CALC_LAND: oper = IR_OP2_band; goto logic;
         case CIR_CALC_EQ: oper = IR_OP2_seq; goto logic;
         case CIR_CALC_NE: oper = IR_OP2_sne; goto logic;
-        case CIR_CALC_LT: oper = IR_OP2_slt; goto logic;
-        case CIR_CALC_LE: oper = IR_OP2_sle; goto logic;
-        case CIR_CALC_GT: oper = IR_OP2_sgt; goto logic;
+        case CIR_CALC_LT: oper = is_signed ? IR_OP2_slts : IR_OP2_sltu; goto logic;
+        case CIR_CALC_LE: oper = is_signed ? IR_OP2_sles : IR_OP2_sleu; goto logic;
+        case CIR_CALC_GT: oper = is_signed ? IR_OP2_sgts : IR_OP2_sgtu; goto logic;
         case CIR_CALC_GE:
-            oper = IR_OP2_sge;
-        logic: {
-            ir_var_t *tmp = ir_var_create(code->func, IR_PRIM_bool, NULL);
-            ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(tmp), oper, lhs.val, rhs.val);
-            ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(res), IR_OP1_mov, IR_OPERAND_VAR(tmp));
-        } break;
+            oper = is_signed ? IR_OP2_sges : IR_OP2_sgeu;
+        logic:
+            {
+                ir_var_t *tmp = ir_var_create(code->func, IR_PRIM_bool, NULL);
+                ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(tmp), oper, lhs.val, rhs.val);
+                ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(res), IR_OP1_mov, IR_OPERAND_VAR(tmp));
+            }
+            break;
     }
 
     return (c_lower_expr_t){
@@ -865,18 +868,18 @@ static void check_case_overlap(
     for (size_t i = 0; i < labels_len; i++) {
         c_lower_case_t const *label = &labels[i];
         if (label->is_ranged) {
-            bool min_a = ir_calc2(IR_OP2_sge, lo, label->lo).constl;
-            bool max_a = ir_calc2(IR_OP2_sle, hi, label->lo).constl;
-            bool min_b = ir_calc2(IR_OP2_sge, lo, label->hi).constl;
-            bool max_b = ir_calc2(IR_OP2_sle, hi, label->hi).constl;
+            bool min_a = ir_calc2(IR_OP2_sges, lo, label->lo).constl;
+            bool max_a = ir_calc2(IR_OP2_sles, hi, label->lo).constl;
+            bool min_b = ir_calc2(IR_OP2_sges, lo, label->hi).constl;
+            bool max_b = ir_calc2(IR_OP2_sles, hi, label->hi).constl;
             if ((min_a && max_a) || (min_b && max_b)) {
                 cctx_diagnostic(cc->cctx, pos, DIAG_ERR, "Case label overlaps previous label");
                 cctx_diagnostic(cc->cctx, label->pos, DIAG_HINT, "Previous case label");
                 break;
             }
         } else if (!label->is_default) {
-            bool min = ir_calc2(IR_OP2_sge, lo, label->lo).constl;
-            bool max = ir_calc2(IR_OP2_sle, hi, label->lo).constl;
+            bool min = ir_calc2(IR_OP2_sges, lo, label->lo).constl;
+            bool max = ir_calc2(IR_OP2_sles, hi, label->lo).constl;
             if (min && max) {
                 cctx_diagnostic(cc->cctx, pos, DIAG_ERR, "Case label overlaps previous label");
                 cctx_diagnostic(cc->cctx, label->pos, DIAG_HINT, "Previous case label");
@@ -928,12 +931,12 @@ ir_code_t *
             ir_code_t *check = ir_code_create_after(code, NULL);
             ir_code_t *next  = ir_code_create_after(check, NULL);
 
-            ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(condvar), IR_OP2_slt, expr.val, IR_OPERAND_CONST(label->lo));
+            ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(condvar), IR_OP2_slts, expr.val, IR_OPERAND_CONST(label->lo));
             ir_add_branch(IR_APPEND(code), IR_OPERAND_VAR(condvar), next);
             ir_add_jump(IR_APPEND(code), check);
             code = check;
 
-            ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(condvar), IR_OP2_slt, expr.val, IR_OPERAND_CONST(label->lo));
+            ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(condvar), IR_OP2_slts, expr.val, IR_OPERAND_CONST(label->lo));
             ir_add_branch(IR_APPEND(code), IR_OPERAND_VAR(condvar), label->code);
             ir_add_jump(IR_APPEND(code), next);
             code = next;

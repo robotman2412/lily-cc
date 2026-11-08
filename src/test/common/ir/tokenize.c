@@ -15,7 +15,7 @@ int main() {
     // clang-format off
     char const src[] =
     "function var\n"
-    "s32'0xcafebabe\n"
+    "i32'0xcafebabe\n"
     "// Line comment things\n"
     "/*\n"
     "Block comment things\n"
@@ -66,12 +66,12 @@ int main() {
     tkn_delete(tkn);
     EXPECT_EOL_TKN();
 
-    tkn = tkn_next(tctx); // s32'0xcafebabe
+    tkn = tkn_next(tctx); // i32'0xcafebabe
     TEST_EXPECT_INT(tkn.pos.line, 1);
     TEST_EXPECT_INT(tkn.pos.col, 0);
     ASSERT_TYPE(TOKENTYPE_ICONST);
     TEST_EXPECT_INT(tkn.pos.len, 14);
-    TEST_EXPECT_INT(tkn.subtype, IR_PRIM_s32);
+    TEST_EXPECT_INT(tkn.subtype, IR_PRIM_i32);
     TEST_EXPECT_INT((int)tkn.ival, (int)0xcafebabe);
     tkn_delete(tkn);
     EXPECT_EOL_TKN();

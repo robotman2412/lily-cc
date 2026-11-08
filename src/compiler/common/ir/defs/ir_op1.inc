@@ -8,8 +8,12 @@
 #define IR_OP1_DEF(keyw)
 #endif
 
-// Move / cast value.
+// Move value without conversion.
 IR_OP1_DEF(mov)
+// Zero-extend integer resize.
+IR_OP1_DEF(zeroext)
+// Sign-extend integer resize.
+IR_OP1_DEF(signext)
 // Bit-cast value.
 IR_OP1_DEF(bitcast)
 

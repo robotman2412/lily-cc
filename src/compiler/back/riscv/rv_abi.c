@@ -38,7 +38,7 @@ static ir_insn_t *rv_reg_to_struct(
     }
     // clang-format on
     uint64_t const  ptr_size   = rv64 ? 8 : 4;
-    ir_prim_t const ptr_prim   = rv64 ? IR_PRIM_u64 : IR_PRIM_u32;
+    ir_prim_t const ptr_prim   = rv64 ? IR_PRIM_i64 : IR_PRIM_i32;
 
     ir_insn_t *new_node;
     for (int64_t offset2 = 0; offset2 < size;) {
@@ -50,21 +50,21 @@ static ir_insn_t *rv_reg_to_struct(
             copy_max_exp = lilycc_ctz32(ptr_size);
         }
 
-        ir_prim_t copy_prim = copy_max_exp * 2;
+        ir_prim_t copy_prim = copy_max_exp + IR_PRIM_i8;
         ir_var_t *shr       = ir_var_create(ir_insnloc_code(loc)->func, ptr_prim, NULL);
         loc                 = IR_AFTER_INSN(ir_add_expr2(
             loc,
             IR_RETVAL_VAR(shr),
-            IR_OP2_shr,
+            IR_OP2_shru,
             value,
             IR_OPERAND_CONST(((ir_const_t){.prim_type = ptr_prim, .constl = offset2 * 8}))
         ));
         ir_var_t *mov       = ir_var_create(ir_insnloc_code(loc)->func, copy_prim, NULL);
-        loc                 = IR_AFTER_INSN(ir_add_expr1(loc, IR_RETVAL_VAR(mov), IR_OP1_mov, IR_OPERAND_VAR(shr)));
+        loc                 = IR_AFTER_INSN(ir_add_expr1(loc, IR_RETVAL_VAR(mov), IR_OP1_zeroext, IR_OPERAND_VAR(shr)));
         new_node            = ir_add_store(
             loc,
             IR_OPERAND_VAR(mov),
-            IR_MEMREF(IR_N_PRIM, IR_BADDR_FRAME(frame), .offset = offset + offset2)
+            IR_MEMREF(copy_prim, IR_BADDR_FRAME(frame), .offset = offset + offset2)
         );
         loc = IR_AFTER_INSN(new_node);
 
@@ -124,7 +124,7 @@ ir_insn_t *rv_xabi_return(backend_profile_t *profile, ir_insn_t *ret_insn) {
         ret_size    = ret_insn->operands[0].struct_frame->size;
     } else if (ret_insn->operands_len) {
         retval_prim = ir_operand_prim(ret_insn->operands[0]);
-        ret_size    = ir_prim_sizes[retval_prim];
+        ret_size    = ir_prim_size(retval_prim);
     } else {
         retval_prim = IR_N_PRIM;
         ret_size    = 0;
@@ -219,7 +219,7 @@ static void rv_xabi_call_int(
 ) {
     if (cc->gpr_args >= cc->gpr_avl) {
         // Passed on the stack.
-        uint64_t size = ir_prim_sizes[prim];
+        uint64_t size = ir_prim_size(prim);
         rv_alloc_call_frame(profile, func, cc, size, size);
         cc->loc = IR_AFTER_INSN(ir_add_store(
             cc->loc,
@@ -253,7 +253,7 @@ static void rv_xabi_call_struct(
     }
     // clang-format on
     uint64_t const  ptr_size   = rv64 ? 8 : 4;
-    ir_prim_t const ptr_prim   = rv64 ? IR_PRIM_u64 : IR_PRIM_u32;
+    ir_prim_t const ptr_prim   = rv64 ? IR_PRIM_i64 : IR_PRIM_i32;
 
     if (src_frame->size == 0) {
         // Zero-sized argument ignored.
@@ -331,7 +331,7 @@ ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
     }
     // clang-format on
     uint64_t const  ptr_size   = rv64 ? 8 : 4;
-    ir_prim_t const ptr_prim   = rv64 ? IR_PRIM_u64 : IR_PRIM_u32;
+    ir_prim_t const ptr_prim   = rv64 ? IR_PRIM_i64 : IR_PRIM_i32;
     uint64_t const  fpr_size   = f64 ? 8 : 4;
 
     rv_ccstate_t cc = {
@@ -359,7 +359,7 @@ ir_insn_t *rv_xabi_call(backend_profile_t *profile, ir_insn_t *call_insn) {
         rv_xabi_call_int(profile, call_insn->code->func, &cc, ptr_prim, IR_OPERAND_VAR(ptr));
     } else if (call_insn->returns_len) {
         retval_prim = call_insn->returns[0].dest_var->prim_type;
-        ret_size    = ir_prim_sizes[retval_prim];
+        ret_size    = ir_prim_size(retval_prim);
     } else {
         retval_prim = IR_N_PRIM;
         ret_size    = 0;
@@ -569,7 +569,7 @@ static void rv_xabi_entry_struct(
     }
     // clang-format on
     uint64_t const  ptr_size   = rv64 ? 8 : 4;
-    ir_prim_t const ptr_prim   = rv64 ? IR_PRIM_u64 : IR_PRIM_u32;
+    ir_prim_t const ptr_prim   = rv64 ? IR_PRIM_i64 : IR_PRIM_i32;
 
     if (dest_frame->size == 0) {
         // Zero-sized argument ignored.
@@ -644,7 +644,7 @@ void rv_xabi_entry(backend_profile_t *profile, ir_func_t *func) {
     bool const      f32        = rv_profile->ext_enabled[RV_EXT_F];
     bool const      f64        = rv_profile->ext_enabled[RV_EXT_D];
     uint64_t const  ptr_size   = rv64 ? 8 : 4;
-    ir_prim_t const ptr_prim   = rv64 ? IR_PRIM_u64 : IR_PRIM_u32;
+    ir_prim_t const ptr_prim   = rv64 ? IR_PRIM_i64 : IR_PRIM_i32;
 
     rv_ccstate_t cc = {
         .gpr_avl           = rve ? 6 : 8,
@@ -667,31 +667,31 @@ void rv_xabi_entry(backend_profile_t *profile, ir_func_t *func) {
         ir_prim_t prim;
         uint64_t  arg_size;
         switch (func->args[i].arg_type) {
-            case IR_ARG_TYPE_STRUCT:
+            case IR_FUNCARG_TYPE_STRUCT:
                 prim     = IR_N_PRIM;
                 arg_size = func->args[i].struct_frame->size;
                 break;
-            case IR_ARG_TYPE_VAR:
+            case IR_FUNCARG_TYPE_VAR:
                 prim     = func->args[i].var->prim_type;
-                arg_size = ir_prim_sizes[prim];
+                arg_size = ir_prim_size(prim);
                 break;
-            case IR_ARG_TYPE_IGNORED:
+            case IR_FUNCARG_TYPE_IGNORED:
                 prim     = func->args[i].ignored_prim;
-                arg_size = ir_prim_sizes[prim];
+                arg_size = ir_prim_size(prim);
                 break;
             default: UNREACHABLE();
         }
 
         if ((prim == IR_PRIM_f32 && f32) || (prim == IR_PRIM_f64 && f64)) {
             // Float args.
-            if (func->args[i].arg_type == IR_ARG_TYPE_VAR) {
+            if (func->args[i].arg_type == IR_FUNCARG_TYPE_VAR) {
                 rv_xabi_entry_float(profile, func, &cc, prim, func->args[i].var);
             } else {
                 rv_xabi_entry_float(profile, func, &cc, prim, NULL);
             }
         } else if (prim < IR_N_PRIM) {
             // Scalar args.
-            ir_var_t *dest_var_opt = func->args[i].arg_type == IR_ARG_TYPE_VAR ? func->args[i].var : NULL;
+            ir_var_t *dest_var_opt = func->args[i].arg_type == IR_FUNCARG_TYPE_VAR ? func->args[i].var : NULL;
             if (arg_size <= ptr_size) {
                 // Scalar fits within a single register.
                 rv_xabi_entry_int(profile, func, &cc, prim, dest_var_opt);

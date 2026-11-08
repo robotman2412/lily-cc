@@ -6,7 +6,9 @@
 #pragma once
 
 #include "arith128.h"
+#include "list.h"
 #include "map.h"
+#include "set.h"
 #include "unreachable.h"
 #include "vec.h"
 
@@ -27,16 +29,11 @@ typedef enum __attribute__((packed)) {
 // Number of bits (exluding padding) per IR type.
 __attribute__((const)) static inline int ir_prim_bits(ir_prim_t prim) {
     switch (prim) {
-        case IR_PRIM_s8:
-        case IR_PRIM_u8: return 8;
-        case IR_PRIM_s16:
-        case IR_PRIM_u16: return 16;
-        case IR_PRIM_s32:
-        case IR_PRIM_u32: return 32;
-        case IR_PRIM_s64:
-        case IR_PRIM_u64: return 64;
-        case IR_PRIM_s128:
-        case IR_PRIM_u128: return 128;
+        case IR_PRIM_i8: return 8;
+        case IR_PRIM_i16: return 16;
+        case IR_PRIM_i32: return 32;
+        case IR_PRIM_i64: return 64;
+        case IR_PRIM_i128: return 128;
         case IR_PRIM_bool: return 1;
         case IR_PRIM_f32: return 32;
         case IR_PRIM_f64: return 64;
@@ -45,22 +42,33 @@ __attribute__((const)) static inline int ir_prim_bits(ir_prim_t prim) {
     UNREACHABLE();
 }
 
+// Number of bits (exluding padding) per IR type.
+__attribute__((const)) static inline size_t ir_prim_size(ir_prim_t prim) {
+    switch (prim) {
+        case IR_PRIM_i8: return 1;
+        case IR_PRIM_i16: return 2;
+        case IR_PRIM_i32: return 4;
+        case IR_PRIM_i64: return 8;
+        case IR_PRIM_i128: return 16;
+        case IR_PRIM_bool: return 1;
+        case IR_PRIM_f32: return 4;
+        case IR_PRIM_f64: return 8;
+        case IR_N_PRIM: return 0;
+    }
+    UNREACHABLE();
+}
+
 // Minimum value of integer primitive types (including bool).
 // Meaningless for other primitive types.
-__attribute__((const)) static inline i128_t ir_prim_min(ir_prim_t prim) {
+__attribute__((const)) static inline i128_t ir_prim_min(ir_prim_t prim, bool is_signed) {
     switch (prim) {
             // clang-format off
         case IR_PRIM_bool: return I128_ZERO; break;
-        case IR_PRIM_s8:   return i128(INT8_MIN); break;
-        case IR_PRIM_u8:   return I128_ZERO; break;
-        case IR_PRIM_s16:  return i128(INT16_MIN); break;
-        case IR_PRIM_u16:  return I128_ZERO; break;
-        case IR_PRIM_s32:  return i128(INT32_MIN); break;
-        case IR_PRIM_u32:  return I128_ZERO; break;
-        case IR_PRIM_s64:  return i128(INT64_MIN); break;
-        case IR_PRIM_u64:  return I128_ZERO; break;
-        case IR_PRIM_s128: return I128_MIN; break;
-        case IR_PRIM_u128: return I128_ZERO; break;
+        case IR_PRIM_i8:   return is_signed ? i128(INT8_MIN)  : I128_ZERO; break;
+        case IR_PRIM_i16:  return is_signed ? i128(INT16_MIN) : I128_ZERO; break;
+        case IR_PRIM_i32:  return is_signed ? i128(INT32_MIN) : I128_ZERO; break;
+        case IR_PRIM_i64:  return is_signed ? i128(INT64_MIN) : I128_ZERO; break;
+        case IR_PRIM_i128: return is_signed ? I128_MIN        : I128_ZERO; break;
             // clang-format on
         default: // Intentionally meaningless value.
 #ifdef NDEBUG
@@ -73,20 +81,15 @@ __attribute__((const)) static inline i128_t ir_prim_min(ir_prim_t prim) {
 
 // Maximum value of integer primitive types (including bool).
 // Meaningless for other primitive types.
-__attribute__((const)) static inline i128_t ir_prim_max(ir_prim_t prim) {
+__attribute__((const)) static inline i128_t ir_prim_max(ir_prim_t prim, bool is_signed) {
     switch (prim) {
             // clang-format off
         case IR_PRIM_bool: return ui128(1); break;
-        case IR_PRIM_s8:   return i128(INT8_MAX); break;
-        case IR_PRIM_u8:   return ui128(UINT8_MAX); break;
-        case IR_PRIM_s16:  return i128(INT16_MAX); break;
-        case IR_PRIM_u16:  return ui128(UINT16_MAX); break;
-        case IR_PRIM_s32:  return i128(INT32_MAX); break;
-        case IR_PRIM_u32:  return ui128(UINT32_MAX); break;
-        case IR_PRIM_s64:  return i128(INT64_MAX); break;
-        case IR_PRIM_u64:  return ui128(UINT64_MAX); break;
-        case IR_PRIM_s128: return I128_MAX; break;
-        case IR_PRIM_u128: return UI128_MAX; break;
+        case IR_PRIM_i8:   return is_signed ? i128(INT8_MAX)  : ui128(UINT8_MAX);  break;
+        case IR_PRIM_i16:  return is_signed ? i128(INT16_MAX) : ui128(UINT16_MAX); break;
+        case IR_PRIM_i32:  return is_signed ? i128(INT32_MAX) : ui128(UINT32_MAX); break;
+        case IR_PRIM_i64:  return is_signed ? i128(INT64_MAX) : ui128(UINT64_MAX); break;
+        case IR_PRIM_i128: return is_signed ? I128_MAX        : UI128_MAX;         break;
             // clang-format on
         default: // Intentionally meaningless value.
 #ifdef NDEBUG
@@ -109,59 +112,24 @@ __attribute__((const)) static inline bool ir_prim_is_float(ir_prim_t prim) {
 // Whether a primitive is of integer type.
 __attribute__((const)) static inline bool ir_prim_is_integer(ir_prim_t prim) {
     switch (prim) {
-        case IR_PRIM_s8:
-        case IR_PRIM_s16:
-        case IR_PRIM_s32:
-        case IR_PRIM_s64:
-        case IR_PRIM_s128:
-        case IR_PRIM_u8:
-        case IR_PRIM_u16:
-        case IR_PRIM_u32:
-        case IR_PRIM_u64:
-        case IR_PRIM_u128: return true;
+        case IR_PRIM_i8:
+        case IR_PRIM_i16:
+        case IR_PRIM_i32:
+        case IR_PRIM_i64:
+        case IR_PRIM_i128: return true;
         default: return false;
     }
 }
 
-// Whether a primitive is signed.
-__attribute__((const)) static inline bool ir_prim_is_signed(ir_prim_t prim) {
-    switch (prim) {
-        case IR_PRIM_s8:
-        case IR_PRIM_s16:
-        case IR_PRIM_s32:
-        case IR_PRIM_s64:
-        case IR_PRIM_s128: return true;
-        default: return false;
-    }
-}
-
-// Get unsigned counterpart of primitive.
-__attribute__((const)) static inline ir_prim_t ir_prim_as_unsigned(ir_prim_t prim) {
-    switch (prim) {
-        case IR_PRIM_s8: return IR_PRIM_u8;
-        case IR_PRIM_s16: return IR_PRIM_u16;
-        case IR_PRIM_s32: return IR_PRIM_u32;
-        case IR_PRIM_s64: return IR_PRIM_u64;
-        case IR_PRIM_s128: return IR_PRIM_u128;
-        default: return prim;
-    }
-}
-
-// Get unsigned counterpart of primitive.
-__attribute__((const)) static inline ir_prim_t ir_prim_as_signed(ir_prim_t prim) {
-    switch (prim) {
-        case IR_PRIM_u8: return IR_PRIM_s8;
-        case IR_PRIM_u16: return IR_PRIM_s16;
-        case IR_PRIM_u32: return IR_PRIM_s32;
-        case IR_PRIM_u64: return IR_PRIM_s64;
-        case IR_PRIM_u128: return IR_PRIM_s128;
-        default: return prim;
-    }
-}
-
-#include "arith128.h"
-#include "list.h"
-#include "set.h"
+// IR sign-significance.
+typedef enum __attribute__((packed)) {
+    // Is sign-agnostic (needs no extension).
+    IR_SIGN_AGNOSTIC,
+    // Needs to be zero-extended.
+    IR_SIGN_ZEROEXT,
+    // Needs to be sign-extended.
+    IR_SIGN_SIGNEXT,
+} ir_sign_t;
 
 // Binary IR operators.
 typedef enum __attribute__((packed)) {
@@ -170,12 +138,57 @@ typedef enum __attribute__((packed)) {
     IR_N_OP2,
 } ir_op2_type_t;
 
+__attribute__((const)) static inline ir_sign_t ir_op2_get_sign(ir_op2_type_t op2) {
+    switch (op2) {
+        case IR_OP2_shru:
+        case IR_OP2_sgtu:
+        case IR_OP2_sleu:
+        case IR_OP2_sltu:
+        case IR_OP2_sgeu:
+        case IR_OP2_divu:
+        case IR_OP2_remu: return IR_SIGN_ZEROEXT;
+        case IR_OP2_sgts:
+        case IR_OP2_sles:
+        case IR_OP2_slts:
+        case IR_OP2_sges:
+        case IR_OP2_divs:
+        case IR_OP2_rems:
+        case IR_OP2_shrs: return IR_SIGN_SIGNEXT;
+        case IR_OP2_seq:
+        case IR_OP2_sne:
+        case IR_OP2_add:
+        case IR_OP2_sub:
+        case IR_OP2_mul:
+        case IR_OP2_shl:
+        case IR_OP2_band:
+        case IR_OP2_bor:
+        case IR_OP2_bxor: return IR_SIGN_AGNOSTIC;
+        case IR_N_OP2: UNREACHABLE();
+    }
+    UNREACHABLE();
+}
+
 // Unary IR operators.
 typedef enum __attribute__((packed)) {
 #define IR_OP1_DEF(name) IR_OP1_##name,
 #include "defs/ir_op1.inc"
     IR_N_OP1,
 } ir_op1_type_t;
+
+__attribute__((const)) static inline ir_sign_t ir_op1_get_sign(ir_op1_type_t op1) {
+    switch (op1) {
+        case IR_OP1_zeroext: return IR_SIGN_ZEROEXT;
+        case IR_OP1_signext: return IR_SIGN_SIGNEXT;
+        case IR_OP1_mov:
+        case IR_OP1_bitcast:
+        case IR_OP1_seqz:
+        case IR_OP1_snez:
+        case IR_OP1_neg:
+        case IR_OP1_bneg: return IR_SIGN_AGNOSTIC;
+        case IR_N_OP1: UNREACHABLE();
+    }
+    UNREACHABLE();
+}
 
 // Type of IR instruction.
 typedef enum __attribute__((packed)) {
@@ -265,12 +278,12 @@ typedef enum __attribute__((packed)) {
 // Possible representations of a function argument.
 typedef enum __attribute__((packed)) {
     // Passed in IR variable.
-    IR_ARG_TYPE_VAR,
+    IR_FUNCARG_TYPE_VAR,
     // Struct passed/copied into some stack frame.
-    IR_ARG_TYPE_STRUCT,
+    IR_FUNCARG_TYPE_STRUCT,
     // Ignored argument of primitive type.
-    IR_ARG_TYPE_IGNORED,
-} ir_arg_type_t;
+    IR_FUNCARG_TYPE_IGNORED,
+} ir_funcarg_type_t;
 
 // Types of IR instruction return value.
 typedef enum __attribute__((packed)) {
@@ -295,7 +308,7 @@ typedef enum __attribute__((packed)) {
 // IR stack frame.
 typedef struct ir_frame      ir_frame_t;
 // IR function argument.
-typedef struct ir_arg        ir_arg_t;
+typedef struct ir_funcarg    ir_funcarg_t;
 // IR variable.
 typedef struct ir_var        ir_var_t;
 // IR constant.
@@ -321,6 +334,7 @@ typedef uint16_t             regno_t;
 
 VEC_TYPE_DEF(vec_ir_operand_t, ir_operand_t);
 VEC_TYPE_DEF(vec_ir_frame_t, ir_frame_t *);
+VEC_TYPE_DEF(vec_ir_var_t, ir_var_t *);
 
 // No register assigned.
 #define REGNO_NONE UINT16_MAX
@@ -350,8 +364,9 @@ struct ir_frame {
 };
 
 // IR function argument.
-struct ir_arg {
-    ir_arg_type_t arg_type;
+struct ir_funcarg {
+    ir_funcarg_type_t arg_type;
+    ir_sign_t         sign;
     union {
         // Primitive argument.
         ir_var_t   *var;
@@ -384,9 +399,10 @@ struct ir_var {
     set_t        assigned_at;
     // Instructions that read this variable.
     set_t        used_at;
-    // For integer typed vars: possible range of the values in this variable (inclusive).
-    // Interpret as signed iff the IR type is signed.
-    i128_t       range_min, range_max;
+    // For integer typed vars: possible range of the values in this variable (inclusive, unsigned).
+    i128_t       range_minu, range_maxu;
+    // For integer typed vars: possible range of the values in this variable (inclusive, signed).
+    i128_t       range_mins, range_maxs;
 };
 
 // IR constant.
@@ -421,17 +437,17 @@ struct ir_const {
 
 #define IR_CONST_BOOL(value) ((ir_const_t){.prim_type = IR_PRIM_bool, .constl = (bool)(value)})
 
-#define IR_CONST_U8(value)   ((ir_const_t){.prim_type = IR_PRIM_u8, .constl = (uint8_t)(value)})
-#define IR_CONST_U16(value)  ((ir_const_t){.prim_type = IR_PRIM_u16, .constl = (uint16_t)(value)})
-#define IR_CONST_U32(value)  ((ir_const_t){.prim_type = IR_PRIM_u32, .constl = (uint32_t)(value)})
-#define IR_CONST_U64(value)  ((ir_const_t){.prim_type = IR_PRIM_u64, .constl = (uint64_t)(value)})
-#define IR_CONST_U128(value) ((ir_const_t){.prim_type = IR_PRIM_u128, .const128 = (value)})
+#define IR_CONST_U8(value)   ((ir_const_t){.prim_type = IR_PRIM_i8, .constl = (uint8_t)(value)})
+#define IR_CONST_U16(value)  ((ir_const_t){.prim_type = IR_PRIM_i16, .constl = (uint16_t)(value)})
+#define IR_CONST_U32(value)  ((ir_const_t){.prim_type = IR_PRIM_i32, .constl = (uint32_t)(value)})
+#define IR_CONST_U64(value)  ((ir_const_t){.prim_type = IR_PRIM_i64, .constl = (uint64_t)(value)})
+#define IR_CONST_U128(value) ((ir_const_t){.prim_type = IR_PRIM_i128, .const128 = (value)})
 
-#define IR_CONST_S8(value)   ((ir_const_t){.prim_type = IR_PRIM_s8, .constl = (int8_t)(value)})
-#define IR_CONST_S16(value)  ((ir_const_t){.prim_type = IR_PRIM_s16, .constl = (int16_t)(value)})
-#define IR_CONST_S32(value)  ((ir_const_t){.prim_type = IR_PRIM_s32, .constl = (int32_t)(value)})
-#define IR_CONST_S64(value)  ((ir_const_t){.prim_type = IR_PRIM_s64, .constl = (int64_t)(value)})
-#define IR_CONST_S128(value) ((ir_const_t){.prim_type = IR_PRIM_s128, .const128 = (value)})
+#define IR_CONST_S8(value)   ((ir_const_t){.prim_type = IR_PRIM_i8, .constl = (int8_t)(value)})
+#define IR_CONST_S16(value)  ((ir_const_t){.prim_type = IR_PRIM_i16, .constl = (int16_t)(value)})
+#define IR_CONST_S32(value)  ((ir_const_t){.prim_type = IR_PRIM_i32, .constl = (int32_t)(value)})
+#define IR_CONST_S64(value)  ((ir_const_t){.prim_type = IR_PRIM_i64, .constl = (int64_t)(value)})
+#define IR_CONST_S128(value) ((ir_const_t){.prim_type = IR_PRIM_i128, .const128 = (value)})
 
 #define IR_CONST_F32(value) ((ir_const_t){.prim_type = IR_PRIM_f32, .constf32 = (float)(value)})
 #define IR_CONST_F64(value) ((ir_const_t){.prim_type = IR_PRIM_f64, .constf64 = (double)(value)})
@@ -480,6 +496,8 @@ struct ir_memref {
 struct ir_operand {
     // What kind of operand this is.
     ir_operand_type_t type;
+    // Sign-extension tag used for IR `call` instruction arguments.
+    ir_sign_t         sign;
     union {
         // Constant / immediate value.
         ir_const_t  iconst;
@@ -510,17 +528,47 @@ static inline ir_prim_t ir_operand_prim(ir_operand_t oper) {
 }
 
 // A constant operand.
-#define IR_OPERAND_CONST(iconst_)     ((ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = (iconst_)})
+#define IR_OPERAND_CONST(iconst_)                                                                                      \
+    ((ir_operand_t){                                                                                                   \
+        .type   = IR_OPERAND_TYPE_CONST,                                                                               \
+        .sign   = IR_SIGN_AGNOSTIC,                                                                                    \
+        .iconst = (iconst_),                                                                                           \
+    })
 // An undefined operand.
-#define IR_OPERAND_UNDEF(undef_type_) ((ir_operand_t){.type = IR_OPERAND_TYPE_UNDEF, .undef_type = (undef_type_)})
+#define IR_OPERAND_UNDEF(undef_type_)                                                                                  \
+    ((ir_operand_t){                                                                                                   \
+        .type       = IR_OPERAND_TYPE_UNDEF,                                                                           \
+        .sign       = IR_SIGN_AGNOSTIC,                                                                                \
+        .undef_type = (undef_type_),                                                                                   \
+    })
 // A variable operand.
-#define IR_OPERAND_VAR(var_)          ((ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = (var_)})
+#define IR_OPERAND_VAR(var_)                                                                                           \
+    ((ir_operand_t){                                                                                                   \
+        .type = IR_OPERAND_TYPE_VAR,                                                                                   \
+        .sign = IR_SIGN_AGNOSTIC,                                                                                      \
+        .var  = (var_),                                                                                                \
+    })
 // A memory location operand.
-#define IR_OPERAND_MEM(mem_)          ((ir_operand_t){.type = IR_OPERAND_TYPE_MEM, .mem = (mem_)})
+#define IR_OPERAND_MEM(mem_)                                                                                           \
+    ((ir_operand_t){                                                                                                   \
+        .type = IR_OPERAND_TYPE_MEM,                                                                                   \
+        .sign = IR_SIGN_AGNOSTIC,                                                                                      \
+        .mem  = (mem_),                                                                                                \
+    })
 // A struct operand.
-#define IR_OPERAND_STRUCT(frame_)     ((ir_operand_t){.type = IR_OPERAND_TYPE_STRUCT, .struct_frame = (frame_)})
+#define IR_OPERAND_STRUCT(frame_)                                                                                      \
+    ((ir_operand_t){                                                                                                   \
+        .type         = IR_OPERAND_TYPE_STRUCT,                                                                        \
+        .sign         = IR_SIGN_AGNOSTIC,                                                                              \
+        .struct_frame = (frame_),                                                                                      \
+    })
 // A register operand.
-#define IR_OPERAND_REG(regno_)        ((ir_operand_t){.type = IR_OPERAND_TYPE_REG, .regno = (regno_)})
+#define IR_OPERAND_REG(regno_)                                                                                         \
+    ((ir_operand_t){                                                                                                   \
+        .type  = IR_OPERAND_TYPE_REG,                                                                                  \
+        .sign  = IR_SIGN_AGNOSTIC,                                                                                     \
+        .regno = (regno_),                                                                                             \
+    })
 
 // Helper macro for performing an operation on all variables in an IR operand.
 #define IR_FOR_OPERAND_VARS(operand, name, action)                                                                     \
@@ -596,6 +644,12 @@ struct ir_retval {
 // This instruction is part of a sequence that clamps the destination back in range;
 // do not clamp the input variable just for this instruction.
 #define IR_INSN_FLAG_CLAMPING      (1 << 6)
+// Specifies that the clamping done was a sign-extension.
+// Must imply IR_INSN_FLAG_CLAMPING.
+#define IR_INSN_FLAG_SIGNEXT       (1 << 7)
+// Specifies that the clamping done was a zero-extension.
+// Must imply IR_INSN_FLAG_CLAMPING.
+#define IR_INSN_FLAG_ZEROEXT       (1 << 8)
 
 // IR instruction.
 struct ir_insn {
@@ -661,7 +715,10 @@ struct ir_code {
 struct ir_funcret {
     ir_funcret_type_t type;
     union {
-        ir_prim_t prim_type;
+        struct {
+            ir_prim_t prim_type;
+            ir_sign_t sign;
+        };
         struct {
             uint64_t size, align;
         } struct_type;
@@ -671,65 +728,65 @@ struct ir_funcret {
 // IR function.
 struct ir_func {
     // Function name.
-    char        *name;
+    char         *name;
     // Type of the function's return value.
-    ir_funcret_t rettype;
+    ir_funcret_t  rettype;
     // Number of arguments.
-    size_t       args_len;
+    size_t        args_len;
     // Implicit out parameter pointer.
-    ir_var_t    *retval_ptr;
+    ir_var_t     *retval_ptr;
     // The stack frame for arguments passed to this function on the stack.
     // For variadic functions, may in reality be larger than what IR says.
-    ir_frame_t  *call_frame;
+    ir_frame_t   *call_frame;
     // The stack frame to use for frame link and return address.
     // Always allocated to offset 0.
     // For use by the backend only.
-    ir_frame_t  *link_frame;
+    ir_frame_t   *link_frame;
     // Function arguments.
-    ir_arg_t    *args;
+    ir_funcarg_t *args;
     // Function entrypoint.
-    ir_code_t   *entry;
+    ir_code_t    *entry;
     // Unordered list of code blocks.
-    dlist_t      code_list;
+    dlist_t       code_list;
     // Unordered list of variables.
-    dlist_t      vars_list;
+    dlist_t       vars_list;
     // Unordered list of stack frames.
-    dlist_t      frames_list;
+    dlist_t       frames_list;
     // Name counters for code blocks.
-    size_t       code_name_ctr;
+    size_t        code_name_ctr;
     // Name counters for stack frames.
-    size_t       frame_name_ctr;
+    size_t        frame_name_ctr;
     // Name counters for variables.
-    size_t       var_name_ctr;
+    size_t        var_name_ctr;
     // Map from name to code blocks.
-    map_t        code_by_name;
+    map_t         code_by_name;
     // Map from name to variables.
-    map_t        var_by_name;
+    map_t         var_by_name;
     // Map from name to frames.
-    map_t        frame_by_name;
+    map_t         frame_by_name;
     // Number that will be used for the next variable.
-    size_t       var_next_id;
+    size_t        var_next_id;
     // Number that will be used for the next stack frame.
-    size_t       frame_next_id;
+    size_t        frame_next_id;
     // Number that will be used for the next code block.
-    size_t       code_next_id;
+    size_t        code_next_id;
     // Total size of the stack allocated for this function.
-    uint64_t     stack_footprint;
+    uint64_t      stack_footprint;
     // Enforce the SSA form.
-    uint32_t     enforce_ssa      : 1;
+    uint32_t      enforce_ssa      : 1;
     // Enforce comparison insn returns bool.
-    uint32_t     enforce_cmp_bool : 1;
+    uint32_t      enforce_cmp_bool : 1;
     // Function will use a frame pointer.
     // Always true if there are any `alloca` in the function.
-    uint32_t     use_frame_ptr    : 1;
+    uint32_t      use_frame_ptr    : 1;
     // Is a leaf function; does not call any other functions, even implicitly.
-    uint32_t     is_leaf          : 1;
+    uint32_t      is_leaf          : 1;
     // Funcion may call `alloca`.
-    uint32_t     uses_alloca      : 1;
+    uint32_t      uses_alloca      : 1;
 };
 
 // Byte size per primitive type.
-extern uint8_t const     ir_prim_sizes[];
+extern uint8_t const     ir_prim_sizes[] __attribute__((deprecated("Use ir_prim_size()")));
 // Names used in the serialized representation for `ir_prim_t`.
 extern char const *const ir_prim_name[];
 // Names used in the serialized representation for `ir_op2_type_t`.

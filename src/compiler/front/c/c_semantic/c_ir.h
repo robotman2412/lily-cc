@@ -37,24 +37,24 @@ typedef enum {
     CIR_CALC_GE, // >=
 } cir_calc_op_t;
 
-static inline ir_op2_type_t cir_calc_op_to_ir_op2(cir_calc_op_t op) {
+static inline ir_op2_type_t cir_calc_op_to_ir_op2(cir_calc_op_t op, bool is_signed) {
     switch (op) {
         case CIR_CALC_ADD: return IR_OP2_add;
         case CIR_CALC_SUB: return IR_OP2_sub;
         case CIR_CALC_MUL: return IR_OP2_mul;
-        case CIR_CALC_DIV: return IR_OP2_div;
-        case CIR_CALC_MOD: return IR_OP2_rem;
+        case CIR_CALC_DIV: return is_signed ? IR_OP2_divs : IR_OP2_divu;
+        case CIR_CALC_MOD: return is_signed ? IR_OP2_rems : IR_OP2_remu;
         case CIR_CALC_SHL: return IR_OP2_shl;
-        case CIR_CALC_SHR: return IR_OP2_shr;
+        case CIR_CALC_SHR: return is_signed ? IR_OP2_shrs : IR_OP2_shru;
         case CIR_CALC_BAND: return IR_OP2_band;
         case CIR_CALC_BOR: return IR_OP2_bor;
         case CIR_CALC_BXOR: return IR_OP2_bxor;
         case CIR_CALC_EQ: return IR_OP2_seq;
         case CIR_CALC_NE: return IR_OP2_sne;
-        case CIR_CALC_LT: return IR_OP2_slt;
-        case CIR_CALC_LE: return IR_OP2_sle;
-        case CIR_CALC_GT: return IR_OP2_sgt;
-        case CIR_CALC_GE: return IR_OP2_sge;
+        case CIR_CALC_LT: return is_signed ? IR_OP2_slts : IR_OP2_sltu;
+        case CIR_CALC_LE: return is_signed ? IR_OP2_sles : IR_OP2_sleu;
+        case CIR_CALC_GT: return is_signed ? IR_OP2_sgts : IR_OP2_sgtu;
+        case CIR_CALC_GE: return is_signed ? IR_OP2_sges : IR_OP2_sgeu;
         case CIR_CALC_LAND:
         case CIR_CALC_LOR: break;
     }

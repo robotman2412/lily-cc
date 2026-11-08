@@ -90,7 +90,12 @@ struct backend {
     ir_insn_t *(*isel)(backend_profile_t *profile, ir_insn_t *ir_insn);
     // Emit load for register spilling.
     void (*ra_spill_load)(
-        backend_profile_t *profile, ir_insnloc_t loc, ir_retval_t dest, ir_frame_t *frame, int64_t offset
+        backend_profile_t *profile,
+        ir_insnloc_t       loc,
+        ir_retval_t        dest,
+        ir_frame_t        *frame,
+        int64_t            offset,
+        ir_sign_t          sign
     );
     // Emit store for register spilling.
     void (*ra_spill_store)(
@@ -125,21 +130,25 @@ struct backend_profile {
     uint8_t stack_align;
 
     // Has insns for f32.
-    uint32_t has_f32          : 1;
+    uint32_t has_f32                   : 1;
     // Has insns for f64.
-    uint32_t has_f64          : 1;
+    uint32_t has_f64                   : 1;
     // Has insns for float square rooot.
-    uint32_t has_fsqrt        : 1;
+    uint32_t has_fsqrt                 : 1;
     // Has insns for multiply.
-    uint32_t has_mul          : 1;
+    uint32_t has_mul                   : 1;
     // Has insns for divide.
-    uint32_t has_div          : 1;
+    uint32_t has_div                   : 1;
     // Has insns for remainder.
-    uint32_t has_rem          : 1;
+    uint32_t has_rem                   : 1;
     // Has insns for variable bit shift.
-    uint32_t has_var_shift    : 1;
+    uint32_t has_var_shift             : 1;
     // Has insns for count leading/trailing zeroes.
-    uint32_t has_count_zeroes : 1;
+    uint32_t has_count_zeroes          : 1;
+    // Has insns for count count population (count ones).
+    uint32_t has_count_ones            : 1;
+    // Sign-extends (as opposed to zero-extends) arguments in wider integer registers.
+    uint32_t sign_extend_narrow_values : 1;
 
     // Type of data that can be operated on in a register.
     // Setting a regclass to all 0 will cause the register not to be used by resource allocation.

@@ -15,8 +15,8 @@
 int main() {
     ir_func_t *func = ir_func_create("ir_to_ssa", NULL, 0);
 
-    ir_var_t *var0 = ir_var_create(func, IR_PRIM_s32, NULL);
-    ir_var_t *var1 = ir_var_create(func, IR_PRIM_s32, NULL);
+    ir_var_t *var0 = ir_var_create(func, IR_PRIM_i32, NULL);
+    ir_var_t *var1 = ir_var_create(func, IR_PRIM_i32, NULL);
     ir_var_t *var2 = ir_var_create(func, IR_PRIM_bool, NULL);
 
     ir_code_t *code0 = container_of(func->code_list.head, ir_code_t, node);
@@ -28,13 +28,13 @@ int main() {
         IR_APPEND(code0),
         IR_RETVAL_VAR(var0),
         IR_OP1_mov,
-        (ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = {.prim_type = IR_PRIM_s32, .constl = 0xdeadbeef}}
+        (ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = {.prim_type = IR_PRIM_i32, .constl = 0xdeadbeef}}
     );
     ir_add_expr1(
         IR_APPEND(code0),
         IR_RETVAL_VAR(var1),
         IR_OP1_mov,
-        (ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = {.prim_type = IR_PRIM_s32, .constl = 0}}
+        (ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = {.prim_type = IR_PRIM_i32, .constl = 0}}
     );
     ir_add_jump(IR_APPEND(code0), code1);
 
@@ -50,9 +50,9 @@ int main() {
     ir_add_expr2(
         IR_APPEND(code2),
         IR_RETVAL_VAR(var0),
-        IR_OP2_shr,
+        IR_OP2_shrs,
         (ir_operand_t){.type = IR_OPERAND_TYPE_VAR, .var = var0},
-        (ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = {.prim_type = IR_PRIM_s32, .constl = 3}}
+        (ir_operand_t){.type = IR_OPERAND_TYPE_CONST, .iconst = {.prim_type = IR_PRIM_i32, .constl = 3}}
     );
     ir_add_jump(IR_APPEND(code2), code1);
 

@@ -417,18 +417,28 @@ static void ra_spill(backend_profile_t *profile, ra_nodes_t nodes) {
         abort();
     }
 
-    uint64_t    size     = ir_prim_sizes[to_spill->orig_prim_type];
+    uint64_t    size     = ir_prim_size(to_spill->orig_prim_type);
     ir_frame_t *frame    = ir_frame_create(to_spill->func, size, size, NULL);
     set_t       orig_def = PTR_SET_EMPTY;
     set_t       orig_use = PTR_SET_EMPTY;
     set_addall(&orig_def, &to_spill->assigned_at);
     set_addall(&orig_use, &to_spill->used_at);
 
+    bool zeroext = false;
+    bool signext = false;
     set_foreach(ir_insn_t, insn, &orig_def) {
+        zeroext |= insn->flags & IR_INSN_FLAG_ZEROEXT;
+        signext |= insn->flags & IR_INSN_FLAG_SIGNEXT;
         profile->backend->ra_spill_store(profile, IR_AFTER_INSN(insn), IR_OPERAND_VAR(to_spill), frame, 0);
     }
+    ir_sign_t sign = IR_SIGN_AGNOSTIC;
+    if (zeroext && !signext) {
+        sign = IR_SIGN_ZEROEXT;
+    } else if (signext && !zeroext) {
+        sign = IR_SIGN_SIGNEXT;
+    }
     set_foreach(ir_insn_t, insn, &orig_use) {
-        profile->backend->ra_spill_load(profile, IR_BEFORE_INSN(insn), IR_RETVAL_VAR(to_spill), frame, 0);
+        profile->backend->ra_spill_load(profile, IR_BEFORE_INSN(insn), IR_RETVAL_VAR(to_spill), frame, 0, sign);
     }
     to_spill->no_spill = true;
 
@@ -478,32 +488,27 @@ static void choose_one_reg(backend_profile_t *profile, ra_node_t *node, uint32_t
         regclass_t regclass = profile->gpr_classes[regno];
         switch (node->var->prim_type) {
             case IR_PRIM_bool:
-            case IR_PRIM_s8:
-            case IR_PRIM_u8:
+            case IR_PRIM_i8:
                 if (!regclass.int8) {
                     continue;
                 }
                 break;
-            case IR_PRIM_s16:
-            case IR_PRIM_u16:
+            case IR_PRIM_i16:
                 if (!regclass.int16) {
                     continue;
                 }
                 break;
-            case IR_PRIM_s32:
-            case IR_PRIM_u32:
+            case IR_PRIM_i32:
                 if (!regclass.int32) {
                     continue;
                 }
                 break;
-            case IR_PRIM_s64:
-            case IR_PRIM_u64:
+            case IR_PRIM_i64:
                 if (!regclass.int64) {
                     continue;
                 }
                 break;
-            case IR_PRIM_s128:
-            case IR_PRIM_u128:
+            case IR_PRIM_i128:
                 if (!regclass.int128) {
                     continue;
                 }
@@ -561,7 +566,7 @@ static void ra_callee_save_regs_impl(
             tmp         ^= 1 << reg;
 
             if (is_restore) {
-                profile->backend->ra_spill_load(profile, loc, IR_RETVAL_REG(reg), frame, offset);
+                profile->backend->ra_spill_load(profile, loc, IR_RETVAL_REG(reg), frame, offset, IR_SIGN_AGNOSTIC);
             } else {
                 profile->backend->ra_spill_store(profile, loc, IR_OPERAND_REG(reg), frame, offset);
             }
@@ -604,24 +609,19 @@ void regalloc(backend_profile_t *profile, ir_func_t *func) {
             k_values[IR_PRIM_f32]++;
         }
         if (class.int128) {
-            k_values[IR_PRIM_u128]++;
-            k_values[IR_PRIM_s128]++;
+            k_values[IR_PRIM_i128]++;
         }
         if (class.int64) {
-            k_values[IR_PRIM_u64]++;
-            k_values[IR_PRIM_s64]++;
+            k_values[IR_PRIM_i64]++;
         }
         if (class.int32) {
-            k_values[IR_PRIM_u32]++;
-            k_values[IR_PRIM_s32]++;
+            k_values[IR_PRIM_i32]++;
         }
         if (class.int16) {
-            k_values[IR_PRIM_u16]++;
-            k_values[IR_PRIM_s16]++;
+            k_values[IR_PRIM_i16]++;
         }
         if (class.int8) {
-            k_values[IR_PRIM_u8]++;
-            k_values[IR_PRIM_s8]++;
+            k_values[IR_PRIM_i8]++;
             k_values[IR_PRIM_bool]++;
         }
     }

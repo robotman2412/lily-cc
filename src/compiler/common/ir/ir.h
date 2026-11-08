@@ -46,7 +46,7 @@ typedef struct {
 
 
 // Create a new IR function.
-// Function argument types are IR_PRIM_s32 by default.
+// Function argument types are IR_PRIM_i32 by default.
 // Function returns nothing by default.
 ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_len);
 // Create an IR function without operands nor code.

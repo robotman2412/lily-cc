@@ -5,6 +5,7 @@
 
 #include "ir.h"
 
+#include "arith128.h"
 #include "arrays.h"
 #include "bitops.h"
 #include "insn_proto.h"
@@ -39,14 +40,14 @@ void ir_mark_used(ir_operand_t operand, ir_insn_t *insn) {
 }
 
 // Create a new IR function.
-// Function argument types are IR_PRIM_s32 by default.
+// Function argument types are IR_PRIM_i32 by default.
 ir_func_t *ir_func_create(char const *name, char const *entry_name, size_t args_len) {
     ir_func_t *func = ir_func_create_empty(name);
-    func->args      = lilycc_calloc(args_len, sizeof(ir_arg_t));
+    func->args      = lilycc_calloc(args_len, sizeof(ir_funcarg_t));
     func->args_len  = args_len;
     for (size_t i = 0; i < args_len; i++) {
-        func->args[i].arg_type     = IR_ARG_TYPE_IGNORED;
-        func->args[i].ignored_prim = IR_PRIM_s32;
+        func->args[i].arg_type     = IR_FUNCARG_TYPE_IGNORED;
+        func->args[i].ignored_prim = IR_PRIM_i32;
     }
     func->entry        = ir_code_create(func, entry_name);
     func->rettype.type = IR_FUNCRET_NONE;
@@ -508,8 +509,10 @@ ir_var_t *ir_var_create(ir_func_t *func, ir_prim_t type, char const *name) {
     var->arg_index      = -1;
 
     // Intentionally reversed; causes range to be calculated properly when assigned.
-    var->range_min = ir_prim_max(type);
-    var->range_max = ir_prim_min(type);
+    var->range_minu = ir_prim_max(type, false);
+    var->range_maxu = UI128_ZERO;
+    var->range_minu = ir_prim_max(type, true);
+    var->range_maxu = ir_prim_min(type, true);
 
     dlist_append(&func->vars_list, &var->node);
     map_set(&func->var_by_name, var->name, var);
@@ -530,12 +533,12 @@ void ir_var_delete(ir_var_t *var) {
 
     if (var->arg_index >= 0) {
         // Turn function arg into variable-less.
-        var->func->args[var->arg_index].arg_type     = IR_ARG_TYPE_IGNORED;
+        var->func->args[var->arg_index].arg_type     = IR_FUNCARG_TYPE_IGNORED;
         var->func->args[var->arg_index].ignored_prim = var->prim_type;
     }
 #ifndef NDEBUG
     for (size_t i = 0; i < var->func->args_len; i++) {
-        if (var->func->args[i].arg_type == IR_ARG_TYPE_VAR) {
+        if (var->func->args[i].arg_type == IR_FUNCARG_TYPE_VAR) {
             assert(var->func->args[i].var != var);
         }
     }
@@ -1047,30 +1050,50 @@ ir_insn_t *ir_add_combinator(ir_insnloc_t loc, ir_var_t *dest, size_t from_len, 
 
 // Add an expression to a code block.
 ir_insn_t *ir_add_expr1(ir_insnloc_t loc, ir_retval_t dest, ir_op1_type_t oper, ir_operand_t operand) {
-    // TODO: Enforce no additive operations for bool.
     assert(oper < IR_N_OP1);
     bool enforce_cmp_bool = ir_insnloc_code(loc)->func->enforce_cmp_bool;
     if (operand.type == IR_OPERAND_TYPE_MEM || operand.type == IR_OPERAND_TYPE_STRUCT) {
         fprintf(stderr, "BUG: IR expr1 operands must not be MEM nor STRUCT\n");
         abort();
     }
-    if (oper == IR_OP1_snez || oper == IR_OP1_seqz) {
-        if (dest.type == IR_RETVAL_TYPE_VAR) {
-            if (dest.dest_var->prim_type != IR_PRIM_bool && enforce_cmp_bool) {
-                fprintf(stderr, "BUG: IR %s must return a boolean\n", ir_op1_names[oper]);
-                abort();
-            } else if (dest.dest_var->prim_type != IR_PRIM_bool && !ir_prim_is_integer(dest.dest_var->prim_type)) {
-                fprintf(stderr, "BUG: IR %s must return a boolean or integer type\n", ir_op1_names[oper]);
+    switch (oper) {
+        case IR_OP1_zeroext:
+        case IR_OP1_signext:
+            if (dest.type == IR_RETVAL_TYPE_VAR && !ir_prim_is_integer(dest.dest_var->prim_type)) {
+                fprintf(stderr, "BUG: IR %s must return an integer type\n", ir_op1_names[oper]);
                 abort();
             }
-        }
-    } else if (oper != IR_OP1_mov) {
-        if (dest.type == IR_RETVAL_TYPE_VAR && operand.type != IR_OPERAND_TYPE_REG
-            && ir_operand_prim(operand) != dest.dest_var->prim_type) {
-            fprintf(stderr, "BUG: IR %s has conflicting operand and return types\n", ir_op1_names[oper]);
-            abort();
-        }
+            if (!ir_prim_is_integer(ir_operand_prim(operand))) {
+                fprintf(stderr, "BUG: IR %s takes an integer type\n", ir_op1_names[oper]);
+                abort();
+            }
+            break;
+        case IR_OP1_bitcast: // Any cast is allowed, but illegal values are UB.
+            break;
+        case IR_OP1_seqz:
+        case IR_OP1_snez:
+            if (dest.type == IR_RETVAL_TYPE_VAR) {
+                if (dest.dest_var->prim_type != IR_PRIM_bool && enforce_cmp_bool) {
+                    fprintf(stderr, "BUG: IR %s must return a boolean\n", ir_op1_names[oper]);
+                    abort();
+                } else if (dest.dest_var->prim_type != IR_PRIM_bool && !ir_prim_is_integer(dest.dest_var->prim_type)) {
+                    fprintf(stderr, "BUG: IR %s accepts a boolean or integer type\n", ir_op1_names[oper]);
+                    abort();
+                }
+            }
+            break;
+        case IR_OP1_mov:
+        case IR_OP1_neg:
+        case IR_OP1_bneg:
+            if (dest.type == IR_RETVAL_TYPE_VAR && operand.type != IR_OPERAND_TYPE_REG
+                && ir_operand_prim(operand) != dest.dest_var->prim_type) {
+                fprintf(stderr, "BUG: IR %s has conflicting operand and return types\n", ir_op1_names[oper]);
+                abort();
+            }
+            break;
+        case IR_N_OP1: UNREACHABLE();
     }
+
     ir_insn_t *insn = ir_create_insn_va(loc, IR_INSN_EXPR1, true, dest, 1, operand);
     insn->op1       = oper;
     return insn;
@@ -1092,7 +1115,7 @@ ir_insn_t *ir_add_expr2(ir_insnloc_t loc, ir_retval_t dest, ir_op2_type_t oper, 
         fprintf(stderr, "BUG: IR %s has conflicting operand types\n", ir_op2_names[oper]);
         abort();
     }
-    if (oper >= IR_OP2_sgt && oper <= IR_OP2_sne) {
+    if (oper >= IR_OP2_sgtu && oper <= IR_OP2_sne) {
         if (dest.type == IR_RETVAL_TYPE_VAR) {
             if (dest.dest_var->prim_type != IR_PRIM_bool && enforce_cmp_bool) {
                 fprintf(stderr, "BUG: IR %s must return a boolean\n", ir_op2_names[oper]);
@@ -1154,7 +1177,7 @@ ir_insn_t *ir_add_lea_stack(ir_insnloc_t loc, ir_retval_t dest, ir_frame_t *fram
         true,
         dest,
         1,
-        IR_OPERAND_MEM(IR_MEMREF(IR_PRIM_u8, IR_BADDR_FRAME(frame), .offset = offset))
+        IR_OPERAND_MEM(IR_MEMREF(IR_N_PRIM, IR_BADDR_FRAME(frame), .offset = offset))
     );
 }
 
@@ -1166,7 +1189,7 @@ ir_insn_t *ir_add_lea_symbol(ir_insnloc_t loc, ir_retval_t dest, char const *sym
         true,
         dest,
         1,
-        IR_OPERAND_MEM(IR_MEMREF(IR_PRIM_u8, IR_BADDR_SYM((char *)symbol), .offset = offset))
+        IR_OPERAND_MEM(IR_MEMREF(IR_N_PRIM, IR_BADDR_SYM((char *)symbol), .offset = offset))
     );
 }
 
@@ -1299,7 +1322,7 @@ static ir_insn_t *ir_gen_memcpy_impl(
     ir_func_t *func = ir_insnloc_code(loc)->func;
 
     // How many pairs of load -> store would be generated for inline memcpy.
-    size_t copies_reqd = (size_t)(((ptrdiff_t)len - 1) / (ptrdiff_t)ir_prim_sizes[copy_max_prim] + 1);
+    size_t copies_reqd = (size_t)(((ptrdiff_t)len - 1) / (ptrdiff_t)ir_prim_size(copy_max_prim) + 1);
 
     // Simple heuristic to determine whether inline memcpy is better.
     if (copies_reqd > 8 && allow_implicit_call) {
@@ -1326,14 +1349,14 @@ static ir_insn_t *ir_gen_memcpy_impl(
         // Determine the largest possible copy primitive here.
         ir_prim_t copy_prim;
         size_t    max_bytes = len - i;
-        if (max_bytes > ir_prim_sizes[copy_max_prim]) {
-            max_bytes = ir_prim_sizes[copy_max_prim];
+        if (max_bytes > ir_prim_size(copy_max_prim)) {
+            max_bytes = ir_prim_size(copy_max_prim);
         }
         int ilog2 = lilycc_ctz64(max_bytes);
-        if (ilog2 > lilycc_ctz64(ir_prim_sizes[copy_max_prim])) {
-            ilog2 = lilycc_ctz64(ir_prim_sizes[copy_max_prim]);
+        if (ilog2 > lilycc_ctz64(ir_prim_size(copy_max_prim))) {
+            ilog2 = lilycc_ctz64(ir_prim_size(copy_max_prim));
         }
-        copy_prim = IR_PRIM_u8 + 2 * ilog2;
+        copy_prim = IR_PRIM_i8 + ilog2;
 
         ir_operand_t data;
         if (is_const) {
@@ -1359,7 +1382,7 @@ static ir_insn_t *ir_gen_memcpy_impl(
         loc                    = IR_AFTER_INSN(last);
 
         // Advance by the primitive size, not just one byte.
-        i += ir_prim_sizes[copy_prim];
+        i += ir_prim_size(copy_prim);
     }
 
     return last;

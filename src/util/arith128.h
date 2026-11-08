@@ -141,6 +141,16 @@ INLINE_MATH128 i128_t xor128(i128_t lhs, i128_t rhs) {
 INLINE_MATH128 i128_t bneg128(i128_t a) {
     return (i128_t){~a.val};
 }
+
+// Test for equality to zero.
+INLINE_MATH128 bool eq128(i128_t a, i128_t b) {
+    return a.val == b.val;
+}
+
+// Test for equality to zero.
+INLINE_MATH128 bool eqzero128(i128_t a) {
+    return a.val == 0;
+}
 #else
 
 // Structure that stores 128 bits of data.
@@ -299,6 +309,16 @@ INLINE_MATH128 i128_t bneg128(i128_t a) {
         .lo = ~a.lo,
         .hi = ~a.hi,
     };
+}
+
+// Test for equality to zero.
+INLINE_MATH128 bool eq128(i128_t a, i128_t b) {
+    return a.lo == b.lo && a.hi == b.hi;
+}
+
+// Test for equality to zero.
+INLINE_MATH128 bool eqzero128(i128_t a) {
+    return a.lo == 0 && a.hi == 0;
 }
 #endif
 

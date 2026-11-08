@@ -6,6 +6,7 @@
 #include "rv_isel.h"
 
 #include "arith128.h"
+#include "backend.h"
 #include "ir.h"
 #include "ir_interpreter.h"
 #include "ir_types.h"
@@ -23,7 +24,7 @@
 // Primitive type corresponding to a certain register class.
 static inline __attribute__((pure)) ir_prim_t rv_regclass_prim(rv_profile_t const *profile, size_t regno) {
     if (regno < 32) {
-        return profile->ext_enabled[RV_64] ? IR_PRIM_u64 : IR_PRIM_u32;
+        return profile->ext_enabled[RV_64] ? IR_PRIM_i64 : IR_PRIM_i32;
     } else if (regno < 64 && profile->ext_enabled[RV_EXT_D]) {
         return IR_PRIM_f64;
     } else if (regno < 64 && profile->ext_enabled[RV_EXT_D]) {
@@ -64,90 +65,62 @@ static ir_insn_t *rv_emit_rr_copy(rv_profile_t const *profile, ir_insnloc_t loc,
     return new_node;
 }
 
-// Emit an integer casting operation.
-static ir_insn_t *rv_emit_int_cast(
-    rv_profile_t const *profile, ir_insnloc_t loc, ir_retval_t dest, ir_prim_t dest_prim, ir_operand_t src
+static ir_insn_t *rv_emit_rr_zeroext(
+    rv_profile_t const *profile, ir_insnloc_t loc, ir_retval_t dest, ir_operand_t src, int dest_bit
 ) {
-    ir_prim_t src_prim = ir_operand_prim(src);
-    uint8_t   ptr_bits = profile->ext_enabled[RV_64] ? 64 : 32;
-
-    if (src_prim == dest_prim) { // TODO: Add checks for cast signed <-> unsigned int.
+    int xlen = profile->ext_enabled[RV_64] ? 64 : 32;
+    if (dest_bit == xlen) {
         // mv dest, src
-        ir_insn_t *new_node  = ir_add_mach_insn(loc, true, dest, &rv_insn_mv, 1, (ir_operand_t const[]){src});
-        new_node->flags     |= IR_INSN_FLAG_RR_COPY;
-        return new_node;
-    } else if (
-        (src_prim == IR_PRIM_s64 || src_prim == IR_PRIM_u64) && (dest_prim == IR_PRIM_s32 || dest_prim == IR_PRIM_u32)
-    ) {
+        ir_insn_t *node  = rv_add_mv(loc, dest, src);
+        node->flags     |= IR_INSN_FLAG_RR_COPY | IR_INSN_FLAG_CLAMPING | IR_INSN_FLAG_ZEROEXT;
+        return node;
+    } else if (dest_bit < 12) {
+        // andi dest, src, (1 << dest_bit) - 1
+        ir_insn_t *node  = rv_add_andi(loc, dest, src, (1 << dest_bit) - 1);
+        node->flags     |= IR_INSN_FLAG_RR_COPY | IR_INSN_FLAG_CLAMPING | IR_INSN_FLAG_ZEROEXT;
+        return node;
+    } else if (dest_bit == 32 && profile->ext_enabled[RV_64]) {
         // addiw dest, src, 0
-        return ir_add_mach_insn(
-            loc,
-            true,
-            dest,
-            &rv_insn_addiw,
-            2,
-            (ir_operand_t const[]){src, IR_OPERAND_CONST(IR_CONST_S16(0))}
-        );
-    } else if (dest_prim == IR_PRIM_bool) {
-        // slt dest, x0, src
-        return ir_add_mach_insn(loc, true, dest, &rv_insn_sltu, 2, (ir_operand_t const[]){IR_OPERAND_REG(0), src});
-    } else if (
-        ir_prim_is_signed(src_prim) || (ir_prim_is_signed(dest_prim) && ir_prim_as_signed(src_prim) == dest_prim)
-    ) {
-        // Sign-extend.
-        uint8_t   shamt = ptr_bits - ir_prim_sizes[dest_prim] * 8;
-        ir_var_t *tmp   = ir_var_create(ir_insnloc_code(loc)->func, dest_prim, NULL);
-        // slli tmp, src, shamt
-        loc             = IR_AFTER_INSN(ir_add_mach_insn(
-            loc,
-            true,
-            IR_RETVAL_VAR(tmp),
-            &rv_insn_slli,
-            2,
-            (ir_operand_t const[]){src, IR_OPERAND_CONST(IR_CONST_S16(shamt))}
-        ));
-        // srai dest, tmp, shamt
-        return ir_add_mach_insn(
-            loc,
-            true,
-            dest,
-            &rv_insn_srai,
-            2,
-            (ir_operand_t const[]){IR_OPERAND_VAR(tmp), IR_OPERAND_CONST(IR_CONST_S16(shamt))}
-        );
-    } else if (dest_prim == IR_PRIM_u8) {
-        // Zero-extend (one byte).
-        // andi dest, src, 255
-        return ir_add_mach_insn(
-            loc,
-            true,
-            dest,
-            &rv_insn_andi,
-            2,
-            (ir_operand_t const[]){src, IR_OPERAND_CONST(IR_CONST_S16(255))}
-        );
+        ir_insn_t *node  = rv_add_addiw(loc, dest, src, 0);
+        node->flags     |= IR_INSN_FLAG_RR_COPY | IR_INSN_FLAG_CLAMPING | IR_INSN_FLAG_ZEROEXT;
+        return node;
     } else {
-        // Zero-extend.
-        uint8_t   shamt = ptr_bits - ir_prim_sizes[dest_prim] * 8;
-        ir_var_t *tmp   = ir_var_create(ir_insnloc_code(loc)->func, dest_prim, NULL);
-        // slli tmp, src, shamt
-        loc             = IR_AFTER_INSN(ir_add_mach_insn(
-            loc,
-            true,
-            IR_RETVAL_VAR(tmp),
-            &rv_insn_slli,
-            2,
-            (ir_operand_t const[]){src, IR_OPERAND_CONST(IR_CONST_S16(shamt))}
-        ));
-        // srli dest, tmp, shamt
-        return ir_add_mach_insn(
-            loc,
-            true,
-            dest,
-            &rv_insn_srli,
-            2,
-            (ir_operand_t const[]){src, IR_OPERAND_CONST(IR_CONST_S16(shamt))}
-        );
+        ir_var_t  *tmpvar  = ir_var_create(ir_insnloc_code(loc)->func, ir_operand_prim(src), NULL);
+        // slli tmp, src, XLEN - dest_bit
+        ir_insn_t *node1   = rv_add_slli(loc, IR_RETVAL_VAR(tmpvar), src, xlen - dest_bit);
+        loc                = IR_AFTER_INSN(node1);
+        ir_insn_t *node2   = rv_add_srli(loc, dest, IR_OPERAND_VAR(tmpvar), xlen - dest_bit);
+        // srli dest, tmp, XLEN - dest_bit
+        node1->flags      |= IR_INSN_FLAG_RR_COPY | IR_INSN_FLAG_CLAMPING | IR_INSN_FLAG_ZEROEXT;
+        node2->flags      |= IR_INSN_FLAG_RR_COPY | IR_INSN_FLAG_CLAMPING | IR_INSN_FLAG_ZEROEXT;
+        return node2;
+    }
+}
+
+static ir_insn_t *rv_emit_rr_signext(
+    rv_profile_t const *profile, ir_insnloc_t loc, ir_retval_t dest, ir_operand_t src, int dest_bit
+) {
+    int xlen = profile->ext_enabled[RV_64] ? 64 : 32;
+    if (dest_bit == xlen) {
+        // mv dest, src
+        ir_insn_t *node  = rv_add_mv(loc, dest, src);
+        node->flags     |= IR_INSN_FLAG_RR_COPY | IR_INSN_FLAG_CLAMPING | IR_INSN_FLAG_SIGNEXT;
+        return node;
+    } else if (dest_bit == 32 && profile->ext_enabled[RV_64]) {
+        // addiw dest, src, 0
+        ir_insn_t *node  = rv_add_addiw(loc, dest, src, 0);
+        node->flags     |= IR_INSN_FLAG_RR_COPY | IR_INSN_FLAG_CLAMPING | IR_INSN_FLAG_SIGNEXT;
+        return node;
+    } else {
+        ir_var_t  *tmpvar  = ir_var_create(ir_insnloc_code(loc)->func, ir_operand_prim(src), NULL);
+        // slli tmp, src, XLEN - dest_bit
+        ir_insn_t *node1   = rv_add_slli(loc, IR_RETVAL_VAR(tmpvar), src, xlen - dest_bit);
+        loc                = IR_AFTER_INSN(node1);
+        ir_insn_t *node2   = rv_add_srai(loc, dest, IR_OPERAND_VAR(tmpvar), xlen - dest_bit);
+        // srai dest, tmp, XLEN - dest_bit
+        node1->flags      |= IR_INSN_FLAG_RR_COPY | IR_INSN_FLAG_CLAMPING | IR_INSN_FLAG_SIGNEXT;
+        node2->flags      |= IR_INSN_FLAG_RR_COPY | IR_INSN_FLAG_CLAMPING | IR_INSN_FLAG_SIGNEXT;
+        return node2;
     }
 }
 
@@ -175,30 +148,45 @@ static void rv_operand_to_reg(rv_profile_t const *profile, ir_insn_t *insn, size
 }
 
 
-// Register-register bitcast.
-static ir_insn_t *rv_isel_rr_bitcast(rv_profile_t const *profile, ir_insn_t *insn) {
+// Register-register copy/bitcast.
+static ir_insn_t *rv_isel_rr_copy(rv_profile_t const *profile, ir_insn_t *insn) {
     (void)profile;
     ir_insn_t *new_node = rv_emit_rr_copy(profile, IR_BEFORE_INSN(insn), insn->returns[0], insn->operands[0]);
     ir_insn_delete(insn);
     return new_node;
 }
 
-// Register-register mov.
-static ir_insn_t *rv_isel_rr_mov(rv_profile_t const *profile, ir_insn_t *insn) {
-    ir_operand_t operand = insn->operands[0];
-    ir_insn_t   *new_node;
-    if (ir_prim_is_float(rv_operand_prim(profile, operand))) {
-        fprintf(stderr, "TODO: rv_isel_rr_mov with float types\n");
-        return NULL;
-    } else {
-        new_node = rv_emit_int_cast(
-            profile,
-            IR_BEFORE_INSN(insn),
-            insn->returns[0],
-            insn->returns[0].dest_var->prim_type,
-            operand
-        );
-    }
+// Register-register sign extend.
+static ir_insn_t *rv_isel_rr_signext(rv_profile_t const *profile, ir_insn_t *insn) {
+    rv_operand_to_reg(profile, insn, 0);
+    int ret_bit = ir_prim_bits(insn->returns[0].dest_var->orig_prim_type);
+    int val_bit = ir_prim_bits(insn->operands[0].var->orig_prim_type);
+
+    ir_insn_t *new_node = rv_emit_rr_signext(
+        profile,
+        IR_BEFORE_INSN(insn),
+        insn->returns[0],
+        insn->operands[0],
+        ret_bit < val_bit ? ret_bit : val_bit
+    );
+
+    ir_insn_delete(insn);
+    return new_node;
+}
+
+// Register-register zero extend.
+static ir_insn_t *rv_isel_rr_zeroext(rv_profile_t const *profile, ir_insn_t *insn) {
+    rv_operand_to_reg(profile, insn, 0);
+    int ret_bit = ir_prim_bits(insn->returns[0].dest_var->orig_prim_type);
+    int val_bit = ir_prim_bits(insn->operands[0].var->orig_prim_type);
+
+    ir_insn_t *new_node = rv_emit_rr_zeroext(
+        profile,
+        IR_BEFORE_INSN(insn),
+        insn->returns[0],
+        insn->operands[0],
+        ret_bit < val_bit ? ret_bit : val_bit
+    );
 
     ir_insn_delete(insn);
     return new_node;
@@ -207,7 +195,7 @@ static ir_insn_t *rv_isel_rr_mov(rv_profile_t const *profile, ir_insn_t *insn) {
 // Constant mov.
 static ir_insn_t *rv_isel_const_mov(rv_profile_t const *profile, ir_insn_t *insn) {
     (void)profile;
-    ir_const_t const iconst = ir_trim_const(insn->operands[0].iconst);
+    ir_const_t const iconst = ir_trim_const(insn->operands[0].iconst, true);
 
     if (iconst.prim_type == IR_PRIM_f32 || iconst.prim_type == IR_PRIM_f64) {
         fprintf(stderr, "TODO: Emit constant for FP\n");
@@ -224,7 +212,7 @@ static ir_insn_t *rv_isel_const_mov(rv_profile_t const *profile, ir_insn_t *insn
 
 // Constant bitcast.
 static ir_insn_t *rv_isel_const_bitcast(rv_profile_t const *profile, ir_insn_t *insn) {
-    insn->operands[0].iconst = ir_cast(rv_retval_prim(profile, insn->returns[0]), insn->operands[0].iconst);
+    insn->operands[0].iconst = ir_cast(rv_retval_prim(profile, insn->returns[0]), insn->operands[0].iconst, true);
     return rv_isel_const_mov(profile, insn);
 }
 
@@ -286,24 +274,39 @@ static inline ir_insn_t *rv_isel_cmp_branch(rv_profile_t const *profile, ir_insn
 
     } else if (pred_insn->type == IR_INSN_EXPR2) {
         // ...or comparison expr2.
-        bool                is_signed = ir_prim_is_signed(ir_operand_prim(pred_insn->operands[0]));
         insn_proto_t const *proto;
         bool                swap;
         switch (pred_insn->op2) {
-            case IR_OP2_sgt: // blt rs2, rs1, dest
-                proto = is_signed ? &rv_insn_blt : &rv_insn_bltu;
+            case IR_OP2_sgtu: // bltu rs2, rs1, dest
+                proto = &rv_insn_bltu;
                 swap  = true;
                 break;
-            case IR_OP2_sle: // blt rs1, rs2, dest
-                proto = is_signed ? &rv_insn_blt : &rv_insn_bltu;
+            case IR_OP2_sleu: // bltu rs1, rs2, dest
+                proto = &rv_insn_bltu;
                 swap  = false;
                 break;
-            case IR_OP2_slt: // bge rs2, rs1, dest
-                proto = is_signed ? &rv_insn_bge : &rv_insn_bgeu;
+            case IR_OP2_sltu: // bgeu rs2, rs1, dest
+                proto = &rv_insn_bgeu;
                 swap  = true;
                 break;
-            case IR_OP2_sge: // bge rs1, rs2, dest
-                proto = is_signed ? &rv_insn_bge : &rv_insn_bgeu;
+            case IR_OP2_sgeu: // bgeu rs1, rs2, dest
+                proto = &rv_insn_bgeu;
+                swap  = false;
+                break;
+            case IR_OP2_sgts: // blt rs2, rs1, dest
+                proto = &rv_insn_blt;
+                swap  = true;
+                break;
+            case IR_OP2_sles: // blt rs1, rs2, dest
+                proto = &rv_insn_blt;
+                swap  = false;
+                break;
+            case IR_OP2_slts: // bge rs2, rs1, dest
+                proto = &rv_insn_bge;
+                swap  = true;
+                break;
+            case IR_OP2_sges: // bge rs1, rs2, dest
+                proto = &rv_insn_bge;
                 swap  = false;
                 break;
             case IR_OP2_seq: // beq rs1, rs2, dest
@@ -378,9 +381,8 @@ static inline ir_insn_t *rv_isel_expr2_ri(rv_profile_t const *profile, ir_insn_t
     if (iconst.prim_type == IR_PRIM_f32 || iconst.prim_type == IR_PRIM_f64 || ir_count_bits(iconst, true, false) > 12) {
         return NULL;
     }
-    iconst.prim_type = ir_prim_as_signed(iconst.prim_type);
 
-    bool op32 = profile->ext_enabled[RV_64] && (iconst.prim_type == IR_PRIM_s32 || iconst.prim_type == IR_PRIM_u32);
+    bool op32 = profile->ext_enabled[RV_64] && iconst.prim_type == IR_PRIM_i32;
 
     insn_proto_t const *proto;
     switch (insn->op2) {
@@ -393,13 +395,8 @@ static inline ir_insn_t *rv_isel_expr2_ri(rv_profile_t const *profile, ir_insn_t
         case IR_OP2_add:
         case IR_OP2_sub: proto = op32 ? &rv_insn_addiw : &rv_insn_addi; break;
         case IR_OP2_shl: proto = op32 ? &rv_insn_slliw : &rv_insn_slli; break;
-        case IR_OP2_shr:
-            if (ir_prim_is_signed(ir_operand_prim(insn->operands[0]))) {
-                proto = op32 ? &rv_insn_sraiw : &rv_insn_srai;
-            } else {
-                proto = op32 ? &rv_insn_srliw : &rv_insn_srli;
-            }
-            break;
+        case IR_OP2_shru: proto = op32 ? &rv_insn_srliw : &rv_insn_srli; break;
+        case IR_OP2_shrs: proto = op32 ? &rv_insn_sraiw : &rv_insn_srai; break;
         case IR_OP2_band: proto = &rv_insn_andi; break;
         case IR_OP2_bor: proto = &rv_insn_ori; break;
         case IR_OP2_bxor: proto = &rv_insn_xori; break;
@@ -424,7 +421,7 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t const *profile, ir_insn_t
         return NULL;
     }
 
-    if (insn->op2 == IR_OP2_sgt || insn->op2 == IR_OP2_sge) {
+    if (insn->op2 == IR_OP2_sgtu || insn->op2 == IR_OP2_sgeu || insn->op2 == IR_OP2_sgts || insn->op2 == IR_OP2_sges) {
         // Swap operands as RISC-V only has slt and an emulated sle.
         ir_operand_t tmp  = insn->operands[0];
         insn->operands[0] = insn->operands[1];
@@ -434,13 +431,9 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t const *profile, ir_insn_t
     for (size_t i = 0; i < 2; i++) {
         rv_operand_to_reg(profile, insn, i);
     }
-    bool op32
-        = profile->ext_enabled[RV_64]
-          && (ir_operand_prim(insn->operands[0]) == IR_PRIM_s32 || ir_operand_prim(insn->operands[0]) == IR_PRIM_u32);
-    bool is_signed
-        = ir_operand_prim(insn->operands[0]) == IR_PRIM_s32 || ir_operand_prim(insn->operands[0]) == IR_PRIM_s64;
+    bool op32 = profile->ext_enabled[RV_64] && ir_operand_prim(insn->operands[0]) == IR_PRIM_i32;
 
-    if (insn->op2 == IR_OP2_sle || insn->op2 == IR_OP2_sge) {
+    if (insn->op2 == IR_OP2_sleu || insn->op2 == IR_OP2_sgeu || insn->op2 == IR_OP2_sgts || insn->op2 == IR_OP2_sges) {
         // a <= b written as (b < a) ^ 1
         ir_var_t *tmp = ir_var_create(insn->code->func, ir_operand_prim(insn->operands[0]), NULL);
         // b < a
@@ -448,7 +441,7 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t const *profile, ir_insn_t
             IR_BEFORE_INSN(insn),
             true,
             IR_RETVAL_VAR(tmp),
-            &rv_insn_slt,
+            ir_op2_get_sign(insn->op2) == IR_SIGN_SIGNEXT ? &rv_insn_slt : &rv_insn_sltu,
             2,
             (ir_operand_t const[]){insn->operands[1], insn->operands[0]}
         );
@@ -498,8 +491,10 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t const *profile, ir_insn_t
 
     insn_proto_t const *proto;
     switch (insn->op2) {
-        case IR_OP2_sgt: // Operands have been swapped.
-        case IR_OP2_slt: proto = &rv_insn_slt; break;
+        case IR_OP2_sgtu: // Operands have been swapped.
+        case IR_OP2_sltu: proto = &rv_insn_sltu; break;
+        case IR_OP2_sgts: // Operands have been swapped.
+        case IR_OP2_slts: proto = &rv_insn_slt; break;
         case IR_OP2_add: proto = op32 ? &rv_insn_addw : &rv_insn_add; break;
         case IR_OP2_sub: proto = op32 ? &rv_insn_subw : &rv_insn_sub; break;
         case IR_OP2_mul:
@@ -508,34 +503,33 @@ static inline ir_insn_t *rv_isel_expr2_rr(rv_profile_t const *profile, ir_insn_t
             }
             proto = op32 ? &rv_insn_mulw : &rv_insn_mul;
             break;
-        case IR_OP2_div:
+        case IR_OP2_divu:
             if (!profile->ext_enabled[RV_EXT_M]) {
                 return NULL;
             }
-            if (is_signed) {
-                proto = op32 ? &rv_insn_divw : &rv_insn_div;
-            } else {
-                proto = op32 ? &rv_insn_divuw : &rv_insn_divu;
-            }
+            proto = op32 ? &rv_insn_divuw : &rv_insn_divu;
             break;
-        case IR_OP2_rem:
+        case IR_OP2_divs:
             if (!profile->ext_enabled[RV_EXT_M]) {
                 return NULL;
             }
-            if (is_signed) {
-                proto = op32 ? &rv_insn_remw : &rv_insn_rem;
-            } else {
-                proto = op32 ? &rv_insn_remuw : &rv_insn_remu;
+            proto = op32 ? &rv_insn_divw : &rv_insn_div;
+            break;
+        case IR_OP2_remu:
+            if (!profile->ext_enabled[RV_EXT_M]) {
+                return NULL;
             }
+            proto = op32 ? &rv_insn_remuw : &rv_insn_remu;
+            break;
+        case IR_OP2_rems:
+            if (!profile->ext_enabled[RV_EXT_M]) {
+                return NULL;
+            }
+            proto = op32 ? &rv_insn_remw : &rv_insn_rem;
             break;
         case IR_OP2_shl: proto = op32 ? &rv_insn_sllw : &rv_insn_sll; break;
-        case IR_OP2_shr:
-            if (ir_prim_is_signed(ir_operand_prim(insn->operands[0]))) {
-                proto = op32 ? &rv_insn_sraw : &rv_insn_sra;
-            } else {
-                proto = op32 ? &rv_insn_srlw : &rv_insn_srl;
-            }
-            break;
+        case IR_OP2_shru: proto = op32 ? &rv_insn_srlw : &rv_insn_srl; break;
+        case IR_OP2_shrs: proto = op32 ? &rv_insn_sraw : &rv_insn_sra; break;
         case IR_OP2_band: proto = &rv_insn_and; break;
         case IR_OP2_bor: proto = &rv_insn_or; break;
         case IR_OP2_bxor: proto = &rv_insn_xor; break;
@@ -631,7 +625,7 @@ static inline ir_insn_t *
         if (offset < 0) {
             lui++;
         }
-        ir_prim_t ptr_prim = IR_PRIM_s8 + profile->base.ptr_bits * 2;
+        ir_prim_t ptr_prim = IR_PRIM_i8 + (profile->base.ptr_bits - LILY_8_BITS);
         ir_var_t *tmp      = ir_var_create(ir_insn->code->func, ptr_prim, NULL);
         ir_add_mach_insn(
             IR_BEFORE_INSN(ir_insn),
@@ -750,31 +744,24 @@ static inline ir_insn_t *
 static inline ir_insn_t *rv_isel_mem(rv_profile_t const *profile, ir_insn_t *insn) {
     insn_proto_t const *lo12_proto;
     if (insn->type == IR_INSN_LOAD) {
+        bool sign = insn->operands[0].sign != IR_SIGN_ZEROEXT;
         switch (insn->operands[0].mem.data_type) {
-            case IR_PRIM_s8: lo12_proto = &rv_insn_lb; break;
             case IR_PRIM_bool:
-            case IR_PRIM_u8: lo12_proto = &rv_insn_lbu; break;
-            case IR_PRIM_s16: lo12_proto = &rv_insn_lh; break;
-            case IR_PRIM_u16: lo12_proto = &rv_insn_lhu; break;
-            case IR_PRIM_s32:
-            case IR_PRIM_u32: lo12_proto = &rv_insn_lw; break; // TODO: Support for `lwu` as an optimization.
-            case IR_PRIM_s64:
-            case IR_PRIM_u64: lo12_proto = &rv_insn_ld; break;
+            case IR_PRIM_i8: lo12_proto = sign ? &rv_insn_lb : &rv_insn_lbu; break;
+            case IR_PRIM_i16: lo12_proto = sign ? &rv_insn_lh : &rv_insn_lhu; break;
+            case IR_PRIM_i32: lo12_proto = sign || !profile->ext_enabled[RV_64] ? &rv_insn_lw : &rv_insn_lwu; break;
+            case IR_PRIM_i64: lo12_proto = &rv_insn_ld; break;
             // case IR_PRIM_f32: lo12_proto = &rv_insn_flw; break;
             // case IR_PRIM_f64: lo12_proto = &rv_insn_fld; break;
             default: return false;
         }
     } else if (insn->type == IR_INSN_STORE) {
         switch (insn->operands[0].mem.data_type) {
-            case IR_PRIM_s8:
             case IR_PRIM_bool:
-            case IR_PRIM_u8: lo12_proto = &rv_insn_sb; break;
-            case IR_PRIM_s16:
-            case IR_PRIM_u16: lo12_proto = &rv_insn_sh; break;
-            case IR_PRIM_s32:
-            case IR_PRIM_u32: lo12_proto = &rv_insn_sw; break;
-            case IR_PRIM_s64:
-            case IR_PRIM_u64: lo12_proto = &rv_insn_sd; break;
+            case IR_PRIM_i8: lo12_proto = &rv_insn_sb; break;
+            case IR_PRIM_i16: lo12_proto = &rv_insn_sh; break;
+            case IR_PRIM_i32: lo12_proto = &rv_insn_sw; break;
+            case IR_PRIM_i64: lo12_proto = &rv_insn_sd; break;
             // case IR_PRIM_f32: lo12_proto = &rv_insn_fsw; break;
             // case IR_PRIM_f64: lo12_proto = &rv_insn_fsd; break;
             default: return false;
@@ -821,26 +808,28 @@ static inline ir_insn_t *rv_isel_mem(rv_profile_t const *profile, ir_insn_t *ins
 ir_insn_t *rv_isel(backend_profile_t *base_profile, ir_insn_t *insn) {
     rv_profile_t const *profile = (void *)base_profile;
 
-    if (insn->type == IR_INSN_EXPR1 && (insn->op1 == IR_OP1_mov || insn->op1 == IR_OP1_bitcast)) {
-        assert(insn->operands[0].type != IR_OPERAND_TYPE_MEM);
+    if (insn->type == IR_INSN_EXPR1 && insn->returns[0].type == IR_RETVAL_TYPE_VAR) {
         if (insn->operands[0].type == IR_OPERAND_TYPE_CONST) {
-            if (insn->op1 == IR_OP1_bitcast || insn->returns[0].type == IR_RETVAL_TYPE_REG) {
-                // Constant bit-cast.
-                return rv_isel_const_bitcast(profile, insn);
-            } else {
-                // Constant mov.
-                return rv_isel_const_mov(profile, insn);
+            switch (insn->op1) {
+                case IR_OP1_signext:
+                case IR_OP1_zeroext:
+                case IR_OP1_mov: return rv_isel_const_mov(profile, insn);
+                case IR_OP1_bitcast: return rv_isel_const_bitcast(profile, insn);
+                default: break;
             }
-        } else {
-            if (insn->op1 == IR_OP1_bitcast || insn->returns[0].type == IR_RETVAL_TYPE_REG) {
-                // Register-register bitcast.
-                return rv_isel_rr_bitcast(profile, insn);
-            } else {
-                // Register-register mov.
-                return rv_isel_rr_mov(profile, insn);
+        } else if (insn->operands[0].type == IR_OPERAND_TYPE_REG) {
+            return rv_isel_rr_copy(profile, insn);
+        } else if (insn->operands[0].type == IR_OPERAND_TYPE_VAR) {
+            switch (insn->op1) {
+                case IR_OP1_signext: return rv_isel_rr_signext(profile, insn);
+                case IR_OP1_zeroext: return rv_isel_rr_zeroext(profile, insn);
+                case IR_OP1_mov:
+                case IR_OP1_bitcast: return rv_isel_rr_copy(profile, insn);
+                default: break;
             }
         }
-    } else if (insn->type == IR_INSN_JUMP) {
+    }
+    if (insn->type == IR_INSN_JUMP) {
         // Jump instruction.
         assert(insn->operands[0].mem.base_type == IR_MEMBASE_CODE);
         return rv_isel_jump(profile, insn);

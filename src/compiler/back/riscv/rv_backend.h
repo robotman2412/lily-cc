@@ -111,7 +111,9 @@ void               rv_postreg_pass(backend_profile_t *profile, ir_func_t *func);
 void               rv_postproc_pass(backend_profile_t *profile, ir_func_t *func);
 
 // Emit load for register spilling.
-void rv_spill_load(backend_profile_t *profile, ir_insnloc_t loc, ir_retval_t dest, ir_frame_t *frame, int64_t offset);
+void rv_spill_load(
+    backend_profile_t *profile, ir_insnloc_t loc, ir_retval_t dest, ir_frame_t *frame, int64_t offset, ir_sign_t sign
+);
 // Emit store for register spilling.
 void rv_spill_store(backend_profile_t *profile, ir_insnloc_t loc, ir_operand_t src, ir_frame_t *frame, int64_t offset);
 // Print directives before the function label.

@@ -187,17 +187,19 @@ static cir_expr_t *raw_cast(c_compiler_t *cc, pos_t pos, c_type_t type, cir_expr
         return NULL;
     }
 
+    bool is_signed = c_prim_is_sint(cc->options.char_is_signed, val->common.type.prim);
+
     if (val->tag == CIR_EXPR_VALUE && val->value->tag == CIR_VALUE_COMP_VALUE
         && val->value->scope_val->tag == CIR_SCOPE_VAL_ENUM_CONST) {
         ir_prim_t   dest_prim = c_type_to_ir_type(cc, type);
-        ir_const_t  iconst    = ir_cast(dest_prim, val->value->scope_val->enum_const->iconst);
+        ir_const_t  iconst    = ir_cast(dest_prim, val->value->scope_val->enum_const->iconst, is_signed);
         cir_expr_t *res       = cir_expr_create_value(cir_value_create_const(cir_const_create(pos, type.prim, iconst)));
         c_type_delete(type);
         cir_expr_delete(val);
         return res;
     } else if (val->tag == CIR_EXPR_VALUE && val->value->tag == CIR_VALUE_CONST && type.prim < C_PRIM_VOID) {
         ir_prim_t   dest_prim = c_type_to_ir_type(cc, type);
-        ir_const_t  iconst    = ir_cast(dest_prim, val->value->iconst->iconst);
+        ir_const_t  iconst    = ir_cast(dest_prim, val->value->iconst->iconst, is_signed);
         cir_expr_t *res       = cir_expr_create_value(cir_value_create_const(cir_const_create(pos, type.prim, iconst)));
         c_type_delete(type);
         cir_expr_delete(val);
@@ -256,7 +258,7 @@ static cir_expr_t *raw_calc(c_compiler_t *cc, pos_t pos, cir_calc_op_t op, cir_e
             iconst.constl    = lhs_b | rhs_b;
             iconst.consth    = 0;
         } else {
-            ir_op2_type_t ir_op = cir_calc_op_to_ir_op2(op);
+            ir_op2_type_t ir_op = cir_calc_op_to_ir_op2(op, c_prim_is_sint(cc->options.char_is_signed, type.prim));
             iconst              = ir_calc2(ir_op, lhs->value->iconst->iconst, rhs->value->iconst->iconst);
         }
 
@@ -537,12 +539,11 @@ cir_expr_t *c_compile_expr_index(c_compiler_t *cc, cir_scope_t *scope, c_ast_exp
             }
 
             ir_const_t ir_index = rhs->value->iconst->iconst;
-            ir_index.prim_type  = ir_prim_as_unsigned(ir_index.prim_type);
             ir_const_t bound    = {
                 .prim_type = ir_index.prim_type,
                 .const128  = ui128(type.extra->length),
             };
-            if (ir_calc2(IR_OP2_sge, ir_index, bound).constl) {
+            if (ir_calc2(IR_OP2_sgeu, ir_index, bound).constl) {
                 goto non_const_prop;
             }
 
@@ -1306,8 +1307,8 @@ static inline bool
     assert(index->value->tag == CIR_VALUE_CONST);
 
     ir_const_t ir_index = index->value->iconst->iconst;
-    if (ir_prim_is_signed(ir_index.prim_type)) {
-        i128_t s_index = ir_cast(IR_PRIM_s128, ir_index).const128;
+    if (c_prim_is_sint(cc->options.char_is_signed, index->common.type.prim)) {
+        i128_t s_index = ir_cast(IR_PRIM_i128, ir_index, true).const128;
         if (cmp128s(s_index, I128_ZERO) < 0) {
             char buf[40];
             itoa128(neg128(s_index), 0, buf);
@@ -1316,7 +1317,7 @@ static inline bool
             return false;
         }
     }
-    i128_t u_index = ir_cast(IR_PRIM_u128, ir_index).const128;
+    i128_t u_index = ir_cast(IR_PRIM_i128, ir_index, false).const128;
     if (cmp128u(u_index, ui128(field_type.extra->length)) > 0) {
         char buf[40];
         itoa128(u_index, 0, buf);
@@ -1749,7 +1750,7 @@ cir_expr_t *c_compile_compinit(
 // Helper that creates a synthetic integer constant.
 cir_expr_t *c_compile_synth_iconst(c_compiler_t *cc, pos_t pos, c_prim_t prim, i128_t value) {
     ir_prim_t  ir_prim  = c_type_to_ir_type(cc, C_TYPE_FROM_PRIM(prim));
-    ir_const_t ir_const = ir_cast(ir_prim, IR_CONST_S128(value));
+    ir_const_t ir_const = ir_cast(ir_prim, IR_CONST_S128(value), c_prim_is_sint(cc->options.char_is_signed, prim));
 
     cir_value_t *cir_value = cir_value_create_const(cir_const_create(pos, prim, ir_const));
 

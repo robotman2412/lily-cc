@@ -18,17 +18,17 @@ int main() {
     // clang-format off
     char const src[] =
     "function <test_ir_deserialize>\n"
-    "    var %a s32\n"
-    "    var %b s32\n"
+    "    var %a i32\n"
+    "    var %b i32\n"
     "    var %c bool\n"
     "    entry %code0\n"
     "code %code0\n"
-    "    %b = add %a, s32'-3\n"
+    "    %b = add %a, i32'-3\n"
     "    %c = seqz %b\n"
     "    branch (%code1), %c\n"
     "    return %b\n"
     "code %code1\n"
-    "    return s32'1\n"
+    "    return i32'1\n"
     ;
     // clang-format on
 

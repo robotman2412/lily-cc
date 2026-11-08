@@ -23,15 +23,15 @@ clang-tidy:
 
 .PHONY: test
 test: build
-	meson test -C build --print-errorlogs
+	meson test -C build --print-errorlogs $(TEST)
 
 .PHONY: valgrind-test
 valgrind-test: build
-	meson test -C build --print-errorlogs --setup valgrind
+	meson test -C build --print-errorlogs --setup valgrind $(TEST)
 
 .PHONY: gdb-test
 gdb-test: build
-	meson test -C build --print-errorlogs --gdb
+	meson test -C build --print-errorlogs --gdb $(TEST)
 
 .PHONY: clean
 clean:

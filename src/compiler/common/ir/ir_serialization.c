@@ -31,7 +31,7 @@
 
 // Serialize an IR constant.
 void ir_const_serialize(ir_const_t iconst, FILE *to) {
-    iconst = ir_trim_const(iconst);
+    iconst = ir_trim_const(iconst, false);
     if (iconst.prim_type == IR_PRIM_bool) {
         fputs(iconst.constl ? "true" : "false", to);
 
@@ -44,11 +44,11 @@ void ir_const_serialize(ir_const_t iconst, FILE *to) {
     } else {
         fputs(ir_prim_name[iconst.prim_type], to);
         fputc('\'', to);
-        uint8_t size = ir_prim_sizes[iconst.prim_type];
+        uint8_t size = ir_prim_size(iconst.prim_type);
 
         // Print decimal representation.
         i128_t u_val;
-        if (!(iconst.prim_type & 1) && iconst.consth >> 63) {
+        if (!eqzero128(shr128u(iconst.const128, ir_prim_bits(iconst.prim_type) - 1))) {
             // Negative number.
             u_val = neg128(iconst.const128);
             fputc('-', to);
@@ -225,9 +225,9 @@ void ir_func_serialize(ir_func_t const *func, backend_profile_t const *profile_o
 
     for (size_t i = 0; i < func->args_len; i++) {
         switch (func->args[i].arg_type) {
-            case IR_ARG_TYPE_VAR: fprintf(to, "    arg %%%s\n", func->args[i].var->name); break;
-            case IR_ARG_TYPE_STRUCT: fprintf(to, "    arg struct %%%s\n", func->args[i].struct_frame->name); break;
-            case IR_ARG_TYPE_IGNORED: fprintf(to, "    arg %s\n", ir_prim_name[func->args[i].ignored_prim]); break;
+            case IR_FUNCARG_TYPE_VAR: fprintf(to, "    arg %%%s\n", func->args[i].var->name); break;
+            case IR_FUNCARG_TYPE_STRUCT: fprintf(to, "    arg struct %%%s\n", func->args[i].struct_frame->name); break;
+            case IR_FUNCARG_TYPE_IGNORED: fprintf(to, "    arg %s\n", ir_prim_name[func->args[i].ignored_prim]); break;
         }
     }
 
@@ -271,7 +271,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
             default: UNREACHABLE();
             case IR_AST_VAR: {
                 claim_name(stmt->params[0]) {
-                    ir_var_create(func, stmt->params[1].subtype - IR_KEYW_s8 + IR_PRIM_s8, stmt->params[0].strval);
+                    ir_var_create(func, stmt->params[1].subtype - IR_KEYW_i8 + IR_PRIM_i8, stmt->params[0].strval);
                 }
             } break;
             case IR_AST_CODE: {
@@ -320,24 +320,30 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                 cur_code = map_get(&func->code_by_name, stmt->params[0].strval);
             } break;
             case IR_AST_STRUCT: {
-                ir_arg_t arg = {
-                    .arg_type     = IR_ARG_TYPE_STRUCT,
+                ir_funcarg_t arg = {
+                    .arg_type     = IR_FUNCARG_TYPE_STRUCT,
                     .struct_frame = get_by_name(frame, stmt->params[0]),
                 };
-                array_len_insert_strong(&func->args, sizeof(ir_arg_t), &func->args_len, &arg, func->args_len);
+                array_len_insert_strong(&func->args, sizeof(ir_funcarg_t), &func->args_len, &arg, func->args_len);
             } break;
             case IR_AST_ARG: {
                 if (stmt->params[0].type == TOKENTYPE_IDENT) {
-                    ir_arg_t arg = {.arg_type = IR_ARG_TYPE_VAR, .var = get_by_name(var, stmt->params[0])};
+                    ir_funcarg_t arg = {.arg_type = IR_FUNCARG_TYPE_VAR, .var = get_by_name(var, stmt->params[0])};
                     if (arg.var && arg.var->arg_index < 0) {
                         arg.var->arg_index = (ptrdiff_t)func->args_len;
-                        array_len_insert_strong(&func->args, sizeof(ir_arg_t), &func->args_len, &arg, func->args_len);
+                        array_len_insert_strong(
+                            &func->args,
+                            sizeof(ir_funcarg_t),
+                            &func->args_len,
+                            &arg,
+                            func->args_len
+                        );
                     }
                 } else {
-                    ir_arg_t arg
-                        = {.arg_type     = IR_ARG_TYPE_IGNORED,
-                           .ignored_prim = stmt->params[0].subtype - IR_KEYW_s8 + IR_PRIM_s8};
-                    array_len_insert_strong(&func->args, sizeof(ir_arg_t), &func->args_len, &arg, func->args_len);
+                    ir_funcarg_t arg
+                        = {.arg_type     = IR_FUNCARG_TYPE_IGNORED,
+                           .ignored_prim = stmt->params[0].subtype - IR_KEYW_i8 + IR_PRIM_i8};
+                    array_len_insert_strong(&func->args, sizeof(ir_funcarg_t), &func->args_len, &arg, func->args_len);
                 }
             } break;
             case IR_AST_ENTRY: {
@@ -395,7 +401,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                         if (operand_ast->params[0].type == TOKENTYPE_KEYWORD) {
                             // With a type.
                             nontype                = 1;
-                            operand->mem.data_type = operand_ast->params[0].subtype - IR_KEYW_s8 + IR_PRIM_s8;
+                            operand->mem.data_type = operand_ast->params[0].subtype - IR_KEYW_i8 + IR_PRIM_i8;
                         } else {
                             // Without a type.
                             operand->mem.data_type = IR_N_PRIM;
@@ -592,8 +598,8 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                         goto operand0_mem;
 
                     case IR_KEYW_memset:
-                        // Second operand must be either u8 or s8.
-                        if (ir_prim_as_unsigned(ir_operand_prim(operands[2])) != IR_PRIM_u8) {
+                        // Second operand must be i8.
+                        if (ir_operand_prim(operands[2]) != IR_PRIM_i8) {
                             cctx_diagnostic(
                                 from->cctx,
                                 stmt->params[2].params[2].pos,
@@ -645,10 +651,14 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                         }
                         break;
 
-                    case IR_KEYW_sgt:
-                    case IR_KEYW_sle:
-                    case IR_KEYW_sge:
-                    case IR_KEYW_slt:
+                    case IR_KEYW_sgtu:
+                    case IR_KEYW_sleu:
+                    case IR_KEYW_sgeu:
+                    case IR_KEYW_sltu:
+                    case IR_KEYW_sgts:
+                    case IR_KEYW_sles:
+                    case IR_KEYW_sges:
+                    case IR_KEYW_slts:
                     case IR_KEYW_seq:
                     case IR_KEYW_sne:
                     case IR_KEYW_seqz:
@@ -668,7 +678,8 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                         goto operand_nomem;
 
                     case IR_KEYW_shl:
-                    case IR_KEYW_shr:
+                    case IR_KEYW_shru:
+                    case IR_KEYW_shrs:
                     case IR_KEYW_band:
                     case IR_KEYW_bor:
                     case IR_KEYW_bxor:
@@ -690,8 +701,10 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                     case IR_KEYW_add:
                     case IR_KEYW_sub:
                     case IR_KEYW_mul:
-                    case IR_KEYW_div:
-                    case IR_KEYW_rem:
+                    case IR_KEYW_divu:
+                    case IR_KEYW_remu:
+                    case IR_KEYW_divs:
+                    case IR_KEYW_rems:
                     case IR_KEYW_neg:
                     operand_match:
                         // Operand must equal return type.
@@ -832,7 +845,7 @@ ir_func_t *ir_func_deserialize(tokenizer_t *from) {
                             ir_add_expr2(
                                 IR_APPEND(cur_code),
                                 returns[0],
-                                stmt->params[1].subtype - IR_KEYW_sgt + IR_OP2_sgt,
+                                stmt->params[1].subtype - IR_KEYW_sgtu + IR_OP2_sgtu,
                                 operands[0],
                                 operands[1]
                             );

@@ -223,7 +223,7 @@ cir_unit_t *c_compile_func(c_compiler_t *cc, cir_scope_t *scope, c_ast_def_func_
 static void
     c_compile_enum_body(c_compiler_t *cc, c_ast_enum_spec_t const *spec, cir_scope_t *scope, c_enum_type_t *comp) {
     vec_c_ast_enumvar_t const *body    = &spec->definition->items;
-    ir_prim_t const            ir_prim = cc->options.int32 ? IR_PRIM_s32 : IR_PRIM_s16;
+    ir_prim_t const            ir_prim = cc->options.int32 ? IR_PRIM_i32 : IR_PRIM_i16;
 
     // TODO: Packed enums support.
     comp->prim = C_PRIM_SINT;
@@ -243,14 +243,14 @@ static void
                 cir_expr_delete(res);
                 continue;
             }
-            cur = (int32_t)ir_cast(IR_PRIM_s32, res->value->iconst->iconst).constl;
+            cur = (int32_t)ir_cast(IR_PRIM_i32, res->value->iconst->iconst, true).constl;
             cir_expr_delete(res);
         }
         if (map_get(&scope->values, name->name)) {
             cctx_diagnostic(cc->cctx, name->pos, DIAG_ERR, "Redefinition of %s", name->name);
             continue;
         } else {
-            ir_const_t   ir_const = ir_cast(ir_prim, IR_CONST_S32(cur));
+            ir_const_t   ir_const = ir_cast(ir_prim, IR_CONST_S32(cur), true);
             cir_const_t *iconst   = cir_const_create(name->pos, C_PRIM_SINT, ir_const);
             cir_scope_add_enum_const(cc->cctx, scope, name->name, iconst);
 
@@ -824,9 +824,12 @@ c_type_opt_t c_compile_type(
                 }
 
                 // Check length bounds.
-                ir_const_t length = ir_trim_const(res->value->iconst->iconst);
+                bool       length_sign = c_prim_is_sint(cc->options.char_is_signed, res->common.type.prim);
+                ir_const_t length      = ir_trim_const(res->value->iconst->iconst, length_sign);
                 cir_expr_delete(res);
-                if (ir_calc2(IR_OP2_slt, length, (ir_const_t){.prim_type = length.prim_type, .constl = 0}).constl) {
+                if (length_sign
+                    && ir_calc2(IR_OP2_slts, length, (ir_const_t){.prim_type = length.prim_type, .const128 = I128_ZERO})
+                           .constl) {
                     char buf[40];
                     itoa128(neg128(length.const128), 0, buf);
                     cctx_diagnostic(
@@ -839,8 +842,12 @@ c_type_opt_t c_compile_type(
                     c_type_delete(cur);
                     return C_TYPE_INVALID;
                 } else if (
-                    length.prim_type >= IR_PRIM_u32
-                    && ir_calc2(IR_OP2_sgt, length, (ir_const_t){.prim_type = length.prim_type, .constl = INT32_MAX})
+                    length.prim_type >= IR_PRIM_i32
+                    && ir_calc2(
+                           IR_OP2_sgtu,
+                           length,
+                           (ir_const_t){.prim_type = length.prim_type, .const128 = i128(INT32_MAX)}
+                    )
                            .constl
                 ) {
                     char buf[40];
@@ -857,7 +864,7 @@ c_type_opt_t c_compile_type(
                     return C_TYPE_INVALID;
                 }
 
-                extra->length = (int32_t)ir_cast(IR_PRIM_s32, length).constl;
+                extra->length = (int32_t)ir_cast(IR_PRIM_i32, length, false).constl;
             } else {
                 extra->length = -1;
             }

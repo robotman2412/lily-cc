@@ -493,7 +493,9 @@ void rv_postproc_pass(backend_profile_t *profile, ir_func_t *func) {
 
 
 // Emit load for register spilling.
-void rv_spill_load(backend_profile_t *profile0, ir_insnloc_t loc, ir_retval_t dest, ir_frame_t *frame, int64_t offset) {
+void rv_spill_load(
+    backend_profile_t *profile0, ir_insnloc_t loc, ir_retval_t dest, ir_frame_t *frame, int64_t offset, ir_sign_t sign
+) {
     rv_profile_t       *profile = (void *)profile0;
     insn_proto_t const *op;
     ir_prim_t           prim;
@@ -501,20 +503,17 @@ void rv_spill_load(backend_profile_t *profile0, ir_insnloc_t loc, ir_retval_t de
         prim = dest.dest_var->orig_prim_type;
     } else {
         assert(dest.type == IR_RETVAL_TYPE_REG);
-        prim = profile->ext_enabled[RV_64] ? IR_PRIM_s64 : IR_PRIM_s32;
+        prim = profile->ext_enabled[RV_64] ? IR_PRIM_i64 : IR_PRIM_i32;
     }
     switch (prim) {
-        case IR_PRIM_s8: op = &rv_insn_lb; break;
-        case IR_PRIM_bool:
-        case IR_PRIM_u8: op = &rv_insn_lbu; break;
-        case IR_PRIM_s16: op = &rv_insn_lh; break;
-        case IR_PRIM_u16: op = &rv_insn_lhu; break;
-        case IR_PRIM_s32:
-        case IR_PRIM_u32: op = &rv_insn_lw; break;
-        case IR_PRIM_s64:
-        case IR_PRIM_u64: op = &rv_insn_ld; break;
-        // case IR_PRIM_s128:
-        // case IR_PRIM_u128:
+        case IR_PRIM_bool: op = &rv_insn_lbu; break;
+        case IR_PRIM_i8: op = sign == IR_SIGN_ZEROEXT ? &rv_insn_lbu : &rv_insn_lb; break;
+        case IR_PRIM_i16: op = sign == IR_SIGN_ZEROEXT ? &rv_insn_lhu : &rv_insn_lh; break;
+        case IR_PRIM_i32:
+            op = profile->ext_enabled[RV_64] && sign == IR_SIGN_ZEROEXT ? &rv_insn_lwu : &rv_insn_lw;
+            break;
+        case IR_PRIM_i64: op = &rv_insn_ld; break;
+        // case IR_PRIM_i128:
         // case IR_PRIM_f32:
         // case IR_PRIM_f64:
         default: UNREACHABLE();
@@ -542,18 +541,14 @@ void rv_spill_store(
         prim = src.var->orig_prim_type;
     } else {
         assert(src.type == IR_OPERAND_TYPE_REG);
-        prim = profile->ext_enabled[RV_64] ? IR_PRIM_s64 : IR_PRIM_s32;
+        prim = profile->ext_enabled[RV_64] ? IR_PRIM_i64 : IR_PRIM_i32;
     }
     switch (prim) {
-        case IR_PRIM_s8:
         case IR_PRIM_bool:
-        case IR_PRIM_u8: op = &rv_insn_sb; break;
-        case IR_PRIM_s16:
-        case IR_PRIM_u16: op = &rv_insn_sh; break;
-        case IR_PRIM_s32:
-        case IR_PRIM_u32: op = &rv_insn_sw; break;
-        case IR_PRIM_s64:
-        case IR_PRIM_u64: op = &rv_insn_sd; break;
+        case IR_PRIM_i8: op = &rv_insn_sb; break;
+        case IR_PRIM_i16: op = &rv_insn_sh; break;
+        case IR_PRIM_i32: op = &rv_insn_sw; break;
+        case IR_PRIM_i64: op = &rv_insn_sd; break;
         // case IR_PRIM_s128:
         // case IR_PRIM_u128:
         // case IR_PRIM_f32:

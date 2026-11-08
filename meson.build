@@ -16,6 +16,11 @@ project(
     ]
 )
 
+add_test_setup(
+    'valgrind',
+    exe_wrapper: ['valgrind', '--leak-check=yes', '--error-exitcode=133'],
+)
+
 add_global_arguments(
     '-Wno-type-limits', '-Wno-unused-function',
     '-Werror=all', '-Werror=enum-conversion', '-Werror=incompatible-pointer-types', '-Werror=implicit-fallthrough',

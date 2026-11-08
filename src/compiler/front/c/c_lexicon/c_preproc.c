@@ -1108,6 +1108,7 @@ static void c_directive_undef(c_preproc_t *pre, pos_t pos) {
     }
     map_remove(&pre->shared->macros, name.strval);
     c_macro_destroy(macro);
+    tkn_delete(name);
 }
 
 // Handle a preprocessor directive.

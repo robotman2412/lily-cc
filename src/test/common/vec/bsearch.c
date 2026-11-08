@@ -57,5 +57,7 @@ int main() {
     TEST_EXPECT_INT(res.index, 4u);
     TEST_ASSERT(res.found == false);
 
+    vec_clear(&vec);
+
     TEST_OK();
 }

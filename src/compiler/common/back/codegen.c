@@ -677,6 +677,7 @@ void codegen(backend_profile_t *profile, ir_func_t *func) {
     for (size_t i = 0; i < vars.len; i++) {
         cg_promote_var_1(profile, vars.arr[i]);
     }
+    vec_clear(&vars);
 
     // Convert from strict SSA to non-strict SSA by converting combinators into moves.
     func->enforce_ssa = false;

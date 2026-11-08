@@ -105,19 +105,19 @@ INLINE_MATH128 int cmp128s(i128_t lhs, i128_t rhs) {
 
 
 // Perform unsigned 128-bit right shift.
-INLINE_MATH128 i128_t shr128u(i128_t lhs, int rhs) {
+INLINE_MATH128 i128_t shr128u(i128_t lhs, unsigned int rhs) {
     rhs &= 127;
     return (i128_t){lhs.val >> rhs};
 }
 
 // Perform signed 128-bit right shift.
-INLINE_MATH128 i128_t shr128s(i128_t lhs, int rhs) {
+INLINE_MATH128 i128_t shr128s(i128_t lhs, unsigned int rhs) {
     rhs &= 127;
     return (i128_t){(__int128_t)lhs.val >> rhs};
 }
 
 // Perform 128-bit left shift.
-INLINE_MATH128 i128_t shl128(i128_t lhs, int rhs) {
+INLINE_MATH128 i128_t shl128(i128_t lhs, unsigned int rhs) {
     rhs &= 127;
     return (i128_t){lhs.val << rhs};
 }

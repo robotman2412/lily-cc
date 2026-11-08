@@ -126,7 +126,8 @@
 ## Generic codegen
 - Support
     - Implicit calls for unsupported arithmetic ✓
-    - Conversion of arithmetic to fit physical register sizes
+    - Conversion of arithmetic to fit physical register sizes ✓
+    - Big-endian targets
 - Generic optimizations
     - Function call inlining
     - Constant propagation ✓

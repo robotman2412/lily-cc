@@ -5,12 +5,19 @@
 
 #include "ir/ir_optimizer.h"
 
+#include "arith128.h"
 #include "assert.h"
 #include "ir.h"
 #include "ir/ir_interpreter.h"
+#include "ir_serialization.h"
 #include "ir_types.h"
 #include "list.h"
 #include "set.h"
+#include "unreachable.h"
+#include "vec.h"
+
+#include <stdint.h>
+#include <stdio.h>
 
 
 
@@ -36,6 +43,267 @@ bool ir_optimize(ir_func_t *func) {
 }
 
 
+
+static inline void mem2reg_replace_load(
+    ir_func_t *func, ir_insn_t *insn, ir_var_t *replacement, ir_prim_t replacement_type, unsigned int offset
+) {
+    ir_insnloc_t loc         = IR_AFTER_INSN(insn);
+    ir_sign_t    sign        = insn->operands[0].sign;
+    ir_prim_t    access_type = insn->operands[0].mem.data_type;
+
+    ir_var_t *shifted = replacement;
+    if (offset != 0) {
+        shifted          = ir_var_create(func, replacement_type, NULL);
+        ir_const_t shamt = {
+            .prim_type = replacement_type,
+            .const128  = ui128(offset * 8),
+        };
+        loc = IR_AFTER_INSN(
+            ir_add_expr2(loc, IR_RETVAL_VAR(shifted), IR_OP2_shru, IR_OPERAND_VAR(replacement), IR_OPERAND_CONST(shamt))
+        );
+    }
+
+    if (ir_prim_is_float(access_type)) {
+        ir_var_t *truncated = shifted;
+        if (ir_prim_size(replacement_type) != ir_prim_size(access_type)) {
+            truncated = ir_var_create(func, access_type == IR_PRIM_f64 ? IR_PRIM_i64 : IR_PRIM_i32, NULL);
+            loc = IR_AFTER_INSN(ir_add_expr1(loc, IR_RETVAL_VAR(truncated), IR_OP1_zeroext, IR_OPERAND_VAR(shifted)));
+        }
+
+        ir_add_expr1(loc, insn->returns[0], IR_OP1_bitcast, IR_OPERAND_VAR(truncated));
+    } else if (sign == IR_SIGN_SIGNEXT) {
+        ir_add_expr1(loc, insn->returns[0], IR_OP1_signext, IR_OPERAND_VAR(shifted));
+    } else {
+        ir_add_expr1(loc, insn->returns[0], IR_OP1_zeroext, IR_OPERAND_VAR(shifted));
+    }
+
+    ir_insn_delete(insn);
+}
+
+static inline void mem2reg_replace_store(
+    ir_func_t *func, ir_insn_t *insn, ir_var_t *replacement, ir_prim_t replacement_type, unsigned int offset
+) {
+    ir_insnloc_t loc         = IR_AFTER_INSN(insn);
+    ir_prim_t    access_type = insn->operands[0].mem.data_type;
+
+    // Convert into replacement format.
+    ir_operand_t cast = insn->operands[1];
+    if (ir_operand_prim(cast) != replacement_type) {
+        ir_var_t *tmpvar = ir_var_create(func, replacement_type, NULL);
+        if (ir_prim_is_float(ir_operand_prim(cast))) {
+            loc = IR_AFTER_INSN(ir_add_expr1(loc, IR_RETVAL_VAR(tmpvar), IR_OP1_bitcast, cast));
+        } else {
+            loc = IR_AFTER_INSN(ir_add_expr1(loc, IR_RETVAL_VAR(tmpvar), IR_OP1_zeroext, cast));
+        }
+        cast = IR_OPERAND_VAR(tmpvar);
+    }
+
+
+    if (offset != 0 || ir_prim_size(replacement_type) != ir_prim_size(access_type)) {
+        // Shift into place according to offset.
+        ir_operand_t shifted = cast;
+        if (offset != 0) {
+            ir_var_t  *tmpvar = ir_var_create(func, replacement_type, NULL);
+            ir_const_t shamt  = {
+                .prim_type = replacement_type,
+                .const128  = ui128(offset * 8),
+            };
+            loc = IR_AFTER_INSN(ir_add_expr2(loc, IR_RETVAL_VAR(tmpvar), IR_OP2_shl, cast, IR_OPERAND_CONST(shamt)));
+            shifted = IR_OPERAND_VAR(tmpvar);
+        }
+
+        // Masked store into replacement.
+        i128_t data_mask;
+        switch (access_type) {
+            case IR_PRIM_bool:
+            case IR_PRIM_i8: data_mask = ui128(0xffu); break;
+            case IR_PRIM_i16: data_mask = ui128(0xffffu); break;
+            case IR_PRIM_f32:
+            case IR_PRIM_i32: data_mask = ui128(0xffffffffu); break;
+            case IR_PRIM_f64:
+            case IR_PRIM_i64: data_mask = ui128(UINT64_MAX); break;
+            case IR_PRIM_i128: data_mask = UI128_MAX; break;
+            default: UNREACHABLE();
+        }
+        i128_t     cutout_mask = bneg128(shl128(data_mask, offset * 8));
+        ir_const_t mask        = {.prim_type = replacement_type, .const128 = cutout_mask};
+
+        loc = IR_AFTER_INSN(ir_add_expr2(
+            loc,
+            IR_RETVAL_VAR(replacement),
+            IR_OP2_band,
+            IR_OPERAND_VAR(replacement),
+            IR_OPERAND_CONST(mask)
+        ));
+        ir_add_expr2(loc, IR_RETVAL_VAR(replacement), IR_OP2_bor, IR_OPERAND_VAR(replacement), shifted);
+
+    } else {
+        // Direct store to replacement.
+        ir_add_expr1(loc, IR_RETVAL_VAR(replacement), IR_OP1_mov, cast);
+    }
+
+    ir_insn_delete(insn);
+}
+
+static bool mem2reg_frame(ir_func_t *func, ir_frame_t *frame) {
+    if (frame->ref_at.len == 0) {
+        // Nothing to change due to no instruction references.
+        return false;
+    }
+    if (frame->arg_index >= 0) {
+        // TODO: Could possibly be mem2reg'd with one store, but that requires a better algorithm.
+        return false;
+    }
+
+    ir_prim_t max_int = IR_PRIM_bool;
+    bool      has_int = false; // i8-i128 and bool, or offset != 0
+    bool      has_f32 = false;
+    bool      has_f64 = false;
+
+    // The minimum and maximum offsets (both inclusive) that would be accessed.
+    int64_t min_off = INT64_MAX;
+    int64_t max_off = INT64_MIN;
+
+    // Test for disqualifying references.
+    vec_ir_insn_t insns = VEC_INIT;
+    set_foreach(ir_insn_t, insn, &frame->ref_at) {
+        switch (insn->type) {
+            case IR_INSN_LOAD:
+            case IR_INSN_STORE: {
+                assert(
+                    insn->operands[0].type == IR_OPERAND_TYPE_MEM && insn->operands[0].mem.base_type == IR_MEMBASE_FRAME
+                );
+
+                // Calculate min/max offsets for load/store.
+                int64_t   offset = insn->operands[0].mem.offset;
+                ir_prim_t data   = insn->operands[0].mem.data_type;
+                int64_t   size   = ir_prim_size(data);
+                if (INT64_MAX - size + 1 <= offset) {
+                    // Offset would overflow.
+                    goto fail;
+                }
+                int64_t end_offset = offset - 1 + size;
+                if (min_off > offset) {
+                    min_off = offset;
+                }
+                if (max_off < end_offset) {
+                    max_off = end_offset;
+                }
+
+                // Loads/stores can be replaced automatically.
+                if (ir_prim_is_integer(data) || data == IR_PRIM_bool) {
+                    if (ir_prim_bits(max_int) < ir_prim_bits(data)) {
+                        max_int = data;
+                    }
+                    has_int = true;
+                } else if (data == IR_PRIM_f32) {
+                    has_f32 = true;
+                } else if (data == IR_PRIM_f64) {
+                    has_f64 = true;
+                } else {
+                    fflush(stdout);
+                    fprintf(stderr, "BUG: Load/store instruction has no data type:\n    ");
+                    ir_insn_serialize(insn, NULL, stderr);
+                    fprintf(stderr, "\n");
+                    abort();
+                }
+                vec_push(&insns, insn);
+            } break;
+            default:
+                // Anything else, especially `lea`, cannot be replaced automatically.
+                // TODO: Operations such as `memset`, `memcpy` and `call` can be replaced in certain circumstances.
+                goto fail;
+        }
+    }
+
+    /*
+    Together, `has_*`, `min_off` and `max_off` determine what primitive type the replacement variable is.
+
+    If `min_off` != `max_off`, then the smallest integer type that will fit it is used.
+    If `i128` can't store it, then mem2reg is aborted.
+
+    Otherwise, if `has_int`, then the largest integer type loaded/stored is used.
+
+    Otherwise, if `has_f64`, then `f64` is used.
+
+    Otherwise, if `has_f32`, then `f32` is used.
+
+    Otherwise, an assertion is raised as having no data types is a precondition violation on load/store.
+    */
+    ir_prim_t replacement_type;
+    if (max_off > min_off + 15) {
+        goto fail; // Size too large to optimize.
+    }
+    uint64_t size = max_off - min_off + 1;
+    if (min_off != max_off) {
+        if (size == 2) {
+            replacement_type = IR_PRIM_i16;
+        } else if (size <= 4) {
+            replacement_type = IR_PRIM_i32;
+        } else if (size <= 4) {
+            replacement_type = IR_PRIM_i64;
+        } else {
+            replacement_type = IR_PRIM_i128;
+        }
+    } else if (has_int) {
+        replacement_type = max_int;
+    } else if (has_f64) {
+        replacement_type = IR_PRIM_f64;
+    } else if (has_f32) {
+        replacement_type = IR_PRIM_f32;
+    } else {
+        UNREACHABLE();
+    }
+
+    ir_var_t *replacement = ir_var_create(func, replacement_type, NULL);
+
+    // Commence mem2reg of all loads and stores.
+    // TODO: There is no proper handling for big-endian values in the load/store replacement helpers.
+    for (size_t i = 0; i < insns.len; i++) {
+        ir_insn_t *insn = insns.arr[i];
+        switch (insn->type) {
+            case IR_INSN_LOAD:
+                mem2reg_replace_load(func, insn, replacement, replacement_type, insn->operands[0].mem.offset - min_off);
+                break;
+            case IR_INSN_STORE:
+                mem2reg_replace_store(
+                    func,
+                    insn,
+                    replacement,
+                    replacement_type,
+                    insn->operands[0].mem.offset - min_off
+                );
+                break;
+            default: UNREACHABLE();
+        }
+    }
+    vec_clear(&insns);
+    return true;
+
+fail:
+    vec_clear(&insns);
+    return false;
+}
+
+// Optimization: Replace trivial stack frame accesses with copy instructions.
+// Returns whether any code was changed.
+bool opt_mem2reg(ir_func_t *func) {
+    assert(func->enforce_ssa);
+    func->enforce_ssa = false; // The replacement variables could cause non-SSA code.
+
+    bool changed = false;
+    dlist_foreach_node(ir_frame_t, frame, &func->frames_list) {
+        changed |= mem2reg_frame(func, frame);
+    }
+
+    if (changed) {
+        ir_func_to_ssa(func); // Fix replacement variables back into SSA form.
+    } else {
+        func->enforce_ssa = true;
+    }
+
+    return changed;
+}
 
 // Try to strength-reduce a single expression.
 static bool strength_reduce_expr(ir_insn_t *expr) {
@@ -218,37 +486,11 @@ bool opt_unused_vars(ir_func_t *func) {
 // Optimization: Delete unused stack frames.
 // Returns whether any frames were deleted.
 bool opt_unused_frames(ir_func_t *func) {
-    dlist_foreach_node(ir_frame_t, frame, &func->frames_list) {
-        frame->visited = false;
-    }
-
-    dlist_foreach_node(ir_code_t, code, &func->code_list) {
-        dlist_foreach_node(ir_insn_t, insn, &code->insns) {
-            if (insn->type == IR_INSN_COMBINATOR) {
-                continue;
-            }
-            for (size_t i = 0; i < insn->returns_len; i++) {
-                if (insn->returns[i].type == IR_RETVAL_TYPE_STRUCT) {
-                    insn->returns[i].dest_struct->visited = true;
-                }
-            }
-            for (size_t i = 0; i < insn->operands_len; i++) {
-                if (insn->operands[i].type == IR_OPERAND_TYPE_STRUCT) {
-                    insn->operands[i].struct_frame->visited = true;
-                } else if (
-                    insn->operands[i].type == IR_OPERAND_TYPE_MEM && insn->operands[i].mem.base_type == IR_MEMBASE_FRAME
-                ) {
-                    insn->operands[i].mem.base_frame->visited = true;
-                }
-            }
-        }
-    }
-
     bool        deleted = false;
     ir_frame_t *frame   = (ir_frame_t *)func->frames_list.head;
     while (frame) {
         ir_frame_t *next = (ir_frame_t *)frame->node.next;
-        if (!frame->visited) {
+        if (!frame->ref_at.len && frame->arg_index < 0) {
             ir_frame_delete(frame);
             deleted = true;
         }

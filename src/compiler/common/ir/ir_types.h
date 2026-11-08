@@ -27,33 +27,33 @@ typedef enum __attribute__((packed)) {
 } ir_prim_t;
 
 // Number of bits (exluding padding) per IR type.
-__attribute__((const)) static inline int ir_prim_bits(ir_prim_t prim) {
+__attribute__((const)) static inline unsigned int ir_prim_bits(ir_prim_t prim) {
     switch (prim) {
-        case IR_PRIM_i8: return 8;
-        case IR_PRIM_i16: return 16;
-        case IR_PRIM_i32: return 32;
-        case IR_PRIM_i64: return 64;
-        case IR_PRIM_i128: return 128;
-        case IR_PRIM_bool: return 1;
-        case IR_PRIM_f32: return 32;
-        case IR_PRIM_f64: return 64;
+        case IR_PRIM_i8: return 8u;
+        case IR_PRIM_i16: return 16u;
+        case IR_PRIM_i32: return 32u;
+        case IR_PRIM_i64: return 64u;
+        case IR_PRIM_i128: return 128u;
+        case IR_PRIM_bool: return 1u;
+        case IR_PRIM_f32: return 32u;
+        case IR_PRIM_f64: return 64u;
         case IR_N_PRIM: UNREACHABLE();
     }
     UNREACHABLE();
 }
 
 // Number of bits (exluding padding) per IR type.
-__attribute__((const)) static inline size_t ir_prim_size(ir_prim_t prim) {
+__attribute__((const)) static inline unsigned int ir_prim_size(ir_prim_t prim) {
     switch (prim) {
-        case IR_PRIM_i8: return 1;
-        case IR_PRIM_i16: return 2;
-        case IR_PRIM_i32: return 4;
-        case IR_PRIM_i64: return 8;
-        case IR_PRIM_i128: return 16;
-        case IR_PRIM_bool: return 1;
-        case IR_PRIM_f32: return 4;
-        case IR_PRIM_f64: return 8;
-        case IR_N_PRIM: return 0;
+        case IR_PRIM_i8: return 1u;
+        case IR_PRIM_i16: return 2u;
+        case IR_PRIM_i32: return 4u;
+        case IR_PRIM_i64: return 8u;
+        case IR_PRIM_i128: return 16u;
+        case IR_PRIM_bool: return 1u;
+        case IR_PRIM_f32: return 4u;
+        case IR_PRIM_f64: return 8u;
+        case IR_N_PRIM: return 0u;
     }
     UNREACHABLE();
 }
@@ -117,6 +117,19 @@ __attribute__((const)) static inline bool ir_prim_is_integer(ir_prim_t prim) {
         case IR_PRIM_i32:
         case IR_PRIM_i64:
         case IR_PRIM_i128: return true;
+        default: return false;
+    }
+}
+
+// Whether a primitive is of integer or boolean type.
+__attribute__((const)) static inline bool ir_prim_is_integer_or_bool(ir_prim_t prim) {
+    switch (prim) {
+        case IR_PRIM_i8:
+        case IR_PRIM_i16:
+        case IR_PRIM_i32:
+        case IR_PRIM_i64:
+        case IR_PRIM_i128:
+        case IR_PRIM_bool: return true;
         default: return false;
     }
 }
@@ -334,6 +347,7 @@ typedef uint16_t             regno_t;
 
 VEC_TYPE_DEF(vec_ir_operand_t, ir_operand_t);
 VEC_TYPE_DEF(vec_ir_frame_t, ir_frame_t *);
+VEC_TYPE_DEF(vec_ir_insn_t, ir_insn_t *);
 VEC_TYPE_DEF(vec_ir_var_t, ir_var_t *);
 
 // No register assigned.
@@ -348,18 +362,22 @@ VEC_TYPE_DEF(vec_ir_var_t, ir_var_t *);
 struct ir_frame {
     // Function's frames list node.
     dlist_node_t node;
+    // Is one of this function's args and if so, which.
+    ptrdiff_t    arg_index;
+    // Instructions referencing this frame.
+    set_t        ref_at;
     // Frame name.
     char        *name;
     // Parent function.
     ir_func_t   *func;
-    // Flags (e.g. is a call frame).
-    uint32_t     flags;
     // Frame alignment.
     uint64_t     align;
     // Frame size.
     uint64_t     size;
     // Offset from frame pointer (stack pointer on function entry).
     uint64_t     offset;
+    // Flags (e.g. is a call frame).
+    uint32_t     flags;
     bool         visited;
 };
 

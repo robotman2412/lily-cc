@@ -21,6 +21,9 @@ void test_failure_context(char const *fmt, ...) __attribute__((format(printf, 1,
 
 
 
+#define TEST__FORMAT_IF_PRESENT(first, ...)     first
+#define TEST__FORMATARGS_IF_PRESENT(first, ...) __VA_OPT__(, ) __VA_ARGS__
+
 #define TEST_OK()                                                                                                      \
     do {                                                                                                               \
         return 0;                                                                                                      \
@@ -34,8 +37,8 @@ void test_failure_context(char const *fmt, ...) __attribute__((format(printf, 1,
 
 #define TEST_ASSERT(expr, ...)                                                                                         \
     do {                                                                                                               \
-        __auto_type value = (expr);                                                                                    \
-        if (!value) {                                                                                                  \
+        __auto_type test_assert_rc_ = (expr);                                                                          \
+        if (!test_assert_rc_) {                                                                                        \
             test_failure_message(__FILE_NAME__, __LINE__, #expr, "" __VA_ARGS__);                                      \
             return 1;                                                                                                  \
         }                                                                                                              \
@@ -43,12 +46,22 @@ void test_failure_context(char const *fmt, ...) __attribute__((format(printf, 1,
 
 #define TEST_COMPARE_(lhs_, compar, rhs_, fmt_cast, fmt_spec, fmt_spec_alt, ...)                                       \
     do {                                                                                                               \
-        __auto_type lhs = (lhs_);                                                                                      \
-        __auto_type rhs = (rhs_);                                                                                      \
-        if (!(lhs compar rhs)) {                                                                                       \
+        __auto_type test_compare_lhs_ = (lhs_);                                                                        \
+        __auto_type test_compare_rhs_ = (rhs_);                                                                        \
+        if (!(test_compare_lhs_ compar test_compare_rhs_)) {                                                           \
             test_failure_message(__FILE_NAME__, __LINE__, #lhs_ " " #compar " " #rhs_, "" __VA_ARGS__);                \
-            test_failure_context(#lhs_ ": " fmt_spec " (" fmt_spec_alt ")", fmt_cast lhs, fmt_cast lhs);               \
-            test_failure_context(#rhs_ ": " fmt_spec " (" fmt_spec_alt ")", fmt_cast rhs, fmt_cast rhs);               \
+            test_failure_context(                                                                                      \
+                "%s: " fmt_spec " (" fmt_spec_alt ")",                                                                 \
+                #lhs_,                                                                                                 \
+                fmt_cast test_compare_lhs_,                                                                            \
+                fmt_cast test_compare_lhs_                                                                             \
+            );                                                                                                         \
+            test_failure_context(                                                                                      \
+                "%s: " fmt_spec " (" fmt_spec_alt ")",                                                                 \
+                #rhs_,                                                                                                 \
+                fmt_cast test_compare_rhs_,                                                                            \
+                fmt_cast test_compare_rhs_                                                                             \
+            );                                                                                                         \
             return 1;                                                                                                  \
         }                                                                                                              \
     } while (0)
@@ -68,13 +81,13 @@ void test_failure_context(char const *fmt, ...) __attribute__((format(printf, 1,
 #define TEST_EXPECT_STR(lhs_, rhs_, ...)                                                                               \
     do {                                                                                                               \
         extern int  strcmp(char const *, char const *);                                                                \
-        __auto_type lhs        = (lhs_);                                                                               \
-        __auto_type rhs        = (rhs_);                                                                               \
-        int         difference = strcmp(lhs, rhs);                                                                     \
-        if (difference != 0) {                                                                                         \
+        __auto_type text_expect_str_lhs_ = (lhs_);                                                                     \
+        __auto_type text_expect_str_rhs_ = (rhs_);                                                                     \
+        int         test_expect_str_rc_  = strcmp(text_expect_str_lhs_, text_expect_str_rhs_);                         \
+        if (test_expect_str_rc_ != 0) {                                                                                \
             test_failure_message(__FILE_NAME__, __LINE__, "strcmp(" #lhs_ ", " #rhs_ ") == 0", "" __VA_ARGS__);        \
-            test_failure_context(#lhs_ ": %s", lhs);                                                                   \
-            test_failure_context(#rhs_ ": %s", rhs);                                                                   \
+            test_failure_context(#lhs_ ": %s", text_expect_str_lhs_);                                                  \
+            test_failure_context(#rhs_ ": %s", text_expect_str_rhs_);                                                  \
             return 1;                                                                                                  \
         }                                                                                                              \
     } while (0)
@@ -82,19 +95,20 @@ void test_failure_context(char const *fmt, ...) __attribute__((format(printf, 1,
 #define TEST_EXPECT_STR_L(lhs_, lhs_len_, rhs_, rhs_len_, ...)                                                         \
     do {                                                                                                               \
         extern int  memcmp(void const *, void const *, unsigned long);                                                 \
-        __auto_type lhs     = (lhs_);                                                                                  \
-        __auto_type lhs_len = (lhs_len_);                                                                              \
-        __auto_type rhs     = (rhs_);                                                                                  \
-        __auto_type rhs_len = (rhs_len_);                                                                              \
-        if (lhs_len != rhs_len || memcmp(lhs, rhs, lhs_len) != 0) {                                                    \
+        __auto_type test_expect_str_l_lhs_     = (lhs_);                                                               \
+        __auto_type test_expect_str_l_lhs_len_ = (lhs_len_);                                                           \
+        __auto_type test_expect_str_l_rhs_     = (rhs_);                                                               \
+        __auto_type test_expect_str_l_rhs_len_ = (rhs_len_);                                                           \
+        if (test_expect_str_l_lhs_len_ != test_expect_str_l_rhs_len_                                                   \
+            || memcmp(test_expect_str_l_lhs_, test_expect_str_l_rhs_, test_expect_str_l_lhs_len_) != 0) {              \
             test_failure_message(                                                                                      \
                 __FILE_NAME__,                                                                                         \
                 __LINE__,                                                                                              \
-                "memcmp(" #lhs_ ", " #rhs_ ", " #lhs_len_ ") == 0",                                                    \
+                #lhs_len_ " == " #rhs_len_ " && memcmp(" #lhs_ ", " #rhs_ ", " #lhs_len_ ") == 0",                     \
                 "" __VA_ARGS__                                                                                         \
             );                                                                                                         \
-            test_failure_context(#lhs_ ": %.*s", (int)lhs_len, lhs);                                                   \
-            test_failure_context(#rhs_ ": %.*s", (int)rhs_len, rhs);                                                   \
+            test_failure_context(#lhs_ ": %.*s", (int)test_expect_str_l_lhs_len_, test_expect_str_l_lhs_);             \
+            test_failure_context(#rhs_ ": %.*s", (int)test_expect_str_l_rhs_len_, test_expect_str_l_rhs_);             \
             return 1;                                                                                                  \
         }                                                                                                              \
     } while (0)

@@ -13,6 +13,9 @@
 // Returns whether any code was changed.
 bool ir_optimize(ir_func_t *func);
 
+// Optimization: Replace trivial stack frame accesses with copy instructions.
+// Returns whether any code was changed.
+bool opt_mem2reg(ir_func_t *func);
 // Optimization: Strength reduction; replaces expensive with cheaper arithmetic where available.
 bool opt_strength_reduce(ir_func_t *func);
 // Optimization: Delete all variables and assignments to them whose value is never read.

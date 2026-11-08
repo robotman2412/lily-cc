@@ -41,6 +41,7 @@ test_components = {
             'ir/deserialize',
             'ir/append',
             'ir/to_ssa',
+            'ir/mem2reg',
             'set/basic',
             'set/multiset',
             'set/large_set',

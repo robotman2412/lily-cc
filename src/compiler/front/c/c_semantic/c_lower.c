@@ -388,12 +388,20 @@ c_lower_expr_t c_lower_expr_cast(c_compiler_t *cc, ir_code_t *code, c_lower_scop
             return res;
         }
 
-        ir_var_t *cast = ir_var_create(code->func, cast_prim, NULL);
-        ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(cast), IR_OP1_mov, res.val);
+        ir_var_t     *tmpvar = ir_var_create(code->func, cast_prim, NULL);
+        ir_op1_type_t op1;
+        if (c_type_is_identical(cast->common.type, cast->value->common.type, false)) {
+            op1 = IR_OP1_mov;
+        } else if (c_prim_is_sint(cc->options.char_is_signed, cast->value->common.type.prim)) {
+            op1 = IR_OP1_signext;
+        } else {
+            op1 = IR_OP1_zeroext;
+        }
+        ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(tmpvar), op1, res.val);
 
         return (c_lower_expr_t){
             .code = code,
-            .val  = IR_OPERAND_VAR(cast),
+            .val  = IR_OPERAND_VAR(tmpvar),
         };
     }
 
@@ -539,7 +547,7 @@ static c_lower_expr_t
 
     // Branch if lhs-dominated.
     ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(ltmp), is_land ? IR_OP1_seqz : IR_OP1_snez, lhs.val);
-    ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(res), IR_OP1_mov, IR_OPERAND_CONST(IR_CONST_BOOL(is_land ? 0 : 1)));
+    ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(res), IR_OP1_zeroext, IR_OPERAND_CONST(IR_CONST_BOOL(is_land ? 0 : 1)));
     ir_add_branch(IR_APPEND(code), IR_OPERAND_VAR(ltmp), out);
     ir_add_jump(IR_APPEND(code), rdom); // If not, evaluate rhs.
 
@@ -550,7 +558,7 @@ static c_lower_expr_t
 
     // Rhs-dominated.
     ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(rtmp), IR_OP1_snez, rhs.val);
-    ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(res), IR_OP1_mov, IR_OPERAND_VAR(rtmp));
+    ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(res), IR_OP1_zeroext, IR_OPERAND_VAR(rtmp));
     ir_add_jump(IR_APPEND(code), out);
 
     return (c_lower_expr_t){
@@ -605,7 +613,7 @@ c_lower_expr_t c_lower_expr_calc(c_compiler_t *cc, ir_code_t *code, c_lower_scop
             {
                 ir_var_t *tmp = ir_var_create(code->func, IR_PRIM_bool, NULL);
                 ir_add_expr2(IR_APPEND(code), IR_RETVAL_VAR(tmp), oper, lhs.val, rhs.val);
-                ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(res), IR_OP1_mov, IR_OPERAND_VAR(tmp));
+                ir_add_expr1(IR_APPEND(code), IR_RETVAL_VAR(res), IR_OP1_zeroext, IR_OPERAND_VAR(tmp));
             }
             break;
     }
@@ -643,6 +651,7 @@ c_lower_expr_t
                     .val  = IR_OPERAND_VAR(res.val.mem.base_var),
                 };
             }
+            break;
         default: break;
     }
 

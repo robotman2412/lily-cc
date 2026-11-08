@@ -73,7 +73,9 @@ static void cg_isel(backend_profile_t *profile, ir_code_t *code) {
                 fprintf(stderr, "`\n");
                 set_t vars = PTR_SET_EMPTY;
                 for (size_t i = 0; i < cur->returns_len; i++) {
-                    set_add(&vars, cur->returns[i].dest_var);
+                    if (cur->returns[i].type == IR_RETVAL_TYPE_VAR) {
+                        set_add(&vars, cur->returns[i].dest_var);
+                    }
                 }
                 for (size_t i = 0; i < cur->operands_len; i++) {
                     if (cur->operands[i].type == IR_OPERAND_TYPE_VAR) {
@@ -555,9 +557,10 @@ static void cg_promote_var_1(backend_profile_t *profile, ir_var_t *orig) {
             case IR_INSN_CALLFRAME_ENTER: // Impossible; do not have (integer) operands.
             case IR_INSN_CALLFRAME_EXIT:
             case IR_INSN_JUMP:
-            case IR_INSN_BRANCH: break;
-            case IR_INSN_MACHINE: // These instructions should not exist at this stage.
-            case IR_INSN_CLOBBER:
+            case IR_INSN_BRANCH:
+            case IR_INSN_MACHINE: // Should in theory only be the `call` and `ret` instructions.
+                break;
+            case IR_INSN_CLOBBER: // These instructions should not exist at this stage.
             case IR_INSN_MARK_USED:
             case IR_INSN_EPILOGUE: UNREACHABLE();
         }

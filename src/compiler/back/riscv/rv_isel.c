@@ -66,9 +66,9 @@ static ir_insn_t *rv_emit_rr_copy(rv_profile_t const *profile, ir_insnloc_t loc,
 }
 
 static ir_insn_t *rv_emit_rr_zeroext(
-    rv_profile_t const *profile, ir_insnloc_t loc, ir_retval_t dest, ir_operand_t src, int dest_bit
+    rv_profile_t const *profile, ir_insnloc_t loc, ir_retval_t dest, ir_operand_t src, unsigned int dest_bit
 ) {
-    int xlen = profile->ext_enabled[RV_64] ? 64 : 32;
+    unsigned int xlen = profile->ext_enabled[RV_64] ? 64 : 32;
     if (dest_bit == xlen) {
         // mv dest, src
         ir_insn_t *node  = rv_add_mv(loc, dest, src);
@@ -87,9 +87,9 @@ static ir_insn_t *rv_emit_rr_zeroext(
     } else {
         ir_var_t  *tmpvar  = ir_var_create(ir_insnloc_code(loc)->func, ir_operand_prim(src), NULL);
         // slli tmp, src, XLEN - dest_bit
-        ir_insn_t *node1   = rv_add_slli(loc, IR_RETVAL_VAR(tmpvar), src, xlen - dest_bit);
+        ir_insn_t *node1   = rv_add_slli(loc, IR_RETVAL_VAR(tmpvar), src, (int)(xlen - dest_bit));
         loc                = IR_AFTER_INSN(node1);
-        ir_insn_t *node2   = rv_add_srli(loc, dest, IR_OPERAND_VAR(tmpvar), xlen - dest_bit);
+        ir_insn_t *node2   = rv_add_srli(loc, dest, IR_OPERAND_VAR(tmpvar), (int)(xlen - dest_bit));
         // srli dest, tmp, XLEN - dest_bit
         node1->flags      |= IR_INSN_FLAG_RR_COPY | IR_INSN_FLAG_CLAMPING | IR_INSN_FLAG_ZEROEXT;
         node2->flags      |= IR_INSN_FLAG_RR_COPY | IR_INSN_FLAG_CLAMPING | IR_INSN_FLAG_ZEROEXT;
@@ -98,9 +98,9 @@ static ir_insn_t *rv_emit_rr_zeroext(
 }
 
 static ir_insn_t *rv_emit_rr_signext(
-    rv_profile_t const *profile, ir_insnloc_t loc, ir_retval_t dest, ir_operand_t src, int dest_bit
+    rv_profile_t const *profile, ir_insnloc_t loc, ir_retval_t dest, ir_operand_t src, unsigned int dest_bit
 ) {
-    int xlen = profile->ext_enabled[RV_64] ? 64 : 32;
+    unsigned int xlen = profile->ext_enabled[RV_64] ? 64 : 32;
     if (dest_bit == xlen) {
         // mv dest, src
         ir_insn_t *node  = rv_add_mv(loc, dest, src);
@@ -114,9 +114,9 @@ static ir_insn_t *rv_emit_rr_signext(
     } else {
         ir_var_t  *tmpvar  = ir_var_create(ir_insnloc_code(loc)->func, ir_operand_prim(src), NULL);
         // slli tmp, src, XLEN - dest_bit
-        ir_insn_t *node1   = rv_add_slli(loc, IR_RETVAL_VAR(tmpvar), src, xlen - dest_bit);
+        ir_insn_t *node1   = rv_add_slli(loc, IR_RETVAL_VAR(tmpvar), src, (int)(xlen - dest_bit));
         loc                = IR_AFTER_INSN(node1);
-        ir_insn_t *node2   = rv_add_srai(loc, dest, IR_OPERAND_VAR(tmpvar), xlen - dest_bit);
+        ir_insn_t *node2   = rv_add_srai(loc, dest, IR_OPERAND_VAR(tmpvar), (int)(xlen - dest_bit));
         // srai dest, tmp, XLEN - dest_bit
         node1->flags      |= IR_INSN_FLAG_RR_COPY | IR_INSN_FLAG_CLAMPING | IR_INSN_FLAG_SIGNEXT;
         node2->flags      |= IR_INSN_FLAG_RR_COPY | IR_INSN_FLAG_CLAMPING | IR_INSN_FLAG_SIGNEXT;
@@ -158,9 +158,13 @@ static ir_insn_t *rv_isel_rr_copy(rv_profile_t const *profile, ir_insn_t *insn) 
 
 // Register-register sign extend.
 static ir_insn_t *rv_isel_rr_signext(rv_profile_t const *profile, ir_insn_t *insn) {
+    if (insn->returns[0].type != IR_RETVAL_TYPE_VAR) {
+        return NULL;
+    }
+
     rv_operand_to_reg(profile, insn, 0);
-    int ret_bit = ir_prim_bits(insn->returns[0].dest_var->orig_prim_type);
-    int val_bit = ir_prim_bits(insn->operands[0].var->orig_prim_type);
+    unsigned int ret_bit = ir_prim_bits(insn->returns[0].dest_var->orig_prim_type);
+    unsigned int val_bit = ir_prim_bits(insn->operands[0].var->orig_prim_type);
 
     ir_insn_t *new_node = rv_emit_rr_signext(
         profile,
@@ -176,9 +180,13 @@ static ir_insn_t *rv_isel_rr_signext(rv_profile_t const *profile, ir_insn_t *ins
 
 // Register-register zero extend.
 static ir_insn_t *rv_isel_rr_zeroext(rv_profile_t const *profile, ir_insn_t *insn) {
+    if (insn->returns[0].type != IR_RETVAL_TYPE_VAR) {
+        return NULL;
+    }
+
     rv_operand_to_reg(profile, insn, 0);
-    int ret_bit = ir_prim_bits(insn->returns[0].dest_var->orig_prim_type);
-    int val_bit = ir_prim_bits(insn->operands[0].var->orig_prim_type);
+    unsigned int ret_bit = ir_prim_bits(insn->returns[0].dest_var->orig_prim_type);
+    unsigned int val_bit = ir_prim_bits(insn->operands[0].var->orig_prim_type);
 
     ir_insn_t *new_node = rv_emit_rr_zeroext(
         profile,
@@ -808,7 +816,7 @@ static inline ir_insn_t *rv_isel_mem(rv_profile_t const *profile, ir_insn_t *ins
 ir_insn_t *rv_isel(backend_profile_t *base_profile, ir_insn_t *insn) {
     rv_profile_t const *profile = (void *)base_profile;
 
-    if (insn->type == IR_INSN_EXPR1 && insn->returns[0].type == IR_RETVAL_TYPE_VAR) {
+    if (insn->type == IR_INSN_EXPR1) {
         if (insn->operands[0].type == IR_OPERAND_TYPE_CONST) {
             switch (insn->op1) {
                 case IR_OP1_signext:

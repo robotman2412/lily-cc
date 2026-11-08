@@ -119,10 +119,11 @@ extern size_t const              rv_insns_len;
     }
 #define RV_DEFINE_ADD_R(name)                                                                                          \
     static inline ir_insn_t *rv_add_##name(ir_insnloc_t loc, ir_retval_t dest, ir_operand_t val) {                     \
-        return ir_add_mach_insn(loc, true, dest, &rv_insn_##name, 2, (ir_operand_t const[]){val});                     \
+        return ir_add_mach_insn(loc, true, dest, &rv_insn_##name, 1, (ir_operand_t const[]){val});                     \
     }
 
 RV_DEFINE_ADD_R(mv)
+RV_DEFINE_ADD_I(li)
 
 #define RV_INSN_ALU_RI(name, op_maj, funct3, funct7) RV_DEFINE_ADD_RI(name)
 #define RV_INSN_ALU_RR(name, op_maj, funct3, funct7) RV_DEFINE_ADD_RR(name)

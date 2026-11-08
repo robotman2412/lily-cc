@@ -48,7 +48,7 @@ A work-in-progress C compiler for fun. It aims to one day be C23 (and some GNU e
 - `return`
 
 ## Intermediate representation
-- Has types `u8...u128`, `s8...128`, `bool`, `f32`, `f64`
+- Has types `i8`, `i16`, `i32`, `i64`, `i128`, `bool`, `f32`, `f64`
 - Has pseudo-registers and pseudo-stack-frames
 - Expr2 operators matching the C infix operators
 - Expr1 operators `x != 0`, `x == 0`, mov/cast, logical not, bitwise not, arithmetic negate

@@ -24,6 +24,14 @@ void test_failure_context(char const *fmt, ...) __attribute__((format(printf, 1,
 #define TEST__FORMAT_IF_PRESENT(first, ...)     first
 #define TEST__FORMATARGS_IF_PRESENT(first, ...) __VA_OPT__(, ) __VA_ARGS__
 
+#define TEST_RETRHOW(expr)                                                                                             \
+    do {                                                                                                               \
+        int test_rethrow_rc_ = (expr);                                                                                 \
+        if (test_rethrow_rc_) {                                                                                        \
+            return test_rethrow_rc_;                                                                                   \
+        }                                                                                                              \
+    } while (0)
+
 #define TEST_OK()                                                                                                      \
     do {                                                                                                               \
         return 0;                                                                                                      \
@@ -71,6 +79,8 @@ void test_failure_context(char const *fmt, ...) __attribute__((format(printf, 1,
 
 #define TEST_COMPARE_UINT(lhs_, compar, rhs_, ...)                                                                     \
     TEST_COMPARE_(lhs_, compar, rhs_, (unsigned long long), "%llu", "0x%llx" __VA_OPT__(, ) __VA_ARGS__)
+
+#define TEST_EXPECT_BOOL(lhs_, rhs_, ...) TEST_COMPARE_(lhs_, ==, rhs_, (_Bool), "%d", "%d" __VA_OPT__(, ) __VA_ARGS__)
 
 #define TEST_EXPECT_INT(lhs_, rhs_, ...)                                                                               \
     TEST_COMPARE_(lhs_, ==, rhs_, (long long), "%lld", "0x%llx" __VA_OPT__(, ) __VA_ARGS__)

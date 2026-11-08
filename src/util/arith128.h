@@ -155,13 +155,14 @@ INLINE_MATH128 bool eqzero128(i128_t a) {
 
 // Structure that stores 128 bits of data.
 typedef struct {
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#ifndef __BYTE_ORDER
+#error Cannot determine endianness
+#elif __BYTE_ORDER == __LITTLE_ENDIAN
     uint64_t lo, hi;
 #elif __BYTE_ORDER == __BIG_ENDIAN
     uint64_t hi, lo;
 #else
-#error                                                                                                                 \
-    "Invalid endianness; Lily-CC requires a machine that is big-endian or little-endian, but the endianness either different or not detected"
+#error Invalid endianness detected
 #endif
 } i128_t;
 

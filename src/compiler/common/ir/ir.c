@@ -491,6 +491,7 @@ ir_frame_t *ir_frame_create(ir_func_t *func, uint64_t size, uint64_t align, char
 // Delete an IR stack frame.
 void ir_frame_delete(ir_frame_t *frame) {
     set_clear(&frame->ref_at);
+    map_remove(&frame->func->frame_by_name, frame->name);
     dlist_remove(&frame->func->frames_list, &frame->node);
     lilycc_free(frame->name);
     lilycc_free(frame);
@@ -788,6 +789,12 @@ void ir_insn_delete(ir_insn_t *insn) {
             ir_unmark_used(insn->operands[i], insn);
             if (insn->operands[i].type == IR_OPERAND_TYPE_MEM && insn->operands[i].mem.base_type == IR_MEMBASE_SYM) {
                 lilycc_free(insn->operands[i].mem.base_sym);
+            } else if (
+                insn->operands[i].type == IR_OPERAND_TYPE_MEM && insn->operands[i].mem.base_type == IR_MEMBASE_FRAME
+            ) {
+                set_remove(&insn->operands[i].mem.base_frame->ref_at, insn);
+            } else if (insn->operands[i].type == IR_OPERAND_TYPE_STRUCT) {
+                set_remove(&insn->operands[i].struct_frame->ref_at, insn);
             }
         }
         lilycc_free(insn->operands);
@@ -909,11 +916,16 @@ void ir_insn_set_operand(ir_insn_t *insn, size_t index, ir_operand_t operand) {
 // Set an IR instruction's return variable by index.
 void ir_insn_set_return(ir_insn_t *insn, size_t index, ir_retval_t dest) {
     assert(index < insn->returns_len);
-    if (insn->returns[index].type == IR_RETVAL_TYPE_VAR) {
+    if (insn->returns[index].type == IR_RETVAL_TYPE_STRUCT) {
+        set_remove(&insn->returns[index].dest_struct->ref_at, insn);
+    } else if (insn->returns[index].type == IR_RETVAL_TYPE_VAR) {
         set_remove(&insn->returns[index].dest_var->assigned_at, insn);
     }
     insn->returns[index] = dest;
-    if (dest.type == IR_RETVAL_TYPE_VAR) {
+    if (dest.type == IR_RETVAL_TYPE_STRUCT) {
+        assert(dest.dest_struct);
+        set_add(&dest.dest_struct->ref_at, insn);
+    } else if (dest.type == IR_RETVAL_TYPE_VAR) {
         assert(dest.dest_var);
         assert(!set_contains(&dest.dest_var->assigned_at, insn));
         set_add(&dest.dest_var->assigned_at, insn);
@@ -1002,7 +1014,10 @@ static ir_insn_t *ir_create_insn(
     if (has_dest) {
         insn->returns     = lilycc_malloc(sizeof(ir_retval_t));
         insn->returns_len = 1;
-        if (dest.type == IR_RETVAL_TYPE_VAR) {
+        if (dest.type == IR_RETVAL_TYPE_STRUCT) {
+            assert(dest.dest_struct);
+            set_add(&dest.dest_struct->ref_at, insn);
+        } else if (dest.type == IR_RETVAL_TYPE_VAR) {
             assert(dest.dest_var);
             if (ir_insnloc_code(loc)->func->enforce_ssa
                 && (dest.dest_var->assigned_at.len || dest.dest_var->arg_index >= 0)) {
@@ -1462,7 +1477,7 @@ ir_insn_t *ir_add_call(
     memcpy(operands_copy + 1, operands, operands_len * sizeof(ir_operand_t));
 
     ir_insn_t *insn  = ir_create_insn(loc, IR_INSN_CALL, has_dest, dest, 1 + operands_len, operands_copy);
-    insn->flags     |= IR_INSN_FLAG_SIDE_EFFECTS;
+    insn->flags     |= IR_INSN_FLAG_SIDE_EFFECTS | IR_INSN_FLAG_IMPURE;
     return insn;
 }
 

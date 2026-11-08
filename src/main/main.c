@@ -58,6 +58,7 @@ static void compile2(char const *path) {
                 continue;
             }
             ir_func_t *ir = c_lower_func(cc, tu->units.arr[i]->func);
+            ir_optimize(ir);
             codegen(profile, ir);
             printf("\n");
             asm_print_func(ir, profile, stdout);

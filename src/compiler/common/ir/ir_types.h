@@ -427,13 +427,16 @@ struct ir_var {
 struct ir_const {
     // Constant type.
     ir_prim_t prim_type;
+    // TODO: Poison
     union {
         // 32-bit float constant.
         float  constf32;
         // 64-bit float constant.
         double constf64;
         struct {
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#ifndef __BYTE_ORDER
+#error Cannot determine endianness
+#elif __BYTE_ORDER == __LITTLE_ENDIAN
             // Low 64 bits of constant.
             uint64_t constl;
             // High 64 bits of constant.
@@ -444,8 +447,7 @@ struct ir_const {
             // Low 64 bits of constant.
             uint64_t constl;
 #else
-#error                                                                                                                 \
-    "Invalid endianness; Lily-CC requires a machine that is big-endian or little-endian, but the endianness either different or not detected"
+#error Invalid endianness detected
 #endif
         };
         // 128-bit constant.
@@ -453,6 +455,8 @@ struct ir_const {
     };
 };
 
+#define IR_CONST_FALSE       ((ir_const_t){.prim_type = IR_PRIM_bool, .constl = 0})
+#define IR_CONST_TRUE        ((ir_const_t){.prim_type = IR_PRIM_bool, .constl = 1})
 #define IR_CONST_BOOL(value) ((ir_const_t){.prim_type = IR_PRIM_bool, .constl = (bool)(value)})
 
 #define IR_CONST_U8(value)   ((ir_const_t){.prim_type = IR_PRIM_i8, .constl = (uint8_t)(value)})

@@ -24,12 +24,14 @@
 // Run optimizations on some IR.
 // Returns whether any code was changed.
 bool ir_optimize(ir_func_t *func) {
+    ir_func_to_ssa(func);
     bool changed = false, loop;
 
     // Optimization passes that affect each other.
     do {
         loop     = false;
         loop    |= opt_const_prop(func);
+        loop    |= opt_mem2reg(func);
         loop    |= opt_unused_vars(func);
         loop    |= opt_dead_code(func);
         loop    |= opt_branches(func);
@@ -240,7 +242,7 @@ static bool mem2reg_frame(ir_func_t *func, ir_frame_t *frame) {
             replacement_type = IR_PRIM_i16;
         } else if (size <= 4) {
             replacement_type = IR_PRIM_i32;
-        } else if (size <= 4) {
+        } else if (size <= 8) {
             replacement_type = IR_PRIM_i64;
         } else {
             replacement_type = IR_PRIM_i128;
@@ -329,51 +331,67 @@ static bool strength_reduce_expr(ir_insn_t *expr) {
     if (rhs.type != IR_OPERAND_TYPE_CONST) {
         return false;
     }
-    rhs.iconst       = ir_trim_const(rhs.iconst, true);
-    ir_const_t p_rhs = ir_const_is_negative(rhs.iconst) ? ir_calc1(IR_OP1_neg, rhs.iconst) : rhs.iconst;
+    ir_const_t p_rhs = ir_const_abs(rhs.iconst);
 
-    if ((oper == IR_OP2_divu || oper == IR_OP2_divu) && ir_const_popcnt(rhs.iconst) == 1
-        && !ir_const_is_negative(rhs.iconst)) {
+    if ((oper == IR_OP2_divs || oper == IR_OP2_rems) && ir_const_popcnt(p_rhs) == 1) {
+        ir_func_t *func       = expr->code->func;
+        ir_const_t mask       = {.prim_type = prim, .const128 = sub128(p_rhs.const128, ui128(1))};
+        ir_const_t sign_shift = {.prim_type = prim, .const128 = ui128(ir_prim_bits(prim) - 1)};
+        ir_const_t shift      = {.prim_type = prim, .const128 = ui128(ir_const_ctz(p_rhs))};
+        ir_var_t  *sign       = ir_var_create(func, prim, NULL);
+        ir_var_t  *bias       = ir_var_create(func, prim, NULL);
+        ir_var_t  *biased     = ir_var_create(func, prim, NULL);
+
+        // Bias negative dividends by |rhs| - 1 to truncate toward zero.
+        ir_add_expr2(IR_BEFORE_INSN(expr), IR_RETVAL_VAR(sign), IR_OP2_shrs, lhs, IR_OPERAND_CONST(sign_shift));
+        ir_add_expr2(
+            IR_BEFORE_INSN(expr),
+            IR_RETVAL_VAR(bias),
+            IR_OP2_band,
+            IR_OPERAND_VAR(sign),
+            IR_OPERAND_CONST(mask)
+        );
+        ir_add_expr2(IR_BEFORE_INSN(expr), IR_RETVAL_VAR(biased), IR_OP2_add, lhs, IR_OPERAND_VAR(bias));
+
+        if (oper == IR_OP2_rems) {
+            // The remainder has the dividend's sign, independent of the divisor's sign.
+            ir_var_t *masked = ir_var_create(func, prim, NULL);
+            ir_add_expr2(
+                IR_BEFORE_INSN(expr),
+                IR_RETVAL_VAR(masked),
+                IR_OP2_band,
+                IR_OPERAND_VAR(biased),
+                IR_OPERAND_CONST(mask)
+            );
+            ir_insn_set_operand(expr, 0, IR_OPERAND_VAR(masked));
+            ir_insn_set_operand(expr, 1, IR_OPERAND_VAR(bias));
+            oper = IR_OP2_sub;
+        } else {
+            bool negative = ir_const_is_negative(rhs.iconst);
+            ir_insn_set_operand(expr, 0, IR_OPERAND_VAR(biased));
+            ir_insn_set_operand(expr, 1, IR_OPERAND_CONST(shift));
+            oper = IR_OP2_shrs;
+            if (negative) {
+                ir_retval_t dest     = expr->returns[0];
+                ir_var_t   *quotient = ir_var_create(func, prim, NULL);
+                ir_insn_set_return(expr, 0, IR_RETVAL_VAR(quotient));
+                ir_add_expr1(IR_AFTER_INSN(expr), dest, IR_OP1_neg, IR_OPERAND_VAR(quotient));
+            }
+        }
+        return true;
+
+    } else if (oper == IR_OP2_divu && ir_const_popcnt(rhs.iconst) == 1) {
         // Replace a division with a right shift.
         rhs.iconst.constl = ir_const_ctz(rhs.iconst);
         rhs.iconst.consth = 0;
-        oper              = oper == IR_OP2_divu ? IR_OP2_shru : IR_OP2_shrs;
+        oper              = IR_OP2_shru;
         return true;
 
-    } else if ((oper == IR_OP2_remu || oper == IR_OP2_remu) && ir_const_popcnt(p_rhs) == 1) {
-        // Replace a remainder with a bitmask.
-        int    bits = ir_const_ctz(p_rhs);
-        i128_t mask = add128(i128_pack(-1, -1), shl128(i128_pack(0, 1), bits));
-        if (!(prim & 1)) {
-            ir_op2_type_t shr = oper == IR_OP2_divu ? IR_OP2_shru : IR_OP2_shrs;
-
-            // Add instructions to extract and copy the sign from the lhs to the output.
-            ir_var_t *tmp1 = ir_var_create(expr->code->func, prim, NULL);
-            ir_var_t *tmp2 = ir_var_create(expr->code->func, prim, NULL);
-            ir_var_t *tmp3 = ir_var_create(expr->code->func, prim, NULL);
-            ir_var_t *tmp4 = ir_var_create(expr->code->func, prim, NULL);
-
-            ir_const_t shamt1 = {.prim_type = prim, .constl = ir_prim_size(prim) * 8 - 1};
-            ir_add_expr2(IR_BEFORE_INSN(expr), IR_RETVAL_VAR(tmp1), shr, lhs, IR_OPERAND_CONST(shamt1));
-
-            ir_const_t shamt2 = {.prim_type = prim, .constl = ir_prim_size(prim) * 8 - bits};
-            ir_add_expr2(
-                IR_BEFORE_INSN(expr),
-                IR_RETVAL_VAR(tmp2),
-                shr,
-                IR_OPERAND_VAR(tmp1),
-                IR_OPERAND_CONST(shamt2)
-            );
-
-            ir_add_expr2(IR_BEFORE_INSN(expr), IR_RETVAL_VAR(tmp3), IR_OP2_add, lhs, IR_OPERAND_VAR(tmp2));
-
-            ir_retval_t dest = expr->returns[0];
-            ir_insn_set_return(expr, 0, IR_RETVAL_VAR(tmp4));
-
-            ir_add_expr2(IR_AFTER_INSN(expr), dest, IR_OP2_sub, IR_OPERAND_VAR(tmp4), IR_OPERAND_VAR(tmp2));
-        }
-        rhs.iconst.const128 = mask;
-        oper                = IR_OP2_band;
+    } else if (oper == IR_OP2_remu && ir_const_popcnt(rhs.iconst) == 1) {
+        // Replace a modulo with a bitwise AND.
+        ir_const_t one = {.prim_type = rhs.iconst.prim_type, .const128 = i128(1)};
+        rhs.iconst     = ir_calc2(IR_OP2_sub, rhs.iconst, one);
+        oper           = IR_OP2_band;
         return true;
 
     } else if (oper == IR_OP2_mul && ir_const_popcnt(rhs.iconst) == 1 && !ir_const_is_negative(rhs.iconst)) {
@@ -434,7 +452,7 @@ static void mark_used_dfs(ir_var_t *var) {
 }
 
 static void check_var_used(ir_var_t *var) {
-    if (var->visited || !var->used_at.len) {
+    if (var->visited) {
         return;
     }
 
@@ -559,14 +577,15 @@ bool opt_dead_code(ir_func_t *func) {
         }
 
         // Walk the code for reachability.
-        loop = dead_code_dfs(container_of(func->code_list.head, ir_code_t, node));
+        loop = dead_code_dfs(func->entry);
 
         // Delete all unreachable code blocks.
-        ir_code_t *code = container_of(func->code_list.head, ir_code_t, node);
+        ir_code_t *code = (ir_code_t *)func->code_list.head;
         while (code) {
-            ir_code_t *next = container_of(code->node.next, ir_code_t, node);
+            ir_code_t *next = (ir_code_t *)code->node.next;
             if (!code->visited) {
                 ir_code_delete(code);
+                loop = true;
             }
             code = next;
         }
@@ -582,6 +601,18 @@ bool opt_dead_code(ir_func_t *func) {
 
 // Try to constant-propagate a single expression.
 static bool const_prop_expr(ir_insn_t *expr) {
+    if (expr->type == IR_INSN_COMBINATOR) {
+        // Flatten phi-nodes with only a single predecessor or all identical bindings.
+        for (size_t i = 1; i < expr->combinators_len; i++) {
+            if (!ir_operand_identical(expr->combinators[0].bind, expr->combinators[i].bind)) {
+                return false;
+            }
+        }
+        ir_var_replace(expr->returns[0].dest_var, expr->combinators[0].bind);
+        ir_var_delete(expr->returns[0].dest_var);
+        return true;
+    }
+
     if (expr->returns[0].type != IR_RETVAL_TYPE_VAR) {
         return false;
     }
@@ -604,22 +635,16 @@ static bool const_prop_expr(ir_insn_t *expr) {
         }
     }
 
-    if (expr->type == IR_INSN_COMBINATOR) {
-        // Flatten phi-nodes with only a single predecessor or all identical bindings.
-        for (size_t i = 1; i < expr->combinators_len; i++) {
-            if (!ir_operand_identical(expr->combinators[0].bind, expr->combinators[i].bind)) {
-                return false;
-            }
-        }
-        ir_var_replace(expr->returns[0].dest_var, expr->combinators[0].bind);
-        ir_var_delete(expr->returns[0].dest_var);
-        return true;
-
-    } else if (expr->type == IR_INSN_EXPR1 && expr->operands[0].type == IR_OPERAND_TYPE_CONST) {
+    if (expr->type == IR_INSN_EXPR1 && expr->operands[0].type == IR_OPERAND_TYPE_CONST) {
         // Calculate unary expression at compile time.
         ir_const_t iconst;
         if (expr->op1 == IR_OP1_mov) {
             iconst = expr->operands[0].iconst;
+        } else if (expr->op1 == IR_OP1_bitcast) {
+            iconst = ir_trim_const(expr->operands[0].iconst, false);
+            if (expr->returns[0].type == IR_RETVAL_TYPE_VAR) {
+                iconst.prim_type = expr->returns[0].dest_var->prim_type;
+            }
         } else if (expr->op1 == IR_OP1_zeroext) {
             iconst = ir_cast(expr->returns[0].dest_var->prim_type, expr->operands[0].iconst, false);
         } else if (expr->op1 == IR_OP1_signext) {

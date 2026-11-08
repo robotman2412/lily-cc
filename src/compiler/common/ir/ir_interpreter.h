@@ -32,6 +32,8 @@ int        ir_const_clz(ir_const_t value) __attribute__((const));
 int        ir_const_ctz(ir_const_t value) __attribute__((const));
 // Count number of set bits.
 int        ir_const_popcnt(ir_const_t value) __attribute__((const));
+// Absolute value. Assumes integer types are signed.
+ir_const_t ir_const_abs(ir_const_t value) __attribute__((const));
 // Whether a constant is negative.
 bool       ir_const_is_negative(ir_const_t value) __attribute__((const));
 // Determines whether two constants are identical.

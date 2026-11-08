@@ -478,6 +478,20 @@ int ir_const_popcnt(ir_const_t value) {
     return count;
 }
 
+// Absolute value. Assumes integer types are signed.
+ir_const_t ir_const_abs(ir_const_t value) {
+    if (ir_const_is_negative(value)) {
+        if (value.prim_type == IR_PRIM_f32) {
+            value.constf32 = -value.constf32;
+        } else if (value.prim_type == IR_PRIM_f64) {
+            value.constf64 = -value.constf64;
+        } else {
+            value.const128 = neg128(value.const128);
+        }
+    }
+    return value;
+}
+
 // Whether a constant is negative; assumes signed type.
 bool ir_const_is_negative(ir_const_t value) {
     switch (value.prim_type) {
@@ -509,12 +523,18 @@ bool ir_const_identical(ir_const_t lhs, ir_const_t rhs) {
 
 // Truncate unused bits of a constant.
 ir_const_t ir_trim_const(ir_const_t value, bool is_signed) {
-    uint8_t bytes;
     switch (value.prim_type) {
-        case IR_PRIM_i8: bytes = 1; break;
-        case IR_PRIM_i16: bytes = 2; break;
-        case IR_PRIM_i32: bytes = 4; break;
+        case IR_PRIM_i8:
+            value.constl = is_signed ? (uint64_t)(int8_t)value.constl : (uint64_t)(uint8_t)value.constl;
+            goto signext64;
+        case IR_PRIM_i16:
+            value.constl = is_signed ? (uint64_t)(int16_t)value.constl : (uint64_t)(uint16_t)value.constl;
+            goto signext64;
+        case IR_PRIM_i32:
+            value.constl = is_signed ? (uint64_t)(int32_t)value.constl : (uint64_t)(uint32_t)value.constl;
+            goto signext64;
         case IR_PRIM_i64:
+        signext64:
             if (is_signed) {
                 value.consth = -((int64_t)value.constl < 0);
                 return value;
@@ -527,17 +547,11 @@ ir_const_t ir_trim_const(ir_const_t value, bool is_signed) {
             value.constl &= 1;
             value.consth  = 0;
             return value;
-        case IR_PRIM_f32: bytes = 4; break;
-        case IR_PRIM_f64: bytes = 8; break;
-        default: abort();
+        case IR_PRIM_f32: return IR_CONST_F32(value.constf32);
+        case IR_PRIM_f64: return IR_CONST_F64(value.constf64);
+        case IR_N_PRIM: UNREACHABLE();
     }
-    value.constl &= (1llu << (8 * bytes % 64)) - 1; // Intentional overflow.
-    value.consth  = 0;
-    if (!is_signed && (value.constl & (1llu << (8 * bytes - 1)))) {
-        value.consth  = -1llu;
-        value.constl |= -1llu << (8 * bytes);
-    }
-    return value;
+    UNREACHABLE();
 }
 
 // Arithmetic cast between two types.
@@ -605,15 +619,17 @@ ir_const_t ir_cast(ir_prim_t type, ir_const_t value, bool is_signed) {
         }
         return value;
     } else {
+        value           = ir_trim_const(value, is_signed);
         value.prim_type = type;
-        return ir_trim_const(value, is_signed);
+        return value;
     }
 }
 
 // Calculate the result of an expr1.
 ir_const_t ir_calc1(ir_op1_type_t oper, ir_const_t value) {
     if (oper == IR_OP1_mov || oper == IR_OP1_signext || oper == IR_OP1_zeroext || oper == IR_OP1_bitcast) {
-        printf("BUG: IR move/cast operations are invalid for ir_calc1\n");
+        fflush(stdout);
+        fprintf(stderr, "BUG: IR move/cast operations are invalid for ir_calc1\n");
         abort();
     } else if (oper == IR_OP1_snez || oper == IR_OP1_seqz) {
         bool eqz;
@@ -671,23 +687,45 @@ ir_const_t ir_calc1(ir_op1_type_t oper, ir_const_t value) {
 // Calculate the result of an expr2.
 ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
     ir_const_t out = {.prim_type = lhs.prim_type, .constl = 0, .consth = 0};
-    if (oper >= IR_OP2_sgts && oper <= IR_OP2_sne) {
-        out.prim_type = IR_PRIM_bool;
-    } else {
-        out.prim_type = lhs.prim_type;
+    switch (oper) {
+        case IR_OP2_sgtu:
+        case IR_OP2_sleu:
+        case IR_OP2_sltu:
+        case IR_OP2_sgeu:
+        case IR_OP2_sgts:
+        case IR_OP2_sles:
+        case IR_OP2_slts:
+        case IR_OP2_sges:
+        case IR_OP2_seq:
+        case IR_OP2_sne: out.prim_type = IR_PRIM_bool; break;
+        case IR_OP2_add:
+        case IR_OP2_sub:
+        case IR_OP2_mul:
+        case IR_OP2_divu:
+        case IR_OP2_remu:
+        case IR_OP2_divs:
+        case IR_OP2_rems:
+        case IR_OP2_shl:
+        case IR_OP2_shru:
+        case IR_OP2_shrs:
+        case IR_OP2_band:
+        case IR_OP2_bor:
+        case IR_OP2_bxor:
+        case IR_N_OP2: out.prim_type = lhs.prim_type; break;
     }
+    // clang-format off
     if (lhs.prim_type == IR_PRIM_f32) {
         switch (oper) {
-            case IR_OP2_sgts: out.constl = lhs.constf32 > rhs.constf32; break;
-            case IR_OP2_sles: out.constl = lhs.constf32 <= rhs.constf32; break;
-            case IR_OP2_slts: out.constl = lhs.constf32 < rhs.constf32; break;
-            case IR_OP2_sges: out.constl = lhs.constf32 >= rhs.constf32; break;
-            case IR_OP2_seq: out.constl = lhs.constf32 == rhs.constf32; break;
-            case IR_OP2_sne: out.constl = lhs.constf32 != rhs.constf32; break;
-            case IR_OP2_add: out.constf32 = lhs.constf32 + rhs.constf32; break;
-            case IR_OP2_sub: out.constf32 = lhs.constf32 - rhs.constf32; break;
-            case IR_OP2_mul: out.constf32 = lhs.constf32 * rhs.constf32; break;
-            case IR_OP2_divs: out.constf32 = lhs.constf32 / rhs.constf32; break;
+            case IR_OP2_sgts: out.constl   = lhs.constf32 >  rhs.constf32; break;
+            case IR_OP2_sles: out.constl   = lhs.constf32 <= rhs.constf32; break;
+            case IR_OP2_slts: out.constl   = lhs.constf32 <  rhs.constf32; break;
+            case IR_OP2_sges: out.constl   = lhs.constf32 >= rhs.constf32; break;
+            case IR_OP2_seq:  out.constl   = lhs.constf32 == rhs.constf32; break;
+            case IR_OP2_sne:  out.constl   = lhs.constf32 != rhs.constf32; break;
+            case IR_OP2_add:  out.constf32 = lhs.constf32 +  rhs.constf32; break;
+            case IR_OP2_sub:  out.constf32 = lhs.constf32 -  rhs.constf32; break;
+            case IR_OP2_mul:  out.constf32 = lhs.constf32 *  rhs.constf32; break;
+            case IR_OP2_divs: out.constf32 = lhs.constf32 /  rhs.constf32; break;
             default:
                 fprintf(stderr, "BUG: Invalid op2 type for f32: %s\n", ir_op2_names[oper]);
                 abort();
@@ -696,16 +734,16 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
         return out;
     } else if (lhs.prim_type == IR_PRIM_f64) {
         switch (oper) {
-            case IR_OP2_sgts: out.constl = lhs.constf64 > rhs.constf64; break;
-            case IR_OP2_sles: out.constl = lhs.constf64 <= rhs.constf64; break;
-            case IR_OP2_slts: out.constl = lhs.constf64 < rhs.constf64; break;
-            case IR_OP2_sges: out.constl = lhs.constf64 >= rhs.constf64; break;
-            case IR_OP2_seq: out.constl = lhs.constf64 == rhs.constf64; break;
-            case IR_OP2_sne: out.constl = lhs.constf64 != rhs.constf64; break;
-            case IR_OP2_add: out.constf64 = lhs.constf64 + rhs.constf64; break;
-            case IR_OP2_sub: out.constf64 = lhs.constf64 - rhs.constf64; break;
-            case IR_OP2_mul: out.constf64 = lhs.constf64 * rhs.constf64; break;
-            case IR_OP2_divs: out.constf64 = lhs.constf64 / rhs.constf64; break;
+            case IR_OP2_sgts: out.constl   = lhs.constf64 >  rhs.constf64; break;
+            case IR_OP2_sles: out.constl   = lhs.constf64 <= rhs.constf64; break;
+            case IR_OP2_slts: out.constl   = lhs.constf64 <  rhs.constf64; break;
+            case IR_OP2_sges: out.constl   = lhs.constf64 >= rhs.constf64; break;
+            case IR_OP2_seq:  out.constl   = lhs.constf64 == rhs.constf64; break;
+            case IR_OP2_sne:  out.constl   = lhs.constf64 != rhs.constf64; break;
+            case IR_OP2_add:  out.constf64 = lhs.constf64 +  rhs.constf64; break;
+            case IR_OP2_sub:  out.constf64 = lhs.constf64 -  rhs.constf64; break;
+            case IR_OP2_mul:  out.constf64 = lhs.constf64 *  rhs.constf64; break;
+            case IR_OP2_divs: out.constf64 = lhs.constf64 /  rhs.constf64; break;
             default:
                 fprintf(stderr, "BUG: Invalid op2 type for f64: %s\n", ir_op2_names[oper]);
                 abort();
@@ -716,11 +754,11 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
         lhs.constl &= 1;
         rhs.constl &= 1;
         switch (oper) {
-            case IR_OP2_seq: out.constl = 1 & (1 ^ lhs.constl ^ rhs.constl); break;
-            case IR_OP2_sne: out.constl = 1 & (lhs.constl ^ rhs.constl); break;
-            case IR_OP2_band: out.constl = 1 & (lhs.constl & rhs.constl); break;
-            case IR_OP2_bor: out.constl = 1 & (lhs.constl | rhs.constl); break;
-            case IR_OP2_bxor: out.constl = 1 & (lhs.constl ^ rhs.constl); break;
+            case IR_OP2_seq:  out.constl = 1 & (1 ^ lhs.constl ^ rhs.constl); break;
+            case IR_OP2_sne:  out.constl = 1 & (    lhs.constl ^ rhs.constl); break;
+            case IR_OP2_band: out.constl = 1 & (    lhs.constl & rhs.constl); break;
+            case IR_OP2_bor:  out.constl = 1 & (    lhs.constl | rhs.constl); break;
+            case IR_OP2_bxor: out.constl = 1 & (    lhs.constl ^ rhs.constl); break;
             default:
                 fprintf(stderr, "BUG: Invalid op2 type for bool: %s\n", ir_op2_names[oper]);
                 abort();
@@ -729,65 +767,66 @@ ir_const_t ir_calc2(ir_op2_type_t oper, ir_const_t lhs, ir_const_t rhs) {
         return out;
     } else if (lhs.prim_type == IR_PRIM_i128) {
         switch (oper) {
-            case IR_OP2_sgts: out.constl = cmp128s(lhs.const128, rhs.const128) > 0; break;
-            case IR_OP2_sles: out.constl = cmp128s(lhs.const128, rhs.const128) <= 0; break;
-            case IR_OP2_slts: out.constl = cmp128s(lhs.const128, rhs.const128) < 0; break;
-            case IR_OP2_sges: out.constl = cmp128s(lhs.const128, rhs.const128) >= 0; break;
-            case IR_OP2_sgtu: out.constl = cmp128u(lhs.const128, rhs.const128) > 0; break;
-            case IR_OP2_sleu: out.constl = cmp128u(lhs.const128, rhs.const128) <= 0; break;
-            case IR_OP2_sltu: out.constl = cmp128u(lhs.const128, rhs.const128) < 0; break;
-            case IR_OP2_sgeu: out.constl = cmp128u(lhs.const128, rhs.const128) >= 0; break;
-            case IR_OP2_seq: out.constl = cmp128s(lhs.const128, rhs.const128) == 0; break;
-            case IR_OP2_sne: out.constl = cmp128s(lhs.const128, rhs.const128) != 0; break;
-            case IR_OP2_add: out.const128 = add128(lhs.const128, rhs.const128); break;
-            case IR_OP2_sub: out.const128 = add128(lhs.const128, neg128(rhs.const128)); break;
-            case IR_OP2_mul: out.const128 = mul128(lhs.const128, rhs.const128); break;
+            case IR_OP2_sgts: out.constl   = cmp128s(lhs.const128, rhs.const128) > 0;  break;
+            case IR_OP2_sles: out.constl   = cmp128s(lhs.const128, rhs.const128) <= 0; break;
+            case IR_OP2_slts: out.constl   = cmp128s(lhs.const128, rhs.const128) < 0;  break;
+            case IR_OP2_sges: out.constl   = cmp128s(lhs.const128, rhs.const128) >= 0; break;
+            case IR_OP2_sgtu: out.constl   = cmp128u(lhs.const128, rhs.const128) > 0;  break;
+            case IR_OP2_sleu: out.constl   = cmp128u(lhs.const128, rhs.const128) <= 0; break;
+            case IR_OP2_sltu: out.constl   = cmp128u(lhs.const128, rhs.const128) < 0;  break;
+            case IR_OP2_sgeu: out.constl   = cmp128u(lhs.const128, rhs.const128) >= 0; break;
+            case IR_OP2_seq:  out.constl   = cmp128s(lhs.const128, rhs.const128) == 0; break;
+            case IR_OP2_sne:  out.constl   = cmp128s(lhs.const128, rhs.const128) != 0; break;
+            case IR_OP2_add:  out.const128 = add128 (lhs.const128, rhs.const128); break;
+            case IR_OP2_sub:  out.const128 = add128 (lhs.const128, neg128(rhs.const128)); break;
+            case IR_OP2_mul:  out.const128 = mul128 (lhs.const128, rhs.const128); break;
             case IR_OP2_divu: out.const128 = div128u(lhs.const128, rhs.const128); break;
             case IR_OP2_remu: out.const128 = rem128u(lhs.const128, rhs.const128); break;
             case IR_OP2_divs: out.const128 = div128s(lhs.const128, rhs.const128); break;
             case IR_OP2_rems: out.const128 = rem128s(lhs.const128, rhs.const128); break;
-            case IR_OP2_shl: out.const128 = shl128(lhs.const128, (uint8_t)rhs.constl); break;
+            case IR_OP2_shl:  out.const128 = shl128 (lhs.const128, (uint8_t)rhs.constl); break;
             case IR_OP2_shru: out.const128 = shr128u(lhs.const128, (uint8_t)rhs.constl); break;
             case IR_OP2_shrs: out.const128 = shr128s(lhs.const128, (uint8_t)rhs.constl); break;
-            case IR_OP2_band: out.const128 = and128(lhs.const128, rhs.const128); break;
-            case IR_OP2_bor: out.const128 = or128(lhs.const128, rhs.const128); break;
-            case IR_OP2_bxor: out.const128 = xor128(lhs.const128, rhs.const128); break;
+            case IR_OP2_band: out.const128 = and128 (lhs.const128, rhs.const128); break;
+            case IR_OP2_bor:  out.const128 = or128  (lhs.const128, rhs.const128); break;
+            case IR_OP2_bxor: out.const128 = xor128 (lhs.const128, rhs.const128); break;
             case IR_N_OP2: UNREACHABLE();
         }
         return out;
     } else {
         uint64_t lhs_u = ir_trim_const(lhs, false).constl;
         uint64_t rhs_u = ir_trim_const(rhs, false).constl;
-        int64_t  lhs_s = (int64_t)lhs_u;
-        int64_t  rhs_s = (int64_t)rhs_u;
+        int64_t  lhs_s = (int64_t) ir_trim_const(lhs, true).constl;
+        int64_t  rhs_s = (int64_t) ir_trim_const(rhs, true).constl;
         switch (oper) {
-            case IR_OP2_sgts: out.constl = lhs_s > rhs_s; break;
+            case IR_OP2_sgts: out.constl = lhs_s >  rhs_s; break;
             case IR_OP2_sles: out.constl = lhs_s <= rhs_s; break;
-            case IR_OP2_slts: out.constl = lhs_s < rhs_s; break;
+            case IR_OP2_slts: out.constl = lhs_s <  rhs_s; break;
             case IR_OP2_sges: out.constl = lhs_s >= rhs_s; break;
-            case IR_OP2_sgtu: out.constl = lhs_u > rhs_u; break;
+            case IR_OP2_sgtu: out.constl = lhs_u >  rhs_u; break;
             case IR_OP2_sleu: out.constl = lhs_u <= rhs_u; break;
-            case IR_OP2_sltu: out.constl = lhs_u < rhs_u; break;
+            case IR_OP2_sltu: out.constl = lhs_u <  rhs_u; break;
             case IR_OP2_sgeu: out.constl = lhs_u >= rhs_u; break;
-            case IR_OP2_seq: out.constl = lhs_s == rhs_s; break;
-            case IR_OP2_sne: out.constl = lhs_s != rhs_s; break;
-            case IR_OP2_add: out.constl = lhs_s + rhs_s; break;
-            case IR_OP2_sub: out.constl = lhs_s - rhs_s; break;
-            case IR_OP2_mul: out.constl = lhs_s * rhs_s; break;
-            case IR_OP2_divu: out.constl = lhs_u / rhs_u; break;
-            case IR_OP2_remu: out.constl = lhs_u % rhs_u; break;
-            case IR_OP2_divs: out.constl = lhs_s / rhs_s; break;
-            case IR_OP2_rems: out.constl = lhs_s % rhs_s; break;
-            case IR_OP2_shl: out.constl = lhs_s << rhs_s; break;
+            case IR_OP2_seq:  out.constl = lhs_s == rhs_s; break;
+            case IR_OP2_sne:  out.constl = lhs_s != rhs_s; break;
+            case IR_OP2_add:  out.constl = lhs_s +  rhs_s; break;
+            case IR_OP2_sub:  out.constl = lhs_s -  rhs_s; break;
+            case IR_OP2_mul:  out.constl = lhs_s *  rhs_s; break;
+            case IR_OP2_divu: out.constl = lhs_u /  rhs_u; break;
+            case IR_OP2_remu: out.constl = lhs_u %  rhs_u; break;
+            case IR_OP2_divs: out.constl = lhs_s /  rhs_s; break;
+            case IR_OP2_rems: out.constl = lhs_s %  rhs_s; break;
+            case IR_OP2_shl:  out.constl = lhs_s << rhs_s; break;
             case IR_OP2_shru: out.constl = lhs_u >> rhs_u; break;
             case IR_OP2_shrs: out.constl = lhs_s >> rhs_s; break;
-            case IR_OP2_band: out.constl = lhs_s & rhs_s; break;
-            case IR_OP2_bor: out.constl = lhs_s | rhs_s; break;
-            case IR_OP2_bxor: out.constl = lhs_s ^ rhs_s; break;
+            case IR_OP2_band: out.constl = lhs_s &  rhs_s; break;
+            case IR_OP2_bor:  out.constl = lhs_s |  rhs_s; break;
+            case IR_OP2_bxor: out.constl = lhs_s ^  rhs_s; break;
             case IR_N_OP2: UNREACHABLE();
         }
         return out;
     }
+    // clang-format on
     abort();
 }
 

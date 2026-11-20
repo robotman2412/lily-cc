@@ -472,6 +472,9 @@ static void cg_add_sign_tag(sign_tag_list_t *list, ir_insn_t *insn, size_t index
 // Insert additional computations as needded to clamp promoted variable back in range.
 static void cg_promote_var_1(backend_profile_t *profile, ir_var_t *orig) {
     (void)profile;
+    if (orig->assigned_at.len == 0) {
+        return;
+    }
     ir_insn_t *assignment = set_next(&orig->assigned_at, NULL)->value;
     assert(ir_prim_is_integer(orig->prim_type));
 

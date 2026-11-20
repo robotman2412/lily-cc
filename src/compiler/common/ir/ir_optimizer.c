@@ -553,6 +553,7 @@ static bool dead_code_dfs(ir_code_t *code) {
                 } else {
                     // If this is a branch with constant condition false, delete it.
                     ir_insn_delete(insn);
+                    changed = true;
                 }
             } else {
                 // Check the potential branch target.

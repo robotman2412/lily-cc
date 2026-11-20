@@ -320,16 +320,22 @@ static void insert_combinators(ir_func_t *func, ir_var_t *var, size_t nodes_len,
 // Replace variables in an instruction unless it is a phi instruction.
 static void replace_insn_var(ir_insn_t *insn, ir_var_t *from, ir_var_t *to) {
     if (insn->type == IR_INSN_COMBINATOR) {
-        return;
-    }
-    for (size_t i = 0; i < insn->operands_len; i++) {
-        if (insn->operands[i].type == IR_OPERAND_TYPE_VAR && insn->operands[i].var == from) {
-            insn->operands[i].var = to;
-            set_add(&to->used_at, insn);
-        } else if (insn->operands[i].type == IR_OPERAND_TYPE_MEM) {
-            if (insn->operands[i].mem.base_type == IR_MEMBASE_VAR && insn->operands[i].mem.base_var == from) {
-                insn->operands[i].mem.base_var = to;
+        for (size_t i = 0; i < insn->operands_len; i++) {
+            if (insn->combinators[i].bind.type == IR_OPERAND_TYPE_VAR && insn->combinators[i].bind.var == from) {
+                insn->combinators[i].bind.var = to;
                 set_add(&to->used_at, insn);
+            }
+        }
+    } else {
+        for (size_t i = 0; i < insn->operands_len; i++) {
+            if (insn->operands[i].type == IR_OPERAND_TYPE_VAR && insn->operands[i].var == from) {
+                insn->operands[i].var = to;
+                set_add(&to->used_at, insn);
+            } else if (insn->operands[i].type == IR_OPERAND_TYPE_MEM) {
+                if (insn->operands[i].mem.base_type == IR_MEMBASE_VAR && insn->operands[i].mem.base_var == from) {
+                    insn->operands[i].mem.base_var = to;
+                    set_add(&to->used_at, insn);
+                }
             }
         }
     }

@@ -29,6 +29,8 @@
 
 
 
+#pragma region func
+
 // Helper function that marks an operand as not used by an instruction.
 static void ir_unmark_used(ir_operand_t operand, ir_insn_t *insn) {
     IR_FOR_OPERAND_VARS(operand, var, set_remove(&var->used_at, insn););
@@ -102,6 +104,9 @@ void ir_func_delete(ir_func_t *func) {
     lilycc_free(func);
 }
 
+#pragma endregion func
+
+#pragma region ssa
 
 // Extra temporary data used while building dominance tree.
 typedef struct {
@@ -430,7 +435,7 @@ void ir_func_to_ssa(ir_func_t *func) {
     func->enforce_ssa = true;
 }
 
-
+#pragma endregion ssa
 
 // Recalculate the predecessors and successors for code blocks.
 void ir_func_recalc_flow(ir_func_t *func) {
@@ -449,8 +454,6 @@ void ir_func_recalc_flow(ir_func_t *func) {
     }
 }
 
-
-
 // Check that a name isn't already in use.
 static void name_free_assert(ir_func_t *func, char *name) {
     if (map_get(&func->code_by_name, name) || map_get(&func->var_by_name, name)
@@ -459,6 +462,8 @@ static void name_free_assert(ir_func_t *func, char *name) {
         abort();
     }
 }
+
+#pragma region frames
 
 // Create a new stack frame.
 // If `name` is `NULL`, its name will be `frame%zu` where `%zu` is a number.
@@ -503,7 +508,9 @@ void ir_frame_delete(ir_frame_t *frame) {
     lilycc_free(frame);
 }
 
+#pragma endregion frames
 
+#pragma region vars
 
 // Create a new variable.
 // If `name` is `NULL`, its name will be `var%zu` where `%zu` is a number.
@@ -639,6 +646,10 @@ void ir_var_replace(ir_var_t *var, ir_operand_t value) {
     assert(var->used_at.len == 0);
 }
 
+#pragma endregion vars
+
+#pragma region code
+
 ir_code_t *ir_code_create_impl(ir_func_t *func, char const *name) {
     ir_code_t *code = lilycc_calloc(1, sizeof(ir_code_t));
     code->func      = func;
@@ -732,6 +743,10 @@ void ir_code_delete(ir_code_t *code) {
     lilycc_free(code->name);
     lilycc_free(code);
 }
+
+#pragma endregion code
+
+#pragma region insn
 
 // Delete an instruction from the code.
 void ir_insn_delete(ir_insn_t *insn) {
@@ -938,8 +953,6 @@ void ir_insn_set_return(ir_insn_t *insn, size_t index, ir_retval_t dest) {
     }
 }
 
-
-
 // Is a jump, branch or return?
 static bool ir_is_jbr(ir_insn_t const *insn) {
     return insn->type == IR_INSN_BRANCH || insn->type == IR_INSN_JUMP || insn->type == IR_INSN_RETURN;
@@ -1073,6 +1086,10 @@ static ir_insn_t *ir_create_insn_va(
     va_end(l);
     return ir_create_insn(loc, type, has_dest, dest, operands_len, operands);
 }
+
+#pragma endregion insn
+
+#pragma region ir_add
 
 // Add a combinator function to a code block.
 // Takes ownership of the `from` array.
@@ -1555,6 +1572,7 @@ ir_insn_t *ir_add_mach_insn(
     return insn;
 }
 
+#pragma endregion ir_add
 
 // Get the next instruction after this one.
 ir_insn_t *ir_next_after(ir_insn_t const *insn) {
